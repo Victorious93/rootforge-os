@@ -1,0 +1,53 @@
+/**
+ * RootForge OS Plymouth boot script
+ * Victorious Framework | Origin Source Labs
+ *
+ * Text-mode splash: dark background, green wordmark, progress bar.
+ * No external image dependencies — fully self-contained.
+ */
+
+Screen.SetBackgroundTopColor(0.05, 0.05, 0.05);
+Screen.SetBackgroundBottomColor(0.05, 0.05, 0.05);
+
+Window.SetBackgroundTopColor(0.05, 0.05, 0.05);
+Window.SetBackgroundBottomColor(0.05, 0.05, 0.05);
+
+title_text = Image.Text("RootForge OS", 0.0, 1.0, 0.255, 1, "Sans Bold 24");
+title_sprite = Sprite(title_text);
+title_sprite.SetX(Window.GetWidth()  / 2 - title_text.GetWidth()  / 2);
+title_sprite.SetY(Window.GetHeight() / 2 - title_text.GetHeight() / 2 - 40);
+
+subtitle_text = Image.Text("Victorious Framework  |  Android Root Module Development", 0.6, 0.6, 0.6, 1, "Sans 10");
+subtitle_sprite = Sprite(subtitle_text);
+subtitle_sprite.SetX(Window.GetWidth()  / 2 - subtitle_text.GetWidth()  / 2);
+subtitle_sprite.SetY(Window.GetHeight() / 2 - subtitle_text.GetHeight() / 2 - 10);
+
+progress_box_width  = 300;
+progress_box_height = 6;
+progress_x = Window.GetWidth()  / 2 - progress_box_width / 2;
+progress_y = Window.GetHeight() / 2 + 40;
+
+progress_box = Rectangle();
+progress_box.SetX(progress_x);
+progress_box.SetY(progress_y);
+progress_box.SetWidth(progress_box_width);
+progress_box.SetHeight(progress_box_height);
+progress_box.SetFillColor(0.1, 0.1, 0.1);
+progress_box_sprite = Sprite(progress_box.AsImage());
+progress_box_sprite.SetX(progress_x);
+progress_box_sprite.SetY(progress_y);
+
+progress_bar = Rectangle();
+progress_bar.SetX(progress_x);
+progress_bar.SetY(progress_y);
+progress_bar.SetHeight(progress_box_height);
+progress_bar.SetFillColor(0.0, 1.0, 0.255);
+
+fun BootProgressCallback(time, progress) {
+    progress_bar.SetWidth(Math.Int(progress_box_width * progress));
+    progress_bar_sprite = Sprite(progress_bar.AsImage());
+    progress_bar_sprite.SetX(progress_x);
+    progress_bar_sprite.SetY(progress_y);
+}
+
+Plymouth.SetBootProgressFunction(BootProgressCallback);

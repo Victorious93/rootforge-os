@@ -1,0 +1,15 @@
+#!/bin/sh
+# RootForge OS — set Plymouth theme
+# Victorious Framework | Origin Source Labs
+#
+# Activates the rootforge Plymouth theme and rebuilds initramfs so it's
+# embedded at build time. Runs after plymouth package is installed.
+
+set -e
+
+command -v plymouth-set-default-theme >/dev/null 2>&1 || { echo "plymouth not found — skipping"; exit 0; }
+
+echo "==> Setting Plymouth theme: rootforge"
+plymouth-set-default-theme rootforge
+update-initramfs -u 2>/dev/null || true
+echo "==> Plymouth theme set"

@@ -19,5 +19,5 @@ if [ -f "$HOME/.rootforge/ai-keys.env" ]; then
   . "$HOME/.rootforge/ai-keys.env"
 fi
 
-# Rootforge scripts always available
-export PATH="$PATH:/usr/local/bin"
+# Rootforge scripts and self-installed tools (payload-dumper-go, etc.)
+export PATH="$PATH:/usr/local/bin:$ROOTFORGE_HOME/bin"

@@ -1,0 +1,54 @@
+#!/bin/sh
+# RootForge OS — Zygisk NDK API headers
+# Victorious Framework | Origin Source Labs
+#
+# README section 3: "RootForge's Studio install should have the Zygisk API
+# headers vendored into a template project so you're not hunting for them
+# each time."
+#
+# Fetches the Zygisk API headers from the Magisk repo and installs them to
+# /usr/local/share/rootforge/zygisk-api/ so new_module_scaffold.sh can
+# reference them when scaffolding a Zygisk module.
+
+set -e
+
+INSTALL_DIR="/usr/local/share/rootforge/zygisk-api"
+mkdir -p "$INSTALL_DIR"
+
+MAGISK_API="https://api.github.com/repos/topjohnwu/Magisk/releases/latest"
+TAG=$(curl -fsSL "$MAGISK_API" | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+
+BASE="https://raw.githubusercontent.com/topjohnwu/Magisk/${TAG}"
+
+echo "==> Fetching Zygisk API headers from Magisk $TAG"
+for header in zygisk.hpp zygisk.h; do
+  URL="${BASE}/native/include/${header}"
+  if curl -fsSL --head "$URL" 2>/dev/null | grep -q "200"; then
+    curl -fsSL -o "$INSTALL_DIR/$header" "$URL"
+    echo "    $header"
+  fi
+done
+
+# Also fetch the Zygisk NDK API companion source used in native modules
+for src in zygisk.cpp; do
+  URL="${BASE}/native/src/zygisk/${src}"
+  if curl -fsSL --head "$URL" 2>/dev/null | grep -q "200"; then
+    curl -fsSL -o "$INSTALL_DIR/$src" "$URL"
+    echo "    $src"
+  fi
+done
+
+# Write a minimal CMakeLists stub so new Zygisk module projects can find the headers
+cat > "$INSTALL_DIR/CMakeLists.zygisk.txt" <<'EOF'
+# RootForge OS — Zygisk API headers include stub
+# Add to your module's CMakeLists.txt:
+#
+#   include(/usr/local/share/rootforge/zygisk-api/CMakeLists.zygisk.txt)
+
+target_include_directories(${MODULE_NAME} PRIVATE
+    /usr/local/share/rootforge/zygisk-api
+)
+EOF
+
+echo "==> Zygisk API headers installed to $INSTALL_DIR"
+ls "$INSTALL_DIR"

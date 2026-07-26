@@ -76,6 +76,13 @@ gnome-tweaks
 nautilus
 gdm3
 
+# Fonts
+fonts-jetbrains-mono
+
+# Plymouth boot splash
+plymouth
+plymouth-themes
+
 # Live system essentials
 live-boot
 live-config
