@@ -1,0 +1,27 @@
+#!/bin/sh
+# RootForge OS — starship prompt + eza install
+# Victorious Framework | Origin Source Labs
+#
+# Neither starship nor eza is in Debian 12 main repos.
+#   starship: installed via its official curl installer
+#   eza:      installed from the official GitHub release .deb
+#             (replaces the deprecated 'exa'; Bookworm backports may have it
+#              but the release .deb is more reliably current)
+
+set -e
+
+# --- starship ---
+echo "==> Installing starship prompt"
+curl -sS https://starship.rs/install.sh | sh -s -- --yes
+starship --version
+
+# --- eza ---
+echo "==> Installing eza"
+EZA_TAG=$(curl -fsSL https://api.github.com/repos/eza-community/eza/releases/latest \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+EZA_URL="https://github.com/eza-community/eza/releases/download/${EZA_TAG}/eza_x86_64-unknown-linux-gnu.tar.gz"
+curl -fsSL "$EZA_URL" | tar -xz -C /usr/local/bin eza
+chmod +x /usr/local/bin/eza
+eza --version
+
+echo "==> starship + eza install complete"

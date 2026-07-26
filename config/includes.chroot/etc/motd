@@ -1,0 +1,19 @@
+
+  ██████╗  ██████╗  ██████╗ ████████╗███████╗ ██████╗ ██████╗  ██████╗ ███████╗
+  ██╔══██╗██╔═══██╗██╔═══██╗╚══██╔══╝██╔════╝██╔═══██╗██╔══██╗██╔════╝ ██╔════╝
+  ██████╔╝██║   ██║██║   ██║   ██║   █████╗  ██║   ██║██████╔╝██║  ███╗█████╗
+  ██╔══██╗██║   ██║██║   ██║   ██║   ██╔══╝  ██║   ██║██╔══██╗██║   ██║██╔══╝
+  ██║  ██║╚██████╔╝╚██████╔╝   ██║   ██║     ╚██████╔╝██║  ██║╚██████╔╝███████╗
+  ╚═╝  ╚═╝ ╚═════╝  ╚═════╝   ╚═╝   ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝
+  Victorious Framework | Origin Source Labs
+
+  Quick start:
+    sudo 00_bootstrap_distro.sh     provision Android SDK/NDK (needs network)
+    new_module_scaffold.sh          scaffold a new Magisk/KernelSU/Xposed module
+    setup_rooted_avd.sh             create a rooted Android emulator
+    setup_terminal.sh               configure starship prompt + tmux layout
+    setup_ai_tools.sh               configure Claude Code / Grok / Ollama
+
+  All scripts are in /usr/local/bin — tab-complete to explore.
+  Documentation: /usr/local/share/rootforge/ and README.md
+

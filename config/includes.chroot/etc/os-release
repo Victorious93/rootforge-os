@@ -1,0 +1,11 @@
+PRETTY_NAME="RootForge OS 1.0 (Bookworm)"
+NAME="RootForge OS"
+VERSION_ID="1.0"
+VERSION="1.0 (Bookworm)"
+VERSION_CODENAME=bookworm
+ID=rootforge
+ID_LIKE=debian
+HOME_URL="https://github.com/origin-source-labs/rootforge-os"
+SUPPORT_URL="https://github.com/origin-source-labs/rootforge-os/issues"
+BUG_REPORT_URL="https://github.com/origin-source-labs/rootforge-os/issues"
+LOGO=rootforge

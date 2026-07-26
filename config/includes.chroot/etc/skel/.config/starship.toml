@@ -1,0 +1,38 @@
+# RootForge OS — starship prompt config
+# Victorious Framework | Origin Source Labs
+#
+# Custom device-count segment + dark terminal aesthetic.
+# Baked into skel so every new user gets it without running setup_terminal.sh.
+
+format = """
+$username$hostname$directory$git_branch$git_status$custom.rootforge_devices$cmd_duration$line_break$character"""
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol   = "[❯](bold red)"
+
+[directory]
+style            = "bold cyan"
+truncation_length = 4
+truncate_to_repo = true
+
+[git_branch]
+style  = "bold green"
+format = "[$symbol$branch]($style) "
+
+[git_status]
+style = "bold yellow"
+
+# Live connected Android device count
+[custom.rootforge_devices]
+description = "Connected Android devices via adb"
+command     = "n=$(adb devices 2>/dev/null | grep -c 'device$'); [ \"$n\" -gt 0 ] && echo \"📱 ${n}dev\""
+when        = "command -v adb >/dev/null 2>&1"
+shell       = ["bash", "-c"]
+format      = "[$output ]($style)"
+style       = "bold cyan"
+
+[cmd_duration]
+min_time = 2000
+format   = "took [$duration]($style) "
+style    = "yellow"
