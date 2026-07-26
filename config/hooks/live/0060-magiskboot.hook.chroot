@@ -1,0 +1,41 @@
+#!/bin/sh
+# RootForge OS — magiskboot prebuilt install
+# Victorious Framework | Origin Source Labs
+#
+# magiskboot is the core tool for unpacking/repacking Android boot images —
+# used by kernelsu_patch_boot.sh, flash_patched_boot.sh, and others.
+# It lives in Magisk's native tree and isn't in any apt repo.
+#
+# Strategy: fetch the latest Magisk release APK (it's a zip), extract the
+# x86_64 magiskboot binary from the assets inside, install to /usr/local/bin.
+# This is the same binary Magisk ships on-device; it runs on x86_64 Linux fine.
+
+set -e
+
+MAGISK_API="https://api.github.com/repos/topjohnwu/Magisk/releases/latest"
+WORK_DIR="/tmp/magiskboot-extract"
+mkdir -p "$WORK_DIR"
+
+echo "==> Fetching latest Magisk release metadata"
+RELEASE_JSON=$(curl -fsSL "$MAGISK_API")
+
+# Magisk releases the APK as magisk-<version>.apk — it's a zip containing
+# lib/x86_64/libmagiskboot.so which is a standalone ELF, despite the .so name
+APK_URL=$(echo "$RELEASE_JSON" | python3 -c "
+import sys, json
+assets = json.load(sys.stdin)['assets']
+apk = [a for a in assets if a['name'].endswith('.apk') and 'stub' not in a['name']]
+print(apk[0]['browser_download_url'] if apk else '')
+")
+
+[ -z "$APK_URL" ] && { echo "WARNING: Could not find Magisk APK URL — magiskboot will be absent. Scripts will error at runtime if it's needed."; exit 0; }
+
+echo "==> Downloading Magisk APK from $APK_URL"
+curl -fsSL -o "$WORK_DIR/magisk.apk" "$APK_URL"
+
+echo "==> Extracting magiskboot from APK"
+unzip -p "$WORK_DIR/magisk.apk" "lib/x86_64/libmagiskboot.so" > /usr/local/bin/magiskboot
+chmod +x /usr/local/bin/magiskboot
+rm -rf "$WORK_DIR"
+
+echo "==> magiskboot installed: $(magiskboot 2>&1 | head -1 || true)"

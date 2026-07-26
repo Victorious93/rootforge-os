@@ -1,0 +1,25 @@
+#!/bin/sh
+# RootForge OS — pre-create rootforge workspace in skel
+# Victorious Framework | Origin Source Labs
+#
+# Creates the ~/rootforge/ directory layout in /etc/skel so every user
+# (including the live session user) starts with the workspace tree ready.
+# 00_bootstrap_distro.sh expects this layout to exist; scripts log to ~/rootforge/logs/.
+# Keys directory is chmod 700 — nothing else should be.
+
+set -e
+
+SKEL_RF="/etc/skel/rootforge"
+
+mkdir -p \
+  "$SKEL_RF/devices" \
+  "$SKEL_RF/modules/.cache" \
+  "$SKEL_RF/kernels" \
+  "$SKEL_RF/keys" \
+  "$SKEL_RF/avd-profiles" \
+  "$SKEL_RF/logs" \
+  "$SKEL_RF/bin"
+
+chmod 700 "$SKEL_RF/keys"
+
+echo "==> rootforge workspace skeleton created in /etc/skel/rootforge"

@@ -1,0 +1,8 @@
+# RootForge OS — passwordless sudo for live session user
+# Victorious Framework | Origin Source Labs
+#
+# The live user needs passwordless sudo to run adb root, fastboot flash,
+# and installer (calamares) without prompts in a session that has no set
+# password by default. This file is removed post-install by Calamares's
+# removeuser + packages modules — the installed user gets normal sudo.
+rootforge ALL=(ALL) NOPASSWD: ALL

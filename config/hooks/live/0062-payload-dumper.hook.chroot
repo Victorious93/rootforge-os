@@ -1,0 +1,32 @@
+#!/bin/sh
+# RootForge OS — payload-dumper-go prebuilt install
+# Victorious Framework | Origin Source Labs
+#
+# payload-dumper-go extracts partition images from Android OTA payload.bin files.
+# extract_ota.sh self-installs it at first run, but baking it into the squashfs
+# means it's available immediately in the live session without a network fetch.
+
+set -e
+
+PD_API="https://api.github.com/repos/ssut/payload-dumper-go/releases/latest"
+INSTALL_DIR="/usr/local/bin"
+
+echo "==> Fetching payload-dumper-go latest release"
+PD_URL=$(curl -fsSL "$PD_API" | python3 -c "
+import sys, json
+assets = json.load(sys.stdin)['assets']
+# Match linux_amd64 tar.gz
+match = [a for a in assets if 'linux_amd64' in a['name'] and a['name'].endswith('.tar.gz')]
+print(match[0]['browser_download_url'] if match else '')
+")
+
+[ -z "$PD_URL" ] && { echo "WARNING: payload-dumper-go release not found — extract_ota.sh will self-install it at runtime."; exit 0; }
+
+echo "==> Downloading: $PD_URL"
+TMPDIR=$(mktemp -d)
+curl -fsSL -o "$TMPDIR/pd.tar.gz" "$PD_URL"
+tar -xz -C "$TMPDIR" -f "$TMPDIR/pd.tar.gz"
+find "$TMPDIR" -name "payload-dumper-go" -exec install -m 0755 {} "$INSTALL_DIR/payload-dumper-go" \;
+rm -rf "$TMPDIR"
+
+echo "==> payload-dumper-go installed: $("$INSTALL_DIR/payload-dumper-go" --version 2>/dev/null || echo 'ok')"

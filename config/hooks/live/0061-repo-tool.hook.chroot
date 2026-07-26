@@ -1,0 +1,20 @@
+#!/bin/sh
+# RootForge OS — Google repo tool install
+# Victorious Framework | Origin Source Labs
+#
+# 'repo' is Google's manifest-based multi-git tool, required for pulling
+# AOSP/kernel/device trees. Not in Debian repos; installed from source.google.com.
+
+set -e
+
+echo "==> Installing Google repo tool"
+REPO_URL="https://storage.googleapis.com/git-repo-downloads/repo"
+curl -fsSL -o /usr/local/bin/repo "$REPO_URL"
+chmod +x /usr/local/bin/repo
+
+# Verify it's a valid script (repo is a Python script)
+python3 /usr/local/bin/repo --version 2>/dev/null | head -1 || \
+  python3 /usr/local/bin/repo help >/dev/null 2>&1 || \
+  echo "WARNING: repo installed but version check inconclusive — that's normal before git config is set."
+
+echo "==> repo tool installed at /usr/local/bin/repo"
