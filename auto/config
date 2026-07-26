@@ -1,0 +1,35 @@
+#!/bin/sh
+# RootForge OS — live-build configuration
+# Victorious Framework | Origin Source Labs
+#
+# Pin to Bookworm, GNOME, amd64 hybrid ISO with Calamares disk-install support.
+# Run: sudo auto/build
+
+set -e
+
+lb config noauto \
+  --distribution bookworm \
+  --archive-areas "main contrib non-free non-free-firmware" \
+  --binary-image iso-hybrid \
+  --bootloaders grub-efi \
+  --bootloader-timeout 10 \
+  --debian-installer none \
+  --linux-flavours amd64 \
+  --architectures amd64 \
+  --mode debian \
+  --apt-recommends false \
+  --apt-options "--yes --no-install-recommends" \
+  --compression xz \
+  --zsync false \
+  --image-name "rootforge-os" \
+  --iso-volume "RootForge OS" \
+  --iso-application "RootForge OS — Android Root Module Development" \
+  --iso-preparer "Victorious Framework | Origin Source Labs" \
+  --iso-publisher "Origin Source Labs" \
+  --memtest none \
+  --utc-time true \
+  --system live \
+  --initramfs live-boot \
+  --firmware-binary true \
+  --firmware-chroot true \
+  "${@}"

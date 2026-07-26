@@ -1,0 +1,22 @@
+# RootForge OS — disk installer package list
+# Victorious Framework | Origin Source Labs
+#
+# Calamares + dependencies for the "Install RootForge OS" path (README section 14).
+# calamares-settings-debian provides the proven partition/GRUB module config
+# used by MX Linux, Kali, and other Debian derivatives — not hand-rolled.
+
+calamares
+calamares-settings-debian
+grub-efi-amd64
+grub-efi-amd64-signed
+shim-signed
+os-prober
+efibootmgr
+parted
+btrfs-progs
+dosfstools
+ntfs-3g
+xfsprogs
+cryptsetup
+squashfs-tools
+rsync

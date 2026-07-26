@@ -1,0 +1,39 @@
+#!/bin/sh
+# RootForge OS — build wrapper
+# Victorious Framework | Origin Source Labs
+#
+# Checks for root and loop-device access before handing off to lb build.
+# Usage: sudo auto/build [lb-build-options]
+
+set -e
+
+LOGFILE="rootforge-build-$(date +%Y%m%d_%H%M%S).log"
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "ERROR: lb build must run as root (loop device mounts require it)." >&2
+  echo "       Re-run with: sudo auto/build" >&2
+  exit 1
+fi
+
+# Confirm loop device access
+if ! losetup -f >/dev/null 2>&1; then
+  echo "ERROR: No free loop devices found. Check 'losetup -a' and free one, or" >&2
+  echo "       ensure loop module is loaded: modprobe loop" >&2
+  exit 1
+fi
+
+echo "==> RootForge OS build starting — $(date)"
+echo "==> Log: $LOGFILE"
+echo "==> Architecture note: GNOME is the configured desktop. On a box that also"
+echo "    runs an accelerated emulator and kernel builds concurrently, budget 16GB+"
+echo "    RAM. XFCE is a lighter alternative — edit auto/config to swap if needed."
+echo "==> SDK/NDK note: Android SDK, NDK, and Magisk source are NOT baked into"
+echo "    the squashfs. rootforge-firstboot.service runs 00_bootstrap_distro.sh on"
+echo "    first real boot (network required)."
+echo ""
+
+lb build "${@}" 2>&1 | tee "$LOGFILE"
+
+echo ""
+echo "==> Build complete. Log saved to $LOGFILE"
+echo "==> ISO: $(ls -lh rootforge-os-amd64.hybrid.iso 2>/dev/null || echo 'check live-image/')"

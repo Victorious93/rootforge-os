@@ -1,0 +1,15 @@
+#!/bin/sh
+# RootForge OS — Claude Code CLI install
+# Victorious Framework | Origin Source Labs
+#
+# Installs the Claude Code CLI globally via npm. Runs after the NodeSource
+# LTS hook (0010) so a current Node.js is guaranteed present.
+# API key configuration is user-driven via scripts/setup_ai_tools.sh.
+
+set -e
+
+echo "==> Installing Claude Code CLI"
+npm install -g @anthropic-ai/claude-code
+
+claude --version || true
+echo "==> Claude Code CLI install complete"

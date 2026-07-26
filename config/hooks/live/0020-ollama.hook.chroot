@@ -1,0 +1,29 @@
+#!/bin/sh
+# RootForge OS — Ollama binary + systemd service install
+# Victorious Framework | Origin Source Labs
+#
+# Installs the Ollama binary and its systemd service unit at build time.
+# Binary is tens of MB (acceptable at ISO build time). Model weight pulls
+# are large and personal — those are an explicit user opt-in via
+# scripts/setup_ai_tools.sh, NOT run here.
+#
+# AMD GPU / ROCm: setup_ai_tools.sh detects the GPU and sets
+# HSA_OVERRIDE_GFX_VERSION as needed. Not wired here to avoid
+# baking hardware-specific assumptions into the image.
+
+set -e
+
+echo "==> Installing Ollama"
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Confirm the service unit was created by the installer
+if [ -f /etc/systemd/system/ollama.service ]; then
+  echo "==> Ollama systemd service unit present"
+  # Disable auto-start in live session — user enables on installed system
+  systemctl disable ollama || true
+else
+  echo "WARNING: ollama.service not found after install — manual check needed"
+fi
+
+ollama --version || true
+echo "==> Ollama install complete"

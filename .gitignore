@@ -1,0 +1,9 @@
+# live-build output artifacts
+cache/
+chroot/
+binary/
+live-image/
+*.iso
+*.img
+*.log
+.build/

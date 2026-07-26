@@ -1,0 +1,27 @@
+#!/bin/sh
+# RootForge OS — NodeSource LTS repository + Node.js install
+# Victorious Framework | Origin Source Labs
+#
+# Debian 12's packaged Node.js is too old for Claude Code. This hook adds the
+# NodeSource LTS repo and installs the current LTS release at build time.
+# The package list rootforge-ai.list.chroot lists 'npm' as a hint; the actual
+# node binary comes from this hook's repo, which satisfies that dependency.
+
+set -e
+
+KEYRING_URL="https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key"
+KEYRING_PATH="/usr/share/keyrings/nodesource.gpg"
+
+echo "==> Installing NodeSource LTS repository"
+curl -fsSL "$KEYRING_URL" | gpg --dearmor -o "$KEYRING_PATH"
+
+NODE_MAJOR=20
+echo "deb [signed-by=$KEYRING_PATH] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+  > /etc/apt/sources.list.d/nodesource.list
+
+apt-get update -q
+apt-get install -y --no-install-recommends nodejs
+node --version
+npm --version
+
+echo "==> NodeSource LTS install complete"

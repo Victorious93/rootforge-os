@@ -1,0 +1,39 @@
+[Unit]
+Description=RootForge OS first-boot provisioning (Android SDK/NDK bootstrap)
+Documentation=file:///usr/local/bin/00_bootstrap_distro.sh
+# Run exactly once on first real boot (not live session).
+# Sentinel file prevents re-runs on subsequent boots.
+ConditionPathExists=!/var/lib/rootforge/firstboot.done
+# Wait for network — SDK fetch needs internet access.
+After=network-online.target
+Wants=network-online.target
+# Only run on an installed system, not the live session.
+ConditionVirtualization=!container
+ConditionPathExists=/etc/rootforge-installed
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/00_bootstrap_distro.sh
+ExecStartPost=/bin/sh -c 'mkdir -p /var/lib/rootforge && touch /var/lib/rootforge/firstboot.done'
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=1800
+
+# --- IMPORTANT: what is NOT wired here ---
+# The following scripts are all opt-in and must be run manually by the user:
+#   setup_ai_tools.sh    — prompts for API keys; must not run unattended
+#   harden_system.sh     — USBGuard block-all default conflicts with USB dev work
+#   harden_kernel.sh     — --lockdown blocks unsigned module loading (KernelSU)
+#   join_headscale.sh    — requires personal mesh credentials
+#   setup_vpn.sh         — personal WireGuard config
+#   flash_pi_image.sh    — requires hardware present
+#   rpi_fleet_tools.sh   — requires fleet present
+#   fleet_orchestrate.sh — requires devices present
+#   install_adb_ime.sh   — requires device connected
+#   setup_terminal.sh    — user preference
+#   setup_intercept_proxy.sh — requires rooted device
+#   esp32_toolkit.sh     — opt-in hardware toolchain
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+#!/bin/sh
+# RootForge OS — Raspberry Pi Imager install (non-apt fallback)
+# Victorious Framework | Origin Source Labs
+#
+# rpi-imager is not in Debian 12 repos. This hook fetches the official
+# .deb from raspberrypi.com. scripts/flash_pi_image.sh wraps its CLI.
+# If the download fails at build time, the hook exits cleanly and
+# flash_pi_image.sh will error with a helpful message at runtime.
+
+set -e
+
+IMAGER_URL="https://downloads.raspberrypi.com/imager/imager_latest_amd64.deb"
+IMAGER_DEB="/tmp/rpi-imager.deb"
+
+echo "==> Fetching rpi-imager .deb from raspberrypi.com"
+if curl -fsSL -o "$IMAGER_DEB" "$IMAGER_URL"; then
+  apt-get install -y --no-install-recommends "$IMAGER_DEB" || \
+    apt-get install -f -y
+  rm -f "$IMAGER_DEB"
+  echo "==> rpi-imager install complete"
+else
+  echo "WARNING: rpi-imager download failed. flash_pi_image.sh will prompt to"
+  echo "         install it manually at runtime. Continuing build without it."
+fi

@@ -1,0 +1,13 @@
+# RootForge OS — AI/LLM tooling package list
+# Victorious Framework | Origin Source Labs
+#
+# Packages baked into the squashfs at build time (README section 15).
+# Node.js comes from the NodeSource LTS repo (hook: 0010-nodesource.hook.chroot)
+# not Debian's older packaged version — Claude Code requires a current Node.
+# Ollama binary is installed via its own hook (0020-ollama.hook.chroot).
+# Claude Code CLI is installed via npm hook (0030-claude-code.hook.chroot).
+#
+# API keys and model weight pulls are NOT here — see scripts/setup_ai_tools.sh.
+
+# npm is pulled in as a NodeSource dependency; listed for clarity
+npm

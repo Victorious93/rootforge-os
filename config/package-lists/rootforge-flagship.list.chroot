@@ -1,0 +1,49 @@
+# RootForge OS — flagship features package list
+# Victorious Framework | Origin Source Labs
+#
+# Opt-in tooling for the ten flagship features (README section 16).
+# NONE of these are wired into rootforge-firstboot.service — all user-initiated.
+#
+# Two packages may need non-apt fallbacks on Bookworm:
+#   rpi-imager: not in Debian 12 repos; hook 0040-rpi-imager.hook.chroot
+#               fetches the official .deb from raspberrypi.com
+#   tailscale:  proprietary repo; scripts/join_headscale.sh handles its install
+#               at user invocation time, not build time
+
+# Security hardening (harden_system.sh, harden_kernel.sh)
+apparmor
+apparmor-utils
+apparmor-profiles
+usbguard
+auditd
+nftables
+fail2ban
+
+# VPN / mesh (setup_vpn.sh, join_headscale.sh)
+wireguard-tools
+qrencode
+
+# Intercepting proxy (setup_intercept_proxy.sh)
+mitmproxy
+python3-certifi
+
+# Fleet / network tooling (fleet_orchestrate.sh, rpi_fleet_tools.sh)
+nmap
+openssh-client
+sshpass
+
+# ESP32 toolchain (esp32_toolkit.sh)
+python3-serial
+pipx
+
+# Terminal stack (setup_terminal.sh)
+tmux
+fzf
+bat
+eza
+zoxide
+starship
+
+# Miscellaneous script dependencies
+dialog
+pv

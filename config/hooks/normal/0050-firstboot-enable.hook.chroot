@@ -1,0 +1,15 @@
+#!/bin/sh
+# RootForge OS — enable firstboot service in installed system
+# Victorious Framework | Origin Source Labs
+#
+# This hook runs during Calamares post-install (normal/chroot phase) to
+# enable the rootforge-firstboot.service on the newly installed system.
+# The service's ConditionPathExists=/etc/rootforge-installed guard ensures
+# it does NOT trigger in the live session — only on the real installed boot.
+
+set -e
+
+echo "==> Enabling rootforge-firstboot.service for installed system"
+touch /etc/rootforge-installed
+systemctl enable rootforge-firstboot.service || true
+echo "==> First-boot service enabled"

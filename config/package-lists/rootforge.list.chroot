@@ -1,0 +1,87 @@
+# RootForge OS — core toolchain package list
+# Victorious Framework | Origin Source Labs
+#
+# Every apt-installable package needed for Android root-module development
+# (README section 2). Android SDK/NDK are fetched at first boot by
+# 00_bootstrap_distro.sh — not baked here.
+
+# Base build utilities
+build-essential
+git
+curl
+wget
+unzip
+zip
+rsync
+ccache
+gnupg
+lsb-release
+ca-certificates
+software-properties-common
+
+# Java (Android Gradle Plugin 8.x baseline)
+openjdk-17-jdk
+
+# Python (for avbtool, mkbootimg, various scripts)
+python3
+python3-pip
+python3-venv
+
+# Kernel cross-compilation toolchain
+clang
+lld
+llvm
+binutils-aarch64-linux-gnu
+gcc-aarch64-linux-gnu
+bc
+bison
+flex
+libssl-dev
+libelf-dev
+dwarves
+cpio
+kmod
+rsync
+
+# KVM emulator acceleration
+qemu-kvm
+libvirt-daemon-system
+virtinst
+bridge-utils
+cpu-checker
+
+# ADB / fastboot
+android-sdk-platform-tools-common
+adb
+fastboot
+
+# Boot image / sparse image tools
+simg2img
+abootimg
+e2fsprogs
+
+# Script tooling dependencies (README section 2)
+jq
+docker.io
+
+# Gradle (standalone, for Magisk/module builds outside Android Studio)
+gradle
+
+# GNOME desktop (lean selection — not the full gnome meta-package)
+gnome-session
+gnome-shell
+gnome-terminal
+gnome-control-center
+gnome-tweaks
+nautilus
+gdm3
+
+# Live system essentials
+live-boot
+live-config
+live-config-systemd
+sudo
+locales
+network-manager
+network-manager-gnome
+pulseaudio
