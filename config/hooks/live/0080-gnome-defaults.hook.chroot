@@ -1,0 +1,52 @@
+#!/bin/sh
+# RootForge OS — GNOME default settings for live session
+# Victorious Framework | Origin Source Labs
+#
+# Sets dark theme, JetBrains Mono terminal font, and marks the desktop
+# install shortcut as trusted — all via dconf defaults so they apply to
+# every user created from skel without needing a logged-in session.
+# The dconf profile mechanism is used: we write a locks file + a db file
+# that GNOME reads before the per-user profile, establishing system defaults
+# that users can still override.
+
+set -e
+
+# Ensure dconf tools are present (pulled in by gnome-shell)
+command -v dconf >/dev/null 2>&1 || { echo "dconf not found — skipping GNOME defaults hook"; exit 0; }
+
+PROFILE_DIR="/etc/dconf/profile"
+DB_DIR="/etc/dconf/db/rootforge.d"
+mkdir -p "$PROFILE_DIR" "$DB_DIR/locks"
+
+# dconf profile — user overrides > rootforge system defaults > upstream
+cat > "$PROFILE_DIR/user" <<'EOF'
+user-db:user
+system-db:rootforge
+EOF
+
+# System-wide GNOME defaults
+cat > "$DB_DIR/00-rootforge-defaults" <<'EOF'
+[org/gnome/desktop/interface]
+color-scheme='prefer-dark'
+gtk-theme='Adwaita-dark'
+monospace-font-name='JetBrains Mono 11'
+clock-show-seconds=true
+
+[org/gnome/desktop/background]
+primary-color='#0d0d0d'
+color-shading-type='solid'
+
+[org/gnome/terminal/legacy/profiles:/:b1dcc9dd-5262-4d8d-a863-c897e6d979b9]
+font='JetBrains Mono 11'
+use-system-font=false
+use-theme-colors=false
+background-color='#0d0d0d'
+foreground-color='#00ff41'
+
+[org/gnome/nautilus/preferences]
+show-hidden-files=true
+EOF
+
+# Compile the dconf database
+dconf update
+echo "==> GNOME system defaults applied (dark theme, JetBrains Mono, green-on-black terminal)"

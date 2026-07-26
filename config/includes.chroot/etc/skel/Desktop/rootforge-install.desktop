@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Install RootForge OS
+Comment=Install RootForge OS to disk (Calamares installer)
+Exec=pkexec calamares
+Icon=system-software-install
+Terminal=false
+Categories=System;
+Keywords=install;disk;rootforge;
+X-GNOME-Autostart-enabled=false
