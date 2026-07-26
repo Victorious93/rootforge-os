@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=RootForge OS Welcome
+Comment=Show quick-start guide on first login
+Exec=bash -c 'cat /etc/motd | zenity --text-info --title="Welcome to RootForge OS" --width=700 --height=500 --font="JetBrains Mono 11" 2>/dev/null || gnome-terminal -- bash -c "cat /etc/motd; echo; read -p \"Press Enter to close...\" _"'
+Icon=system-help
+Terminal=false
+Categories=System;
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Application

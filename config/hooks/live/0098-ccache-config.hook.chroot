@@ -1,0 +1,30 @@
+#!/bin/sh
+# RootForge OS — ccache global configuration
+# Victorious Framework | Origin Source Labs
+#
+# ccache is in the package list but unconfigured by default — it silently
+# does nothing until the cache dir and size cap are set.
+# 10 GB cap is reasonable for a dev box doing repeated kernel/Magisk builds;
+# adjust with: ccache --max-size <size>
+
+set -e
+
+command -v ccache >/dev/null 2>&1 || { echo "ccache not found — skipping"; exit 0; }
+
+CCACHE_DIR="/etc/ccache.conf"
+cat > "$CCACHE_DIR" <<'EOF'
+# RootForge OS — system-wide ccache config
+# Victorious Framework
+max_size = 10G
+compression = true
+compression_level = 6
+cache_dir = ~/.cache/ccache
+EOF
+
+# Wire ccache as the compiler wrapper system-wide via update-ccache-symlinks
+# (Debian's ccache package ships this). This makes gcc/g++/clang on $PATH
+# transparently cache without any per-project config.
+update-ccache-symlinks 2>/dev/null || true
+
+echo "==> ccache configured: 10G cache, compression enabled"
+echo "    Per-user cache in ~/.cache/ccache — show stats with: ccache -s"
