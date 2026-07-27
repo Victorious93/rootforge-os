@@ -1,5 +1,9 @@
 # RootForge OS — A Debian-Based Distro for Android Root Module Development
 
+<p align="center">
+  <img src="assets/logo/rootforge-os-logo.jpg" alt="RootForge OS logo" width="240">
+</p>
+
 **Victorious Framework — Origin Source Labs**
 Status: Specification / Build Guide (v1.0) — living document, update in place as the toolchain evolves.
 
