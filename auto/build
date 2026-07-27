@@ -1,13 +1,14 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # RootForge OS — build wrapper
 # Victorious Framework | Origin Source Labs
 #
 # Checks for root and loop-device access before handing off to lb build.
 # Usage: sudo auto/build [lb-build-options]
 
-set -e
+set -euo pipefail
 
 LOGFILE="rootforge-build-$(date +%Y%m%d_%H%M%S).log"
+FINAL_ISO="rootforge-os-amd64.hybrid.iso"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "ERROR: lb build must run as root (loop device mounts require it)." >&2
@@ -32,8 +33,40 @@ echo "    the squashfs. rootforge-firstboot.service runs 00_bootstrap_distro.sh 
 echo "    first real boot (network required)."
 echo ""
 
+# `lb build | tee` masks lb build's real exit code without pipefail (tee
+# almost always succeeds even when the command feeding it failed) — that
+# silently turned failed builds into a false "Build complete" before this
+# was pipefail-enabled. Capture the pipeline's real status explicitly so a
+# failure here is loud, not a checksum error three steps later that looks
+# unrelated.
+set +e
 lb build "${@}" 2>&1 | tee "$LOGFILE"
+BUILD_STATUS=$?
+set -e
+
+if [ "$BUILD_STATUS" -ne 0 ]; then
+  echo "" >&2
+  echo "==> lb build FAILED (exit $BUILD_STATUS). See $LOGFILE for details." >&2
+  exit "$BUILD_STATUS"
+fi
+
+# live-build names the artifact binary.iso / binary.hybrid.iso and drops it
+# at the repo root — there's no --image-name flag in this live-build
+# version to control that directly, so rename it to what the rest of the
+# tooling (Makefile, BUILD.md, release.yml) expects.
+PRODUCED_ISO=""
+for candidate in binary.hybrid.iso binary.iso; do
+  [ -f "$candidate" ] && PRODUCED_ISO="$candidate" && break
+done
+
+if [ -z "$PRODUCED_ISO" ]; then
+  echo "==> ERROR: lb build reported success but no binary.iso/binary.hybrid.iso was produced." >&2
+  echo "    Check $LOGFILE — this shouldn't happen if lb build actually exited 0." >&2
+  exit 1
+fi
+
+mv -f "$PRODUCED_ISO" "$FINAL_ISO"
 
 echo ""
 echo "==> Build complete. Log saved to $LOGFILE"
-echo "==> ISO: $(ls -lh rootforge-os-amd64.hybrid.iso 2>/dev/null || echo 'check live-image/')"
+echo "==> ISO: $(ls -lh "$FINAL_ISO")"

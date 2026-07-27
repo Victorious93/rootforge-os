@@ -4,15 +4,29 @@
 #
 # Pin to Bookworm, GNOME, amd64 hybrid ISO with Calamares disk-install support.
 # Run: sudo auto/build
+#
+# [Certain] the exact set of valid `lb config` flags is live-build-version-
+# dependent — this was written against flag names (--bootloaders,
+# --bootloader-timeout, --image-name, --utc-time) that don't exist in the
+# live-build package actually shipped by Debian bookworm / current Ubuntu
+# (3.0~a57): `lb config` treats unrecognized options as non-fatal warnings
+# and keeps going, which combined with auto/build's own pipefail bug meant
+# a build could "succeed" having done nothing. --bootloader grub2 is the
+# value lb_binary_grub2 actually checks for to produce a UEFI-capable image
+# (the enum in `lb config --help`, grub|syslinux|yaboot, is stale docs, not
+# an enforced list — the parser accepts any string). There's no boot-menu-
+# timeout or output-filename flag in this version at all: the timeout is
+# whatever GRUB defaults to unless overridden via a
+# config/bootloaders/grub2/ template, and auto/build renames the produced
+# binary.hybrid.iso itself rather than relying on a --image-name flag.
 
 set -e
 
 lb config noauto \
   --distribution bookworm \
   --archive-areas "main contrib non-free non-free-firmware" \
-  --binary-image iso-hybrid \
-  --bootloaders grub-efi \
-  --bootloader-timeout 10 \
+  --binary-images iso-hybrid \
+  --bootloader grub2 \
   --debian-installer none \
   --linux-flavours amd64 \
   --architectures amd64 \
@@ -21,13 +35,11 @@ lb config noauto \
   --apt-options "--yes --no-install-recommends" \
   --compression xz \
   --zsync false \
-  --image-name "rootforge-os" \
   --iso-volume "RootForge OS" \
   --iso-application "RootForge OS — Android Root Module Development" \
   --iso-preparer "Victorious Framework | Origin Source Labs" \
   --iso-publisher "Origin Source Labs" \
   --memtest none \
-  --utc-time true \
   --system live \
   --initramfs live-boot \
   --firmware-binary true \

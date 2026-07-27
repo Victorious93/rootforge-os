@@ -45,7 +45,7 @@ apt-get install -y --no-install-recommends \
   bc bison flex libssl-dev libelf-dev dwarves cpio kmod \
   qemu-kvm libvirt-daemon-system virtinst bridge-utils cpu-checker \
   android-sdk-platform-tools-common adb fastboot \
-  simg2img abootimg e2fsprogs \
+  android-sdk-libsparse-utils abootimg e2fsprogs \
   jq docker.io \
   gnupg lsb-release \
   | tee -a "$LOG_FILE"

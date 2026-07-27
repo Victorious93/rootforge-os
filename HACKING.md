@@ -43,7 +43,8 @@ rootforge-os/
     │   ├── etc/systemd/     first-boot service
     │   ├── usr/local/bin/   all 27 automation scripts
     │   └── usr/local/share/rootforge/  docker/, zygisk-api/ (added by hooks)
-    └── bootloaders/grub-pc/grub.cfg   live ISO boot menu
+    └── templates/grub2/grub.cfg       live ISO boot menu (path live-build's
+        grub2 stage actually reads — see the file's own header comment)
 ```
 
 ## Adding a script
