@@ -1,6 +1,14 @@
 # Building RootForge OS
 **Victorious Framework | Origin Source Labs**
 
+Don't need to build it yourself? `.github/workflows/release.yml` builds this
+same ISO (and the Termux/PRoot rootfs — see README section 17) on every
+tagged push and attaches both, with `.sha256` checksums, to a draft
+[GitHub Release](https://github.com/Victorious93/rootforge-os/releases).
+README section 14 covers flashing a downloaded or locally-built ISO to a
+USB drive (`make list-usb` / `sudo make flash USB=/dev/sdX`, both checksum-
+aware).
+
 ## Prerequisites
 
 On a Debian 12 (Bookworm) or Ubuntu 22.04+ host:
@@ -27,7 +35,7 @@ sudo auto/build
 
 The ISO lands as `rootforge-os-amd64.hybrid.iso` in the project root. Build time is 20–60 minutes depending on network speed (hooks fetch NodeSource, Ollama, Claude Code, magiskboot, eza, starship, repo, and payload-dumper-go at build time).
 
-A timestamped log is written alongside the ISO.
+A timestamped log is written alongside the ISO. Use `sudo make build` instead of `sudo auto/build` directly and it also writes `rootforge-os-amd64.hybrid.iso.sha256` (or run `make checksum` afterward) — `make flash` verifies against that checksum automatically if it's present.
 
 ## What is NOT in the ISO
 

@@ -7,8 +7,16 @@
 rootforge-os/
 ├── auto/config          lb config invocation — edit to change distro/arch/desktop
 ├── auto/build           build wrapper — run with sudo
-├── Makefile             convenience targets (build / clean / distclean / flash)
+├── Makefile             convenience targets (build / checksum / list-usb / flash / clean / distclean)
 ├── BUILD.md             host prerequisites and build instructions
+├── .github/workflows/release.yml   builds + publishes the ISO and Termux rootfs on a tagged push
+├── termux/              non-root Termux/PRoot variant — see README section 17
+│   ├── build-rootfs.sh          debootstrap-based rootfs builder (reuses config/hooks/live/*)
+│   ├── package-lists/           pruned, PRoot-safe package list
+│   ├── proot-distro-plugins/    the plugin Termux users install
+│   ├── bootstrap_proot.sh       SDK/NDK fetch, replaces 00_bootstrap_distro.sh here
+│   ├── proot-setup.sh           image-bake-time motd/workspace setup
+│   └── install.sh               one-command Termux installer
 └── config/
     ├── package-lists/   apt packages installed into the squashfs
     │   ├── rootforge.list.chroot          core toolchain + GNOME

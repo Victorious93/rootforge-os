@@ -239,6 +239,33 @@ RootForge introduces. If a dual-boot menu ever looks wrong after installing,
 `sudo update-grub` re-running `os-prober` is the first thing to check, before
 assuming the install broke something.
 
+**Getting the ISO onto a USB drive:** the build is `iso-hybrid`, so the raw ISO
+file is already directly `dd`-able — no separate USB-creation tool step is
+required, on Linux or macOS. Two ways to get the ISO itself:
+
+- **Prebuilt**: download `rootforge-os-amd64.hybrid.iso` and its `.sha256` from
+  [GitHub Releases](https://github.com/Victorious93/rootforge-os/releases) —
+  `.github/workflows/release.yml` builds and attaches one on every tagged push.
+- **Build it yourself**: `sudo make build` (runs `auto/build`, then writes
+  `rootforge-os-amd64.hybrid.iso.sha256` automatically — see BUILD.md).
+
+Then flash it:
+
+```
+make list-usb                       # sanity-check which device is actually the USB drive
+sudo make flash USB=/dev/sdX        # verifies the .sha256 if present, confirms, then dd's
+```
+
+`make flash` refuses to run without a checksum match if a `.sha256` file is
+present alongside the ISO, and prints the target device's size/model from
+`lsblk` before the final confirmation window — **[Certain]** `dd` doesn't ask
+twice and doesn't know the difference between a USB stick and your boot disk,
+so that confirmation step is there on purpose; double-check `USB=` against
+`make list-usb`'s output before proceeding. On Windows, there's no `dd` —
+use [Rufus](https://rufus.ie/) or [balenaEtcher](https://www.balena.io/etcher/)
+with "DD/ISO image mode" pointed at the same ISO file; verify the downloaded
+file's SHA-256 against the published `.sha256` first either way.
+
 ## 15. AI / LLM tooling (Claude Code, Grok, Ollama, Hermes)
 
 Bundled independently of the Android toolchain — useful on this box whether or not
@@ -381,7 +408,14 @@ sudo termux/build-rootfs.sh amd64        # x86 Android, or a desktop-Linux PRoot
 ```
 It debootstraps a minimal Debian bookworm rootfs for the target arch, installs `termux/package-lists/rootforge-proot.list.chroot` (a pruned version of the core package lists — GNOME/plymouth/live-boot, qemu-kvm/libvirt, usbguard/auditd/nftables, docker.io, and wireguard-tools are all dropped, since none of them get real kernel/root access under PRoot), reuses the same build-time hooks the full ISO uses for Node/Claude Code, Ollama, magiskboot, `repo`, avbtool/mkbootimg, and the Zygisk headers (the two hooks that used to hardcode x86_64 asset names — `0060-magiskboot` and `0050-starship-eza` — are now architecture-aware via `dpkg --print-architecture`, needed for this to work correctly on arm64), and copies over the RootForge scripts minus the ones that assume real root/kernel access (`00_bootstrap_distro.sh`, `harden_kernel.sh`, `harden_system.sh`, `setup_vpn.sh`, `join_headscale.sh` — see below). Output is `rootforge-proot-<arch>-<timestamp>.tar.xz` plus a `.sha256`.
 
-**Installing it in Termux:** publish that tarball + checksum to a GitHub Release, fill `TARBALL_URL`/`TARBALL_SHA256` into `termux/proot-distro-plugins/rootforge.sh` for the arch you built, then on-device:
+`.github/workflows/release.yml` builds both arches on every tagged push and attaches the stably-named `rootforge-proot-arm64.tar.xz` / `rootforge-proot-amd64.tar.xz` (plus checksums) to a draft GitHub Release alongside the ISO — `termux/proot-distro-plugins/rootforge.sh`'s `TARBALL_URL`s already point at `releases/latest/download/...` under those exact names, so publishing a release is what makes the plugin actually installable; you don't have to run `build-rootfs.sh` by hand unless you're customizing it.
+
+**Installing it in Termux** — one command, once a release has been published:
+```
+curl -fsSL https://raw.githubusercontent.com/Victorious93/rootforge-os/main/termux/install.sh | bash
+proot-distro login rootforge
+```
+`termux/install.sh` installs `proot-distro`, drops the plugin file into `$PREFIX/etc/proot-distro/`, and runs `proot-distro install rootforge`. Equivalent by hand, or if you built a custom tarball and are pointing the plugin at it yourself:
 ```
 pkg install proot-distro
 mkdir -p $PREFIX/etc/proot-distro
