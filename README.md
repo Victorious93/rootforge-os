@@ -254,17 +254,36 @@ Ollama's own install script at build time — the binary is tens of MB, not the
 multi-GB territory that pushed the Android SDK to first-boot).
 
 **First-run, not automatic** (`scripts/setup_ai_tools.sh`): API key configuration
-for Claude Code (Anthropic) and Grok (xAI) is personal and shouldn't be baked into
-a shared image or run unattended — the script prompts interactively (or accepts
-flags for non-interactive provisioning) and writes to `~/.rootforge/ai-keys.env`,
-`chmod 600`, sourced from the shell rc rather than exported globally in
-`/etc/environment`. Grok is xAI's hosted API (`api.x.ai`, OpenAI-compatible
-surface) — there's no local binary for it, just the key and a `test_grok_api.sh`-
-style curl check that the script offers to run. **Hermes** is Nous Research's
-open-weight model family, pulled through Ollama rather than installed separately —
-the script offers `ollama pull hermes3` (and lets you pick a size tag) as an
-explicit opt-in, not a default, since model weights run multiple GB each and
-picking one for someone else's disk budget isn't RootForge's call to make.
+is personal and shouldn't be baked into a shared image or run unattended. Beyond
+the original Claude Code (Anthropic) / Grok (xAI) prompts, the script is now a
+general key manager for any number of providers:
+
+```
+setup_ai_tools.sh add <provider> [--key KEY] [--env-var NAME] [--no-verify]
+setup_ai_tools.sh remove <provider>
+setup_ai_tools.sh list
+setup_ai_tools.sh setup [--non-interactive --anthropic-key KEY --xai-key KEY]
+```
+
+`anthropic`, `openai`, `xai`, `gemini`, `mistral`, `cohere`, `openrouter`,
+`deepseek`, `groq`, and `huggingface` are known by name — `add` picks the right
+env var and verifies the key live against the provider's real `/models`-style
+endpoint (or the closest unauthenticated-cost equivalent) before confirming it's
+good. Any other provider works too via `add <name> --env-var SOME_API_KEY`; it's
+stored the same way, just without a live check (`--no-verify` skips the check
+for a known provider too, e.g. on an offline box). Every key writes to
+`~/.rootforge/ai-keys.env`, `chmod 600`, sourced from the shell rc rather than
+exported globally in `/etc/environment` — `add`/`remove` only ever touch their
+own provider's two lines (the `export` and a `# provider:name:ENV_VAR` tracking
+comment), so keys accumulate across runs instead of the whole file getting
+overwritten. `setup_ai_tools.sh setup` (or no subcommand at all, for backward
+compatibility) still runs the original full first-boot flow: Anthropic + xAI
+prompts, the Ollama service check, AMD GPU/ROCm tuning below, a Claude Code CLI
+check, and the optional Hermes pull. **Hermes** is Nous Research's open-weight
+model family, pulled through Ollama rather than installed separately — offered
+as `ollama pull hermes3` (and lets you pick a size tag) as an explicit opt-in,
+not a default, since model weights run multiple GB each and picking one for
+someone else's disk budget isn't RootForge's call to make.
 
 **[Certain]** GPU acceleration for Ollama on an AMD card goes through ROCm, and the
 exact `HSA_OVERRIDE_GFX_VERSION` needed depends on which GPU generation is

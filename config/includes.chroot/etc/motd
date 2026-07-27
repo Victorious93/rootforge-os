@@ -12,7 +12,7 @@
     new_module_scaffold.sh          scaffold a new Magisk/KernelSU/Xposed module
     setup_rooted_avd.sh             create a rooted Android emulator
     setup_terminal.sh               configure starship prompt + tmux layout
-    setup_ai_tools.sh               configure Claude Code / Grok / Ollama
+    setup_ai_tools.sh add <provider> add any AI API key (Claude, OpenAI, Grok, ...)
 
   All scripts are in /usr/local/bin — tab-complete to explore.
   Documentation: /usr/local/share/rootforge/ and README.md
