@@ -56,7 +56,9 @@ adb
 fastboot
 
 # Boot image / sparse image tools
-simg2img
+# simg2img/img2simg were merged into android-sdk-libsparse-utils on Debian
+# bookworm — the old package name has no installation candidate there.
+android-sdk-libsparse-utils
 abootimg
 e2fsprogs
 

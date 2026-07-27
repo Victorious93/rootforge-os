@@ -37,12 +37,14 @@ python3-serial
 pipx
 
 # Terminal stack (setup_terminal.sh)
+# eza and starship are deliberately NOT here — neither is in Debian 12's
+# main repos (confirmed: apt has no installation candidate for either on
+# bookworm), which is exactly why 0050-starship-eza.hook.chroot installs
+# them directly via their own release/installer instead of apt.
 tmux
 fzf
 bat
-eza
 zoxide
-starship
 
 # Miscellaneous script dependencies
 dialog
