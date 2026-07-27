@@ -7,8 +7,10 @@
 # It lives in Magisk's native tree and isn't in any apt repo.
 #
 # Strategy: fetch the latest Magisk release APK (it's a zip), extract the
-# x86_64 magiskboot binary from the assets inside, install to /usr/local/bin.
-# This is the same binary Magisk ships on-device; it runs on x86_64 Linux fine.
+# magiskboot binary matching this chroot's own architecture from the assets
+# inside, install to /usr/local/bin. This is the same binary Magisk ships
+# on-device — it runs fine on a matching-arch Linux host (or, for the
+# Termux/PRoot rootfs build, matching-arch Android).
 
 set -e
 
@@ -16,11 +18,20 @@ MAGISK_API="https://api.github.com/repos/topjohnwu/Magisk/releases/latest"
 WORK_DIR="/tmp/magiskboot-extract"
 mkdir -p "$WORK_DIR"
 
+DPKG_ARCH="$(dpkg --print-architecture)"
+case "$DPKG_ARCH" in
+  amd64) MAGISK_ABI="x86_64" ;;
+  arm64) MAGISK_ABI="arm64-v8a" ;;
+  armhf) MAGISK_ABI="armeabi-v7a" ;;
+  i386)  MAGISK_ABI="x86" ;;
+  *) echo "WARNING: unrecognized dpkg architecture '$DPKG_ARCH' — defaulting to x86_64 magiskboot, which likely won't run here."; MAGISK_ABI="x86_64" ;;
+esac
+
 echo "==> Fetching latest Magisk release metadata"
 RELEASE_JSON=$(curl -fsSL "$MAGISK_API")
 
 # Magisk releases the APK as magisk-<version>.apk — it's a zip containing
-# lib/x86_64/libmagiskboot.so which is a standalone ELF, despite the .so name
+# lib/<abi>/libmagiskboot.so which is a standalone ELF, despite the .so name
 APK_URL=$(echo "$RELEASE_JSON" | python3 -c "
 import sys, json
 assets = json.load(sys.stdin)['assets']
@@ -33,8 +44,8 @@ print(apk[0]['browser_download_url'] if apk else '')
 echo "==> Downloading Magisk APK from $APK_URL"
 curl -fsSL -o "$WORK_DIR/magisk.apk" "$APK_URL"
 
-echo "==> Extracting magiskboot from APK"
-unzip -p "$WORK_DIR/magisk.apk" "lib/x86_64/libmagiskboot.so" > /usr/local/bin/magiskboot
+echo "==> Extracting magiskboot ($MAGISK_ABI) from APK"
+unzip -p "$WORK_DIR/magisk.apk" "lib/${MAGISK_ABI}/libmagiskboot.so" > /usr/local/bin/magiskboot
 chmod +x /usr/local/bin/magiskboot
 rm -rf "$WORK_DIR"
 

@@ -227,6 +227,13 @@ cmd_create() {
   command -v sdkmanager >/dev/null 2>&1 || die "sdkmanager not on PATH — source /etc/profile.d/rootforge.sh"
   command -v emulator   >/dev/null 2>&1 || die "emulator not on PATH"
 
+  if [[ ! -e /dev/kvm ]]; then
+    log "WARNING: /dev/kvm not present — the emulator will fall back to unaccelerated"
+    log "software rendering (TCG). Expected under Termux/PRoot without root, or any host"
+    log "without virtualization enabled. Usable for a basic smoke test, painfully slow"
+    log "for real work — see 'kvm-ok' (cpu-checker) on a real Linux host to diagnose."
+  fi
+
   local LOG_FILE="$LOG_DIR/avd_${name}_${STAMP}.log"
   local IMAGE="system-images;android-${api};${tag};${abi}"
 
