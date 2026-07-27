@@ -1,81 +1,294 @@
 #!/usr/bin/env bash
-# RootForge OS — rooted / unrooted AVD provisioning
+# RootForge OS — AVD generation: rooted and unrooted emulator sessions
 # Victorious Framework
 #
-# Creates an AVD, and for the rooted profile, boots it with a writable
-# system partition, pushes a Magisk-source-built su binary, and snapshots
-# it so subsequent boots start pre-rooted instead of repeating the patch.
+# Creates AVDs from configurable API level / device profile / ABI / system
+# image tag, auto-installing the system image via sdkmanager if it isn't
+# present yet. Unrooted AVDs are just avdmanager wrapped with sane defaults.
+# Rooted AVDs get patched with a real Magisk ramdisk patch (magiskinit
+# swapped in as /init, magisk32/64 + magiskpolicy staged under overlay.d) —
+# the same mechanism Magisk's own boot_patch.sh uses on a real device boot
+# image, adapted for the goldfish/ranchu emulator's separate ramdisk.img
+# rather than a packed boot.img.
 #
-# Requires: sdkmanager-managed system image already installed
-#   (e.g. system-images;android-34;google_apis;x86_64 — NOT google_apis_playstore,
-#    which resists the writable-system trick by design).
+# Each created AVD gets a profile file under $ROOTFORGE_HOME/avd-profiles/
+# so `boot` can recall its mode (rooted/unrooted) and snapshot without you
+# having to remember which AVDs were rooted.
 #
-# Usage: ./setup_rooted_avd.sh <avd_name> [rooted|unrooted] [su_binary_path]
+# Usage:
+#   setup_rooted_avd.sh create --name <avd> --mode rooted|unrooted [options]
+#   setup_rooted_avd.sh boot   --name <avd> [--snapshot <name>]
+#   setup_rooted_avd.sh list
+#
+# Options for create:
+#   --api <level>      Android API level (default: 34)
+#   --device <profile> avdmanager device profile (default: pixel_6)
+#   --abi <abi>        x86_64 | x86 | arm64-v8a (default: x86_64)
+#   --tag <tag>        google_apis | google_apis_playstore | default | google_tv
+#                       (default: google_apis — rooted mode refuses
+#                       google_apis_playstore, since Play images are signed
+#                       and locked in ways that resist the writable-system
+#                       trick and a ramdisk swap)
+#   --force            recreate the AVD even if it already exists
+#
+# Requires: avdmanager, sdkmanager, emulator, adb on PATH (source
+#   /etc/profile.d/rootforge.sh); magiskboot on PATH for rooted mode
+#   (installed at build time — see 0060-magiskboot.hook.chroot).
 
 set -euo pipefail
 
-AVD_NAME="${1:?Usage: setup_rooted_avd.sh <avd_name> [rooted|unrooted] [su_binary_path]}"
-MODE="${2:-rooted}"
-SU_BINARY="${3:-}"
-
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
-mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/avd_${AVD_NAME}_$(date +%Y%m%d_%H%M%S).log"
-log() { echo "[avd] $*" | tee -a "$LOG_FILE"; }
+PROFILE_DIR="$ROOTFORGE_HOME/avd-profiles"
+WORK_DIR="$ROOTFORGE_HOME/avd-work"
+ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-$HOME/.android/avd}"
+mkdir -p "$LOG_DIR" "$PROFILE_DIR" "$WORK_DIR"
+STAMP="$(date +%Y%m%d_%H%M%S)"
 
-command -v avdmanager >/dev/null 2>&1 || { echo "avdmanager not on PATH — source /etc/profile.d/rootforge.sh" >&2; exit 1; }
-command -v emulator >/dev/null 2>&1 || { echo "emulator not on PATH" >&2; exit 1; }
+log() { echo "[avd] $*"; }
+die() { echo "[avd] ERROR: $*" >&2; exit 1; }
 
-SYSTEM_IMAGE="system-images;android-34;google_apis;x86_64"
-
-if ! avdmanager list avd | grep -q "Name: $AVD_NAME$"; then
-  log "Creating AVD '$AVD_NAME' from $SYSTEM_IMAGE"
-  echo "no" | avdmanager create avd -n "$AVD_NAME" -k "$SYSTEM_IMAGE" --device "pixel_6" 2>>"$LOG_FILE"
-else
-  log "AVD '$AVD_NAME' already exists — reusing."
-fi
-
-if [[ "$MODE" == "unrooted" ]]; then
-  log "Unrooted profile requested — AVD is ready to boot as-is:"
-  log "  emulator -avd $AVD_NAME"
-  exit 0
-fi
-
-[[ -n "$SU_BINARY" && -f "$SU_BINARY" ]] || {
-  echo "Rooted profile requires a su binary path (build one from the Magisk source tree first)." >&2
-  echo "See README section 2 — same toolchain that builds magiskboot also builds su." >&2
-  exit 1
+usage() {
+  sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-0}"
 }
 
-log "Booting emulator writable for root injection (first boot, no snapshot save)"
-emulator -avd "$AVD_NAME" -writable-system -no-snapshot-save -no-window &
-EMULATOR_PID=$!
+cmd_list() {
+  echo "avdmanager-known AVDs:"
+  avdmanager list avd 2>/dev/null | grep -E "Name:|    Based on:|    Tag/ABI:" | sed 's/^/  /' \
+    || echo "  (none)"
+  echo
+  echo "RootForge profiles ($PROFILE_DIR):"
+  shopt -s nullglob
+  local found=0
+  for f in "$PROFILE_DIR"/*.conf; do
+    found=1
+    local name mode api device abi tag
+    name="$(basename "$f" .conf)"
+    mode="$(grep -m1 '^MODE=' "$f" | cut -d= -f2-)"
+    api="$(grep -m1 '^API=' "$f" | cut -d= -f2-)"
+    device="$(grep -m1 '^DEVICE=' "$f" | cut -d= -f2-)"
+    abi="$(grep -m1 '^ABI=' "$f" | cut -d= -f2-)"
+    tag="$(grep -m1 '^TAG=' "$f" | cut -d= -f2-)"
+    echo "  $name  mode=$mode api=$api device=$device abi=$abi tag=$tag"
+  done
+  shopt -u nullglob
+  [[ $found -eq 0 ]] && echo "  (none)"
+}
 
-log "Waiting for device to come online"
-adb wait-for-device
-adb shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'
+cmd_boot() {
+  local name="" snapshot=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --name) name="$2"; shift 2 ;;
+      --snapshot) snapshot="$2"; shift 2 ;;
+      *) die "Unknown option: $1" ;;
+    esac
+  done
+  [[ -z "$name" ]] && die "--name required"
 
-log "Gaining root adb session and remounting /system writable"
-adb root
-sleep 2
-adb remount
+  local profile="$PROFILE_DIR/${name}.conf"
+  local mode="unrooted"
+  if [[ -f "$profile" ]]; then
+    mode="$(grep -m1 '^MODE=' "$profile" | cut -d= -f2-)"
+  else
+    log "No saved profile for '$name' — booting with defaults."
+  fi
 
-log "Pushing su binary to /system/xbin/su"
-adb shell mkdir -p /system/xbin
-adb push "$SU_BINARY" /system/xbin/su
-adb shell chmod 06755 /system/xbin/su
-adb shell chown root:root /system/xbin/su
+  [[ -z "$snapshot" && "$mode" == "rooted" ]] && snapshot="rootforge-rooted"
 
-log "Note [Likely]: exact injection point (xbin path, init.rc hook, or seapp_contexts entry)"
-log "varies by API level. Verify with: adb shell su -c id  — expect uid=0(root)."
+  if [[ -n "$snapshot" ]]; then
+    log "Booting '$name' (mode=$mode) from snapshot '$snapshot'"
+    emulator -avd "$name" -snapshot "$snapshot"
+  else
+    log "Booting '$name' (mode=$mode)"
+    emulator -avd "$name"
+  fi
+}
 
-log "Root injection complete. Shutting down for snapshot save."
-adb emu kill
-wait "$EMULATOR_PID" 2>/dev/null || true
+root_avd() {
+  local name="$1" abi="$2" LOG_FILE="$3"
 
-log "Snapshotting rooted state — subsequent boots start pre-rooted:"
-log "  emulator -avd $AVD_NAME -snapshot rootforge-rooted"
-log "First boot after this: launch normally once WITHOUT -no-snapshot-save to persist the snapshot."
+  local MAGISKBOOT
+  MAGISKBOOT="$(command -v magiskboot 2>/dev/null || true)"
+  [[ -n "$MAGISKBOOT" ]] || die "magiskboot not on PATH. It ships prebuilt on RootForge OS (0060-magiskboot.hook.chroot) — install it manually if missing."
+
+  local avd_dir="$ANDROID_AVD_HOME/${name}.avd"
+  [[ -d "$avd_dir" ]] || die "AVD directory not found: $avd_dir"
+  local ramdisk="$avd_dir/ramdisk.img"
+  [[ -f "$ramdisk" ]] || die "ramdisk.img not found in $avd_dir — unexpected AVD layout for this SDK version"
+
+  if [[ ! -f "$avd_dir/ramdisk.img.stock" ]]; then
+    cp "$ramdisk" "$avd_dir/ramdisk.img.stock"
+    log "Backed up stock ramdisk to ramdisk.img.stock (revert by copying it back over ramdisk.img)"
+  fi
+
+  mkdir -p "$ROOTFORGE_HOME/bin"
+  local MAGISK_APK="$ROOTFORGE_HOME/bin/magisk.apk"
+  if [[ ! -f "$MAGISK_APK" ]]; then
+    log "Fetching latest Magisk release APK (cached at $MAGISK_APK for future runs)"
+    local url
+    url=$(curl -fsSL "https://api.github.com/repos/topjohnwu/Magisk/releases/latest" \
+      | python3 -c "import sys,json; a=[x['browser_download_url'] for x in json.load(sys.stdin)['assets'] if x['name'].endswith('.apk') and 'stub' not in x['name']]; print(a[0] if a else '')")
+    [[ -z "$url" ]] && die "Could not resolve latest Magisk APK download URL"
+    curl -fsSL -o "$MAGISK_APK" "$url"
+  fi
+
+  local rwork="$WORK_DIR/${name}-root-${STAMP}"
+  mkdir -p "$rwork"
+
+  log "Extracting Magisk $abi components from $MAGISK_APK"
+  local component
+  for component in libmagisk32.so libmagisk64.so libmagiskinit.so libmagiskpolicy.so; do
+    unzip -p "$MAGISK_APK" "lib/${abi}/${component}" > "$rwork/$component" 2>/dev/null \
+      && mv "$rwork/$component" "$rwork/${component#lib}" \
+      || rm -f "$rwork/$component"
+  done
+  # libmagiskinit.so -> magiskinit.so at this point; drop the trailing .so
+  local f
+  for f in "$rwork"/*.so; do
+    [[ -f "$f" ]] || continue
+    mv "$f" "${f%.so}"
+  done
+  chmod 755 "$rwork"/magisk* 2>/dev/null || true
+
+  [[ -f "$rwork/magiskinit" ]] || die "magiskinit not present in this Magisk APK for abi=$abi — pick an ABI Magisk actually ships lib/<abi>/ for (x86, x86_64, armeabi-v7a, arm64-v8a)"
+
+  log "Patching ramdisk.img with magiskboot (init -> magiskinit, overlay.d payload)"
+  cp "$ramdisk" "$rwork/ramdisk.img"
+  (
+    cd "$rwork"
+    "$MAGISKBOOT" cpio ramdisk.img \
+      "add 0750 init magiskinit" \
+      "mkdir 0750 overlay.d" \
+      "mkdir 0750 overlay.d/sbin" \
+      "add 0755 overlay.d/sbin/magisk32 magisk32" \
+      "add 0755 overlay.d/sbin/magisk64 magisk64" \
+      "add 0755 overlay.d/sbin/magiskpolicy magiskpolicy" \
+      "patch" \
+      "backup ramdisk_orig.cpio" \
+      "mkdir 000 .backup" \
+      "add 000 .backup/.magisk config" \
+      2>&1 | tee -a "$LOG_FILE"
+  )
+  log "[Likely] this cpio layout mirrors Magisk's own boot_patch.sh for the cached release;"
+  log "if 'su -c id' fails to verify below, diff against scripts/boot_patch.sh in the Magisk"
+  log "source tree for the version at $MAGISK_APK and adjust the cpio command list above."
+
+  cp "$rwork/ramdisk.img" "$ramdisk"
+
+  log "Booting '$name' writable with the patched ramdisk for first-boot root verification"
+  emulator -avd "$name" -writable-system -no-snapshot-load -snapshot rootforge-rooted -no-window &
+  local EMU_PID=$!
+
+  adb wait-for-device
+  adb shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done' || true
+  sleep 2
+
+  log "Verifying root"
+  if adb shell su -c id 2>/dev/null | grep -q "uid=0"; then
+    log "Root verified: 'su -c id' reports uid=0"
+  else
+    log "WARNING: could not verify root via 'su -c id'. Install the Magisk manager APK"
+    log "(adb install \"$MAGISK_APK\") and inspect on-device state with check_root_detection.sh."
+  fi
+
+  log "Shutting down to save the 'rootforge-rooted' snapshot"
+  adb emu kill 2>/dev/null || true
+  wait "$EMU_PID" 2>/dev/null || true
+
+  log "Rooted AVD ready. Boot pre-rooted with:"
+  log "  setup_rooted_avd.sh boot --name $name"
+  log "  (equivalent to: emulator -avd $name -snapshot rootforge-rooted)"
+}
+
+cmd_create() {
+  local name="" mode="" api="34" device="pixel_6" abi="x86_64" tag="google_apis" force=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --name)   name="$2";   shift 2 ;;
+      --mode)   mode="$2";   shift 2 ;;
+      --api)    api="$2";    shift 2 ;;
+      --device) device="$2"; shift 2 ;;
+      --abi)    abi="$2";    shift 2 ;;
+      --tag)    tag="$2";    shift 2 ;;
+      --force)  force=1;     shift ;;
+      *) die "Unknown option: $1" ;;
+    esac
+  done
+
+  [[ -z "$name" ]] && die "--name required"
+  [[ "$mode" == "rooted" || "$mode" == "unrooted" ]] || die "--mode must be 'rooted' or 'unrooted'"
+  if [[ "$mode" == "rooted" && "$tag" == "google_apis_playstore" ]]; then
+    die "Rooted mode requires a non-Play system image (--tag google_apis, default, or google_tv) — Play images are signed and locked in ways that resist both the writable-system trick and a ramdisk swap."
+  fi
+
+  command -v avdmanager >/dev/null 2>&1 || die "avdmanager not on PATH — source /etc/profile.d/rootforge.sh"
+  command -v sdkmanager >/dev/null 2>&1 || die "sdkmanager not on PATH — source /etc/profile.d/rootforge.sh"
+  command -v emulator   >/dev/null 2>&1 || die "emulator not on PATH"
+
+  local LOG_FILE="$LOG_DIR/avd_${name}_${STAMP}.log"
+  local IMAGE="system-images;android-${api};${tag};${abi}"
+
+  if ! sdkmanager --list_installed 2>/dev/null | grep -qF "$IMAGE"; then
+    log "System image $IMAGE not installed — installing via sdkmanager"
+    # yes(1) gets SIGPIPE once sdkmanager exits and closes stdin, which pipefail
+    # would otherwise misreport as pipeline failure — check sdkmanager's own
+    # PIPESTATUS slot instead of the pipeline's overall exit code.
+    set +o pipefail
+    yes | sdkmanager "$IMAGE" 2>&1 | tee -a "$LOG_FILE"
+    local sdk_rc=${PIPESTATUS[1]}
+    set -o pipefail
+    [[ $sdk_rc -eq 0 ]] || die "sdkmanager install failed for $IMAGE — accept licenses first with 'sdkmanager --licenses'"
+  fi
+
+  local exists=0
+  avdmanager list avd 2>/dev/null | grep -q "Name: $name$" && exists=1
+
+  if [[ $exists -eq 1 && $force -eq 1 ]]; then
+    log "Deleting existing AVD '$name' (--force)"
+    avdmanager delete avd -n "$name" 2>>"$LOG_FILE" || true
+    exists=0
+  fi
+
+  if [[ $exists -eq 1 ]]; then
+    log "AVD '$name' already exists — reusing. Pass --force to recreate from scratch."
+  else
+    log "Creating AVD '$name' from $IMAGE (device=$device)"
+    echo "no" | avdmanager create avd -n "$name" -k "$IMAGE" --device "$device" 2>>"$LOG_FILE"
+  fi
+
+  cat > "$PROFILE_DIR/${name}.conf" <<EOF
+NAME=$name
+MODE=$mode
+API=$api
+DEVICE=$device
+ABI=$abi
+TAG=$tag
+IMAGE=$IMAGE
+CREATED=$STAMP
+EOF
+  log "Saved profile: $PROFILE_DIR/${name}.conf"
+
+  if [[ "$mode" == "unrooted" ]]; then
+    log "Unrooted AVD ready:"
+    log "  emulator -avd $name"
+    exit 0
+  fi
+
+  root_avd "$name" "$abi" "$LOG_FILE"
+}
+
+CMD="${1:-}"
+[[ -z "$CMD" ]] && usage 1
+shift || true
+
+case "$CMD" in
+  create) cmd_create "$@" ;;
+  boot)   cmd_boot "$@" ;;
+  list)   cmd_list "$@" ;;
+  -h|--help) usage 0 ;;
+  *) die "Unknown command: $CMD (expected create|boot|list)" ;;
+esac
 
 # Victorious Framework

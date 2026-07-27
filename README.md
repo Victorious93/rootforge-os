@@ -1,5 +1,9 @@
 # RootForge OS — A Debian-Based Distro for Android Root Module Development
 
+<p align="center">
+  <img src="assets/logo/rootforge-os-logo.jpg" alt="RootForge OS logo" width="240">
+</p>
+
 **Victorious Framework — Origin Source Labs**
 Status: Specification / Build Guide (v1.0) — living document, update in place as the toolchain evolves.
 
@@ -91,14 +95,24 @@ All three log every fastboot/adb command and their exit codes to `~/.rootforge/l
 
 ## 5. Emulator support — rooted and unrooted
 
-**Unrooted AVDs**: standard `avdmanager create avd` against a Google Play or Google APIs system image — these ship with dm-verity and won't take root without the `-writable-system` route.
+`scripts/setup_rooted_avd.sh` generates both profiles through one interface, with the API level, device profile, ABI, and system-image tag all configurable rather than hardcoded, and auto-installs the chosen system image via `sdkmanager` if it isn't present yet:
 
-**Rooted AVDs** (`scripts/setup_rooted_avd.sh`): uses a **Google APIs (not Play Store) system image**, since Play images are signed and locked in ways that resist the writable-system trick. The script:
-1. Creates the AVD, boots it once with `-writable-system -no-snapshot-save`
-2. Runs `adb root && adb remount`
-3. Pushes a prebuilt `su` binary (built from the same Magisk source tree as the device toolchain, so on-device modules behave identically to real hardware) into `/system/xbin`
-4. Adds it to `/system/etc/init/…rc` or patches `ro.build.selinux` as needed for the API level, since the exact injection point has moved around across Android versions
-5. Snapshots the AVD post-root so subsequent boots start pre-rooted instead of repeating the patch
+```
+setup_rooted_avd.sh create --name <avd> --mode rooted|unrooted [options]
+setup_rooted_avd.sh boot   --name <avd> [--snapshot <name>]
+setup_rooted_avd.sh list
+```
+
+`create` options: `--api <level>` (default 34), `--device <profile>` (default `pixel_6`), `--abi <abi>` (default `x86_64`), `--tag <google_apis|google_apis_playstore|default|google_tv>` (default `google_apis`), `--force` to recreate an existing AVD. Every created AVD gets a profile file under `~/rootforge/avd-profiles/<name>.conf` recording how it was built, so `boot` and `list` can recall its mode without you tracking which AVDs were rooted by memory.
+
+**Unrooted AVDs**: a thin `avdmanager create avd` wrapper — these ship with dm-verity and won't take root without the writable-system route below.
+
+**Rooted AVDs**: `--tag google_apis_playstore` is refused outright — Play images are signed and locked in ways that resist both the writable-system trick and a ramdisk swap, so rooted mode forces a Google APIs (or `default`/`google_tv`) image. The script then:
+1. Creates the AVD (as above) and backs up its stock `ramdisk.img` to `ramdisk.img.stock` before touching it
+2. Fetches the latest Magisk release APK (cached at `~/rootforge/bin/magisk.apk`) and extracts the `magisk32`/`magisk64`/`magiskinit`/`magiskpolicy` components for the target ABI
+3. Patches `ramdisk.img` with `magiskboot cpio` — swapping `init` for `magiskinit` and staging the Magisk binaries under `overlay.d` — the same mechanism Magisk's own `boot_patch.sh` uses on a real device boot image, adapted for the emulator's separate ramdisk rather than a packed `boot.img`. **[Likely]** the exact `cpio` command list needs revisiting against Magisk's current `scripts/boot_patch.sh` if a future release changes its ramdisk layout — the script logs a note to that effect if root verification fails.
+4. Boots the emulator writable with the patched ramdisk and verifies root live with `adb shell su -c id` rather than assuming success
+5. Snapshots the booted, rooted state as `rootforge-rooted` so `setup_rooted_avd.sh boot --name <avd>` starts pre-rooted on every subsequent run instead of repeating the patch
 
 **KVM note [Certain]:** emulator acceleration requires `/dev/kvm` access — add your user to the `kvm` group and confirm with `kvm-ok` (from `cpu-checker`) before assuming acceleration is active; a silently-software-rendered emulator is the most common "why is this so slow" support question for exactly this kind of distro.
 
@@ -112,8 +126,9 @@ All three log every fastboot/adb command and their exit codes to `~/.rootforge/l
 ├── modules/.cache/               # cached LSPosed/tooling downloads
 ├── kernels/<codename>/          # kernel source + KernelSU integration branch
 ├── keys/                        # AVB / test-signing keys — chmod 700, never in modules/ 
-├── avd-profiles/                # rooted + unrooted AVD configs
-├── bin/                          # self-installed tools (payload-dumper-go, etc.)
+├── avd-profiles/<avd-name>.conf # rooted + unrooted AVD configs, written by setup_rooted_avd.sh
+├── avd-work/                    # scratch dir for ramdisk patching (magiskboot cpio work)
+├── bin/                          # self-installed tools (payload-dumper-go, magisk.apk cache, etc.)
 └── logs/                        # timestamped output from every automation script
 ```
 
@@ -239,17 +254,36 @@ Ollama's own install script at build time — the binary is tens of MB, not the
 multi-GB territory that pushed the Android SDK to first-boot).
 
 **First-run, not automatic** (`scripts/setup_ai_tools.sh`): API key configuration
-for Claude Code (Anthropic) and Grok (xAI) is personal and shouldn't be baked into
-a shared image or run unattended — the script prompts interactively (or accepts
-flags for non-interactive provisioning) and writes to `~/.rootforge/ai-keys.env`,
-`chmod 600`, sourced from the shell rc rather than exported globally in
-`/etc/environment`. Grok is xAI's hosted API (`api.x.ai`, OpenAI-compatible
-surface) — there's no local binary for it, just the key and a `test_grok_api.sh`-
-style curl check that the script offers to run. **Hermes** is Nous Research's
-open-weight model family, pulled through Ollama rather than installed separately —
-the script offers `ollama pull hermes3` (and lets you pick a size tag) as an
-explicit opt-in, not a default, since model weights run multiple GB each and
-picking one for someone else's disk budget isn't RootForge's call to make.
+is personal and shouldn't be baked into a shared image or run unattended. Beyond
+the original Claude Code (Anthropic) / Grok (xAI) prompts, the script is now a
+general key manager for any number of providers:
+
+```
+setup_ai_tools.sh add <provider> [--key KEY] [--env-var NAME] [--no-verify]
+setup_ai_tools.sh remove <provider>
+setup_ai_tools.sh list
+setup_ai_tools.sh setup [--non-interactive --anthropic-key KEY --xai-key KEY]
+```
+
+`anthropic`, `openai`, `xai`, `gemini`, `mistral`, `cohere`, `openrouter`,
+`deepseek`, `groq`, and `huggingface` are known by name — `add` picks the right
+env var and verifies the key live against the provider's real `/models`-style
+endpoint (or the closest unauthenticated-cost equivalent) before confirming it's
+good. Any other provider works too via `add <name> --env-var SOME_API_KEY`; it's
+stored the same way, just without a live check (`--no-verify` skips the check
+for a known provider too, e.g. on an offline box). Every key writes to
+`~/.rootforge/ai-keys.env`, `chmod 600`, sourced from the shell rc rather than
+exported globally in `/etc/environment` — `add`/`remove` only ever touch their
+own provider's two lines (the `export` and a `# provider:name:ENV_VAR` tracking
+comment), so keys accumulate across runs instead of the whole file getting
+overwritten. `setup_ai_tools.sh setup` (or no subcommand at all, for backward
+compatibility) still runs the original full first-boot flow: Anthropic + xAI
+prompts, the Ollama service check, AMD GPU/ROCm tuning below, a Claude Code CLI
+check, and the optional Hermes pull. **Hermes** is Nous Research's open-weight
+model family, pulled through Ollama rather than installed separately — offered
+as `ollama pull hermes3` (and lets you pick a size tag) as an explicit opt-in,
+not a default, since model weights run multiple GB each and picking one for
+someone else's disk budget isn't RootForge's call to make.
 
 **[Certain]** GPU acceleration for Ollama on an AMD card goes through ROCm, and the
 exact `HSA_OVERRIDE_GFX_VERSION` needed depends on which GPU generation is
