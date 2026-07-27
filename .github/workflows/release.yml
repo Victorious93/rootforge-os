@@ -1,0 +1,129 @@
+# RootForge OS — release pipeline
+# Victorious Framework | Origin Source Labs
+#
+# Builds the amd64 installable/USB-flashable ISO and the Termux/PRoot rootfs
+# tarballs (arm64 + amd64) and attaches them, with sha256 checksums, to a
+# draft GitHub Release — so both delivery paths (README sections 14 and 17)
+# have real, downloadable artifacts instead of requiring every user to build
+# from source. The release is left as a draft; a maintainer publishes it
+# after a sanity check.
+#
+# [Likely] this needs at least one real run to shake out runner-specific
+# issues (disk space during the live-build stage, binfmt_misc registration
+# for the cross-arch debootstrap) — it hasn't been exercised on GitHub's
+# infrastructure from this repo, only reasoned through against BUILD.md's
+# documented requirements and termux/build-rootfs.sh's own prerequisites.
+#
+# Triggers on a `v*` tag push (creates/updates the draft release for that
+# tag) or manually via workflow_dispatch (builds and uploads artifacts for
+# inspection without touching Releases, since a manual run may not have a
+# tag ref).
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space (live-build needs ~20GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache || true
+          df -h
+
+      - name: Install live-build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            live-build debootstrap squashfs-tools xorriso isolinux syslinux-utils
+
+      - name: Confirm a loop device is available
+        run: |
+          sudo losetup -f
+          sudo modprobe loop || true
+
+      - name: Build ISO
+        run: sudo auto/build
+
+      - name: Checksum
+        run: make checksum
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootforge-os-amd64-iso
+          path: |
+            rootforge-os-amd64.hybrid.iso
+            rootforge-os-amd64.hybrid.iso.sha256
+          retention-days: 14
+          if-no-files-found: error
+
+  build-termux-rootfs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install debootstrap + qemu-user-static
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends debootstrap qemu-user-static binfmt-support
+
+      - name: Build rootfs (${{ matrix.arch }})
+        run: sudo termux/build-rootfs.sh ${{ matrix.arch }} dist
+
+      - name: Rename to a stable asset name
+        # termux/build-rootfs.sh timestamps its output for safe repeated
+        # local builds; the proot-distro plugin's TARBALL_URL points at a
+        # fixed filename under releases/latest/download/, so the release
+        # asset needs that fixed name instead of the timestamped one.
+        run: |
+          cd dist
+          src="$(ls rootforge-proot-${{ matrix.arch }}-*.tar.xz)"
+          mv "$src" "rootforge-proot-${{ matrix.arch }}.tar.xz"
+          mv "$src.sha256" "rootforge-proot-${{ matrix.arch }}.tar.xz.sha256"
+
+      - name: Upload rootfs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootforge-proot-${{ matrix.arch }}
+          path: |
+            dist/rootforge-proot-${{ matrix.arch }}.tar.xz
+            dist/rootforge-proot-${{ matrix.arch }}.tar.xz.sha256
+          retention-days: 14
+          if-no-files-found: error
+
+  release:
+    needs: [build-iso, build-termux-rootfs]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
