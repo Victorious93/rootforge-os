@@ -95,14 +95,24 @@ All three log every fastboot/adb command and their exit codes to `~/.rootforge/l
 
 ## 5. Emulator support — rooted and unrooted
 
-**Unrooted AVDs**: standard `avdmanager create avd` against a Google Play or Google APIs system image — these ship with dm-verity and won't take root without the `-writable-system` route.
+`scripts/setup_rooted_avd.sh` generates both profiles through one interface, with the API level, device profile, ABI, and system-image tag all configurable rather than hardcoded, and auto-installs the chosen system image via `sdkmanager` if it isn't present yet:
 
-**Rooted AVDs** (`scripts/setup_rooted_avd.sh`): uses a **Google APIs (not Play Store) system image**, since Play images are signed and locked in ways that resist the writable-system trick. The script:
-1. Creates the AVD, boots it once with `-writable-system -no-snapshot-save`
-2. Runs `adb root && adb remount`
-3. Pushes a prebuilt `su` binary (built from the same Magisk source tree as the device toolchain, so on-device modules behave identically to real hardware) into `/system/xbin`
-4. Adds it to `/system/etc/init/…rc` or patches `ro.build.selinux` as needed for the API level, since the exact injection point has moved around across Android versions
-5. Snapshots the AVD post-root so subsequent boots start pre-rooted instead of repeating the patch
+```
+setup_rooted_avd.sh create --name <avd> --mode rooted|unrooted [options]
+setup_rooted_avd.sh boot   --name <avd> [--snapshot <name>]
+setup_rooted_avd.sh list
+```
+
+`create` options: `--api <level>` (default 34), `--device <profile>` (default `pixel_6`), `--abi <abi>` (default `x86_64`), `--tag <google_apis|google_apis_playstore|default|google_tv>` (default `google_apis`), `--force` to recreate an existing AVD. Every created AVD gets a profile file under `~/rootforge/avd-profiles/<name>.conf` recording how it was built, so `boot` and `list` can recall its mode without you tracking which AVDs were rooted by memory.
+
+**Unrooted AVDs**: a thin `avdmanager create avd` wrapper — these ship with dm-verity and won't take root without the writable-system route below.
+
+**Rooted AVDs**: `--tag google_apis_playstore` is refused outright — Play images are signed and locked in ways that resist both the writable-system trick and a ramdisk swap, so rooted mode forces a Google APIs (or `default`/`google_tv`) image. The script then:
+1. Creates the AVD (as above) and backs up its stock `ramdisk.img` to `ramdisk.img.stock` before touching it
+2. Fetches the latest Magisk release APK (cached at `~/rootforge/bin/magisk.apk`) and extracts the `magisk32`/`magisk64`/`magiskinit`/`magiskpolicy` components for the target ABI
+3. Patches `ramdisk.img` with `magiskboot cpio` — swapping `init` for `magiskinit` and staging the Magisk binaries under `overlay.d` — the same mechanism Magisk's own `boot_patch.sh` uses on a real device boot image, adapted for the emulator's separate ramdisk rather than a packed `boot.img`. **[Likely]** the exact `cpio` command list needs revisiting against Magisk's current `scripts/boot_patch.sh` if a future release changes its ramdisk layout — the script logs a note to that effect if root verification fails.
+4. Boots the emulator writable with the patched ramdisk and verifies root live with `adb shell su -c id` rather than assuming success
+5. Snapshots the booted, rooted state as `rootforge-rooted` so `setup_rooted_avd.sh boot --name <avd>` starts pre-rooted on every subsequent run instead of repeating the patch
 
 **KVM note [Certain]:** emulator acceleration requires `/dev/kvm` access — add your user to the `kvm` group and confirm with `kvm-ok` (from `cpu-checker`) before assuming acceleration is active; a silently-software-rendered emulator is the most common "why is this so slow" support question for exactly this kind of distro.
 
@@ -116,8 +126,9 @@ All three log every fastboot/adb command and their exit codes to `~/.rootforge/l
 ├── modules/.cache/               # cached LSPosed/tooling downloads
 ├── kernels/<codename>/          # kernel source + KernelSU integration branch
 ├── keys/                        # AVB / test-signing keys — chmod 700, never in modules/ 
-├── avd-profiles/                # rooted + unrooted AVD configs
-├── bin/                          # self-installed tools (payload-dumper-go, etc.)
+├── avd-profiles/<avd-name>.conf # rooted + unrooted AVD configs, written by setup_rooted_avd.sh
+├── avd-work/                    # scratch dir for ramdisk patching (magiskboot cpio work)
+├── bin/                          # self-installed tools (payload-dumper-go, magisk.apk cache, etc.)
 └── logs/                        # timestamped output from every automation script
 ```
 
