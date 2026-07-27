@@ -1,0 +1,114 @@
+# RootForge OS — Termux/PRoot rootfs package list (non-root variant)
+# Victorious Framework | Origin Source Labs
+#
+# Pruned from config/package-lists/rootforge*.list.chroot: drops everything
+# that needs real root/kernel privileges an unprivileged Android host won't
+# grant a PRoot container — GNOME/plymouth/live-boot (this rootfs isn't
+# bootable, there's no desktop or boot splash), qemu-kvm/libvirt (no
+# /dev/kvm without root), usbguard/auditd/nftables (need real kernel
+# security-module access), docker.io (needs cgroups/overlayfs the Android
+# kernel won't hand an unprivileged process), wireguard-tools (needs
+# CAP_NET_ADMIN + a real wg kernel module — use Termux's own VPN apps
+# instead), network-manager-gnome/pulseaudio/gdm3 (no desktop).
+#
+# binutils-aarch64-linux-gnu / gcc-aarch64-linux-gnu are also dropped:
+# those are cross-compilation packages for building *toward* arm64 from a
+# different host arch. On a native arm64 rootfs (the real-world Termux
+# case — actual Android hardware is almost always arm64), build-essential
+# already provides a native aarch64 gcc/binutils, and clang+lld (still
+# below) cross-compile to any target by design without needing a separate
+# per-arch package. [Likely] worth revisiting if this list is ever used to
+# build an amd64 rootfs for x86 Android or a desktop-Linux PRoot sandbox,
+# where the amd64 core list's cross packages would apply again.
+#
+# eza and starship are NOT apt packages — 0050-starship-eza.hook.chroot
+# installs them directly (now arch-aware, see that hook). magiskboot/
+# repo/avbtool/mkbootimg/Zygisk headers similarly come from their own
+# hooks, reused as-is by termux/build-rootfs.sh.
+
+# Base build utilities
+build-essential
+git
+curl
+wget
+unzip
+zip
+rsync
+ccache
+gnupg
+lsb-release
+ca-certificates
+software-properties-common
+
+# Java (Android Gradle Plugin 8.x baseline)
+openjdk-17-jdk
+
+# Python (for avbtool, mkbootimg, various scripts)
+python3
+python3-pip
+python3-venv
+
+# Kernel cross-compilation toolchain (native on an arm64 rootfs; see note above)
+clang
+lld
+llvm
+bc
+bison
+flex
+libssl-dev
+libelf-dev
+dwarves
+cpio
+kmod
+
+# ADB / fastboot — direct USB access needs Termux:API's termux-usb permission
+# flow (PRoot alone doesn't grant raw USB device nodes); `adb connect <ip>`
+# over Wi-Fi debugging works with zero extra setup.
+android-sdk-platform-tools-common
+adb
+fastboot
+
+# Boot image / sparse image tools
+simg2img
+abootimg
+e2fsprogs
+
+# Script tooling dependencies
+jq
+
+# Gradle (standalone, for Magisk/module builds outside Android Studio)
+gradle
+
+# npm is pulled in as a NodeSource dependency (0010-nodesource.hook.chroot);
+# listed for clarity, same convention as rootforge-ai.list.chroot
+npm
+
+# Locale / privilege helper
+locales
+sudo
+
+# Intercepting proxy (setup_intercept_proxy.sh) — plain userspace proxy on a
+# port, no special privileges needed
+mitmproxy
+python3-certifi
+
+# Fleet / network tooling (fleet_orchestrate.sh, rpi_fleet_tools.sh) — talks
+# to other devices over the network, doesn't touch this host's kernel
+nmap
+openssh-client
+sshpass
+
+# ESP32 toolchain (esp32_toolkit.sh) — USB-serial access still needs
+# termux-usb; the Python tooling itself has no special privilege requirement
+python3-serial
+pipx
+
+# Terminal stack (setup_terminal.sh)
+tmux
+fzf
+bat
+zoxide
+
+# Miscellaneous script dependencies
+dialog
+pv

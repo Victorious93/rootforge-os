@@ -11,12 +11,23 @@ set -e
 PD_API="https://api.github.com/repos/ssut/payload-dumper-go/releases/latest"
 INSTALL_DIR="/usr/local/bin"
 
-echo "==> Fetching payload-dumper-go latest release"
-PD_URL=$(curl -fsSL "$PD_API" | python3 -c "
-import sys, json
+DPKG_ARCH="$(dpkg --print-architecture)"
+case "$DPKG_ARCH" in
+  amd64|arm64) PD_ARCH="$DPKG_ARCH" ;;
+  *) PD_ARCH="" ;;
+esac
+
+if [ -z "$PD_ARCH" ]; then
+  echo "WARNING: no known payload-dumper-go release asset for dpkg architecture '$DPKG_ARCH' — extract_ota.sh will self-install it at runtime if that arch is supported there."
+  exit 0
+fi
+
+echo "==> Fetching payload-dumper-go latest release ($PD_ARCH)"
+PD_URL=$(curl -fsSL "$PD_API" | PD_ARCH="$PD_ARCH" python3 -c "
+import sys, json, os
 assets = json.load(sys.stdin)['assets']
-# Match linux_amd64 tar.gz
-match = [a for a in assets if 'linux_amd64' in a['name'] and a['name'].endswith('.tar.gz')]
+pattern = 'linux_' + os.environ['PD_ARCH']
+match = [a for a in assets if pattern in a['name'] and a['name'].endswith('.tar.gz')]
 print(match[0]['browser_download_url'] if match else '')
 ")
 

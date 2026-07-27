@@ -368,7 +368,34 @@ characters and emoji during scripted UI testing.
 layout), starship prompt with a custom segment showing live connected-device
 count, plus fzf/eza/bat/zoxide.
 
-## 17. What's still a manual step
+## 17. Termux / PRoot — a non-root variant that runs on the phone itself
+
+Everything above targets a real install (bare metal or VM) with root on the box RootForge OS runs on. `termux/` adds a second delivery path: a rootfs that runs *inside Termux, on the Android device itself*, via [proot-distro](https://github.com/termux/proot-distro) — no root on that device, no bootloader unlock, no separate PC required for the parts of the workflow that don't need one.
+
+**What PRoot actually gives you [Certain]:** PRoot fakes a root-like environment (uid 0, a chroot-like view of a Debian filesystem) via ptrace-based syscall interception, entirely in userspace, on top of Android's own unmodified kernel. That's a different thing from *rooting the phone* — it doesn't touch `/dev/kvm`, doesn't get raw USB device access, doesn't get real kernel security-module control (SELinux policy, audit, nftables), and can't run systemd as PID 1. Everything below is scoped around that distinction.
+
+**Building the rootfs** (`termux/build-rootfs.sh`, run as root on a Linux host with `debootstrap`/`qemu-user-static`/`binfmt-support` installed):
+```
+sudo termux/build-rootfs.sh arm64        # real Android hardware (the common case)
+sudo termux/build-rootfs.sh amd64        # x86 Android, or a desktop-Linux PRoot sandbox
+```
+It debootstraps a minimal Debian bookworm rootfs for the target arch, installs `termux/package-lists/rootforge-proot.list.chroot` (a pruned version of the core package lists — GNOME/plymouth/live-boot, qemu-kvm/libvirt, usbguard/auditd/nftables, docker.io, and wireguard-tools are all dropped, since none of them get real kernel/root access under PRoot), reuses the same build-time hooks the full ISO uses for Node/Claude Code, Ollama, magiskboot, `repo`, avbtool/mkbootimg, and the Zygisk headers (the two hooks that used to hardcode x86_64 asset names — `0060-magiskboot` and `0050-starship-eza` — are now architecture-aware via `dpkg --print-architecture`, needed for this to work correctly on arm64), and copies over the RootForge scripts minus the ones that assume real root/kernel access (`00_bootstrap_distro.sh`, `harden_kernel.sh`, `harden_system.sh`, `setup_vpn.sh`, `join_headscale.sh` — see below). Output is `rootforge-proot-<arch>-<timestamp>.tar.xz` plus a `.sha256`.
+
+**Installing it in Termux:** publish that tarball + checksum to a GitHub Release, fill `TARBALL_URL`/`TARBALL_SHA256` into `termux/proot-distro-plugins/rootforge.sh` for the arch you built, then on-device:
+```
+pkg install proot-distro
+mkdir -p $PREFIX/etc/proot-distro
+curl -o $PREFIX/etc/proot-distro/rootforge.sh https://raw.githubusercontent.com/Victorious93/rootforge-os/main/termux/proot-distro-plugins/rootforge.sh
+proot-distro install rootforge
+proot-distro login rootforge
+```
+**[Likely]** the plugin file's shape (`DISTRO_NAME`/`DISTRO_COMMENT` strings, `TARBALL_URL`/`TARBALL_SHA256` associative arrays, an optional `distro_setup()` hook) matches proot-distro's current plugin API — it's been stable, but isn't something this repo can pin a version of, so check against a plugin shipped in proot-distro's own repo if `install` rejects it.
+
+**Works here:** module dev/build/lint (`new_module_scaffold.sh`, `build_magisk_module.sh`, `lint_module.sh`), the boot-image patch toolchain (`magiskboot`, `avbtool`, `mkbootimg`, `flash_patched_boot.sh`, `kernelsu_patch_boot.sh` — patching a boot image is pure file manipulation, no root needed until the `fastboot flash` step, which just needs a connected device), ADB (`adb connect <ip>` over Wi-Fi debugging needs nothing extra; direct USB needs Termux:API's `termux-usb` permission flow rather than the udev rules the ISO variant relies on), OTA/partition extraction and inspection, LSPosed module scaffolding, root-detection checks against a separate device, and AI tooling — Claude Code and Ollama run as plain foreground/tmux-managed processes rather than systemd services, which is how `setup_ai_tools.sh` already treats them (its `systemctl` calls were already best-effort, not assumed).
+
+**Doesn't work here [Certain]:** `setup_rooted_avd.sh` — no `/dev/kvm` means the emulator falls back to unaccelerated software rendering (the script now warns about this rather than silently running slow); `harden_kernel.sh`/`harden_system.sh` — need real kernel lockdown and security-module control this container never gets, PRoot's fake root notwithstanding; `setup_vpn.sh`/`join_headscale.sh` — WireGuard needs `CAP_NET_ADMIN` and a real kernel `wg` module, neither available (use Termux's own VPN apps for mesh/VPN instead); `build_matrix.sh`'s Docker-based NDK matrix builds — no cgroups/overlayfs without root; the GNOME desktop and Calamares installer — this rootfs isn't bootable, it's a PRoot container, there's nothing to install it *to*.
+
+## 18. What's still a manual step
 
 Bootloader unlock permits for Xiaomi/OnePlus regional variants that require an account-linked waiting period, Samsung Download Mode flashing (Odin/Heimdall, not fastboot), and initial OEM driver installation on the host for less common vendors. RootForge's scripts detect these cases and stop with an explanation rather than failing silently or guessing.
 
