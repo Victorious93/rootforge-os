@@ -67,6 +67,19 @@ jobs:
             rootforge-os-amd64.hybrid.iso
             rootforge-os-amd64.hybrid.iso.sha256
           retention-days: 14
+
+      - name: Upload build log (always, even on failure)
+        # A failed `Build ISO` step only shows a handful of echo lines in
+        # the GitHub UI/API — the real live-build trace is in this file.
+        # Uploading it unconditionally is what makes a failure here
+        # diagnosable without re-running the whole build.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootforge-build-log
+          path: rootforge-build-*.log
+          retention-days: 14
+          if-no-files-found: ignore
           if-no-files-found: error
 
   build-termux-rootfs:
