@@ -73,6 +73,14 @@ jobs:
   package-lists:
     runs-on: ubuntu-latest
     container: debian:bookworm
+    # Container-job steps default to the container's own /bin/sh (dash in
+    # debian:bookworm), not bash — `set -o pipefail` below is a bashism and
+    # fails immediately under dash ("Illegal option -o pipefail") without
+    # this. bash is part of Debian's Priority:required set, so it's present
+    # in the base image without an extra install step.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
