@@ -1,0 +1,96 @@
+# RootForge OS — lint pipeline
+# Victorious Framework | Origin Source Labs
+#
+# Fast, PR-time checks that catch a specific class of bug the hard way:
+# release.yml's first real run (see PRs #3/#4) failed on things that took
+# an hour of GitHub Actions time to surface — invalid lb config flags, a
+# renamed Debian package (simg2img -> android-sdk-libsparse-utils), apt
+# packages that were never actually in Debian's repos (eza, starship) — all
+# of which this catches in under a minute instead. It complements
+# release.yml rather than replacing it: things that only break during an
+# actual live-build run (the auto/build pipefail bug, the dead grub-pc
+# template path) still need a real build to catch.
+
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends shellcheck
+
+      - name: Shellcheck bash scripts
+        run: |
+          set -euo pipefail
+          FAIL=0
+          while IFS= read -r -d '' f; do
+            echo "== $f =="
+            shellcheck -S error "$f" || FAIL=1
+          done < <(find config/includes.chroot termux -name '*.sh' -print0)
+          shellcheck -S error auto/build || FAIL=1
+          exit "$FAIL"
+
+      - name: Shellcheck POSIX-sh scripts (hooks, auto/config)
+        run: |
+          set -euo pipefail
+          FAIL=0
+          while IFS= read -r -d '' f; do
+            echo "== $f =="
+            shellcheck -S error -s sh "$f" || FAIL=1
+          done < <(find config/hooks -name '*.hook.chroot' -print0)
+          shellcheck -S error -s sh auto/config || FAIL=1
+          exit "$FAIL"
+
+  yaml-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate workflow YAML
+        run: |
+          python3 -c "
+          import glob, sys
+          import yaml
+          bad = False
+          for f in sorted(glob.glob('.github/workflows/*.yml')):
+              try:
+                  yaml.safe_load(open(f))
+                  print(f'{f}: OK')
+              except Exception as e:
+                  print(f'{f}: FAILED - {e}')
+                  bad = True
+          sys.exit(1 if bad else 0)
+          "
+
+  package-lists:
+    runs-on: ubuntu-latest
+    container: debian:bookworm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: apt-get update
+        run: apt-get update -qq
+
+      - name: Verify every listed package resolves on bookworm
+        run: |
+          set -euo pipefail
+          MISSING=0
+          for f in config/package-lists/*.list.chroot termux/package-lists/*.list.chroot; do
+            echo "== $f =="
+            while IFS= read -r pkg; do
+              [ -z "$pkg" ] && continue
+              if ! apt-cache show "$pkg" >/dev/null 2>&1; then
+                echo "MISSING: $pkg (in $f)"
+                MISSING=1
+              fi
+            done < <(grep -v '^#' "$f" | grep -v '^[[:space:]]*$')
+          done
+          exit "$MISSING"

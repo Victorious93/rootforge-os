@@ -1,4 +1,7 @@
+# shellcheck shell=bash
 # RootForge OS proot-distro plugin — Victorious Framework | Origin Source Labs
+#
+# No shebang — proot-distro sources this file, it never executes it directly.
 #
 # [Likely] this matches proot-distro's current plugin API (DISTRO_NAME/
 # DISTRO_COMMENT strings, TARBALL_URL/TARBALL_SHA256 associative arrays
