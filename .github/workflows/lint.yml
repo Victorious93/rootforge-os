@@ -55,14 +55,37 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Validate workflow YAML
+        # Plain yaml.safe_load() silently accepts duplicate mapping keys
+        # (keeps the last one, no error) even though the YAML spec — and
+        # GitHub's own workflow parser — reject them. release.yml's first
+        # real run failed on exactly that (a duplicate if-no-files-found:
+        # under one step) with zero jobs even scheduled, and this check
+        # passed anyway. Use a loader that raises on duplicates instead.
         run: |
           python3 -c "
           import glob, sys
           import yaml
+
+          class UniqueKeyLoader(yaml.SafeLoader):
+              pass
+
+          def construct_mapping(loader, node, deep=False):
+              mapping = {}
+              for key_node, value_node in node.value:
+                  key = loader.construct_object(key_node, deep=deep)
+                  if key in mapping:
+                      raise ValueError(f'duplicate key {key!r}')
+                  mapping[key] = loader.construct_object(value_node, deep=deep)
+              return mapping
+
+          UniqueKeyLoader.add_constructor(
+              yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, construct_mapping
+          )
+
           bad = False
           for f in sorted(glob.glob('.github/workflows/*.yml')):
               try:
-                  yaml.safe_load(open(f))
+                  yaml.load(open(f), Loader=UniqueKeyLoader)
                   print(f'{f}: OK')
               except Exception as e:
                   print(f'{f}: FAILED - {e}')

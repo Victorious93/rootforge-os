@@ -80,7 +80,6 @@ jobs:
           path: rootforge-build-*.log
           retention-days: 14
           if-no-files-found: ignore
-          if-no-files-found: error
 
   build-termux-rootfs:
     runs-on: ubuntu-latest
