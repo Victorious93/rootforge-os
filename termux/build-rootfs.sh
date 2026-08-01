@@ -40,7 +40,16 @@ ROOTFS="$(mktemp -d /tmp/rootforge-proot-rootfs.XXXXXX)"
 
 log() { echo "[proot-build] $*"; }
 die() { echo "[proot-build] ERROR: $*" >&2; exit 1; }
-cleanup() { rm -rf "$ROOTFS"; }
+cleanup() {
+  # Unmount in reverse order, ignoring anything not actually mounted (the
+  # script may die before all of these are set up) — must happen before
+  # rm -rf, or it either fails on a busy mountpoint or silently deletes the
+  # mountpoint out from under the host's /proc, /sys, /dev.
+  for m in dev/pts dev sys proc; do
+    mountpoint -q "$ROOTFS/$m" 2>/dev/null && umount -l "$ROOTFS/$m"
+  done
+  rm -rf "$ROOTFS"
+}
 trap cleanup EXIT
 
 [[ $EUID -eq 0 ]] || die "Must run as root (debootstrap/chroot need it): sudo $0 $*"
@@ -74,6 +83,17 @@ fi
 
 log "Stage 2: second-stage debootstrap inside the chroot"
 chroot "$ROOTFS" /debootstrap/debootstrap --second-stage
+
+log "Bind-mounting /proc, /sys, /dev, /dev/pts into the chroot"
+# Package postinst scripts routinely need these — ca-certificates-java's
+# Java cacerts update, dbus/polkitd's service setup, and others fail with
+# "Sub-process /usr/bin/dpkg returned an error code (1)" without /proc in
+# particular. live-build's own ISO chroot gets this for free via its
+# lb_chroot_proc/lb_chroot_devpts hooks; debootstrap+chroot by hand doesn't.
+mount -t proc proc "$ROOTFS/proc"
+mount -t sysfs sysfs "$ROOTFS/sys"
+mount --bind /dev "$ROOTFS/dev"
+mount -t devpts devpts "$ROOTFS/dev/pts"
 
 log "Blocking service auto-start during package installs (policy-rc.d)"
 cat > "$ROOTFS/usr/sbin/policy-rc.d" <<'POLICY'
@@ -133,6 +153,14 @@ rm -f "$ROOTFS/usr/sbin/policy-rc.d"
 chroot "$ROOTFS" apt-get clean
 rm -rf "$ROOTFS"/var/lib/apt/lists/* "$ROOTFS"/tmp/* "$ROOTFS/debootstrap"
 [[ $CROSS_BUILD -eq 1 ]] && rm -f "$ROOTFS"/usr/bin/qemu-*-static
+
+log "Unmounting /proc, /sys, /dev, /dev/pts before packing"
+# Must happen before tar, not just in the exit trap — packing them up would
+# ship live kernel runtime state (or a hung/gigantic tar read) instead of an
+# empty mountpoint directory.
+for m in dev/pts dev sys proc; do
+  mountpoint -q "$ROOTFS/$m" 2>/dev/null && umount -l "$ROOTFS/$m"
+done
 
 mkdir -p "$OUT_DIR"
 TARBALL="$OUT_DIR/rootforge-proot-${ARCH}-${STAMP}.tar.xz"
