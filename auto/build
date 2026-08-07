@@ -25,6 +25,8 @@ fi
 
 echo "==> RootForge OS build starting — $(date)"
 echo "==> Log: $LOGFILE"
+echo "==> Disk space at start:"
+df -h . 2>&1 || true
 echo "==> Architecture note: GNOME is the configured desktop. On a box that also"
 echo "    runs an accelerated emulator and kernel builds concurrently, budget 16GB+"
 echo "    RAM. XFCE is a lighter alternative — edit auto/config to swap if needed."
@@ -47,6 +49,16 @@ set -e
 if [ "$BUILD_STATUS" -ne 0 ]; then
   echo "" >&2
   echo "==> lb build FAILED (exit $BUILD_STATUS). See $LOGFILE for details." >&2
+  echo "==> Disk space at failure:" >&2
+  df -h . >&2 || true
+  # tee already mirrored lb build's output to stdout above, but a very
+  # high-volume step (a full GNOME + toolchain install can be thousands of
+  # lines) has been unreliable to retrieve after the fact via GitHub's API
+  # in practice — printing the tail again here, explicitly, right next to
+  # the failure line, is insurance against that rather than assuming the
+  # earlier stream came through intact.
+  echo "==> Last 200 lines of $LOGFILE:" >&2
+  tail -n 200 "$LOGFILE" >&2 || true
   exit "$BUILD_STATUS"
 fi
 
