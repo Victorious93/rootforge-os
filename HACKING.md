@@ -54,8 +54,11 @@ rootforge-os/
     │   ├── etc/systemd/     first-boot service
     │   ├── usr/local/bin/   all 27 automation scripts
     │   └── usr/local/share/rootforge/  docker/, zygisk-api/ (added by hooks)
-    └── templates/grub2/grub.cfg       live ISO boot menu (path live-build's
-        grub2 stage actually reads — see the file's own header comment)
+    └── (no config/templates/ or config/bootloaders/ overrides — the live
+        ISO's own bootloader is syslinux/isolinux, using live-build's
+        bundled default theme; see auto/config's own header for why
+        grub2 doesn't work here despite --bootloader looking like the
+        more modern choice)
 ```
 
 ## Adding a script

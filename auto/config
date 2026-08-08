@@ -11,14 +11,27 @@
 # live-build package actually shipped by Debian bookworm / current Ubuntu
 # (3.0~a57): `lb config` treats unrecognized options as non-fatal warnings
 # and keeps going, which combined with auto/build's own pipefail bug meant
-# a build could "succeed" having done nothing. --bootloader grub2 is the
-# value lb_binary_grub2 actually checks for to produce a UEFI-capable image
-# (the enum in `lb config --help`, grub|syslinux|yaboot, is stale docs, not
-# an enforced list — the parser accepts any string). There's no boot-menu-
-# timeout or output-filename flag in this version at all: the timeout is
-# whatever GRUB defaults to unless overridden via a
-# config/bootloaders/grub2/ template, and auto/build renames the produced
+# a build could "succeed" having done nothing. There's no boot-menu-timeout
+# or output-filename flag in this version at all: the timeout is whatever
+# the bootloader defaults to, and auto/build renames the produced
 # binary.hybrid.iso itself rather than relying on a --image-name flag.
+#
+# [Certain] --bootloader syslinux, not grub2: a real build reaching the
+# literal last step (xorriso had already written the full ISO) failed with
+# "isohybrid: boot loader does not have an isolinux.bin hybrid signature."
+# lb_binary_grub2 in this live-build version only builds an i386-pc
+# (BIOS-only) GRUB El Torito image via grub-mkimage — it was never
+# UEFI-capable here despite this file's previous claim to that effect,
+# which was never actually verified against the source — and isohybrid
+# (the syslinux-project tool lb_binary_iso always invokes for
+# --binary-images iso-hybrid, regardless of --bootloader) only recognizes
+# isolinux's own boot-image signature, not GRUB's. --bootloader syslinux
+# is the pairing lb_binary_syslinux/lb_binary_iso actually support for a
+# working hybrid (BIOS + dd-to-USB) ISO in this version; it costs nothing
+# relative to grub2 here since neither path had UEFI support anyway. The
+# installed system's own bootloader (via Calamares + grub-efi-amd64 in
+# rootforge-installer.list.chroot) is unaffected — this flag only controls
+# how the temporary live/installer ISO itself boots.
 #
 # [Certain] --security false: lb_chroot_archives (read directly from the
 # installed package) hardcodes "${DISTRIBUTION}/updates" as the security
@@ -63,7 +76,7 @@ lb config noauto \
   --distribution bookworm \
   --archive-areas "main contrib non-free non-free-firmware" \
   --binary-images iso-hybrid \
-  --bootloader grub2 \
+  --bootloader syslinux \
   --debian-installer false \
   --linux-flavours amd64 \
   --architectures amd64 \
