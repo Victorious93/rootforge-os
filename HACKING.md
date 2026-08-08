@@ -64,7 +64,15 @@ rootforge-os/
         vesamenu.c32, which were stale symlinks to a pre-repackaging
         syslinux layout; these now point at the real current paths
         (isolinux package's /usr/lib/ISOLINUX/isolinux.bin and
-        syslinux-common's /usr/lib/syslinux/modules/bios/vesamenu.c32)
+        syslinux-common's /usr/lib/syslinux/modules/bios/vesamenu.c32).
+        Also adds bootlogo (an empty cpio archive) — lb_binary_syslinux's
+        "hack around the removal of support in gfxboot" step
+        unconditionally does `cpio -i < bootlogo`, but only ever CREATES
+        that file itself for LB_MODE=ubuntu (via gfxboot-theme-ubuntu);
+        for our LB_MODE=debian it's otherwise never created at all, a gap
+        in live-build itself, not something a --mode flag can route
+        around. An empty archive extracts cleanly (0 entries) and the
+        step repacks a real one afterward from the theme's own files.
 ```
 
 ## Adding a script
