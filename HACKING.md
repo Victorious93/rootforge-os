@@ -54,11 +54,16 @@ rootforge-os/
     │   ├── etc/systemd/     first-boot service
     │   ├── usr/local/bin/   all 27 automation scripts
     │   └── usr/local/share/rootforge/  docker/, zygisk-api/ (added by hooks)
-    └── (no config/templates/ or config/bootloaders/ overrides — the live
-        ISO's own bootloader is syslinux/isolinux, using live-build's
-        bundled default theme; see auto/config's own header for why
-        grub2 doesn't work here despite --bootloader looking like the
-        more modern choice)
+    ├── archives/rootforge-security.list   correct bookworm-security apt
+    │   line — live-build's own built-in security handling hardcodes a
+    │   pre-bullseye suite path that 404s; see auto/config's header
+    └── bootloaders/isolinux/   live ISO's own boot theme (BIOS-only —
+        see auto/config's header for why syslinux/isolinux, not grub2).
+        Copied from live-build's bundled default except isolinux.bin and
+        vesamenu.c32, which were stale symlinks to a pre-repackaging
+        syslinux layout; these now point at the real current paths
+        (isolinux package's /usr/lib/ISOLINUX/isolinux.bin and
+        syslinux-common's /usr/lib/syslinux/modules/bios/vesamenu.c32)
 ```
 
 ## Adding a script

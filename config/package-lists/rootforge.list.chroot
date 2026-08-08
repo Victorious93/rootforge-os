@@ -110,3 +110,13 @@ firmware-linux
 # full ISO) and failing with "binary.sh: isohybrid: not found". Installing
 # the right package ourselves sidesteps live-build's stale check entirely.
 syslinux-utils
+
+# isolinux — provides /usr/lib/ISOLINUX/isolinux.bin, which
+# config/bootloaders/isolinux/isolinux.bin now symlinks to (see that
+# directory's own header in HACKING.md). lb_binary_syslinux's own
+# dependency check only auto-installs syslinux + syslinux-common into
+# the chroot, never the separate isolinux package, so this needs to be
+# explicit — confirmed by a real build failure ("cp: cannot stat
+# '/root/isolinux/isolinux.bin': No such file or directory") the first
+# time this bootloader-theme-copy step was ever reached.
+isolinux
