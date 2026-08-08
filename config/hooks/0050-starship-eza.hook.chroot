@@ -30,7 +30,12 @@ else
   EZA_TAG=$(curl -fsSL https://api.github.com/repos/eza-community/eza/releases/latest \
     | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
   EZA_URL="https://github.com/eza-community/eza/releases/download/${EZA_TAG}/eza_${EZA_TARGET}.tar.gz"
-  curl -fsSL "$EZA_URL" | tar -xz -C /usr/local/bin eza
+  # [Certain] the release tarball's sole member is "./eza" (verified by
+  # downloading and listing a real one), not a bare "eza" — asking tar to
+  # extract a specific member named "eza" therefore never matches and always
+  # fails with "Not found in archive". Extracting without a member filter
+  # instead lands "./eza" at exactly /usr/local/bin/eza, which is what we want.
+  curl -fsSL "$EZA_URL" | tar -xz -C /usr/local/bin
   chmod +x /usr/local/bin/eza
   eza --version
 fi
