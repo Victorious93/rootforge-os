@@ -31,6 +31,22 @@
 # bug in auto/build (see that file's own header) stopped masking it.
 # config/archives/rootforge-security.list replaces it with the correct
 # modern path via live-build's own supported custom-archive mechanism.
+#
+# [Certain] --firmware-chroot false: lb_chroot_linux-image's firmware
+# auto-discovery (triggered only by --firmware-chroot true) fetches a
+# single top-level Contents-${ARCH}.gz from
+# ${MIRROR}/dists/${DISTRIBUTION}/, greps it for /lib/firmware/* file
+# owners, and installs whatever packages it finds — confirmed by a real
+# build failure that this file no longer exists at that path on Debian's
+# actual mirrors (404, not a network/sandbox issue — the request reached
+# ftp.debian.org and got a real answer); Debian's Contents files are
+# per-component now (main/Contents-${ARCH}.gz etc), and this old
+# live-build version was never updated for that. --firmware-binary true
+# is untouched — it only feeds lb_binary_debian-installer, which never
+# runs here since --debian-installer is none. Since this auto-discovery
+# had never once succeeded in any real build (same "silently never
+# worked" class as this whole audit), rootforge.list.chroot now lists
+# firmware-linux directly instead of relying on it.
 
 set -e
 
@@ -56,5 +72,5 @@ lb config noauto \
   --system live \
   --initramfs live-boot \
   --firmware-binary true \
-  --firmware-chroot true \
+  --firmware-chroot false \
   "${@}"

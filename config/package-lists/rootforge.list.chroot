@@ -94,3 +94,8 @@ locales
 network-manager
 network-manager-gnome
 pulseaudio
+
+# Firmware (WiFi/GPU/etc for real hardware) — installed explicitly rather
+# than relying on live-build's --firmware-chroot auto-discovery, which
+# doesn't work on this live-build version (see auto/config's header)
+firmware-linux
