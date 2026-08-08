@@ -99,3 +99,14 @@ pulseaudio
 # than relying on live-build's --firmware-chroot auto-discovery, which
 # doesn't work on this live-build version (see auto/config's header)
 firmware-linux
+
+# isohybrid — lb_binary_iso runs it chrooted (LB_BUILD_WITH_CHROOT
+# defaults true) to make the finished ISO USB-bootable as well as
+# BIOS-bootable, via `Chroot chroot "sh binary.sh"`. live-build's own
+# dependency check for this (`Check_package chroot/usr/bin/isohybrid
+# syslinux`) auto-installs the wrong package — isohybrid actually ships
+# in syslinux-utils, not the bare syslinux package — confirmed by a real
+# build reaching the very last step (xorriso had already written the
+# full ISO) and failing with "binary.sh: isohybrid: not found". Installing
+# the right package ourselves sidesteps live-build's stale check entirely.
+syslinux-utils
