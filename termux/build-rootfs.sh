@@ -10,7 +10,7 @@
 # means for what does and doesn't work here.
 #
 # Reuses the same build-time hooks as the full ISO
-# (config/hooks/live/*.hook.chroot) for the tools that work identically
+# (config/hooks/*.hook.chroot) for the tools that work identically
 # under PRoot (Node/Claude Code, Ollama, magiskboot, repo, avbtool, Zygisk
 # headers, ccache — the arch-hardcoded ones were fixed to be arch-aware
 # specifically so this script can reuse them unmodified) plus a pruned
@@ -122,7 +122,7 @@ SHARED_HOOKS="0010-nodesource 0020-ollama 0030-claude-code 0050-starship-eza
 0060-magiskboot 0061-repo-tool 0062-payload-dumper
 0070-workspace-skel 0085-avbtool 0095-zygisk-headers 0098-ccache-config"
 for h in $SHARED_HOOKS; do
-  cp "$REPO_ROOT/config/hooks/live/${h}.hook.chroot" "$ROOTFS/hooks/${h}.sh"
+  cp "$REPO_ROOT/config/hooks/${h}.hook.chroot" "$ROOTFS/hooks/${h}.sh"
   chmod +x "$ROOTFS/hooks/${h}.sh"
   log "  running $h"
   chroot "$ROOTFS" "/hooks/${h}.sh" 2>&1 | sed 's/^/    /'

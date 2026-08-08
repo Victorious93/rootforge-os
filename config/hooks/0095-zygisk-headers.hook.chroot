@@ -1,0 +1,61 @@
+#!/bin/sh
+# RootForge OS — Zygisk NDK API header
+# Victorious Framework | Origin Source Labs
+#
+# README section 3: "RootForge's Studio install should have the Zygisk API
+# headers vendored into a template project so you're not hunting for them
+# each time."
+#
+# Fetches zygisk.hpp — the single public header Zygisk module developers
+# build against (the same file topjohnwu/zygisk-module-sample vendors into
+# its own template) — and installs it to
+# /usr/local/share/rootforge/zygisk-api/ so new_module_scaffold.sh can
+# reference it when scaffolding a Zygisk module.
+#
+# [Certain] the previous version of this hook fetched from
+# native/include/{zygisk.hpp,zygisk.h} and native/src/zygisk/zygisk.cpp —
+# verified by direct HTTP request against the real v30.7 release tag that
+# none of those three paths exist (all 404). The header actually lives at
+# native/src/core/zygisk/zygisk.hpp (confirmed 200 at v30.7); there is no
+# zygisk.h (C++-only header) and no zygisk.cpp (the .cpp implementation
+# files — entry.cpp, hook.cpp, module.cpp — are Magisk daemon internals,
+# not part of the module-developer-facing API, and aren't needed to build
+# a Zygisk module). This hook's own --head-then-fetch guard meant the old
+# wrong paths never errored the build — it just silently produced an empty
+# zygisk-api/ directory (nothing but the CMakeLists stub) on every build,
+# ever, until now.
+
+set -e
+
+INSTALL_DIR="/usr/local/share/rootforge/zygisk-api"
+mkdir -p "$INSTALL_DIR"
+
+MAGISK_API="https://api.github.com/repos/topjohnwu/Magisk/releases/latest"
+TAG=$(curl -fsSL "$MAGISK_API" | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+
+BASE="https://raw.githubusercontent.com/topjohnwu/Magisk/${TAG}"
+HEADER_URL="${BASE}/native/src/core/zygisk/zygisk.hpp"
+
+echo "==> Fetching Zygisk API header from Magisk $TAG"
+if ! curl -fsSL -o "$INSTALL_DIR/zygisk.hpp" "$HEADER_URL"; then
+  echo "WARNING: failed to fetch $HEADER_URL"
+  echo "         zygisk.hpp not installed — Magisk may have moved the file again;"
+  echo "         check native/src/core/zygisk/ under the $TAG tag."
+  exit 0
+fi
+echo "    zygisk.hpp"
+
+# Write a minimal CMakeLists stub so new Zygisk module projects can find the header
+cat > "$INSTALL_DIR/CMakeLists.zygisk.txt" <<'EOF'
+# RootForge OS — Zygisk API header include stub
+# Add to your module's CMakeLists.txt:
+#
+#   include(/usr/local/share/rootforge/zygisk-api/CMakeLists.zygisk.txt)
+
+target_include_directories(${MODULE_NAME} PRIVATE
+    /usr/local/share/rootforge/zygisk-api
+)
+EOF
+
+echo "==> Zygisk API header installed to $INSTALL_DIR"
+ls "$INSTALL_DIR"

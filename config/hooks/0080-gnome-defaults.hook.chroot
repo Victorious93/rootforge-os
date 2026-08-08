@@ -25,6 +25,13 @@ system-db:rootforge
 EOF
 
 # System-wide GNOME defaults
+#
+# The terminal profile UUID below has to be registered as the profile
+# list's only entry AND as 'default', or gnome-terminal ignores it: on
+# first launch it auto-creates its own randomly-generated-UUID profile and
+# never looks at settings keyed under an unlisted UUID, so this section
+# would otherwise silently no-op — same class of bug as the Plymouth
+# ModuleName mismatch this audit also caught.
 cat > "$DB_DIR/00-rootforge-defaults" <<'EOF'
 [org/gnome/desktop/interface]
 color-scheme='prefer-dark'
@@ -36,7 +43,12 @@ clock-show-seconds=true
 primary-color='#0d0d0d'
 color-shading-type='solid'
 
+[org/gnome/terminal/legacy/profiles:]
+list=['b1dcc9dd-5262-4d8d-a863-c897e6d979b9']
+default='b1dcc9dd-5262-4d8d-a863-c897e6d979b9'
+
 [org/gnome/terminal/legacy/profiles:/:b1dcc9dd-5262-4d8d-a863-c897e6d979b9]
+visible-name='RootForge'
 font='JetBrains Mono 11'
 use-system-font=false
 use-theme-colors=false
