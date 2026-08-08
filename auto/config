@@ -42,11 +42,20 @@
 # ftp.debian.org and got a real answer); Debian's Contents files are
 # per-component now (main/Contents-${ARCH}.gz etc), and this old
 # live-build version was never updated for that. --firmware-binary true
-# is untouched — it only feeds lb_binary_debian-installer, which never
-# runs here since --debian-installer is none. Since this auto-discovery
-# had never once succeeded in any real build (same "silently never
-# worked" class as this whole audit), rootforge.list.chroot now lists
-# firmware-linux directly instead of relying on it.
+# is untouched — it only feeds lb_binary_debian-installer, which exits 0
+# immediately here since --debian-installer is false. Since this
+# auto-discovery had never once succeeded in any real build (same
+# "silently never worked" class as this whole audit), rootforge.list.chroot
+# now lists firmware-linux directly instead of relying on it.
+#
+# [Certain] --debian-installer false, not none: lb_binary_debian-installer
+# (read directly from the installed package) only recognizes
+# true|cdrom|netinst|netboot|businesscard|live (proceed) or false (skip,
+# exit 0) — "none" isn't a value this version understands at all and falls
+# into its catch-all error case ("debian-installer flavour none not
+# supported"), confirmed by a real build failure the first time this
+# stage was ever reached (every earlier attempt died before getting this
+# far). `lb config --help` documents the same enum, ending in "|false".
 
 set -e
 
@@ -55,7 +64,7 @@ lb config noauto \
   --archive-areas "main contrib non-free non-free-firmware" \
   --binary-images iso-hybrid \
   --bootloader grub2 \
-  --debian-installer none \
+  --debian-installer false \
   --linux-flavours amd64 \
   --architectures amd64 \
   --mode debian \
