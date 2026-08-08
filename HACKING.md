@@ -31,6 +31,7 @@ rootforge-os/
     │   ├── 0020-*       Ollama binary + service
     │   ├── 0030-*       Claude Code CLI
     │   ├── 0040-*       rpi-imager .deb
+    │   ├── 0045-*       rsvg compat shim (rsvg-convert, for lb_binary_syslinux)
     │   ├── 0050-*       starship + eza
     │   ├── 006x-*       magiskboot, repo, payload-dumper-go
     │   ├── 007x-*       workspace skel
