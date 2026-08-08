@@ -85,6 +85,12 @@ gradle
 # listed for clarity, same convention as rootforge-ai.list.chroot
 npm
 
+# zstd: hard dependency of 0020-ollama.hook.chroot's install.sh (it shells
+# out to the CLI tool, not just the library) — confirmed by a real build
+# failure ("ERROR: This version requires zstd for extraction") the first
+# time this shared hook actually got to run under this rootfs
+zstd
+
 # Locale / privilege helper
 locales
 sudo
