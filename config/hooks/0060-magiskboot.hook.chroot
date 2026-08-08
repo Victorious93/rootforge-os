@@ -34,7 +34,12 @@ RELEASE_JSON=$(curl -fsSL "$MAGISK_API")
 # lib/<abi>/libmagiskboot.so which is a standalone ELF, despite the .so name
 APK_URL=$(echo "$RELEASE_JSON" | python3 -c "
 import sys, json
-assets = json.load(sys.stdin)['assets']
+# strict=False: confirmed by a real build failure that GitHub's release
+# JSON for this repo can carry a raw control character somewhere in the
+# payload (most likely the free-text release-notes body) — Python's
+# default strict json.load rejects that even though we only need the
+# small, well-formed 'assets' field, never the body itself.
+assets = json.load(sys.stdin, strict=False)['assets']
 apk = [a for a in assets if a['name'].endswith('.apk') and 'stub' not in a['name']]
 print(apk[0]['browser_download_url'] if apk else '')
 ")

@@ -1,13 +1,8 @@
 [Plymouth Theme]
 Name=RootForge OS
 Description=RootForge OS boot splash — Victorious Framework
-ModuleName=two-step
+ModuleName=script
 
-[two-step]
+[script]
 ImageDir=/usr/share/plymouth/themes/rootforge
-HorizontalAlignment=.5
-VerticalAlignment=.5
-Transition=none
-TransitionDuration=0.0
-BackgroundStartColor=0x0d0d0d
-BackgroundEndColor=0x0d0d0d
+ScriptFile=/usr/share/plymouth/themes/rootforge/rootforge.script

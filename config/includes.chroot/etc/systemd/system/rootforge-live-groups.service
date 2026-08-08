@@ -1,0 +1,37 @@
+[Unit]
+Description=RootForge OS live session user group membership
+Documentation=file:///etc/systemd/system/rootforge-live-groups.service
+# Adds the live session's default user (live-config's standard name is
+# 'user') to kvm/plugdev/docker so USB device access, KVM emulator
+# acceleration, and the docker socket work immediately in the live
+# session, without a reboot. This used to be attempted as a build-time
+# chroot hook (0005-live-user-groups) — that never worked: the live
+# user account doesn't exist until live-config creates it at actual boot,
+# not during the ISO build, so `usermod` on a nonexistent account failed
+# every time (and, since chroot hooks abort the whole build on a
+# non-zero exit, would have taken every other hook down with it once
+# hook discovery itself got fixed — see HACKING.md).
+#
+# The installed system's equivalent group membership is handled
+# separately and correctly by 00_bootstrap_distro.sh (via
+# rootforge-firstboot.service), which runs after Calamares has created
+# the real target user — this unit is live-session-only.
+#
+# [Likely] live-config.service is the correct real unit name and ordering
+# point (live-config's own systemd-integrated boot sequence, which creates
+# the live user) — not verified against a live-config package instance in
+# this environment; if the live user still isn't grouped correctly at
+# login, check `systemctl status rootforge-live-groups.service` first.
+ConditionPathExists=!/etc/rootforge-installed
+After=live-config.service
+Wants=live-config.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'for g in kvm plugdev docker; do getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" user || true; done'
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

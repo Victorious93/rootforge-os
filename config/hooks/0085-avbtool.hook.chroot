@@ -1,0 +1,73 @@
+#!/bin/sh
+# RootForge OS — avbtool + mkbootimg install from AOSP
+# Victorious Framework | Origin Source Labs
+#
+# avbtool: re-signs vbmeta after patching boot/init_boot, or disables AVB
+#          verification on eng builds. Python script from AOSP external/avb.
+# mkbootimg / unpack_bootimg / repack_bootimg: creates/unpacks Android boot
+#          images, header v3/v4 aware. From AOSP system/tools/mkbootimg.
+#
+# [Certain] neither avbtool nor mkbootimg is a real PyPI package — verified
+# directly against pypi.org (both return a plain 404/"Not Found"); the
+# previous version of this hook (`pip3 install avbtool mkbootimg`) always
+# failed, and — since chroot hooks abort the whole build on a non-zero
+# exit — would have taken every hook after it down too, once hook
+# discovery itself got fixed (see HACKING.md and 0005-enable-live-groups
+# for that story).
+#
+# Both are plain standalone Python scripts living in AOSP's own git trees
+# (android.googlesource.com), fetched here from LineageOS's GitHub mirrors
+# instead, which serve the identical AOSP source over plain HTTPS. Pinned
+# to the lineage-22.2 branch; there's no "latest" branch on these mirrors,
+# so bump this periodically. mkbootimg.py imports a local gki/ submodule
+# (no external pip dependency — Python's implicit namespace packages find
+# it via the script's own directory) — that companion file has to ship
+# alongside it or mkbootimg fails with ModuleNotFoundError on the very
+# first invocation, not at install time.
+
+set -e
+
+TOOLS_DIR="/usr/local/lib/rootforge/avb-tools"
+BRANCH="lineage-22.2"
+AVB_BASE="https://raw.githubusercontent.com/LineageOS/android_external_avb/${BRANCH}"
+MKBOOTIMG_BASE="https://raw.githubusercontent.com/LineageOS/android_system_tools_mkbootimg/${BRANCH}"
+
+mkdir -p "$TOOLS_DIR/gki"
+
+fetch() {
+  # $1 = URL, $2 = destination path. Exits the whole hook cleanly (not the
+  # build) on failure, matching 0040-rpi-imager / 0062-payload-dumper's
+  # convention: a flaky fetch here shouldn't take the rest of the build
+  # down with it.
+  if ! curl -fsSL -o "$2" "$1"; then
+    echo "WARNING: failed to fetch $1"
+    echo "         avbtool/mkbootimg install incomplete — scripts that need them"
+    echo "         (flash_patched_boot.sh, kernelsu_patch_boot.sh) will error at runtime."
+    exit 0
+  fi
+}
+
+echo "==> Fetching avbtool from AOSP (via LineageOS mirror, $BRANCH)"
+fetch "$AVB_BASE/avbtool.py" "$TOOLS_DIR/avbtool.py"
+
+echo "==> Fetching mkbootimg + companions from AOSP (via LineageOS mirror, $BRANCH)"
+fetch "$MKBOOTIMG_BASE/mkbootimg.py" "$TOOLS_DIR/mkbootimg.py"
+fetch "$MKBOOTIMG_BASE/unpack_bootimg.py" "$TOOLS_DIR/unpack_bootimg.py"
+fetch "$MKBOOTIMG_BASE/repack_bootimg.py" "$TOOLS_DIR/repack_bootimg.py"
+fetch "$MKBOOTIMG_BASE/gki/generate_gki_certificate.py" "$TOOLS_DIR/gki/generate_gki_certificate.py"
+
+chmod +x "$TOOLS_DIR"/*.py
+
+for tool in avbtool mkbootimg unpack_bootimg repack_bootimg; do
+  cat > "/usr/local/bin/$tool" <<WRAPPER
+#!/bin/sh
+exec python3 "$TOOLS_DIR/${tool}.py" "\$@"
+WRAPPER
+  chmod +x "/usr/local/bin/$tool"
+done
+
+echo "==> Verifying"
+avbtool version 2>&1 | head -1 || echo "avbtool installed (version check inconclusive)"
+mkbootimg --help >/dev/null 2>&1 && echo "mkbootimg ok" || echo "mkbootimg installed (verify with: mkbootimg --help)"
+
+echo "==> avbtool + mkbootimg + unpack_bootimg + repack_bootimg install complete"
