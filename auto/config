@@ -19,6 +19,18 @@
 # whatever GRUB defaults to unless overridden via a
 # config/bootloaders/grub2/ template, and auto/build renames the produced
 # binary.hybrid.iso itself rather than relying on a --image-name flag.
+#
+# [Certain] --security false: lb_chroot_archives (read directly from the
+# installed package) hardcodes "${DISTRIBUTION}/updates" as the security
+# suite path for --mode debian, non-derivative builds, in both the
+# chroot-install stage and the final-image stage that writes the
+# persisted /etc/apt/sources.list. Debian renamed that suite to
+# "${DISTRIBUTION}-security" back in bullseye (11); the old path 404s on
+# bookworm (and everything since), which is what actually caused every
+# real ISO build attempt to fail this whole session, once the recursion
+# bug in auto/build (see that file's own header) stopped masking it.
+# config/archives/rootforge-security.list replaces it with the correct
+# modern path via live-build's own supported custom-archive mechanism.
 
 set -e
 
@@ -34,6 +46,7 @@ lb config noauto \
   --apt-recommends false \
   --apt-options "--yes --no-install-recommends" \
   --compression xz \
+  --security false \
   --zsync false \
   --iso-volume "RootForge OS" \
   --iso-application "RootForge OS — Android Root Module Development" \

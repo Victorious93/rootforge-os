@@ -31,7 +31,13 @@ INSTALL_DIR="/usr/local/share/rootforge/zygisk-api"
 mkdir -p "$INSTALL_DIR"
 
 MAGISK_API="https://api.github.com/repos/topjohnwu/Magisk/releases/latest"
-TAG=$(curl -fsSL "$MAGISK_API" | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+# strict=False: confirmed by a real build failure (in 0060-magiskboot,
+# which hits this same API) that GitHub's release JSON for this repo can
+# carry a raw control character somewhere in the payload (most likely the
+# free-text release-notes body) — Python's default strict json.load
+# rejects that even though we only need the small, well-formed tag_name
+# field, never the body itself.
+TAG=$(curl -fsSL "$MAGISK_API" | python3 -c "import sys,json; print(json.load(sys.stdin, strict=False)['tag_name'])")
 
 BASE="https://raw.githubusercontent.com/topjohnwu/Magisk/${TAG}"
 HEADER_URL="${BASE}/native/src/core/zygisk/zygisk.hpp"

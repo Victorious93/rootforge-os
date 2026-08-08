@@ -27,8 +27,13 @@ esac
 if [ -z "$EZA_TARGET" ]; then
   echo "WARNING: no known eza release target for dpkg architecture '$DPKG_ARCH' — skipping eza install."
 else
+  # strict=False: a sibling hook hitting a different GitHub releases API
+  # (0060-magiskboot) hit a real "Invalid control character" JSONDecodeError
+  # from a raw control char somewhere in the payload (likely a release-notes
+  # body) — relaxing strictness here too since we only need tag_name, never
+  # the body, and the same class of API can carry the same class of quirk.
   EZA_TAG=$(curl -fsSL https://api.github.com/repos/eza-community/eza/releases/latest \
-    | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+    | python3 -c "import sys,json; print(json.load(sys.stdin, strict=False)['tag_name'])")
   EZA_URL="https://github.com/eza-community/eza/releases/download/${EZA_TAG}/eza_${EZA_TARGET}.tar.gz"
   # [Certain] the release tarball's sole member is "./eza" (verified by
   # downloading and listing a real one), not a bare "eza" — asking tar to
