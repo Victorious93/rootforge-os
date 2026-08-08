@@ -168,6 +168,15 @@ log "Stage 7: packing $TARBALL"
 tar -C "$ROOTFS" -cJf "$TARBALL" .
 sha256sum "$TARBALL" | awk '{print $1}' > "${TARBALL}.sha256"
 
+# This whole script must run as root (debootstrap/chroot need it), so
+# $OUT_DIR and the tarball/checksum land root-owned — confirmed by a real
+# CI failure ("Permission denied") in the next, non-sudo workflow step
+# that renames the tarball to a stable asset name. Hand ownership back to
+# whoever actually invoked sudo so it isn't left inaccessible to them.
+if [[ -n "${SUDO_USER:-}" ]]; then
+  chown -R "$SUDO_USER" "$OUT_DIR"
+fi
+
 log "Done."
 log "  Tarball: $TARBALL"
 log "  SHA256:  $(cat "${TARBALL}.sha256")"
