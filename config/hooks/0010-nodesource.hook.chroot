@@ -19,18 +19,23 @@ NODE_MAJOR=20
 echo "deb [signed-by=$KEYRING_PATH] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
   > /etc/apt/sources.list.d/nodesource.list
 
-# [Certain] retry apt-get update: confirmed across five separate CI runs
-# that apt-get update can transiently fail here under qemu-user-static
-# arm64 emulation (termux/build-rootfs.sh's cross-arch case) with
-# "getline (12: Cannot allocate memory)" reading an apt list file that
-# was fetched successfully moments earlier in the same job — a known
-# category of qemu-user syscall-translation flakiness, not a real
-# resource or network problem (never observed natively on amd64).
+# [Certain] retry apt-get update, clearing the list cache first: confirmed
+# across six separate CI runs that apt-get update can fail here under
+# qemu-user-static arm64 emulation (termux/build-rootfs.sh's cross-arch
+# case) with "getline (12: Cannot allocate memory)" reading an apt list
+# file — a known category of qemu-user syscall-translation flakiness,
+# never observed natively on amd64. A bare retry alone doesn't help: apt
+# treats the on-disk list as unchanged (logs "Hit:", not "Get:") and
+# never re-fetches it, so every attempt re-reads the same bad file and
+# fails identically — confirmed by a real build retrying 3 times with the
+# exact same error each time. Clearing the cached lists before each retry
+# forces a real re-download instead of re-reading the same file.
 n=0
 until apt-get update -q; do
   n=$((n + 1))
   [ "$n" -ge 3 ] && { echo "ERROR: apt-get update failed $n times, giving up"; exit 1; }
-  echo "WARNING: apt-get update failed (attempt $n/3) — retrying in 5s"
+  echo "WARNING: apt-get update failed (attempt $n/3) — clearing list cache, retrying in 5s"
+  rm -rf /var/lib/apt/lists/*
   sleep 5
 done
 apt-get install -y --no-install-recommends nodejs
