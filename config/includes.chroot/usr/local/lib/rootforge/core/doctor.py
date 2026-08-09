@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List
 
+from rootforge.core.log import Logger
+
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 SECOND_BRAIN_VAULT = Path(
     os.environ.get("ROOTFORGE_BRAIN_VAULT", str(Path.home() / "second-brain"))
@@ -112,6 +114,11 @@ CHECKS: List[Callable[[], CheckResult]] = [
 
 
 def run_doctor() -> int:
+    # echo=False: doctor already prints its own formatted report below, so
+    # the logger only needs to write the JSON-lines audit trail to disk.
+    logger = Logger("doctor", echo=False)
+    logger.info("doctor started")
+
     print("RootForge doctor")
     print("=================")
 
@@ -120,6 +127,14 @@ def run_doctor() -> int:
         result = check()
         status = "OK  " if result.ok else ("FAIL" if result.required else "WARN")
         print(f"[{status}] {result.name:<20} {result.detail}")
+        log_event = logger.info if result.ok else (logger.error if result.required else logger.warn)
+        log_event(
+            "check",
+            check=result.name,
+            ok=result.ok,
+            required=result.required,
+            detail=result.detail,
+        )
         if not result.ok and result.required:
             required_failures += 1
 
@@ -128,4 +143,6 @@ def run_doctor() -> int:
         print(f"{required_failures} required check(s) failed.")
     else:
         print("All required checks passed.")
+
+    logger.info("doctor finished", required_failures=required_failures, log_path=str(logger.path))
     return 1 if required_failures else 0
