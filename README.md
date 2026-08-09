@@ -433,5 +433,4 @@ proot-distro login rootforge
 
 Bootloader unlock permits for Xiaomi/OnePlus regional variants that require an account-linked waiting period, Samsung Download Mode flashing (Odin/Heimdall, not fastboot), and initial OEM driver installation on the host for less common vendors. RootForge's scripts detect these cases and stop with an explanation rather than failing silently or guessing.
 
----
-*RootForge OS specification — Victorious Framework*
+-Victorious Framework 
