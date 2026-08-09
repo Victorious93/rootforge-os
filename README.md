@@ -25,7 +25,7 @@ Status: Specification / Build Guide (v1.0) — living document, update in place 
 - **Desktop:** GNOME (GNOME Shell + GDM3) — **[Likely]** this is the heavier choice versus XFCE when the same box also needs headroom for an accelerated emulator plus a kernel build running concurrently; budget accordingly (16GB+ RAM recommended over the 8GB that would be fine under XFCE) — swappable for a WM-only headless profile for CI/build-server use
 - **Install path:** boots to a live session, then offers an on-disk installer (Calamares) with the same "erase disk / install alongside existing OS / manual partitioning" choice Ubuntu's own installer gives you — see section 14
 - **Signed artifacts:** every module, script, and image this distro produces carries a `Victorious Framework` footer in its metadata
-- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) is a thin wrapper around a Python package at `/usr/local/lib/rootforge/core/`. Today it's a skeleton — `rootforge --version`/`--help` and `rootforge doctor` (checks adb/fastboot/python3/git presence, disk space, and optional AI-tooling reachability). Existing scripts under `/usr/local/bin/` are unaffected and keep working standalone; the plan for wrapping them behind `rootforge` subcommands is in `docs/IMPLEMENTATION_PLAN.md`.
+- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) is a thin wrapper around a Python package at `/usr/local/lib/rootforge/core/`. Subcommands so far: `doctor` (environment checks), `device show` (fastboot/adb detection, with the same vendor-refusal messaging `unlock_bootloader.sh` uses), `config show` (layered YAML config), `backup create/list/verify/restore` (SHA-256-manifested partition backups), and `module create/lint/build` (module scaffolding/linting/packaging — see section 12). Existing scripts under `/usr/local/bin/` are unaffected and keep working standalone; each `rootforge` subcommand wraps them as subprocesses rather than reimplementing their logic. Remaining plan in `docs/IMPLEMENTATION_PLAN.md`.
 
 ## 2. Core package stack
 
@@ -169,7 +169,16 @@ Gradle Android project instead: manifest with the `xposedmodule`/`xposedscope`
 metadata, an `xposed_init` asset pointing at a Kotlin `IXposedHookLoadPackage` stub,
 and a `compileOnly` dependency on the Xposed API. Build it with Gradle, sideload the
 APK, then enable it per-target-app inside the LSPosed manager — LSPosed modules are
-disabled by default until toggled there.
+disabled by default until toggled per-app.
+
+`new_module_scaffold.sh` also accepts `apatch` (APatch's APM module format mirrors
+Magisk's module.prop/lifecycle-script convention by design, so it reuses the same
+scaffold) and `zygisk` (same scaffold plus a `zygisk/jni/` native-lib subdirectory
+pre-wired to the `zygisk.hpp` header `0095-zygisk-headers.hook.chroot` vendors —
+build a `.so` per ABI with the NDK and place it at `zygisk/<abi>.so` before zipping;
+`lint_module.sh` checks that at least one exists). A Zygisk module built this way
+runs natively under Magisk; under KernelSU/APatch it additionally needs a
+Zygisk-API-compatible loader such as Zygisk Next installed on the device.
 
 ## 10. Partition backup & restore
 
@@ -201,8 +210,16 @@ install" reports: a nested top-level folder in the zip (module.prop has to sit a
 zip root, not one directory down — the single most common mistake when zipping a
 module directory by hand) and CRLF line endings in the lifecycle shell scripts,
 which break the shebang parse on-device. It also validates required `module.prop`
-fields, the `id` character-set restriction, and META-INF boilerplate presence, and
-runs against either a raw module directory or an already-built zip.
+fields, the `id` character-set restriction, and META-INF boilerplate presence, checks
+each lifecycle script's shell syntax (`sh -n`) and — for Zygisk-target modules — that
+at least one `zygisk/<abi>.so` actually exists, and runs against either a raw module
+directory or an already-built zip. `--json` emits machine-readable findings instead
+of the human report, for CI consumption.
+
+`rootforge module create/lint/build` wraps `new_module_scaffold.sh`/`lint_module.sh`/
+`build_magisk_module.sh` behind the unified CLI (`rootforge module create <id> <name>
+--target magisk|kernelsu|apatch|zygisk|xposed`, `rootforge module lint [--json] <path>`,
+`rootforge module build <id> [--install]`) — same underlying scripts, one entrypoint.
 
 ## 13. NDK / API version-matrix builds
 

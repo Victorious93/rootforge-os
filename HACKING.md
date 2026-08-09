@@ -70,7 +70,9 @@ rootforge-os/
     │   │                    the thin wrapper for usr/local/lib/rootforge/core/,
     │   │                    and `brain`, the second-brain CLI wrapper)
     │   ├── usr/local/lib/rootforge/core/  rootforge CLI's Python package —
-    │   │   skeleton + `rootforge doctor` today; see
+    │   │   doctor/device/config/backup/module subcommands so far, each
+    │   │   wrapping the relevant usr/local/bin/*.sh script(s) as
+    │   │   subprocesses rather than reimplementing them; see
     │   │   docs/IMPLEMENTATION_PLAN.md for what lands here next
     │   └── usr/local/share/rootforge/  zygisk-api/ (added by hooks)
     ├── archives/rootforge-security.list   correct bookworm-security apt
