@@ -117,6 +117,13 @@ setup_rooted_avd.sh list
 
 **KVM note [Certain]:** emulator acceleration requires `/dev/kvm` access — add your user to the `kvm` group and confirm with `kvm-ok` (from `cpu-checker`) before assuming acceleration is active; a silently-software-rendered emulator is the most common "why is this so slow" support question for exactly this kind of distro.
 
+`rootforge avd create/list/start` wraps `setup_rooted_avd.sh`'s own create/list/boot
+subcommands one-to-one. `stop` and `snapshot` are new — the underlying script has no
+equivalent — implemented via the emulator's standard `adb emu` console commands
+(`emu avd name` to find which running instance is the target AVD, `emu kill` to stop
+it, `emu avd snapshot save|load|list|delete <name>` for snapshots beyond the single
+`rootforge-rooted` one the rooting flow itself creates automatically).
+
 ## 6. Directory & workspace convention
 
 ```
