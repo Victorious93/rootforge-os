@@ -10,9 +10,42 @@
 
 set -e
 
+# See 0060-magiskboot.hook.chroot for the rationale: verify against
+# GitHub's published release-asset digest when available, fail hard on a
+# mismatch, otherwise just record the checksum for the audit trail.
+record_checksum() {
+  # $1 = file path, $2 = label, $3 = source URL, $4 = "sha256:<hex>" or ""
+  manifest_dir="/usr/local/share/rootforge/build-manifest"
+  mkdir -p "$manifest_dir"
+  actual="$(sha256sum "$1" | cut -d' ' -f1)"
+  if [ -n "$4" ]; then
+    expected="${4#sha256:}"
+    if [ "$actual" = "$expected" ]; then
+      echo "==> SHA-256 verified against GitHub-published digest for $2: $actual"
+      echo "$(date -u +%FT%TZ)  $2  $actual  verified  $3" >> "$manifest_dir/checksums.txt"
+    else
+      echo "FATAL: SHA-256 mismatch for $2 — downloaded file does not match GitHub's published digest."
+      echo "  expected: $expected"
+      echo "  actual:   $actual"
+      exit 1
+    fi
+  else
+    echo "==> SHA-256 recorded for $2 (no upstream digest published to verify against): $actual"
+    echo "$(date -u +%FT%TZ)  $2  $actual  unverified  $3" >> "$manifest_dir/checksums.txt"
+  fi
+}
+
 # --- starship ---
 echo "==> Installing starship prompt"
-curl -sS https://starship.rs/install.sh | sh -s -- --yes
+# Download-then-run instead of curl | sh — a straight pipe gives nothing to
+# hash before executing it. starship.rs's installer isn't a GitHub release
+# asset, so there's no upstream digest to verify against, but the fetched
+# script's own hash still gets recorded for the audit trail.
+STARSHIP_INSTALLER="$(mktemp)"
+curl -fsSL -o "$STARSHIP_INSTALLER" https://starship.rs/install.sh
+record_checksum "$STARSHIP_INSTALLER" "starship-install.sh" "https://starship.rs/install.sh"
+sh "$STARSHIP_INSTALLER" --yes
+rm -f "$STARSHIP_INSTALLER"
 starship --version
 
 # --- eza ---
@@ -32,15 +65,26 @@ else
   # from a raw control char somewhere in the payload (likely a release-notes
   # body) — relaxing strictness here too since we only need tag_name, never
   # the body, and the same class of API can carry the same class of quirk.
-  EZA_TAG=$(curl -fsSL https://api.github.com/repos/eza-community/eza/releases/latest \
-    | python3 -c "import sys,json; print(json.load(sys.stdin, strict=False)['tag_name'])")
-  EZA_URL="https://github.com/eza-community/eza/releases/download/${EZA_TAG}/eza_${EZA_TARGET}.tar.gz"
+  EZA_RELEASE_JSON=$(curl -fsSL https://api.github.com/repos/eza-community/eza/releases/latest)
+  EZA_TAG=$(echo "$EZA_RELEASE_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin, strict=False)['tag_name'])")
+  EZA_ASSET_NAME="eza_${EZA_TARGET}.tar.gz"
+  EZA_DIGEST=$(echo "$EZA_RELEASE_JSON" | EZA_ASSET_NAME="$EZA_ASSET_NAME" python3 -c "
+import sys, json, os
+assets = json.load(sys.stdin, strict=False)['assets']
+match = [a for a in assets if a['name'] == os.environ['EZA_ASSET_NAME']]
+print(match[0].get('digest') or '' if match else '')
+")
+  EZA_URL="https://github.com/eza-community/eza/releases/download/${EZA_TAG}/${EZA_ASSET_NAME}"
+  EZA_TARBALL="$(mktemp)"
+  curl -fsSL -o "$EZA_TARBALL" "$EZA_URL"
+  record_checksum "$EZA_TARBALL" "eza.tar.gz" "$EZA_URL" "$EZA_DIGEST"
   # [Certain] the release tarball's sole member is "./eza" (verified by
   # downloading and listing a real one), not a bare "eza" — asking tar to
   # extract a specific member named "eza" therefore never matches and always
   # fails with "Not found in archive". Extracting without a member filter
   # instead lands "./eza" at exactly /usr/local/bin/eza, which is what we want.
-  curl -fsSL "$EZA_URL" | tar -xz -C /usr/local/bin
+  tar -xzf "$EZA_TARBALL" -C /usr/local/bin
+  rm -f "$EZA_TARBALL"
   chmod +x /usr/local/bin/eza
   eza --version
 fi

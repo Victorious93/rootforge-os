@@ -34,27 +34,41 @@ MKBOOTIMG_BASE="https://raw.githubusercontent.com/LineageOS/android_system_tools
 
 mkdir -p "$TOOLS_DIR/gki"
 
+# raw.githubusercontent.com file fetches carry no digest metadata the way
+# a GitHub release asset does (see 0060-magiskboot.hook.chroot for that
+# path) — nothing upstream to verify against, so just record the checksum
+# for the audit trail rather than claim a verification that can't happen.
+record_checksum() {
+  # $1 = file path, $2 = label, $3 = source URL
+  manifest_dir="/usr/local/share/rootforge/build-manifest"
+  mkdir -p "$manifest_dir"
+  actual="$(sha256sum "$1" | cut -d' ' -f1)"
+  echo "==> SHA-256 recorded for $2 (no upstream digest published to verify against): $actual"
+  echo "$(date -u +%FT%TZ)  $2  $actual  unverified  $3" >> "$manifest_dir/checksums.txt"
+}
+
 fetch() {
-  # $1 = URL, $2 = destination path. Exits the whole hook cleanly (not the
-  # build) on failure, matching 0040-rpi-imager / 0062-payload-dumper's
-  # convention: a flaky fetch here shouldn't take the rest of the build
-  # down with it.
+  # $1 = URL, $2 = destination path, $3 = label for the checksum record.
+  # Exits the whole hook cleanly (not the build) on failure, matching
+  # 0040-rpi-imager / 0062-payload-dumper's convention: a flaky fetch here
+  # shouldn't take the rest of the build down with it.
   if ! curl -fsSL -o "$2" "$1"; then
     echo "WARNING: failed to fetch $1"
     echo "         avbtool/mkbootimg install incomplete — scripts that need them"
     echo "         (flash_patched_boot.sh, kernelsu_patch_boot.sh) will error at runtime."
     exit 0
   fi
+  record_checksum "$2" "$3" "$1"
 }
 
 echo "==> Fetching avbtool from AOSP (via LineageOS mirror, $BRANCH)"
-fetch "$AVB_BASE/avbtool.py" "$TOOLS_DIR/avbtool.py"
+fetch "$AVB_BASE/avbtool.py" "$TOOLS_DIR/avbtool.py" "avbtool.py"
 
 echo "==> Fetching mkbootimg + companions from AOSP (via LineageOS mirror, $BRANCH)"
-fetch "$MKBOOTIMG_BASE/mkbootimg.py" "$TOOLS_DIR/mkbootimg.py"
-fetch "$MKBOOTIMG_BASE/unpack_bootimg.py" "$TOOLS_DIR/unpack_bootimg.py"
-fetch "$MKBOOTIMG_BASE/repack_bootimg.py" "$TOOLS_DIR/repack_bootimg.py"
-fetch "$MKBOOTIMG_BASE/gki/generate_gki_certificate.py" "$TOOLS_DIR/gki/generate_gki_certificate.py"
+fetch "$MKBOOTIMG_BASE/mkbootimg.py" "$TOOLS_DIR/mkbootimg.py" "mkbootimg.py"
+fetch "$MKBOOTIMG_BASE/unpack_bootimg.py" "$TOOLS_DIR/unpack_bootimg.py" "unpack_bootimg.py"
+fetch "$MKBOOTIMG_BASE/repack_bootimg.py" "$TOOLS_DIR/repack_bootimg.py" "repack_bootimg.py"
+fetch "$MKBOOTIMG_BASE/gki/generate_gki_certificate.py" "$TOOLS_DIR/gki/generate_gki_certificate.py" "generate_gki_certificate.py"
 
 chmod +x "$TOOLS_DIR"/*.py
 
