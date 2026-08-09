@@ -40,6 +40,23 @@ log "Image: $IMG"
 $FASTBOOT wait-for-device
 
 CURRENT_SLOT="$($FASTBOOT getvar current-slot 2>&1 | grep -oP '(?<=current-slot: ).*' || true)"
+PRODUCT="$($FASTBOOT getvar product 2>&1 | grep -oP '(?<=product: ).*' || echo unknown)"
+
+log "About to flash:"
+log "  Device:     ${SERIAL:-$PRODUCT}"
+log "  Partition:  $PARTITION"
+log "  Image:      $IMG"
+if [[ -n "$CURRENT_SLOT" ]]; then
+  log "  Slot:       $CURRENT_SLOT$([[ $BOTH_SLOTS -eq 1 ]] && echo " (and mirroring to the other slot)")"
+fi
+log "This overwrites the $PARTITION partition on the device now connected in fastboot mode."
+read -r -p "Type FLASH to proceed: " CONFIRM
+if [[ "$CONFIRM" != "FLASH" ]]; then
+  log "Confirmation not given (got: '${CONFIRM:-<empty>}') — aborting. Nothing was flashed."
+  exit 1
+fi
+log "Confirmed by operator — proceeding with flash."
+
 if [[ -n "$CURRENT_SLOT" ]]; then
   log "Device uses A/B slots. Current active slot: $CURRENT_SLOT"
   log "Flashing $PARTITION to active slot"
