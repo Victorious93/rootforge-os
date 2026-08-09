@@ -18,6 +18,39 @@ MAGISK_API="https://api.github.com/repos/topjohnwu/Magisk/releases/latest"
 WORK_DIR="/tmp/magiskboot-extract"
 mkdir -p "$WORK_DIR"
 
+# Records every fetched build artifact's SHA-256 to a shared build-time
+# manifest. When the source is a GitHub release asset, GitHub's API
+# publishes a "digest" field (sha256:<hex>) for assets uploaded through it
+# — verify against that and fail the build hard on mismatch (unlike a
+# fetch *failure*, which these hooks treat as non-fatal, a hash mismatch
+# on a successfully downloaded file means corruption or tampering, not
+# flakiness). Repos/mirrors with no such field (raw file fetches, plain
+# .deb downloads, piped installers) get the checksum recorded for the
+# audit trail with no upstream value to compare against — this hook is
+# honest in its own log output about which case applies, never claiming a
+# verification that didn't happen.
+record_checksum() {
+  # $1 = file path, $2 = label, $3 = source URL, $4 = "sha256:<hex>" or ""
+  manifest_dir="/usr/local/share/rootforge/build-manifest"
+  mkdir -p "$manifest_dir"
+  actual="$(sha256sum "$1" | cut -d' ' -f1)"
+  if [ -n "$4" ]; then
+    expected="${4#sha256:}"
+    if [ "$actual" = "$expected" ]; then
+      echo "==> SHA-256 verified against GitHub-published digest for $2: $actual"
+      echo "$(date -u +%FT%TZ)  $2  $actual  verified  $3" >> "$manifest_dir/checksums.txt"
+    else
+      echo "FATAL: SHA-256 mismatch for $2 — downloaded file does not match GitHub's published digest."
+      echo "  expected: $expected"
+      echo "  actual:   $actual"
+      exit 1
+    fi
+  else
+    echo "==> SHA-256 recorded for $2 (no upstream digest published to verify against): $actual"
+    echo "$(date -u +%FT%TZ)  $2  $actual  unverified  $3" >> "$manifest_dir/checksums.txt"
+  fi
+}
+
 DPKG_ARCH="$(dpkg --print-architecture)"
 case "$DPKG_ARCH" in
   amd64) MAGISK_ABI="x86_64" ;;
@@ -32,7 +65,7 @@ RELEASE_JSON=$(curl -fsSL "$MAGISK_API")
 
 # Magisk releases the APK as magisk-<version>.apk — it's a zip containing
 # lib/<abi>/libmagiskboot.so which is a standalone ELF, despite the .so name
-APK_URL=$(echo "$RELEASE_JSON" | python3 -c "
+APK_INFO=$(echo "$RELEASE_JSON" | python3 -c "
 import sys, json
 # strict=False: confirmed by a real build failure that GitHub's release
 # JSON for this repo can carry a raw control character somewhere in the
@@ -41,13 +74,18 @@ import sys, json
 # small, well-formed 'assets' field, never the body itself.
 assets = json.load(sys.stdin, strict=False)['assets']
 apk = [a for a in assets if a['name'].endswith('.apk') and 'stub' not in a['name']]
-print(apk[0]['browser_download_url'] if apk else '')
+if apk:
+    print(apk[0]['browser_download_url'])
+    print(apk[0].get('digest') or '')
 ")
+APK_URL=$(printf '%s\n' "$APK_INFO" | sed -n 1p)
+APK_DIGEST=$(printf '%s\n' "$APK_INFO" | sed -n 2p)
 
 [ -z "$APK_URL" ] && { echo "WARNING: Could not find Magisk APK URL — magiskboot will be absent. Scripts will error at runtime if it's needed."; exit 0; }
 
 echo "==> Downloading Magisk APK from $APK_URL"
 curl -fsSL -o "$WORK_DIR/magisk.apk" "$APK_URL"
+record_checksum "$WORK_DIR/magisk.apk" "magisk.apk" "$APK_URL" "$APK_DIGEST"
 
 echo "==> Extracting magiskboot ($MAGISK_ABI) from APK"
 unzip -p "$WORK_DIR/magisk.apk" "lib/${MAGISK_ABI}/libmagiskboot.so" > /usr/local/bin/magiskboot

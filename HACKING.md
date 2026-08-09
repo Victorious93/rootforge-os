@@ -39,6 +39,14 @@ rootforge-os/
     │   ├── 009x-*       Plymouth, Zygisk headers, ccache
     │   └── (numbered ascending — gaps left for future insertion)
     │
+    │   The six hooks that fetch external content at build time (0040,
+    │   0050, 0060, 0062, 0085, 0095) record each downloaded artifact's
+    │   SHA-256 to /usr/local/share/rootforge/build-manifest/checksums.txt,
+    │   verifying against GitHub's published release-asset digest where
+    │   one exists (failing the build hard on a mismatch) and simply
+    │   recording the hash for the audit trail where no upstream digest is
+    │   available (raw file fetches, plain .deb/installer downloads).
+    │
     │   IMPORTANT: this must be a FLAT directory. live-build's hook discovery
     │   (Find_files config/hooks/*.chroot, in lb_chroot_hooks) is a
     │   non-recursive glob — a hook nested one level deeper (as these used to

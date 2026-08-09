@@ -11,6 +11,32 @@ set -e
 PD_API="https://api.github.com/repos/ssut/payload-dumper-go/releases/latest"
 INSTALL_DIR="/usr/local/bin"
 
+# See 0060-magiskboot.hook.chroot for the rationale: verify against
+# GitHub's published release-asset digest when available, fail hard on a
+# mismatch (corruption/tampering, unlike a fetch failure), otherwise just
+# record the checksum for the audit trail.
+record_checksum() {
+  # $1 = file path, $2 = label, $3 = source URL, $4 = "sha256:<hex>" or ""
+  manifest_dir="/usr/local/share/rootforge/build-manifest"
+  mkdir -p "$manifest_dir"
+  actual="$(sha256sum "$1" | cut -d' ' -f1)"
+  if [ -n "$4" ]; then
+    expected="${4#sha256:}"
+    if [ "$actual" = "$expected" ]; then
+      echo "==> SHA-256 verified against GitHub-published digest for $2: $actual"
+      echo "$(date -u +%FT%TZ)  $2  $actual  verified  $3" >> "$manifest_dir/checksums.txt"
+    else
+      echo "FATAL: SHA-256 mismatch for $2 — downloaded file does not match GitHub's published digest."
+      echo "  expected: $expected"
+      echo "  actual:   $actual"
+      exit 1
+    fi
+  else
+    echo "==> SHA-256 recorded for $2 (no upstream digest published to verify against): $actual"
+    echo "$(date -u +%FT%TZ)  $2  $actual  unverified  $3" >> "$manifest_dir/checksums.txt"
+  fi
+}
+
 DPKG_ARCH="$(dpkg --print-architecture)"
 case "$DPKG_ARCH" in
   amd64|arm64) PD_ARCH="$DPKG_ARCH" ;;
@@ -23,19 +49,24 @@ if [ -z "$PD_ARCH" ]; then
 fi
 
 echo "==> Fetching payload-dumper-go latest release ($PD_ARCH)"
-PD_URL=$(curl -fsSL "$PD_API" | PD_ARCH="$PD_ARCH" python3 -c "
+PD_INFO=$(curl -fsSL "$PD_API" | PD_ARCH="$PD_ARCH" python3 -c "
 import sys, json, os
 assets = json.load(sys.stdin)['assets']
 pattern = 'linux_' + os.environ['PD_ARCH']
 match = [a for a in assets if pattern in a['name'] and a['name'].endswith('.tar.gz')]
-print(match[0]['browser_download_url'] if match else '')
+if match:
+    print(match[0]['browser_download_url'])
+    print(match[0].get('digest') or '')
 ")
+PD_URL=$(printf '%s\n' "$PD_INFO" | sed -n 1p)
+PD_DIGEST=$(printf '%s\n' "$PD_INFO" | sed -n 2p)
 
 [ -z "$PD_URL" ] && { echo "WARNING: payload-dumper-go release not found — extract_ota.sh will self-install it at runtime."; exit 0; }
 
 echo "==> Downloading: $PD_URL"
 TMPDIR=$(mktemp -d)
 curl -fsSL -o "$TMPDIR/pd.tar.gz" "$PD_URL"
+record_checksum "$TMPDIR/pd.tar.gz" "payload-dumper-go.tar.gz" "$PD_URL" "$PD_DIGEST"
 tar -xz -C "$TMPDIR" -f "$TMPDIR/pd.tar.gz"
 find "$TMPDIR" -name "payload-dumper-go" -exec install -m 0755 {} "$INSTALL_DIR/payload-dumper-go" \;
 rm -rf "$TMPDIR"
