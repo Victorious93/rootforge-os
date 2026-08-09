@@ -1,0 +1,95 @@
+#!/bin/sh
+# RootForge OS — final build manifest
+# Victorious Framework | Origin Source Labs
+#
+# Numbered last on purpose: by the time this runs, dpkg's installed-package
+# list reflects everything package-lists/*.list.chroot actually installed,
+# and every earlier hook's artifact-integrity checksums (0040/0050/0060/
+# 0062/0085/0095's own /usr/local/share/rootforge/build-manifest/
+# checksums.txt) are already on disk to fold in. Combines that with the
+# git-commit/build-timestamp provenance auto/build stages at
+# usr/local/share/rootforge/build-manifest/build-info.json — chroot hooks
+# run in a fresh Debian rootfs with no access to this repo's own .git, only
+# the host side (auto/build) has that — into one system-manifest.json a
+# booted image can be checked against later.
+
+set -e
+
+MANIFEST_DIR="/usr/local/share/rootforge/build-manifest"
+mkdir -p "$MANIFEST_DIR"
+OUT="/usr/local/share/rootforge/system-manifest.json"
+
+echo "==> Assembling $OUT"
+
+python3 - "$MANIFEST_DIR/build-info.json" "$MANIFEST_DIR/checksums.txt" "$OUT" <<'PYEOF'
+import json
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+build_info_path, checksums_path, out_path = sys.argv[1:4]
+
+try:
+    with open(build_info_path) as fh:
+        build_info = json.load(fh)
+except (FileNotFoundError, json.JSONDecodeError):
+    build_info = {
+        "git_commit": "unknown",
+        "git_branch": "unknown",
+        "git_dirty": "unknown",
+        "build_started_at": "unknown",
+    }
+
+# checksums.txt lines are space-separated (see record_checksum() in each
+# fetching hook): "<ts>  <label>  <sha256>  <verified|unverified>  <url>".
+# None of those fields contain internal whitespace, so a plain whitespace
+# split reliably yields exactly 5 tokens per line.
+fetched_artifacts = []
+try:
+    with open(checksums_path) as fh:
+        for line in fh:
+            parts = line.split()
+            if len(parts) != 5:
+                continue
+            timestamp, label, sha256, status, source_url = parts
+            fetched_artifacts.append(
+                {
+                    "timestamp": timestamp,
+                    "label": label,
+                    "sha256": sha256,
+                    "status": status,
+                    "source_url": source_url,
+                }
+            )
+except FileNotFoundError:
+    pass
+
+packages = {}
+result = subprocess.run(
+    ["dpkg-query", "-W", "-f=${Package}\t${Version}\n"],
+    capture_output=True,
+    text=True,
+)
+for line in result.stdout.splitlines():
+    parts = line.split("\t", 1)
+    if len(parts) == 2:
+        packages[parts[0]] = parts[1]
+
+manifest = {
+    "rootforge_build": {
+        **build_info,
+        "manifest_written_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    },
+    "fetched_artifacts": fetched_artifacts,
+    "package_count": len(packages),
+    "packages": packages,
+}
+
+with open(out_path, "w") as fh:
+    json.dump(manifest, fh, indent=2, sort_keys=True)
+    fh.write("\n")
+
+print(f"packages: {len(packages)}, fetched_artifacts: {len(fetched_artifacts)}")
+PYEOF
+
+echo "==> Wrote $OUT"
