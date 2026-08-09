@@ -25,6 +25,7 @@ Status: Specification / Build Guide (v1.0) — living document, update in place 
 - **Desktop:** GNOME (GNOME Shell + GDM3) — **[Likely]** this is the heavier choice versus XFCE when the same box also needs headroom for an accelerated emulator plus a kernel build running concurrently; budget accordingly (16GB+ RAM recommended over the 8GB that would be fine under XFCE) — swappable for a WM-only headless profile for CI/build-server use
 - **Install path:** boots to a live session, then offers an on-disk installer (Calamares) with the same "erase disk / install alongside existing OS / manual partitioning" choice Ubuntu's own installer gives you — see section 14
 - **Signed artifacts:** every module, script, and image this distro produces carries a `Victorious Framework` footer in its metadata
+- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) is a thin wrapper around a Python package at `/usr/local/lib/rootforge/core/`. Today it's a skeleton — `rootforge --version`/`--help` and `rootforge doctor` (checks adb/fastboot/python3/git presence, disk space, and optional AI-tooling reachability). Existing scripts under `/usr/local/bin/` are unaffected and keep working standalone; the plan for wrapping them behind `rootforge` subcommands is in `docs/IMPLEMENTATION_PLAN.md`.
 
 ## 2. Core package stack
 

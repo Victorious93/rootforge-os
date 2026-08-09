@@ -11,3 +11,7 @@ live-image/
 # termux/build-rootfs.sh output
 dist/
 rootforge-proot-*.tar.*
+
+# Python bytecode (usr/local/lib/rootforge/)
+__pycache__/
+*.pyc
