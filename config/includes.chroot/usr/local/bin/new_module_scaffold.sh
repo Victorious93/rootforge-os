@@ -2,19 +2,29 @@
 # RootForge OS — module scaffold generator
 # Victorious Framework
 #
-# Generates a Magisk-, KernelSU-, or LSPosed/Xposed-target module skeleton.
-# Magisk/KernelSU targets get correct META-INF boilerplate, module.prop, and
-# lifecycle scripts pre-stubbed. The xposed target generates a minimal Gradle
-# Android app project instead, since LSPosed modules are hook classes inside
-# a real APK, not a Magisk-style install zip.
+# Generates a Magisk-, KernelSU-, APatch-, standalone-Zygisk-, or
+# LSPosed/Xposed-target module skeleton. Magisk/KernelSU/APatch targets get
+# correct META-INF boilerplate, module.prop, and lifecycle scripts
+# pre-stubbed — APatch's APM module format is deliberately designed to be
+# Magisk-module-compatible, so it reuses the same scaffold. The zygisk
+# target is the same scaffold plus a zygisk/ native-lib subdirectory wired
+# to the header 0095-zygisk-headers.hook.chroot already vendors. The xposed
+# target generates a minimal Gradle Android app project instead, since
+# LSPosed modules are hook classes inside a real APK, not a Magisk-style
+# install zip.
 #
-# Usage: ./new_module_scaffold.sh <module_id> <display_name> [magisk|kernelsu|xposed]
+# Usage: ./new_module_scaffold.sh <module_id> <display_name> [magisk|kernelsu|apatch|zygisk|xposed]
 
 set -euo pipefail
 
-MODULE_ID="${1:?Usage: new_module_scaffold.sh <module_id> <display_name> [magisk|kernelsu|xposed]}"
+MODULE_ID="${1:?Usage: new_module_scaffold.sh <module_id> <display_name> [magisk|kernelsu|apatch|zygisk|xposed]}"
 DISPLAY_NAME="${2:?Missing display name}"
 TARGET="${3:-magisk}"
+
+case "$TARGET" in
+  magisk|kernelsu|apatch|zygisk|xposed) ;;
+  *) echo "Unknown target '$TARGET' — expected magisk, kernelsu, apatch, zygisk, or xposed" >&2; exit 1 ;;
+esac
 
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 MODULE_DIR="$ROOTFORGE_HOME/modules/$MODULE_ID"
@@ -188,6 +198,88 @@ if [[ "$TARGET" == "kernelsu" ]]; then
 # NOTE: KernelSU has no native Zygisk implementation.
 # If this module needs Zygisk-style process hooking under KernelSU,
 # wire in the zygisksu overlay separately — see README section 3.
+EOF
+fi
+
+if [[ "$TARGET" == "apatch" ]]; then
+  cat >> "$MODULE_DIR/module.prop" <<'EOF'
+# NOTE: this scaffold targets APatch's APM module format, which mirrors
+# Magisk's module.prop/lifecycle-script convention by design. Install
+# through the APatch app's module manager. As with KernelSU, APatch has
+# no native Zygisk implementation of its own — see the zygisk scaffold
+# target if this module needs Zygisk-style process hooking.
+EOF
+fi
+
+if [[ "$TARGET" == "zygisk" ]]; then
+  ZYGISK_HEADER="/usr/local/share/rootforge/zygisk-api/zygisk.hpp"
+  ZYGISK_CMAKE_STUB="/usr/local/share/rootforge/zygisk-api/CMakeLists.zygisk.txt"
+  mkdir -p "$MODULE_DIR/zygisk/jni"
+
+  cat > "$MODULE_DIR/zygisk/jni/module.cpp" <<EOF
+// RootForge OS — Zygisk module: $DISPLAY_NAME
+// Victorious Framework
+//
+// Standard Zygisk module shape (see topjohnwu/zygisk-module-sample, the
+// same reference 0095-zygisk-headers.hook.chroot vendors zygisk.hpp from).
+// Build a zygisk/<abi>.so per target ABI (arm64-v8a, armeabi-v7a, x86,
+// x86_64) and place each at zygisk/<abi>.so before zipping — lint_module.sh
+// checks for at least one of them.
+#include "zygisk.hpp"
+
+class ${MODULE_ID//[^a-zA-Z0-9]/_}_module : public zygisk::ModuleBase {
+public:
+    void onLoad(zygisk::Api *api, JNIEnv *env) override {
+        this->api = api;
+        this->env = env;
+    }
+
+    void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
+        // Hook logic before the app process specializes goes here.
+    }
+
+    void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
+        // Hook logic after the app process specializes goes here.
+    }
+
+private:
+    zygisk::Api *api;
+    JNIEnv *env;
+};
+
+REGISTER_ZYGISK_MODULE(${MODULE_ID//[^a-zA-Z0-9]/_}_module)
+EOF
+
+  cat > "$MODULE_DIR/zygisk/jni/CMakeLists.txt" <<EOF
+# RootForge OS — Zygisk module CMake build
+# Victorious Framework
+cmake_minimum_required(VERSION 3.22)
+project($MODULE_ID)
+
+add_library($MODULE_ID SHARED module.cpp)
+
+if(EXISTS "$ZYGISK_CMAKE_STUB")
+  set(MODULE_NAME $MODULE_ID)
+  include("$ZYGISK_CMAKE_STUB")
+else()
+  message(WARNING "$ZYGISK_CMAKE_STUB not found — run this on a RootForge OS build where 0095-zygisk-headers.hook.chroot has run, or vendor zygisk.hpp yourself.")
+endif()
+EOF
+
+  if [[ -f "$ZYGISK_HEADER" ]]; then
+    cp "$ZYGISK_HEADER" "$MODULE_DIR/zygisk/jni/zygisk.hpp"
+  else
+    echo "NOTE: $ZYGISK_HEADER not found on this host — copy zygisk.hpp into"
+    echo "      $MODULE_DIR/zygisk/jni/ yourself before building (RootForge OS's"
+    echo "      own image vendors it via 0095-zygisk-headers.hook.chroot)."
+  fi
+
+  cat >> "$MODULE_DIR/module.prop" <<'EOF'
+# NOTE: this is a standalone Zygisk module. Build zygisk/jni/module.cpp
+# with the NDK per ABI and place the resulting .so at zygisk/<abi>.so
+# (e.g. zygisk/arm64-v8a.so) before zipping. Works under Magisk natively;
+# under KernelSU/APatch it additionally needs a Zygisk-API-compatible
+# loader such as Zygisk Next installed on the device.
 EOF
 fi
 
