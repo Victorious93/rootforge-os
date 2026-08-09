@@ -327,6 +327,19 @@ cmd_setup() {
     fi
   fi
 
+  # ---- 7. Optional embedding model pull, for the second brain (`brain`) --
+  if [[ $noninteractive -eq 0 ]] && command -v ollama >/dev/null 2>&1; then
+    echo ""
+    local pull_embed
+    read -r -p "Pull nomic-embed-text via Ollama now? ~274MB, needed for 'brain index'/'brain search'/'brain ask' (see ~/second-brain/README.md). [y/N]: " pull_embed
+    if [[ "$pull_embed" =~ ^[Yy]$ ]]; then
+      log "Pulling nomic-embed-text via Ollama"
+      ollama pull nomic-embed-text 2>&1 | tee -a "$LOG_FILE"
+    else
+      log "Skipped. Pull later with: ollama pull nomic-embed-text"
+    fi
+  fi
+
   echo ""
   log "AI tooling setup complete. Open a new shell (or 'source ~/.bashrc') to pick up"
   log "the API keys and any GPU override just written to $KEY_FILE."
