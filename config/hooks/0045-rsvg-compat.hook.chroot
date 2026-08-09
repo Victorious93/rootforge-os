@@ -1,0 +1,46 @@
+#!/bin/sh
+# RootForge OS — rsvg -> rsvg-convert compat shim
+# Victorious Framework | Origin Source Labs
+#
+# [Certain] lb_binary_syslinux (read directly from the installed live-build
+# package) hardcodes an invocation of the old `rsvg` binary to render the
+# isolinux splash: `rsvg --format png --height 480 --width 640 splash.svg
+# splash.png`. Current librsvg2-bin only ships /usr/bin/rsvg-convert —
+# confirmed by installing the real package and listing its files — which
+# has a different CLI: one positional input file plus an explicit
+# -o/--output flag, not two positional args (input then output) like the
+# old `rsvg`. A bare `rsvg -> rsvg-convert` symlink would silently
+# misinterpret the output filename as a second input file. This shim
+# translates the exact call shape live-build uses; confirmed by a real
+# build failure ("rsvg: No such file or directory") the first time
+# lb_binary_syslinux's splash-rendering step was ever reached.
+
+set -e
+
+cat > /usr/local/bin/rsvg <<'WRAPPER'
+#!/bin/sh
+args=""
+input=""
+output=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --format|--height|--width)
+      args="$args $1 $2"
+      shift 2
+      ;;
+    *)
+      if [ -z "$input" ]; then
+        input="$1"
+      else
+        output="$1"
+      fi
+      shift
+      ;;
+  esac
+done
+# shellcheck disable=SC2086
+exec rsvg-convert $args -o "$output" "$input"
+WRAPPER
+chmod +x /usr/local/bin/rsvg
+
+echo "==> rsvg compat shim installed at /usr/local/bin/rsvg"

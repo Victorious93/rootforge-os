@@ -41,8 +41,19 @@ echo ""
 # was pipefail-enabled. Capture the pipeline's real status explicitly so a
 # failure here is loud, not a checksum error three steps later that looks
 # unrelated.
+#
+# [Certain] `lb build` (lb_build, read directly from the installed
+# live-build package) starts with: `if [ "${1}" != "noauto" ] && [ -x
+# auto/build ]; then ./auto/build "${@}"; exit ${?}; fi` — i.e. unless its
+# first argument is literally "noauto", it re-execs *this very script*.
+# Calling it plain `lb build` therefore recurses forever: auto/build -> lb
+# build -> auto/build -> lb build -> ... until the runner's process/fd
+# limits give out, which is what the mysterious fast "exit 126" failures
+# during the ISO build actually were — confirmed by reading lb_build's
+# source, not by observation alone. auto/config already knew about this
+# (`lb config noauto ...`); this call just never got the same treatment.
 set +e
-lb build "${@}" 2>&1 | tee "$LOGFILE"
+lb build noauto "${@}" 2>&1 | tee "$LOGFILE"
 BUILD_STATUS=$?
 set -e
 

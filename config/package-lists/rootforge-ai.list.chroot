@@ -8,6 +8,15 @@
 # Claude Code CLI is installed via npm hook (0030-claude-code.hook.chroot).
 #
 # API keys and model weight pulls are NOT here — see scripts/setup_ai_tools.sh.
+#
+# [Certain] zstd (the CLI tool, not just libzstd1 — dpkg links the library
+# for its own internal .deb decompression, but that's a different thing
+# from the standalone command Ollama's installer shells out to) is not
+# part of Debian's minimal/required package set and wasn't listed anywhere
+# in this repo. Confirmed via a real build: ollama.com/install.sh hard-
+# fails with "ERROR: This version requires zstd for extraction" the moment
+# 0020-ollama actually got to run for the first time post-hook-discovery-fix.
 
 # npm is pulled in as a NodeSource dependency; listed for clarity
 npm
+zstd

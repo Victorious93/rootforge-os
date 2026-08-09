@@ -1,0 +1,23 @@
+#!/bin/sh
+# RootForge OS — enable rootforge-live-groups.service
+# Victorious Framework | Origin Source Labs
+#
+# The unit itself lives at
+# config/includes.chroot/etc/systemd/system/rootforge-live-groups.service
+# (copied into the squashfs unconditionally, before any hooks run) — this
+# just symlinks it into multi-user.target.wants so it actually starts.
+# `systemctl enable` works fine here without a running systemd instance:
+# it operates purely on the unit file's own [Install] section to create
+# the target-wants symlink, the same offline mechanism Debian package
+# postinst scripts rely on during any chroot-based install.
+#
+# Replaces the old 0005-live-user-groups hook, which tried to usermod a
+# live-session user account directly at build time — that account doesn't
+# exist until live-config creates it at actual boot, so it always failed.
+# See rootforge-live-groups.service's own header for the full story.
+
+set -e
+
+echo "==> Enabling rootforge-live-groups.service"
+systemctl enable rootforge-live-groups.service
+echo "==> rootforge-live-groups.service enabled"

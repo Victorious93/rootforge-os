@@ -1,0 +1,24 @@
+# RootForge OS — Debian security archive
+# Victorious Framework | Origin Source Labs
+#
+# [Certain] this live-build version (3.0~a57) hardcodes the pre-bullseye
+# security-suite path ("${DISTRIBUTION}/updates") for LB_MODE=debian,
+# non-derivative builds — read directly from lb_chroot_archives, both the
+# chroot-build-time "install" stage and the final-image "remove" stage
+# that writes the persisted /etc/apt/sources.list. Debian renamed the
+# security suite to "${DISTRIBUTION}-security" back in bullseye (11);
+# security.debian.org/deb.debian.org 404s on the old path for bookworm
+# and every release since, which is what actually caused every "exit 126"
+# ISO build failure this whole session, once the recursion bug in
+# auto/build (see that file's own header) stopped masking it entirely.
+#
+# auto/config sets --security false to suppress live-build's broken
+# built-in security line (in BOTH the chroot-install and final-image
+# stages) and this file replaces it via live-build's own supported
+# config/archives/*.list mechanism instead — a bare ".list" (no .chroot
+# or .binary suffix) applies to both the build-time chroot AND the
+# persisted /etc/apt/sources.list.d shipped in the installed system, so
+# one file covers both without duplicating it. Same trusted
+# debian-archive-keyring already present from bootstrap covers this
+# archive too, so no companion .key file is needed.
+deb http://deb.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware

@@ -11,14 +11,64 @@
 # live-build package actually shipped by Debian bookworm / current Ubuntu
 # (3.0~a57): `lb config` treats unrecognized options as non-fatal warnings
 # and keeps going, which combined with auto/build's own pipefail bug meant
-# a build could "succeed" having done nothing. --bootloader grub2 is the
-# value lb_binary_grub2 actually checks for to produce a UEFI-capable image
-# (the enum in `lb config --help`, grub|syslinux|yaboot, is stale docs, not
-# an enforced list — the parser accepts any string). There's no boot-menu-
-# timeout or output-filename flag in this version at all: the timeout is
-# whatever GRUB defaults to unless overridden via a
-# config/bootloaders/grub2/ template, and auto/build renames the produced
+# a build could "succeed" having done nothing. There's no boot-menu-timeout
+# or output-filename flag in this version at all: the timeout is whatever
+# the bootloader defaults to, and auto/build renames the produced
 # binary.hybrid.iso itself rather than relying on a --image-name flag.
+#
+# [Certain] --bootloader syslinux, not grub2: a real build reaching the
+# literal last step (xorriso had already written the full ISO) failed with
+# "isohybrid: boot loader does not have an isolinux.bin hybrid signature."
+# lb_binary_grub2 in this live-build version only builds an i386-pc
+# (BIOS-only) GRUB El Torito image via grub-mkimage — it was never
+# UEFI-capable here despite this file's previous claim to that effect,
+# which was never actually verified against the source — and isohybrid
+# (the syslinux-project tool lb_binary_iso always invokes for
+# --binary-images iso-hybrid, regardless of --bootloader) only recognizes
+# isolinux's own boot-image signature, not GRUB's. --bootloader syslinux
+# is the pairing lb_binary_syslinux/lb_binary_iso actually support for a
+# working hybrid (BIOS + dd-to-USB) ISO in this version; it costs nothing
+# relative to grub2 here since neither path had UEFI support anyway. The
+# installed system's own bootloader (via Calamares + grub-efi-amd64 in
+# rootforge-installer.list.chroot) is unaffected — this flag only controls
+# how the temporary live/installer ISO itself boots.
+#
+# [Certain] --security false: lb_chroot_archives (read directly from the
+# installed package) hardcodes "${DISTRIBUTION}/updates" as the security
+# suite path for --mode debian, non-derivative builds, in both the
+# chroot-install stage and the final-image stage that writes the
+# persisted /etc/apt/sources.list. Debian renamed that suite to
+# "${DISTRIBUTION}-security" back in bullseye (11); the old path 404s on
+# bookworm (and everything since), which is what actually caused every
+# real ISO build attempt to fail this whole session, once the recursion
+# bug in auto/build (see that file's own header) stopped masking it.
+# config/archives/rootforge-security.list replaces it with the correct
+# modern path via live-build's own supported custom-archive mechanism.
+#
+# [Certain] --firmware-chroot false: lb_chroot_linux-image's firmware
+# auto-discovery (triggered only by --firmware-chroot true) fetches a
+# single top-level Contents-${ARCH}.gz from
+# ${MIRROR}/dists/${DISTRIBUTION}/, greps it for /lib/firmware/* file
+# owners, and installs whatever packages it finds — confirmed by a real
+# build failure that this file no longer exists at that path on Debian's
+# actual mirrors (404, not a network/sandbox issue — the request reached
+# ftp.debian.org and got a real answer); Debian's Contents files are
+# per-component now (main/Contents-${ARCH}.gz etc), and this old
+# live-build version was never updated for that. --firmware-binary true
+# is untouched — it only feeds lb_binary_debian-installer, which exits 0
+# immediately here since --debian-installer is false. Since this
+# auto-discovery had never once succeeded in any real build (same
+# "silently never worked" class as this whole audit), rootforge.list.chroot
+# now lists firmware-linux directly instead of relying on it.
+#
+# [Certain] --debian-installer false, not none: lb_binary_debian-installer
+# (read directly from the installed package) only recognizes
+# true|cdrom|netinst|netboot|businesscard|live (proceed) or false (skip,
+# exit 0) — "none" isn't a value this version understands at all and falls
+# into its catch-all error case ("debian-installer flavour none not
+# supported"), confirmed by a real build failure the first time this
+# stage was ever reached (every earlier attempt died before getting this
+# far). `lb config --help` documents the same enum, ending in "|false".
 
 set -e
 
@@ -26,14 +76,15 @@ lb config noauto \
   --distribution bookworm \
   --archive-areas "main contrib non-free non-free-firmware" \
   --binary-images iso-hybrid \
-  --bootloader grub2 \
-  --debian-installer none \
+  --bootloader syslinux \
+  --debian-installer false \
   --linux-flavours amd64 \
   --architectures amd64 \
   --mode debian \
   --apt-recommends false \
   --apt-options "--yes --no-install-recommends" \
   --compression xz \
+  --security false \
   --zsync false \
   --iso-volume "RootForge OS" \
   --iso-application "RootForge OS — Android Root Module Development" \
@@ -43,5 +94,5 @@ lb config noauto \
   --system live \
   --initramfs live-boot \
   --firmware-binary true \
-  --firmware-chroot true \
+  --firmware-chroot false \
   "${@}"
