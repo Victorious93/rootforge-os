@@ -53,8 +53,12 @@ rootforge-os/
     │   ├── etc/skel/        default files for every new user
     │   ├── etc/udev/        Android USB rules
     │   ├── etc/systemd/     first-boot service
-    │   ├── usr/local/bin/   all 27 automation scripts
-    │   └── usr/local/share/rootforge/  docker/, zygisk-api/ (added by hooks)
+    │   ├── usr/local/bin/   all 28 automation scripts (incl. `rootforge`,
+    │   │                    the thin wrapper for usr/local/lib/rootforge/)
+    │   ├── usr/local/lib/rootforge/core/  rootforge CLI's Python package —
+    │   │   skeleton + `rootforge doctor` today; see
+    │   │   docs/IMPLEMENTATION_PLAN.md for what lands here next
+    │   └── usr/local/share/rootforge/  zygisk-api/ (added by hooks)
     ├── archives/rootforge-security.list   correct bookworm-security apt
     │   line — live-build's own built-in security handling hardcodes a
     │   pre-bullseye suite path that 404s; see auto/config's header

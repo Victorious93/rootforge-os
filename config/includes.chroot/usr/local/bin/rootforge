@@ -1,0 +1,4 @@
+#!/bin/sh
+# RootForge OS — unified CLI wrapper
+# Victorious Framework | Origin Source Labs
+exec env PYTHONPATH="/usr/local/lib:${PYTHONPATH:-}" python3 -m rootforge.core.cli "$@"

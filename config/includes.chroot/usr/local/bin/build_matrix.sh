@@ -37,9 +37,14 @@ LOG_DIR="$ROOTFORGE_HOME/logs"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOG_DIR"
 REPORT="$LOG_DIR/build-matrix-${STAMP}.md"
-DOCKERFILE="$(dirname "$0")/../docker/Dockerfile.ndk-matrix"
-[[ -f "$DOCKERFILE" ]] || DOCKERFILE="$(dirname "$0")/docker/Dockerfile.ndk-matrix"
-[[ -f "$DOCKERFILE" ]] || DOCKERFILE="/opt/rootforge/docker/Dockerfile.ndk-matrix"
+# Installed layout ships this script at /usr/local/bin/build_matrix.sh with
+# its Dockerfile baked at /opt/rootforge/docker/ — that's the only path a
+# real ISO install ever reaches. The second entry is for running straight
+# out of a repo checkout (config/includes.chroot/usr/local/bin/build_matrix.sh
+# -> ../../../opt/rootforge/docker/), which is the only other place this
+# script is actually run from during development.
+DOCKERFILE="/opt/rootforge/docker/Dockerfile.ndk-matrix"
+[[ -f "$DOCKERFILE" ]] || DOCKERFILE="$(dirname "$0")/../../../opt/rootforge/docker/Dockerfile.ndk-matrix"
 [[ -f "$DOCKERFILE" ]] || { echo "Dockerfile.ndk-matrix not found — pass its location or check your RootForge install." >&2; exit 1; }
 
 if [[ -n "$MATRIX_FILE" && -f "$MATRIX_FILE" ]]; then

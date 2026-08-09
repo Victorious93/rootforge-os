@@ -132,7 +132,9 @@ rm -rf "$ROOTFS/hooks"
 log "Stage 4: copying RootForge scripts (dropping root/kernel-only ones)"
 mkdir -p "$ROOTFS/usr/local/bin" "$ROOTFS/usr/local/share/rootforge" "$ROOTFS/etc/profile.d"
 EXCLUDE_SCRIPTS="00_bootstrap_distro.sh harden_kernel.sh harden_system.sh setup_vpn.sh join_headscale.sh"
-for script in "$REPO_ROOT"/config/includes.chroot/usr/local/bin/*.sh; do
+# find, not a *.sh glob — usr/local/bin/ also holds extensionless wrappers
+# (rootforge) that a *.sh-only glob would silently skip.
+find "$REPO_ROOT/config/includes.chroot/usr/local/bin" -maxdepth 1 -type f | while read -r script; do
   base="$(basename "$script")"
   case " $EXCLUDE_SCRIPTS " in
     *" $base "*) continue ;;
@@ -142,6 +144,10 @@ done
 install -m 0755 "$SCRIPT_DIR/bootstrap_proot.sh" "$ROOTFS/usr/local/bin/bootstrap_proot.sh"
 [[ -d "$REPO_ROOT/config/includes.chroot/usr/local/share/rootforge" ]] && \
   cp -r "$REPO_ROOT/config/includes.chroot/usr/local/share/rootforge/." "$ROOTFS/usr/local/share/rootforge/"
+if [[ -d "$REPO_ROOT/config/includes.chroot/usr/local/lib/rootforge" ]]; then
+  mkdir -p "$ROOTFS/usr/local/lib"
+  cp -r "$REPO_ROOT/config/includes.chroot/usr/local/lib/rootforge" "$ROOTFS/usr/local/lib/rootforge"
+fi
 
 log "Stage 5: PRoot-specific setup (motd, workspace skeleton)"
 install -m 0755 "$SCRIPT_DIR/proot-setup.sh" "$ROOTFS/usr/local/bin/proot-setup.sh"
