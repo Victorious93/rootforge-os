@@ -12,8 +12,23 @@ set -e
 IMAGER_URL="https://downloads.raspberrypi.com/imager/imager_latest_amd64.deb"
 IMAGER_DEB="/tmp/rpi-imager.deb"
 
+# raspberrypi.com's "latest" .deb has no accompanying checksum/digest
+# endpoint the way a GitHub release asset does (see
+# 0060-magiskboot.hook.chroot for that path) — nothing upstream to verify
+# against, so just record the checksum for the audit trail rather than
+# claim a verification that can't happen.
+record_checksum() {
+  # $1 = file path, $2 = label, $3 = source URL
+  manifest_dir="/usr/local/share/rootforge/build-manifest"
+  mkdir -p "$manifest_dir"
+  actual="$(sha256sum "$1" | cut -d' ' -f1)"
+  echo "==> SHA-256 recorded for $2 (no upstream digest published to verify against): $actual"
+  echo "$(date -u +%FT%TZ)  $2  $actual  unverified  $3" >> "$manifest_dir/checksums.txt"
+}
+
 echo "==> Fetching rpi-imager .deb from raspberrypi.com"
 if curl -fsSL -o "$IMAGER_DEB" "$IMAGER_URL"; then
+  record_checksum "$IMAGER_DEB" "rpi-imager.deb" "$IMAGER_URL"
   apt-get install -y --no-install-recommends "$IMAGER_DEB" || \
     apt-get install -f -y
   rm -f "$IMAGER_DEB"
