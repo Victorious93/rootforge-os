@@ -1,0 +1,2 @@
+# brain's local search index — regenerate with `brain index`, don't sync/commit it
+.brain/

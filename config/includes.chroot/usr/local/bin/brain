@@ -1,0 +1,4 @@
+#!/bin/sh
+# RootForge OS — second brain CLI wrapper
+# Victorious Framework | Origin Source Labs
+exec python3 /usr/local/lib/rootforge/second-brain/brain.py "$@"

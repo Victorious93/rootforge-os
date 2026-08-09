@@ -132,21 +132,34 @@ rm -rf "$ROOTFS/hooks"
 log "Stage 4: copying RootForge scripts (dropping root/kernel-only ones)"
 mkdir -p "$ROOTFS/usr/local/bin" "$ROOTFS/usr/local/share/rootforge" "$ROOTFS/etc/profile.d"
 EXCLUDE_SCRIPTS="00_bootstrap_distro.sh harden_kernel.sh harden_system.sh setup_vpn.sh join_headscale.sh"
-# find, not a *.sh glob — usr/local/bin/ also holds extensionless wrappers
-# (rootforge) that a *.sh-only glob would silently skip.
-find "$REPO_ROOT/config/includes.chroot/usr/local/bin" -maxdepth 1 -type f | while read -r script; do
+# [Certain] plain *.sh was silently dropping extensionless wrappers like
+# rootforge and brain (same convention as avbtool/mkbootimg: a thin wrapper
+# in usr/local/bin/ with no extension, calling into usr/local/lib/rootforge/)
+# — confirmed by checking this glob against what's actually in
+# includes.chroot/usr/local/bin/ now. -type f -maxdepth 1 catches all of them.
+while IFS= read -r -d '' script; do
   base="$(basename "$script")"
   case " $EXCLUDE_SCRIPTS " in
     *" $base "*) continue ;;
   esac
   install -m 0755 "$script" "$ROOTFS/usr/local/bin/$base"
-done
+done < <(find "$REPO_ROOT/config/includes.chroot/usr/local/bin" -maxdepth 1 -type f -print0)
 install -m 0755 "$SCRIPT_DIR/bootstrap_proot.sh" "$ROOTFS/usr/local/bin/bootstrap_proot.sh"
 [[ -d "$REPO_ROOT/config/includes.chroot/usr/local/share/rootforge" ]] && \
   cp -r "$REPO_ROOT/config/includes.chroot/usr/local/share/rootforge/." "$ROOTFS/usr/local/share/rootforge/"
+# usr/local/lib/rootforge/ — rootforge CLI's core/ package and brain.py's
+# second-brain/ package, plus anything else a usr/local/bin/ wrapper execs
+# into, same convention as the share/ copy above.
 if [[ -d "$REPO_ROOT/config/includes.chroot/usr/local/lib/rootforge" ]]; then
-  mkdir -p "$ROOTFS/usr/local/lib"
-  cp -r "$REPO_ROOT/config/includes.chroot/usr/local/lib/rootforge" "$ROOTFS/usr/local/lib/rootforge"
+  mkdir -p "$ROOTFS/usr/local/lib/rootforge"
+  cp -r "$REPO_ROOT/config/includes.chroot/usr/local/lib/rootforge/." "$ROOTFS/usr/local/lib/rootforge/"
+fi
+# etc/skel/second-brain/ — the PARA-method vault brain operates on. Not
+# etc/skel/ wholesale: most of it (Desktop/, GNOME autostart, etc.) is
+# GUI-specific and doesn't belong in this headless variant.
+if [[ -d "$REPO_ROOT/config/includes.chroot/etc/skel/second-brain" ]]; then
+  mkdir -p "$ROOTFS/etc/skel/second-brain"
+  cp -r "$REPO_ROOT/config/includes.chroot/etc/skel/second-brain/." "$ROOTFS/etc/skel/second-brain/"
 fi
 
 log "Stage 5: PRoot-specific setup (motd, workspace skeleton)"

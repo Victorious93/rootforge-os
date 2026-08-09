@@ -136,7 +136,9 @@ setup_rooted_avd.sh list
 `~/.rootforge/ai-keys.env` (note: dotfile, outside this tree entirely) holds the
 Claude Code / Grok API keys `setup_ai_tools.sh` writes — kept out of `~/rootforge/`
 specifically so it doesn't end up swept into a zip or backup of the workspace by
-habit.
+habit. `~/second-brain/` (also a sibling, not nested under `~/rootforge/`) is a
+separate, general-purpose PARA-method notes vault — see section 15's `brain` CLI
+entry, not specific to root-module work the way everything above is.
 
 ## 7. Optional hardware bench integration
 
@@ -312,6 +314,24 @@ model family, pulled through Ollama rather than installed separately — offered
 as `ollama pull hermes3` (and lets you pick a size tag) as an explicit opt-in,
 not a default, since model weights run multiple GB each and picking one for
 someone else's disk budget isn't RootForge's call to make.
+
+**Second brain** (`brain`, baked into the ISO — `~/second-brain/` in every new
+user's home directory): a local, plaintext knowledge vault using the PARA method
+(Projects / Areas / Resources / Archives, plus daily notes), with semantic
+search and RAG-style Q&A layered on top so the AI tooling above actually has
+something to work *with* instead of starting from zero context every session.
+Everything stays on-device — `brain index` embeds changed notes through
+Ollama's local `nomic-embed-text` model (a small, separate opt-in pull from
+`setup_ai_tools.sh`, same "explicit, not automatic" treatment as Hermes, just
+a couple hundred MB instead of several GB), `brain search "query"` does cosine
+similarity over the local index, and `brain ask "question"` stuffs the
+top-matching notes into a prompt and answers through Ollama (`hermes3` by
+default) or, with `--provider claude`, through the already-installed Claude
+Code CLI for questions that need a stronger model than what's practical to
+run locally. No note ever leaves the machine unless that flag is used on
+purpose. `brain new`/`brain daily`/`brain list`/`brain stats` round out the
+CLI for actually writing into the vault — see `~/second-brain/README.md` or
+`brain --help` for the full command reference.
 
 **[Certain]** GPU acceleration for Ollama on an AMD card goes through ROCm, and the
 exact `HSA_OVERRIDE_GFX_VERSION` needed depends on which GPU generation is

@@ -50,11 +50,17 @@ rootforge-os/
     │   pattern this repo uses for it.
     ├── includes.chroot/ files overlaid onto the squashfs verbatim
     │   ├── etc/calamares/   installer config + branding
-    │   ├── etc/skel/        default files for every new user
+    │   ├── etc/skel/        default files for every new user, incl.
+    │   │                    second-brain/ (PARA-method notes vault — the
+    │   │                    brain CLI's actual code lives under
+    │   │                    usr/local/lib/rootforge/second-brain/, wrapped
+    │   │                    by usr/local/bin/brain, same convention as
+    │   │                    avbtool/mkbootimg's wrapper scripts)
     │   ├── etc/udev/        Android USB rules
     │   ├── etc/systemd/     first-boot service
-    │   ├── usr/local/bin/   all 28 automation scripts (incl. `rootforge`,
-    │   │                    the thin wrapper for usr/local/lib/rootforge/)
+    │   ├── usr/local/bin/   all 29 automation scripts (incl. `rootforge`,
+    │   │                    the thin wrapper for usr/local/lib/rootforge/core/,
+    │   │                    and `brain`, the second-brain CLI wrapper)
     │   ├── usr/local/lib/rootforge/core/  rootforge CLI's Python package —
     │   │   skeleton + `rootforge doctor` today; see
     │   │   docs/IMPLEMENTATION_PLAN.md for what lands here next
