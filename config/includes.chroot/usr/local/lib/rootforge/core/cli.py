@@ -15,6 +15,7 @@ from rootforge.core import __version__
 from rootforge.core import backup as backup_mod
 from rootforge.core import boot as boot_mod
 from rootforge.core import module as module_mod
+from rootforge.core import ota as ota_mod
 from rootforge.core.config import cmd_show as config_cmd_show
 from rootforge.core.device import cmd_show as device_cmd_show
 from rootforge.core.doctor import run_doctor
@@ -159,6 +160,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     boot_verify_parser.add_argument("image")
 
+    ota_parser = subparsers.add_parser(
+        "ota", help="Inspect/extract Android OTA zips and raw payload.bin files."
+    )
+    ota_sub = ota_parser.add_subparsers(dest="ota_command", required=True)
+
+    ota_inspect_parser = ota_sub.add_parser(
+        "inspect", help="Identify an OTA input without extracting partitions."
+    )
+    ota_inspect_parser.add_argument("input")
+
+    ota_extract_parser = ota_sub.add_parser(
+        "extract", help="Extract partition images from an OTA zip or payload.bin."
+    )
+    ota_extract_parser.add_argument("input")
+    ota_extract_parser.add_argument("output_dir")
+    ota_extract_parser.add_argument(
+        "--partitions",
+        default=None,
+        help="Comma-separated partition names (default: boot,init_boot,vendor_boot,dtbo,vbmeta).",
+    )
+
     return parser
 
 
@@ -204,6 +226,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return boot_mod.cmd_patch(args.work_dir, args.ramdisk, args.cpio_commands)
         if args.boot_command == "verify":
             return boot_mod.cmd_verify(args.image)
+
+    if args.command == "ota":
+        if args.ota_command == "inspect":
+            return ota_mod.cmd_inspect(args.input)
+        if args.ota_command == "extract":
+            return ota_mod.cmd_extract(args.input, args.output_dir, args.partitions)
 
     parser.print_help()
     return 0

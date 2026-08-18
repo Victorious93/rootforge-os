@@ -205,6 +205,12 @@ versions. It self-installs `payload-dumper-go` from its GitHub releases on first
 mount of an extracted ext4/erofs image for browsing contents without flashing
 anything — it refuses to mount anything other than `-o ro`.
 
+`rootforge ota inspect <file>` identifies an OTA input (zip vs. raw `payload.bin`,
+whether `payload.bin` sits at the zip root) without extracting anything — useful
+before committing to a full extraction. `rootforge ota extract <file> <out_dir>
+[--partitions a,b,c]` wraps `extract_ota.sh` and records a SHA-256 per extracted
+partition image.
+
 ## 12. Module linting
 
 `scripts/lint_module.sh` catches the two bugs that account for most "why won't this
