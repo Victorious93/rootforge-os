@@ -30,6 +30,19 @@ set -e
 INSTALL_DIR="/usr/local/share/rootforge/zygisk-api"
 mkdir -p "$INSTALL_DIR"
 
+# raw.githubusercontent.com file fetches carry no digest metadata the way
+# a GitHub release asset does (see 0060-magiskboot.hook.chroot for that
+# path) — nothing upstream to verify against, so just record the checksum
+# for the audit trail rather than claim a verification that can't happen.
+record_checksum() {
+  # $1 = file path, $2 = label, $3 = source URL
+  manifest_dir="/usr/local/share/rootforge/build-manifest"
+  mkdir -p "$manifest_dir"
+  actual="$(sha256sum "$1" | cut -d' ' -f1)"
+  echo "==> SHA-256 recorded for $2 (no upstream digest published to verify against): $actual"
+  echo "$(date -u +%FT%TZ)  $2  $actual  unverified  $3" >> "$manifest_dir/checksums.txt"
+}
+
 MAGISK_API="https://api.github.com/repos/topjohnwu/Magisk/releases/latest"
 # strict=False: confirmed by a real build failure (in 0060-magiskboot,
 # which hits this same API) that GitHub's release JSON for this repo can
@@ -50,6 +63,7 @@ if ! curl -fsSL -o "$INSTALL_DIR/zygisk.hpp" "$HEADER_URL"; then
   exit 0
 fi
 echo "    zygisk.hpp"
+record_checksum "$INSTALL_DIR/zygisk.hpp" "zygisk.hpp" "$HEADER_URL"
 
 # Write a minimal CMakeLists stub so new Zygisk module projects can find the header
 cat > "$INSTALL_DIR/CMakeLists.zygisk.txt" <<'EOF'

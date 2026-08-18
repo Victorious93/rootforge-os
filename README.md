@@ -25,7 +25,8 @@ Status: Specification / Build Guide (v1.0) — living document, update in place 
 - **Desktop:** GNOME (GNOME Shell + GDM3) — **[Likely]** this is the heavier choice versus XFCE when the same box also needs headroom for an accelerated emulator plus a kernel build running concurrently; budget accordingly (16GB+ RAM recommended over the 8GB that would be fine under XFCE) — swappable for a WM-only headless profile for CI/build-server use
 - **Install path:** boots to a live session, then offers an on-disk installer (Calamares) with the same "erase disk / install alongside existing OS / manual partitioning" choice Ubuntu's own installer gives you — see section 14
 - **Signed artifacts:** every module, script, and image this distro produces carries a `Victorious Framework` footer in its metadata
-- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) is a thin wrapper around a Python package at `/usr/local/lib/rootforge/core/`. Today it's a skeleton — `rootforge --version`/`--help` and `rootforge doctor` (checks adb/fastboot/python3/git presence, disk space, and optional AI-tooling reachability). Existing scripts under `/usr/local/bin/` are unaffected and keep working standalone; the plan for wrapping them behind `rootforge` subcommands is in `docs/IMPLEMENTATION_PLAN.md`.
+- **Build provenance:** every ISO carries `/usr/local/share/rootforge/system-manifest.json` — the git commit/branch it was built from, every installed package's version, and a SHA-256 per build-time-fetched artifact (from the six hooks that fetch external content) — so a given image's actual contents can be checked against what it claims to be, after the fact.
+- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) is a thin wrapper around a Python package at `/usr/local/lib/rootforge/core/`. Subcommands so far: `doctor` (environment checks), `device show` (fastboot/adb detection, with the same vendor-refusal messaging `unlock_bootloader.sh` uses), `config show` (layered YAML config), `backup create/list/verify/restore` (SHA-256-manifested partition backups), `module create/lint/build` (module scaffolding/linting/packaging — see section 12), `boot inspect/unpack/repack/patch/verify` (boot-image toolchain — section 4), `ota inspect/extract` (section 11), and `avd create/list/start/stop/snapshot` (section 5). Existing scripts under `/usr/local/bin/` are unaffected and keep working standalone; each `rootforge` subcommand wraps them as subprocesses rather than reimplementing their logic.
 
 ## 2. Core package stack
 
@@ -94,6 +95,8 @@ Three scripts, deliberately separated because they're destructive operations you
 
 All three log every fastboot/adb command and their exit codes to `~/.rootforge/logs/`, since "what exactly did the last unlock attempt run" is the first question you ask when a device won't boot.
 
+`rootforge boot inspect/unpack/repack/patch/verify` unifies the lower-level magiskboot/avbtool primitives these scripts already use — `unpack`/`repack` reuse `kernelsu_patch_boot.sh`'s proven `magiskboot unpack`/`repack` pair, `patch` reuses `setup_rooted_avd.sh`'s proven `magiskboot cpio` ramdisk-patch invocation (generalized to accept arbitrary cpio commands), and `verify` runs `avbtool verify_image`. Each operation logs its tool version, inputs, and output SHA-256 to a structured JSON log.
+
 ## 5. Emulator support — rooted and unrooted
 
 `scripts/setup_rooted_avd.sh` generates both profiles through one interface, with the API level, device profile, ABI, and system-image tag all configurable rather than hardcoded, and auto-installs the chosen system image via `sdkmanager` if it isn't present yet:
@@ -116,6 +119,13 @@ setup_rooted_avd.sh list
 5. Snapshots the booted, rooted state as `rootforge-rooted` so `setup_rooted_avd.sh boot --name <avd>` starts pre-rooted on every subsequent run instead of repeating the patch
 
 **KVM note [Certain]:** emulator acceleration requires `/dev/kvm` access — add your user to the `kvm` group and confirm with `kvm-ok` (from `cpu-checker`) before assuming acceleration is active; a silently-software-rendered emulator is the most common "why is this so slow" support question for exactly this kind of distro.
+
+`rootforge avd create/list/start` wraps `setup_rooted_avd.sh`'s own create/list/boot
+subcommands one-to-one. `stop` and `snapshot` are new — the underlying script has no
+equivalent — implemented via the emulator's standard `adb emu` console commands
+(`emu avd name` to find which running instance is the target AVD, `emu kill` to stop
+it, `emu avd snapshot save|load|list|delete <name>` for snapshots beyond the single
+`rootforge-rooted` one the rooting flow itself creates automatically).
 
 ## 6. Directory & workspace convention
 
@@ -169,7 +179,16 @@ Gradle Android project instead: manifest with the `xposedmodule`/`xposedscope`
 metadata, an `xposed_init` asset pointing at a Kotlin `IXposedHookLoadPackage` stub,
 and a `compileOnly` dependency on the Xposed API. Build it with Gradle, sideload the
 APK, then enable it per-target-app inside the LSPosed manager — LSPosed modules are
-disabled by default until toggled there.
+disabled by default until toggled per-app.
+
+`new_module_scaffold.sh` also accepts `apatch` (APatch's APM module format mirrors
+Magisk's module.prop/lifecycle-script convention by design, so it reuses the same
+scaffold) and `zygisk` (same scaffold plus a `zygisk/jni/` native-lib subdirectory
+pre-wired to the `zygisk.hpp` header `0095-zygisk-headers.hook.chroot` vendors —
+build a `.so` per ABI with the NDK and place it at `zygisk/<abi>.so` before zipping;
+`lint_module.sh` checks that at least one exists). A Zygisk module built this way
+runs natively under Magisk; under KernelSU/APatch it additionally needs a
+Zygisk-API-compatible loader such as Zygisk Next installed on the device.
 
 ## 10. Partition backup & restore
 
@@ -194,6 +213,12 @@ versions. It self-installs `payload-dumper-go` from its GitHub releases on first
 mount of an extracted ext4/erofs image for browsing contents without flashing
 anything — it refuses to mount anything other than `-o ro`.
 
+`rootforge ota inspect <file>` identifies an OTA input (zip vs. raw `payload.bin`,
+whether `payload.bin` sits at the zip root) without extracting anything — useful
+before committing to a full extraction. `rootforge ota extract <file> <out_dir>
+[--partitions a,b,c]` wraps `extract_ota.sh` and records a SHA-256 per extracted
+partition image.
+
 ## 12. Module linting
 
 `scripts/lint_module.sh` catches the two bugs that account for most "why won't this
@@ -201,8 +226,16 @@ install" reports: a nested top-level folder in the zip (module.prop has to sit a
 zip root, not one directory down — the single most common mistake when zipping a
 module directory by hand) and CRLF line endings in the lifecycle shell scripts,
 which break the shebang parse on-device. It also validates required `module.prop`
-fields, the `id` character-set restriction, and META-INF boilerplate presence, and
-runs against either a raw module directory or an already-built zip.
+fields, the `id` character-set restriction, and META-INF boilerplate presence, checks
+each lifecycle script's shell syntax (`sh -n`) and — for Zygisk-target modules — that
+at least one `zygisk/<abi>.so` actually exists, and runs against either a raw module
+directory or an already-built zip. `--json` emits machine-readable findings instead
+of the human report, for CI consumption.
+
+`rootforge module create/lint/build` wraps `new_module_scaffold.sh`/`lint_module.sh`/
+`build_magisk_module.sh` behind the unified CLI (`rootforge module create <id> <name>
+--target magisk|kernelsu|apatch|zygisk|xposed`, `rootforge module lint [--json] <path>`,
+`rootforge module build <id> [--install]`) — same underlying scripts, one entrypoint.
 
 ## 13. NDK / API version-matrix builds
 
