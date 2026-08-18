@@ -94,6 +94,8 @@ Three scripts, deliberately separated because they're destructive operations you
 
 All three log every fastboot/adb command and their exit codes to `~/.rootforge/logs/`, since "what exactly did the last unlock attempt run" is the first question you ask when a device won't boot.
 
+`rootforge boot inspect/unpack/repack/patch/verify` unifies the lower-level magiskboot/avbtool primitives these scripts already use — `unpack`/`repack` reuse `kernelsu_patch_boot.sh`'s proven `magiskboot unpack`/`repack` pair, `patch` reuses `setup_rooted_avd.sh`'s proven `magiskboot cpio` ramdisk-patch invocation (generalized to accept arbitrary cpio commands), and `verify` runs `avbtool verify_image`. Each operation logs its tool version, inputs, and output SHA-256 to a structured JSON log.
+
 ## 5. Emulator support — rooted and unrooted
 
 `scripts/setup_rooted_avd.sh` generates both profiles through one interface, with the API level, device profile, ABI, and system-image tag all configurable rather than hardcoded, and auto-installs the chosen system image via `sdkmanager` if it isn't present yet:
