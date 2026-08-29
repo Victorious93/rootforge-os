@@ -136,8 +136,32 @@ jobs:
         run: |
           set -euo pipefail
           export PYTHONPATH=config/includes.chroot/usr/local/lib
+
           python3 -m rootforge.core.cli --version
           python3 -m rootforge.core.cli --help > /dev/null
-          # doctor exits non-zero on a runner with no adb/fastboot, which is
-          # correct behavior — assert it runs and reports, not that it passes.
-          python3 -m rootforge.core.cli doctor --json | python3 -c "import json,sys; json.load(sys.stdin)"
+
+          # `doctor` and `devices` deliberately exit non-zero to REPORT a
+          # finding — doctor when a required check fails, devices when
+          # nothing is connected. On a runner with no adb/fastboot and no
+          # phone attached, both of those are the expected, correct answer.
+          # Capture the output first: piping either straight into a
+          # validator makes `pipefail` read that reported finding as a step
+          # failure, which is exactly how this step failed on its first run.
+          DOCTOR_JSON="$(python3 -m rootforge.core.cli doctor --json)" || true
+          printf '%s' "$DOCTOR_JSON" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          assert 'checks' in data and data['checks'], 'doctor reported no checks'
+          for check in data['checks']:
+              assert check['status'] in ('ok', 'fail', 'warn'), check
+          print(f\"doctor: {len(data['checks'])} checks, \"
+                f\"{data['failed']} failed, {data['warnings']} warnings\")
+          "
+
+          DEVICES_JSON="$(python3 -m rootforge.core.cli devices --json)" || true
+          printf '%s' "$DEVICES_JSON" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          assert isinstance(data, list), 'devices did not emit a JSON list'
+          print(f'devices: {len(data)} found')
+          "
