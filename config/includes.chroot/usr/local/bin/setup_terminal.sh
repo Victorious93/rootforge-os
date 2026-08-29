@@ -81,13 +81,37 @@ EOF
   log "Appended device-status segment to $STARSHIP_CONFIG"
 fi
 
+# `${RC##*.}` on "$HOME/.bashrc" strips everything up to the last dot and
+# yields "bashrc", not "bash" — so this wrote `eval "$(starship init
+# bashrc)"` into the rc file. Both starship and zoxide reject that ("invalid
+# value 'bashrc'"), and because it lands in the rc itself the error printed
+# on every new shell from then on, with no prompt configured. Derive the
+# shell name explicitly instead of pattern-matching the filename.
 for RC in "$HOME/.bashrc" "$HOME/.zshrc"; do
   [[ -f "$RC" ]] || continue
-  grep -q 'starship init' "$RC" 2>/dev/null || {
-    SHELL_NAME="$(basename "$RC" | tr -d '.')"
-    echo "eval \"\$(starship init ${RC##*.})\"" >> "$RC" 2>/dev/null || true
-  }
-  grep -q 'zoxide init' "$RC" 2>/dev/null || echo "eval \"\$(zoxide init ${RC##*.})\"" >> "$RC" 2>/dev/null || true
+  case "$RC" in
+    *.bashrc) SHELL_NAME="bash" ;;
+    *.zshrc)  SHELL_NAME="zsh" ;;
+    *) log "Skipping $RC — no known shell name for it"; continue ;;
+  esac
+
+  if command -v starship >/dev/null 2>&1; then
+    grep -q 'starship init' "$RC" 2>/dev/null || {
+      echo "eval \"\$(starship init $SHELL_NAME)\"" >> "$RC" && \
+        log "Wired starship into $RC ($SHELL_NAME)"
+    }
+  else
+    log "starship not on PATH — not adding its init line to $RC (it would error on every new shell)"
+  fi
+
+  if command -v zoxide >/dev/null 2>&1; then
+    grep -q 'zoxide init' "$RC" 2>/dev/null || {
+      echo "eval \"\$(zoxide init $SHELL_NAME)\"" >> "$RC" && \
+        log "Wired zoxide into $RC ($SHELL_NAME)"
+    }
+  else
+    log "zoxide not on PATH — not adding its init line to $RC"
+  fi
 done
 
 log "Terminal stack configured. Open a new shell to pick up starship/zoxide,"
