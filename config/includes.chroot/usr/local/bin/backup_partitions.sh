@@ -16,6 +16,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 CODENAME="${1:?Usage: backup_partitions.sh <device_codename> [serial]}"
 SERIAL="${2:-}"
 
@@ -48,16 +51,37 @@ try_adb_dd() {
   $ADB shell "rm -f /sdcard/${part}.img" 2>>"$LOG_FILE"
 }
 
+# `adb devices` always prints a "List of devices attached" header followed by
+# a blank line, so the previous `grep -qv "List of devices"` matched that
+# blank line and reported MODE=adb with nothing plugged in — every partition
+# then "failed to fetch" for a reason that had nothing to do with the device.
+# rf_adb_serials/rf_fastboot_serials parse the state column instead.
 MODE=""
-if $FASTBOOT devices 2>/dev/null | grep -q .; then
-  MODE="fastboot"
-elif $ADB devices 2>/dev/null | grep -qv "List of devices"; then
-  MODE="adb"
+if [[ -n "$SERIAL" ]]; then
+  if rf_fastboot_serials | grep -qxF "$SERIAL"; then
+    MODE="fastboot"
+  elif rf_adb_serials | grep -qxF "$SERIAL"; then
+    MODE="adb"
+  fi
+else
+  if rf_have_fastboot_device; then
+    MODE="fastboot"
+  elif rf_have_adb_device; then
+    MODE="adb"
+  fi
 fi
 
 if [[ -z "$MODE" ]]; then
-  log "No device found in fastboot or adb mode. Connect the device and put it in"
-  log "bootloader mode (adb reboot bootloader) or ensure adb sees it, then retry."
+  if [[ -n "$SERIAL" ]]; then
+    log "Device '$SERIAL' is not in fastboot mode and not reporting 'device' over adb."
+    log "Connected adb devices:      $(rf_adb_serials | tr '\n' ' ')"
+    log "Connected fastboot devices: $(rf_fastboot_serials | tr '\n' ' ')"
+  else
+    log "No device found in fastboot or adb mode. Connect the device and put it in"
+    log "bootloader mode (adb reboot bootloader) or ensure adb sees it, then retry."
+    log "A device shown as 'unauthorized' by 'adb devices' still needs the USB-debugging"
+    log "prompt accepted on-screen — it does not count as connected here."
+  fi
   exit 1
 fi
 
@@ -90,9 +114,26 @@ for part in "${PARTITIONS[@]}"; do
   fi
 done
 
-echo "$CODENAME backup $STAMP" > "$BACKUP_DIR/manifest.txt"
+# The manifest used to carry a human-readable `du -h` size and nothing else,
+# which gave restore_partitions.sh no way to tell a good image from a
+# truncated or corrupted one before flashing it. Record a SHA-256 per image
+# (and a sha256sum-compatible sidecar) so the restore path can verify.
+{
+  echo "$CODENAME backup $STAMP"
+  echo "# columns: partition sha256 bytes"
+} > "$BACKUP_DIR/manifest.txt"
+
+: > "$BACKUP_DIR/SHA256SUMS"
 for part in "${PARTITIONS[@]}"; do
-  [[ -f "$BACKUP_DIR/${part}.img" ]] && echo "$part: OK ($(du -h "$BACKUP_DIR/${part}.img" | cut -f1))" >> "$BACKUP_DIR/manifest.txt"
+  IMG_PATH="$BACKUP_DIR/${part}.img"
+  [[ -f "$IMG_PATH" ]] || continue
+  DIGEST="$(rf_sha256_file "$IMG_PATH")"
+  BYTES="$(stat -c %s "$IMG_PATH")"
+  echo "$part $DIGEST $BYTES" >> "$BACKUP_DIR/manifest.txt"
+  # Relative name so `sha256sum -c SHA256SUMS` works from inside the backup
+  # directory even after it has been moved or copied elsewhere.
+  echo "$DIGEST  ${part}.img" >> "$BACKUP_DIR/SHA256SUMS"
+  log "$part: $(numfmt --to=iec --suffix=B "$BYTES" 2>/dev/null || echo "$BYTES bytes") sha256=${DIGEST:0:16}..."
 done
 
 if [[ ${#FAILED[@]} -gt 0 ]]; then
@@ -102,6 +143,7 @@ if [[ ${#FAILED[@]} -gt 0 ]]; then
 fi
 
 log "Backup complete at $BACKUP_DIR"
+log "Verify at any time with: (cd $BACKUP_DIR && sha256sum -c SHA256SUMS)"
 log "Restore with: restore_partitions.sh $CODENAME $STAMP"
 
 # Victorious Framework

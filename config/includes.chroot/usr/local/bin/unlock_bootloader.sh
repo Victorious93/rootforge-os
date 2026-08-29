@@ -11,6 +11,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 LOG_DIR="${ROOTFORGE_HOME:-$HOME/rootforge}/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/unlock_$(date +%Y%m%d_%H%M%S).log"
@@ -27,8 +30,13 @@ log "Reading device variables"
 VARS="$($FASTBOOT getvar all 2>&1 || true)"
 echo "$VARS" >> "$LOG_FILE"
 
-PRODUCT="$(echo "$VARS" | grep -oP '(?<=product: ).*' | head -1 || true)"
-UNLOCK_ABILITY="$(echo "$VARS" | grep -oP '(?<=unlocked: ).*' | head -1 || true)"
+# Several bootloaders terminate getvar lines with CRLF, so an untrimmed
+# value never compares equal to "yes" below and an already-unlocked device
+# gets walked through the unlock prompt again. Strip CRs and surrounding
+# whitespace. `grep -m1` rather than `| head -1` also avoids handing grep a
+# SIGPIPE, which `pipefail` would turn into a spurious failure.
+PRODUCT="$(echo "$VARS" | grep -m1 -oP '(?<=product: ).*' | tr -d '\r' | xargs || true)"
+UNLOCK_ABILITY="$(echo "$VARS" | grep -m1 -oP '(?<=unlocked: ).*' | tr -d '\r' | xargs || true)"
 
 log "Detected product: ${PRODUCT:-unknown}"
 
@@ -53,10 +61,12 @@ if [[ "$UNLOCK_ABILITY" == "yes" ]]; then
   exit 0
 fi
 
-log "This device appears to use a standard AOSP-lineage bootloader (Pixel/Nexus/OnePlus-class)."
-log "Unlocking WILL WIPE ALL USER DATA on the device. This is a firmware-enforced behavior, not a script choice."
-read -r -p "Type UNLOCK to proceed: " CONFIRM
-if [[ "$CONFIRM" != "UNLOCK" ]]; then
+# rf_confirm prompts on /dev/tty, so the gate stays visible when this script
+# is driven by fleet_orchestrate.sh with stdout redirected to a log.
+if ! rf_confirm UNLOCK \
+    "Device: ${PRODUCT:-unknown}${SERIAL:+ (serial $SERIAL)}" \
+    "This device appears to use a standard AOSP-lineage bootloader (Pixel/Nexus/OnePlus-class)." \
+    "Unlocking WILL WIPE ALL USER DATA on the device. This is a firmware-enforced behavior, not a script choice."; then
   log "Confirmation not given — aborting."
   exit 1
 fi

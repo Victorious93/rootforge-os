@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Test stub for adb. Prints whatever RF_STUB_ADB_DEVICES holds for the
+# `devices` subcommand and records every call to RF_STUB_LOG.
+[ -n "${RF_STUB_LOG:-}" ] && printf 'adb %s\n' "$*" >> "$RF_STUB_LOG"
+
+case "${1:-}" in
+  devices)
+    printf 'List of devices attached\n'
+    printf '%b' "${RF_STUB_ADB_DEVICES:-}"
+    printf '\n'
+    ;;
+  wait-for-device) exit "${RF_STUB_ADB_WAIT_RC:-0}" ;;
+  shell)
+    printf '%b' "${RF_STUB_ADB_SHELL_OUT:-}"
+    exit "${RF_STUB_ADB_SHELL_RC:-0}"
+    ;;
+  *) exit "${RF_STUB_ADB_RC:-0}" ;;
+esac

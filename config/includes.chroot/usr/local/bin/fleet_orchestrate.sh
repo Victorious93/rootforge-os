@@ -16,6 +16,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 OPERATION="${1:?Usage: fleet_orchestrate.sh <operation> [--allow-destructive] [-- extra-args]}"
 shift || true
 
@@ -29,9 +32,31 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-DESTRUCTIVE_OPS="unlock flash"
 OP_NAME="${OPERATION%%:*}"
-if echo "$DESTRUCTIVE_OPS" | grep -qw "$OP_NAME" && [[ $ALLOW_DESTRUCTIVE -eq 0 ]]; then
+
+# "${OPERATION#*:}" returns the whole string when there is no colon, so
+# `fleet_orchestrate.sh flash` used to pass the literal word "flash" as the
+# image path (and "module-install" as the module id) to every device.
+# Require the argument these two operations cannot work without.
+OP_ARG=""
+case "$OPERATION" in
+  *:*) OP_ARG="${OPERATION#*:}" ;;
+esac
+case "$OP_NAME" in
+  module-install)
+    [[ -n "$OP_ARG" ]] || { echo "module-install needs a module id: module-install:<module_id>" >&2; exit 1; }
+    ;;
+  flash)
+    [[ -n "$OP_ARG" ]] || { echo "flash needs an image path: flash:<image.img>" >&2; exit 1; }
+    [[ -f "$OP_ARG" ]] || { echo "Image not found: $OP_ARG" >&2; exit 1; }
+    ;;
+esac
+
+IS_DESTRUCTIVE=0
+case "$OP_NAME" in
+  unlock|flash) IS_DESTRUCTIVE=1 ;;
+esac
+if [[ $IS_DESTRUCTIVE -eq 1 && $ALLOW_DESTRUCTIVE -eq 0 ]]; then
   echo "'$OP_NAME' is destructive across a whole fleet — pass --allow-destructive to confirm you mean it for every connected device, not just one." >&2
   exit 1
 fi
@@ -45,9 +70,11 @@ SUMMARY="$LOG_DIR/fleet_${OP_NAME}_${STAMP}_summary.md"
 log() { echo "[fleet] $*"; }
 
 log "Enumerating connected devices (adb + fastboot)"
-mapfile -t ADB_SERIALS < <(adb devices 2>/dev/null | grep -v 'List of devices' | grep 'device$' | cut -f1)
-mapfile -t FASTBOOT_SERIALS < <(fastboot devices 2>/dev/null | cut -f1)
-ALL_SERIALS=("${ADB_SERIALS[@]}" "${FASTBOOT_SERIALS[@]}")
+mapfile -t ADB_SERIALS < <(rf_adb_serials)
+mapfile -t FASTBOOT_SERIALS < <(rf_fastboot_serials)
+ALL_SERIALS=()
+[[ ${#ADB_SERIALS[@]} -gt 0 ]] && ALL_SERIALS+=("${ADB_SERIALS[@]}")
+[[ ${#FASTBOOT_SERIALS[@]} -gt 0 ]] && ALL_SERIALS+=("${FASTBOOT_SERIALS[@]}")
 
 if [[ ${#ALL_SERIALS[@]} -eq 0 ]]; then
   echo "No devices found in adb or fastboot mode." >&2
@@ -56,11 +83,33 @@ fi
 
 log "Found ${#ALL_SERIALS[@]} device(s): ${ALL_SERIALS[*]}"
 
+# The per-device scripts each gate destructive work behind a typed
+# confirmation read from the terminal. This loop redirects their stdout into
+# a per-device log, so before rf_confirm existed those prompts vanished into
+# the log file and the run sat waiting on input the operator could not see.
+# Collect one fleet-wide confirmation here instead, then let the children run
+# unattended — a deliberate, logged handover, not a silent bypass.
+if [[ $IS_DESTRUCTIVE -eq 1 ]]; then
+  if ! rf_confirm "$(printf '%s' "$OP_NAME" | tr '[:lower:]' '[:upper:]')" \
+      "" \
+      "About to run the destructive operation '$OPERATION' against ALL ${#ALL_SERIALS[@]} connected device(s):" \
+      "  ${ALL_SERIALS[*]}" \
+      "Each device's own confirmation gate will be satisfied by this single answer." \
+      "unlock wipes user data; flash overwrites the boot partition."; then
+    echo "Fleet confirmation not given — aborting. Nothing was run." >&2
+    exit 1
+  fi
+  # Consumed by the child scripts via common.sh's rf_confirm.
+  export ROOTFORGE_ASSUME_YES=1
+  log "Fleet-wide confirmation accepted — child scripts will not prompt individually."
+fi
+
 echo "# Fleet operation: $OPERATION — $STAMP" > "$SUMMARY"
 echo "" >> "$SUMMARY"
 echo "| Serial | Result | Log |" >> "$SUMMARY"
 echo "|---|---|---|" >> "$SUMMARY"
 
+FAILED_DEVICES=()
 for serial in "${ALL_SERIALS[@]}"; do
   DEV_LOG="$LOG_DIR/fleet_${OP_NAME}_${STAMP}_${serial}.log"
   log "=== $serial ==="
@@ -80,15 +129,16 @@ for serial in "${ALL_SERIALS[@]}"; do
       if bash "$SCRIPT_DIR/backup_partitions.sh" "$serial" "$serial" "${EXTRA_ARGS[@]}" > "$DEV_LOG" 2>&1; then RESULT="OK"; fi
       ;;
     module-install)
-      MODULE_ID="${OPERATION#*:}"
-      if bash "$SCRIPT_DIR/build_magisk_module.sh" "$MODULE_ID" --install "${EXTRA_ARGS[@]}" > "$DEV_LOG" 2>&1; then RESULT="OK"; fi
+      # --serial matters here: without it adb refuses to act ("more than one
+      # device/emulator") the moment a second device is plugged in, which is
+      # precisely the situation this script exists for.
+      if bash "$SCRIPT_DIR/build_magisk_module.sh" "$OP_ARG" --install --serial "$serial" "${EXTRA_ARGS[@]}" > "$DEV_LOG" 2>&1; then RESULT="OK"; fi
       ;;
     unlock)
       if bash "$SCRIPT_DIR/unlock_bootloader.sh" "$serial" "${EXTRA_ARGS[@]}" > "$DEV_LOG" 2>&1; then RESULT="OK"; fi
       ;;
     flash)
-      IMG="${OPERATION#*:}"
-      if bash "$SCRIPT_DIR/flash_patched_boot.sh" "$IMG" boot "$serial" "${EXTRA_ARGS[@]}" > "$DEV_LOG" 2>&1; then RESULT="OK"; fi
+      if bash "$SCRIPT_DIR/flash_patched_boot.sh" "$OP_ARG" boot "$serial" "${EXTRA_ARGS[@]}" > "$DEV_LOG" 2>&1; then RESULT="OK"; fi
       ;;
     *)
       echo "Unknown operation: $OP_NAME" >&2
@@ -98,10 +148,18 @@ for serial in "${ALL_SERIALS[@]}"; do
 
   log "$serial: $RESULT (log: $DEV_LOG)"
   echo "| $serial | $RESULT | \`$DEV_LOG\` |" >> "$SUMMARY"
+  [[ "$RESULT" == "FAIL" ]] && FAILED_DEVICES+=("$serial")
 done
 
 echo ""
 log "Summary: $SUMMARY"
 cat "$SUMMARY"
+
+# A fleet run that failed on every device used to exit 0, so nothing wrapping
+# this script could tell success from total failure.
+if [[ ${#FAILED_DEVICES[@]} -gt 0 ]]; then
+  log "${#FAILED_DEVICES[@]} of ${#ALL_SERIALS[@]} device(s) failed: ${FAILED_DEVICES[*]}"
+  exit 1
+fi
 
 # Victorious Framework

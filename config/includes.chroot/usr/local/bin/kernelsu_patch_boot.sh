@@ -19,6 +19,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 WORK_DIR="$ROOTFORGE_HOME/kernelsu-work"
@@ -35,21 +38,58 @@ KSU_VERSION="latest"
 DEVICE_CODENAME="unknown"
 FLASH_ONLY=0
 
+# Each value-taking option needs its argument checked before it is read:
+# under `set -u` a bare trailing `--stock-boot` aborted with the raw
+# "$2: unbound variable" instead of saying what was actually wrong.
+need_value() {
+  [[ $2 -ge 2 ]] || die "$1 requires a value"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --stock-boot)      STOCK_BOOT="$2";        shift 2 ;;
-    --android-version) ANDROID_VER="$2";       shift 2 ;;
-    --ksu-version)     KSU_VERSION="$2";       shift 2 ;;
-    --device)          DEVICE_CODENAME="$2";   shift 2 ;;
-    --flash)           FLASH_ONLY=1;           shift   ;;
+    --stock-boot)      need_value "$1" $#; STOCK_BOOT="$2";      shift 2 ;;
+    --android-version) need_value "$1" $#; ANDROID_VER="$2";     shift 2 ;;
+    --ksu-version)     need_value "$1" $#; KSU_VERSION="$2";     shift 2 ;;
+    --device)          need_value "$1" $#; DEVICE_CODENAME="$2"; shift 2 ;;
+    --flash)           FLASH_ONLY=1;                             shift   ;;
+    -h|--help)
+      sed -n '12,18p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
+      exit 0
+      ;;
     *) die "Unknown argument: $1" ;;
   esac
 done
 
 # --- Flash-only path ---
 if [[ $FLASH_ONLY -eq 1 ]]; then
-  LATEST=$(ls -t "$WORK_DIR"/boot-ksu-patched-*.img 2>/dev/null | head -1)
-  [[ -z "$LATEST" ]] && die "No patched boot image found in $WORK_DIR"
+  # `LATEST=$(ls -t ... | head -1)` aborted the script here under
+  # `set -o pipefail` whenever the glob matched nothing: ls exits non-zero,
+  # pipefail propagates it through head, and the failing assignment tripped
+  # `set -e` *before* the die() below could explain anything. The user got a
+  # silent exit 2. Collect matches with a glob instead, which cannot fail.
+  shopt -s nullglob
+  CANDIDATES=("$WORK_DIR"/boot-ksu-patched-*.img)
+  shopt -u nullglob
+  [[ ${#CANDIDATES[@]} -gt 0 ]] || die "No patched boot image found in $WORK_DIR — run without --flash first to build one."
+
+  LATEST=""
+  for candidate in "${CANDIDATES[@]}"; do
+    [[ -z "$LATEST" || "$candidate" -nt "$LATEST" ]] && LATEST="$candidate"
+  done
+
+  rf_require_cmd fastboot "install the fastboot package (android-sdk-platform-tools-common / platform-tools)"
+
+  # This path writes the boot partition, exactly like flash_patched_boot.sh,
+  # but shipped without that script's typed-confirmation gate — the same
+  # safety gap. Gate it the same way.
+  if ! rf_confirm FLASH \
+      "About to flash the boot partition of the device connected in fastboot mode:" \
+      "  Image:  $LATEST" \
+      "  Device: ${DEVICE_CODENAME}" \
+      "This overwrites boot. If the image does not match this device, it will not boot."; then
+    die "Confirmation not given — aborting. Nothing was flashed."
+  fi
+
   log "Flashing most recent patched image: $LATEST"
   fastboot flash boot "$LATEST"
   log "Done. Reboot with: fastboot reboot"
@@ -60,6 +100,12 @@ fi
 [[ -z "$STOCK_BOOT" ]]   && die "--stock-boot <boot.img> required"
 [[ -z "$ANDROID_VER" ]]  && die "--android-version <12|13|14> required"
 [[ -f "$STOCK_BOOT" ]]   || die "Boot image not found: $STOCK_BOOT"
+[[ -s "$STOCK_BOOT" ]]   || die "Boot image is empty: $STOCK_BOOT"
+# ANDROID_VER is interpolated into the release-asset name match below, so
+# keep it to the digits that convention actually uses.
+[[ "$ANDROID_VER" =~ ^[0-9]{1,2}$ ]] || die "--android-version must be a number like 12, 13 or 14 (got '$ANDROID_VER')"
+
+rf_require_cmd curl "install curl"
 
 MAGISKBOOT="$(command -v magiskboot 2>/dev/null || echo "$ROOTFORGE_HOME/bin/magiskboot")"
 [[ -x "$MAGISKBOOT" ]] || die "magiskboot not found. Run 00_bootstrap_distro.sh first."

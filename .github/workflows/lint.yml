@@ -27,27 +27,14 @@ jobs:
       - name: Install shellcheck
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends shellcheck
 
-      - name: Shellcheck bash scripts
-        run: |
-          set -euo pipefail
-          FAIL=0
-          while IFS= read -r -d '' f; do
-            echo "== $f =="
-            shellcheck -S error "$f" || FAIL=1
-          done < <(find config/includes.chroot termux -name '*.sh' -print0)
-          shellcheck -S error auto/build || FAIL=1
-          exit "$FAIL"
-
-      - name: Shellcheck POSIX-sh scripts (hooks, auto/config)
-        run: |
-          set -euo pipefail
-          FAIL=0
-          while IFS= read -r -d '' f; do
-            echo "== $f =="
-            shellcheck -S error -s sh "$f" || FAIL=1
-          done < <(find config/hooks -name '*.hook.chroot' -print0)
-          shellcheck -S error -s sh auto/config || FAIL=1
-          exit "$FAIL"
+      - name: Lint sweep
+        # tests/lint.sh is the same script `make lint` runs, so a
+        # contributor's local check and this job cannot drift apart. It
+        # selects scripts by shebang rather than by a '*.sh' glob — the
+        # `rootforge` and `brain` entrypoints have no extension and were
+        # never checked at all under the old name-based selection — and it
+        # byte-compiles the shipped Python, which this pipeline never did.
+        run: tests/lint.sh
 
   yaml-lint:
     runs-on: ubuntu-latest
@@ -125,3 +112,32 @@ jobs:
             done < <(grep -v '^#' "$f" | grep -v '^[[:space:]]*$')
           done
           exit "$MISSING"
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the RootForge test suite
+        # Hermetic: stubbed adb/fastboot, no device, no network, no Docker.
+        # See tests/README.md.
+        run: tests/run-tests.sh
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check the CLI responds
+        run: |
+          set -euo pipefail
+          export PYTHONPATH=config/includes.chroot/usr/local/lib
+          python3 -m rootforge.core.cli --version
+          python3 -m rootforge.core.cli --help > /dev/null
+          # doctor exits non-zero on a runner with no adb/fastboot, which is
+          # correct behavior — assert it runs and reports, not that it passes.
+          python3 -m rootforge.core.cli doctor --json | python3 -c "import json,sys; json.load(sys.stdin)"

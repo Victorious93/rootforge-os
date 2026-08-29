@@ -25,7 +25,7 @@ Status: Specification / Build Guide (v1.0) — living document, update in place 
 - **Desktop:** GNOME (GNOME Shell + GDM3) — **[Likely]** this is the heavier choice versus XFCE when the same box also needs headroom for an accelerated emulator plus a kernel build running concurrently; budget accordingly (16GB+ RAM recommended over the 8GB that would be fine under XFCE) — swappable for a WM-only headless profile for CI/build-server use
 - **Install path:** boots to a live session, then offers an on-disk installer (Calamares) with the same "erase disk / install alongside existing OS / manual partitioning" choice Ubuntu's own installer gives you — see section 14
 - **Signed artifacts:** every module, script, and image this distro produces carries a `Victorious Framework` footer in its metadata
-- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) is a thin wrapper around a Python package at `/usr/local/lib/rootforge/core/`. Today it's a skeleton — `rootforge --version`/`--help` and `rootforge doctor` (checks adb/fastboot/python3/git presence, disk space, and optional AI-tooling reachability). Existing scripts under `/usr/local/bin/` are unaffected and keep working standalone; the plan for wrapping them behind `rootforge` subcommands is in `docs/IMPLEMENTATION_PLAN.md`.
+- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) is a thin wrapper around a Python package at `/usr/local/lib/rootforge/core/`. Today it offers `rootforge --version`/`--help`, `rootforge doctor` (host tooling, disk space, `~/rootforge` writability, attached devices, and optional AI-tooling reachability — with `--json` for scripting, `--quiet` to show only problems, and `--strict` to fail on warnings), and `rootforge devices` (adb + fastboot in one list, `-l` for codename/slot/lock state, `--json` for scripting). Existing scripts under `/usr/local/bin/` are unaffected and keep working standalone; the plan for wrapping them behind `rootforge` subcommands is in `docs/IMPLEMENTATION_PLAN.md`.
 
 ## 2. Core package stack
 
@@ -179,9 +179,15 @@ dtbo/vbmeta before you touch anything, trying `fastboot fetch` first (supported 
 many Pixel-lineage bootloaders), falling back to `adb root` + `dd` from
 `/dev/block/by-name/<partition>` if the device is already rooted, and printing exact
 manual `dd` instructions rather than silently skipping a partition it can't reach.
-Backups land in `devices/<codename>/backups/<timestamp>/` with a manifest.
+Backups land in `devices/<codename>/backups/<timestamp>/` with a manifest and a
+`SHA256SUMS` sidecar — verify one at any time with
+`(cd <backup_dir> && sha256sum -c SHA256SUMS)`.
 `scripts/restore_partitions.sh` flashes an entire backup back in one confirmed
-command — pass no timestamp to list what's available for that device.
+command — pass no timestamp to list what's available for that device. It verifies
+every image against `SHA256SUMS` **before** flashing and refuses outright on a
+mismatch: a truncated or bit-rotted `boot`/`vendor_boot` image is the one failure
+here with no recourse afterward, and it is entirely detectable beforehand. A restore
+in which any partition failed to flash exits non-zero and says which.
 
 ## 11. Firmware / OTA extraction
 

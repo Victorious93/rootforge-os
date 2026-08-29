@@ -62,6 +62,55 @@ is proven equivalent.
 
 ---
 
+## P0.5 — Bug fixes and test coverage (landed)
+
+Work that fell out of a bug sweep across the shipped scripts. None of it was
+planned; all of it blocked the phases below, because P2 wraps these scripts
+and wrapping code with a silent argument-parsing bug just moves the bug.
+
+- **Argument parsing.** `flash_patched_boot.sh` and `extract_ota.sh` both
+  used `shift 2 || true` to skip optional positional arguments. Under a
+  one-argument or flag-second invocation that guard left the wrong value in
+  `$@`: `flash_patched_boot.sh boot.img` ran `fastboot -s boot.img`, and
+  `flash_patched_boot.sh boot.img --both-slots` flashed a partition named
+  `--both-slots` while silently not mirroring slots. Both now parse
+  positionally and validate.
+- **Device detection.** `backup_partitions.sh` decided a device was present
+  with `adb devices | grep -qv "List of devices"`, which matches the trailing
+  blank line and so reported a device with nothing attached. Enumeration now
+  lives in one place (`rf_adb_serials` / `rootforge.core.devices`) and parses
+  the state column, so `unauthorized` and `offline` are surfaced as such.
+- **Confirmation gates.** `kernelsu_patch_boot.sh --flash` wrote the boot
+  partition with no gate at all — the same class of gap item 1 fixed. All the
+  destructive scripts now share `rf_confirm`, which prompts on `/dev/tty` so
+  the gate stays visible when `fleet_orchestrate.sh` redirects a child's
+  stdout to a log (a bare `read -r -p` prompt vanished into that log and the
+  run looked hung).
+- **Backup integrity** (brings item 8's intent forward). Backups now carry a
+  `SHA256SUMS` sidecar, and `restore_partitions.sh` verifies every image
+  before flashing and refuses on a mismatch. A restore in which any flash
+  failed now exits non-zero instead of printing "complete".
+- **Exit codes.** `restore_partitions.sh`, `fleet_orchestrate.sh`,
+  `build_matrix.sh` and `build_magisk_module.sh` all reported success after
+  total failure, so nothing could wrap them programmatically.
+- **`setup_terminal.sh`** wrote `eval "$(starship init bashrc)"` into shell
+  rc files (`${RC##*.}` yields `bashrc`, not `bash`), so every new shell
+  printed an error and got no prompt.
+- **`brain.py`** never split a paragraph longer than `CHUNK_CHARS`, so a
+  pasted log became one oversized chunk the embedding model silently
+  truncates; and `cosine()` used `zip()`, which scored mismatched-dimension
+  embeddings over a prefix rather than reporting the model change.
+- **Tests.** `tests/` is a hermetic suite (stubbed `adb`/`fastboot`, scratch
+  `HOME`, no network or Docker) covering every fix above, wired into CI. The
+  lint pipeline now selects scripts by shebang instead of `*.sh`, which is
+  why the `rootforge` and `brain` entrypoints had never been checked, and
+  byte-compiles the shipped Python, which it never did.
+- **CLI.** `rootforge doctor` gained `--json`/`--quiet`/`--strict` and checks
+  for the tooling the scripts actually shell out to; `rootforge devices` is
+  the first slice of item 5's device abstraction.
+
+---
+
 ## P1 — High priority
 
 5. **Device abstraction (`rootforge.core.device`).**

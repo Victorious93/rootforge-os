@@ -2,6 +2,8 @@
 # Victorious Framework | Origin Source Labs
 #
 # Usage:
+#   make test                run the test suite (no root, no device needed)
+#   make lint                shellcheck + Python byte-compile sweep
 #   sudo make build          build the ISO
 #   make checksum            write rootforge-os-amd64.hybrid.iso.sha256
 #   make list-usb            list candidate USB block devices (sanity check before flash)
@@ -16,7 +18,16 @@
 ISO     := rootforge-os-amd64.hybrid.iso
 LOGFILE := rootforge-build-$(shell date +%Y%m%d_%H%M%S).log
 
-.PHONY: build clean distclean checksum list-usb flash check-root
+.PHONY: build clean distclean checksum list-usb flash check-root test lint
+
+# Neither target needs root: the tests stub out adb/fastboot and write only
+# to a scratch HOME. tests/lint.sh is the single definition of "lint" here,
+# shared with the CI workflow so the two can't drift apart.
+test:
+	tests/run-tests.sh
+
+lint:
+	tests/lint.sh
 
 check-root:
 	@[ "$$(id -u)" -eq 0 ] || { echo "Run with sudo: sudo make $(MAKECMDGOALS)"; exit 1; }

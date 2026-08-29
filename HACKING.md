@@ -17,6 +17,10 @@ rootforge-os/
 │   ├── bootstrap_proot.sh       SDK/NDK fetch, replaces 00_bootstrap_distro.sh here
 │   ├── proot-setup.sh           image-bake-time motd/workspace setup
 │   └── install.sh               one-command Termux installer
+├── tests/               hermetic test suite — no device, Docker, or network
+│   ├── run-tests.sh             the runner (see "Running the tests" below)
+│   ├── stubs/                   fake adb/fastboot that record their arguments
+│   └── test_*.py                Python unit tests
 └── config/
     ├── package-lists/   apt packages installed into the squashfs
     │   ├── rootforge.list.chroot          core toolchain + GNOME
@@ -62,8 +66,12 @@ rootforge-os/
     │   │                    the thin wrapper for usr/local/lib/rootforge/core/,
     │   │                    and `brain`, the second-brain CLI wrapper)
     │   ├── usr/local/lib/rootforge/core/  rootforge CLI's Python package —
-    │   │   skeleton + `rootforge doctor` today; see
+    │   │   `doctor` and `devices` today; see
     │   │   docs/IMPLEMENTATION_PLAN.md for what lands here next
+    │   ├── usr/local/lib/rootforge/sh/common.sh  shared shell helpers
+    │   │   (confirmation gate, checksums, device enumeration) sourced by
+    │   │   the destructive scripts in usr/local/bin/ — see "Shared shell
+    │   │   helpers" below
     │   └── usr/local/share/rootforge/  zygisk-api/ (added by hooks)
     ├── archives/rootforge-security.list   correct bookworm-security apt
     │   line — live-build's own built-in security handling hardcodes a
@@ -85,12 +93,52 @@ rootforge-os/
         step repacks a real one afterward from the theme's own files.
 ```
 
+## Running the tests
+
+```
+tests/run-tests.sh          # everything
+tests/run-tests.sh shell    # shell-script behavior only
+tests/run-tests.sh python   # Python unit tests only
+```
+
+No device, Docker, or network access needed: `tests/stubs/` puts fake `adb` and
+`fastboot` binaries first on `PATH` that print canned output and record every
+invocation, so a test can assert on the exact command a script *would* have run
+against real hardware. `HOME` is redirected per test, so nothing touches your real
+`~/rootforge`. See `tests/README.md`.
+
+The same suite runs in CI (the `tests` job in `.github/workflows/lint.yml`).
+
 ## Adding a script
 
 1. Write it to `config/includes.chroot/usr/local/bin/your_script.sh`
 2. `chmod 0755` it
 3. Add it to the script count in `BUILD.md`
 4. Sign it: `# Victorious Framework | Origin Source Labs` in the header comment
+5. If it does anything destructive (writes a partition, wipes data), gate it with
+   `rf_confirm` from `usr/local/lib/rootforge/sh/common.sh` rather than a bare
+   `read -r -p`. `rf_confirm` prompts on `/dev/tty`, so the gate stays visible when
+   `fleet_orchestrate.sh` runs the script with stdout redirected to a per-device log
+   — a plain `read` prompt disappears into that log and the run looks hung.
+6. Add a test to `tests/run-tests.sh` for its argument handling and, if it has one,
+   both sides of its confirmation gate.
+
+## Shared shell helpers
+
+`config/includes.chroot/usr/local/lib/rootforge/sh/common.sh` is sourced by the
+scripts in `usr/local/bin/` via a path relative to `${BASH_SOURCE[0]}` — the repo
+checkout and the installed ISO have the same `usr/local/{bin,lib}` arrangement, so
+one relative path works in both. It holds only the pieces that were being
+reimplemented inconsistently across scripts:
+
+| Helper | Why it's shared |
+|---|---|
+| `rf_confirm` | The typed-confirmation gate, prompting on `/dev/tty` |
+| `rf_sha256_file` / `rf_sha256_verify` | Backup/restore integrity |
+| `rf_adb_serials` / `rf_fastboot_serials` | One correct answer to "what's connected" |
+| `rf_require_cmd` | A useful message instead of "command not found" under `set -e` |
+
+Keep it small. A helper belongs here when a second script needs it, not before.
 
 ## Adding a package
 
