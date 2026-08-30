@@ -813,6 +813,48 @@ assert_eq "an unreachable device is refused" "$RC" "1"
 assert_contains "an unreachable device explains why no report is produced" "$OUT" "Cannot reach the device"
 drop_sandbox
 
+section "new_module_scaffold.sh"
+
+new_sandbox
+# The generator and the linter disagreed about what a valid module id is, so
+# the scaffold could produce a module that this project's own linter fails.
+# Tie them together: whatever the scaffold emits must lint clean.
+run_script bash "$BIN_DIR/new_module_scaffold.sh" mymod "My Mod" magisk
+assert_eq "scaffolding a magisk module succeeds" "$RC" "0"
+run_script bash "$BIN_DIR/lint_module.sh" "$ROOTFORGE_HOME/modules/mymod"
+assert_eq "a scaffolded magisk module passes lint_module.sh" "$RC" "0"
+
+new_sandbox
+run_script bash "$BIN_DIR/new_module_scaffold.sh" mykmod "My KMod" kernelsu
+assert_eq "scaffolding a kernelsu module succeeds" "$RC" "0"
+run_script bash "$BIN_DIR/lint_module.sh" "$ROOTFORGE_HOME/modules/mykmod"
+assert_eq "a scaffolded kernelsu module passes lint_module.sh" "$RC" "0"
+
+new_sandbox
+# Regression: an id the linter rejects was accepted here without comment.
+run_script bash "$BIN_DIR/new_module_scaffold.sh" "9bad-id!" "Bad" magisk
+assert_eq "an id the linter would reject is refused up front" "$RC" "1"
+assert_contains "the refusal cites the same rule the linter uses" "$OUT" "lint_module.sh enforces"
+
+new_sandbox
+# Regression: the id was used as a path component with no validation, so
+# '../escaped' scaffolded the module outside modules/.
+run_script bash "$BIN_DIR/new_module_scaffold.sh" "../escaped" "Escaped" magisk
+assert_eq "an id that climbs out of modules/ is refused" "$RC" "1"
+if [[ -d "$ROOTFORGE_HOME/escaped" ]]; then
+  fail "nothing is created outside modules/" "found $ROOTFORGE_HOME/escaped"
+else
+  pass "nothing is created outside modules/"
+fi
+
+new_sandbox
+# Regression: an unrecognized target fell through to the magisk path and then
+# announced "Scaffolded magsik module", as if it had done something else.
+run_script bash "$BIN_DIR/new_module_scaffold.sh" okid "Ok" magsik
+assert_eq "an unknown target is refused" "$RC" "1"
+assert_contains "an unknown target lists the real ones" "$OUT" "expected magisk, kernelsu or xposed"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox
@@ -836,6 +878,30 @@ printf 'id=testmod\nid=dupe\nname=T\nversion=1\nversionCode=1\nauthor=a\ndescrip
 touch "$MOD/META-INF/com/google/android/update-binary" "$MOD/META-INF/com/google/android/updater-script"
 run_script bash "$BIN_DIR/lint_module.sh" "$MOD"
 assert_contains "duplicate field does not abort the lint" "$OUT" "PASS"
+# Regression: a clean directory target printed PASS and then exited 1. The
+# cleanup trap's last command is `[[ -n "$WORKDIR" ]]`, which is false when
+# no temp dir was created — i.e. for every directory target — and a bash EXIT
+# trap whose last command fails overrides the script's own `exit 0`. The
+# script was therefore unusable as a CI gate for the case its usage line
+# lists first, while printing PASS the whole time.
+assert_eq "a clean directory target exits 0, not just prints PASS" "$RC" "0"
+
+new_sandbox
+MOD="$SANDBOX/mod"
+mkdir -p "$MOD/META-INF/com/google/android"
+printf 'id=zipmod\nname=Z\nversion=1\nversionCode=1\nauthor=a\ndescription=d\n' > "$MOD/module.prop"
+touch "$MOD/META-INF/com/google/android/update-binary" "$MOD/META-INF/com/google/android/updater-script"
+( cd "$MOD" && zip -qr "$SANDBOX/mod.zip" . )
+run_script bash "$BIN_DIR/lint_module.sh" "$SANDBOX/mod.zip"
+assert_eq "a clean zip target still exits 0" "$RC" "0"
+assert_contains "a clean zip target passes" "$OUT" "PASS"
+
+new_sandbox
+MOD="$SANDBOX/mod"
+mkdir -p "$MOD"
+printf 'id=incomplete\n' > "$MOD/module.prop"
+run_script bash "$BIN_DIR/lint_module.sh" "$MOD"
+assert_eq "a genuinely broken module still exits 1" "$RC" "1"
 drop_sandbox
 
 }

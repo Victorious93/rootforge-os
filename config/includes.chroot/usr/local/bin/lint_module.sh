@@ -17,7 +17,17 @@ set -euo pipefail
 TARGET="${1:?Usage: lint_module.sh <module_dir_or_zip>}"
 
 WORKDIR=""
-cleanup() { [[ -n "$WORKDIR" ]] && rm -rf "$WORKDIR"; }
+# `return 0` is load-bearing. Without it the function's status is that of
+# `[[ -n "$WORKDIR" ]]`, which is 1 whenever no temp dir was created — i.e.
+# every time the target is a directory rather than a zip. A bash EXIT trap
+# whose last command fails overrides the script's own `exit 0`, so
+# `lint_module.sh <dir>` printed "PASS — no blocking issues found." and then
+# exited 1, making it useless as a CI gate or pre-push hook for the case the
+# usage line lists first.
+cleanup() {
+  [[ -n "$WORKDIR" ]] && rm -rf "$WORKDIR"
+  return 0
+}
 trap cleanup EXIT
 
 ISSUES=0
