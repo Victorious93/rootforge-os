@@ -715,6 +715,146 @@ COUNT="$(grep -cE '^[[:space:]]*allow' "$POLICY" || true)"
 assert_eq "a populated policy is counted correctly" "$COUNT" "2"
 drop_sandbox
 
+section "rpi_fleet_tools.sh"
+
+new_sandbox
+# The nmap output shapes that matter: a host WITH a PTR record is reported as
+# "for <name> (<ip>)", one WITHOUT as "for <ip>". Matching only the
+# parenthesised form dropped every Pi lacking reverse DNS — common on a home
+# LAN — so `run` skipped those hosts forever with nothing to say so.
+cat > "$SANDBOX/nmap.txt" <<'NMAPOUT'
+Nmap scan report for raspberrypi.local (192.168.1.5)
+Host is up (0.0021s latency).
+MAC Address: DC:A6:32:11:22:33 (Raspberry Pi Trading)
+Nmap scan report for 192.168.1.9
+Host is up (0.0034s latency).
+MAC Address: B8:27:EB:44:55:66 (Raspberry Pi Foundation)
+Nmap scan report for pi-node3.lan (192.168.1.14)
+Host is up (0.0012s latency).
+MAC Address: E4:5F:01:77:88:99 (Raspberry Pi Trading)
+NMAPOUT
+
+# Drive the real scan path with recorded nmap output rather than copying the
+# extraction expression into this file — a test that re-implements what it
+# checks passes whether or not the shipped code is right.
+export ROOTFORGE_NMAP_OUTPUT="$SANDBOX/nmap.txt"
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh" scan
+FLEET="$ROOTFORGE_HOME/devices/pi-fleet.txt"
+assert_eq "scan succeeds" "$RC" "0"
+assert_eq "all three Pis are found, PTR or not" "$(wc -l < "$FLEET" | tr -d ' ')" "3"
+assert_contains "a Pi without reverse DNS is included" "$(cat "$FLEET")" "192.168.1.9"
+assert_contains "a Pi with reverse DNS is included" "$(cat "$FLEET")" "192.168.1.5"
+assert_contains "a third Pi is included" "$(cat "$FLEET")" "192.168.1.14"
+
+new_sandbox
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh"
+assert_eq "no subcommand is rejected" "$RC" "1"
+
+new_sandbox
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh" bogus-subcommand
+assert_eq "unknown subcommand is rejected" "$RC" "1"
+assert_contains "unknown subcommand prints usage" "$OUT" "Usage:"
+
+new_sandbox
+# `run` with no hosts and no prior scan must fail rather than silently
+# iterating over nothing.
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh" run "uptime"
+assert_eq "run with no hosts and no scan file is rejected" "$RC" "1"
+
+new_sandbox
+# A fleet file of only blank lines used to produce `ssh pi@` per line.
+mkdir -p "$ROOTFORGE_HOME/devices"
+printf '\n\n   \n' > "$ROOTFORGE_HOME/devices/pi-fleet.txt"
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh" run "uptime"
+assert_eq "an all-blank fleet file is rejected" "$RC" "1"
+assert_contains "an all-blank fleet file says so" "$OUT" "No usable hosts"
+
+new_sandbox
+# Every host failing must not exit 0: ssh to a reserved-for-doc address
+# fails fast under ConnectTimeout.
+mkdir -p "$ROOTFORGE_HOME/devices"
+printf '192.0.2.1\n' > "$ROOTFORGE_HOME/devices/pi-fleet.txt"
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh" run "true"
+assert_eq "a run where every host fails exits non-zero" "$RC" "1"
+assert_contains "a failed run names the hosts" "$OUT" "host(s) failed"
+drop_sandbox
+
+section "check_root_detection.sh — silence is not a pass"
+
+new_sandbox
+# Every probe in this script concludes "clean" from empty output. A device
+# whose `pm list packages` or mountinfo query returns nothing therefore used
+# to be reported as fully clean — the worst direction to fail in for a tool
+# whose entire job is telling you whether your hiding config holds.
+cp "$STUB_DIR/adb-quiet-probes" "$SANDBOX/adb"
+chmod +x "$SANDBOX/adb"
+export PATH="$SANDBOX:$ORIGINAL_PATH"
+run_script bash "$BIN_DIR/check_root_detection.sh"
+assert_contains "an empty package list is reported as unknown, not clean" "$OUT" \
+  "'pm list packages' returned nothing"
+assert_contains "unreadable mountinfo is reported as unknown, not clean" "$OUT" \
+  "mountinfo came back empty"
+assert_not_contains "the empty package probe no longer reports a pass" "$OUT" \
+  "**PASS** — known root manager package names"
+assert_not_contains "the empty mount probe no longer reports a pass" "$OUT" \
+  "**PASS** — mount namespace leak"
+# The probes that genuinely ran must still pass, so this isn't just blanket
+# pessimism.
+assert_contains "a probe that really ran still passes" "$OUT" "**PASS** — ro.build.tags"
+
+new_sandbox
+# A device that answers nothing at all must be refused outright rather than
+# producing a report at all.
+printf '#!/bin/sh\ncase "$1" in wait-for-device) exit 0;; *) exit 1;; esac\n' > "$SANDBOX/adb"
+chmod +x "$SANDBOX/adb"
+export PATH="$SANDBOX:$ORIGINAL_PATH"
+run_script bash "$BIN_DIR/check_root_detection.sh"
+assert_eq "an unreachable device is refused" "$RC" "1"
+assert_contains "an unreachable device explains why no report is produced" "$OUT" "Cannot reach the device"
+drop_sandbox
+
+section "new_module_scaffold.sh"
+
+new_sandbox
+# The generator and the linter disagreed about what a valid module id is, so
+# the scaffold could produce a module that this project's own linter fails.
+# Tie them together: whatever the scaffold emits must lint clean.
+run_script bash "$BIN_DIR/new_module_scaffold.sh" mymod "My Mod" magisk
+assert_eq "scaffolding a magisk module succeeds" "$RC" "0"
+run_script bash "$BIN_DIR/lint_module.sh" "$ROOTFORGE_HOME/modules/mymod"
+assert_eq "a scaffolded magisk module passes lint_module.sh" "$RC" "0"
+
+new_sandbox
+run_script bash "$BIN_DIR/new_module_scaffold.sh" mykmod "My KMod" kernelsu
+assert_eq "scaffolding a kernelsu module succeeds" "$RC" "0"
+run_script bash "$BIN_DIR/lint_module.sh" "$ROOTFORGE_HOME/modules/mykmod"
+assert_eq "a scaffolded kernelsu module passes lint_module.sh" "$RC" "0"
+
+new_sandbox
+# Regression: an id the linter rejects was accepted here without comment.
+run_script bash "$BIN_DIR/new_module_scaffold.sh" "9bad-id!" "Bad" magisk
+assert_eq "an id the linter would reject is refused up front" "$RC" "1"
+assert_contains "the refusal cites the same rule the linter uses" "$OUT" "lint_module.sh enforces"
+
+new_sandbox
+# Regression: the id was used as a path component with no validation, so
+# '../escaped' scaffolded the module outside modules/.
+run_script bash "$BIN_DIR/new_module_scaffold.sh" "../escaped" "Escaped" magisk
+assert_eq "an id that climbs out of modules/ is refused" "$RC" "1"
+if [[ -d "$ROOTFORGE_HOME/escaped" ]]; then
+  fail "nothing is created outside modules/" "found $ROOTFORGE_HOME/escaped"
+else
+  pass "nothing is created outside modules/"
+fi
+
+new_sandbox
+# Regression: an unrecognized target fell through to the magisk path and then
+# announced "Scaffolded magsik module", as if it had done something else.
+run_script bash "$BIN_DIR/new_module_scaffold.sh" okid "Ok" magsik
+assert_eq "an unknown target is refused" "$RC" "1"
+assert_contains "an unknown target lists the real ones" "$OUT" "expected magisk, kernelsu or xposed"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox
@@ -738,6 +878,30 @@ printf 'id=testmod\nid=dupe\nname=T\nversion=1\nversionCode=1\nauthor=a\ndescrip
 touch "$MOD/META-INF/com/google/android/update-binary" "$MOD/META-INF/com/google/android/updater-script"
 run_script bash "$BIN_DIR/lint_module.sh" "$MOD"
 assert_contains "duplicate field does not abort the lint" "$OUT" "PASS"
+# Regression: a clean directory target printed PASS and then exited 1. The
+# cleanup trap's last command is `[[ -n "$WORKDIR" ]]`, which is false when
+# no temp dir was created — i.e. for every directory target — and a bash EXIT
+# trap whose last command fails overrides the script's own `exit 0`. The
+# script was therefore unusable as a CI gate for the case its usage line
+# lists first, while printing PASS the whole time.
+assert_eq "a clean directory target exits 0, not just prints PASS" "$RC" "0"
+
+new_sandbox
+MOD="$SANDBOX/mod"
+mkdir -p "$MOD/META-INF/com/google/android"
+printf 'id=zipmod\nname=Z\nversion=1\nversionCode=1\nauthor=a\ndescription=d\n' > "$MOD/module.prop"
+touch "$MOD/META-INF/com/google/android/update-binary" "$MOD/META-INF/com/google/android/updater-script"
+( cd "$MOD" && zip -qr "$SANDBOX/mod.zip" . )
+run_script bash "$BIN_DIR/lint_module.sh" "$SANDBOX/mod.zip"
+assert_eq "a clean zip target still exits 0" "$RC" "0"
+assert_contains "a clean zip target passes" "$OUT" "PASS"
+
+new_sandbox
+MOD="$SANDBOX/mod"
+mkdir -p "$MOD"
+printf 'id=incomplete\n' > "$MOD/module.prop"
+run_script bash "$BIN_DIR/lint_module.sh" "$MOD"
+assert_eq "a genuinely broken module still exits 1" "$RC" "1"
 drop_sandbox
 
 }

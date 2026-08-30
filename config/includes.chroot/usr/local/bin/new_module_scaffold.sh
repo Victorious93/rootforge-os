@@ -16,6 +16,29 @@ MODULE_ID="${1:?Usage: new_module_scaffold.sh <module_id> <display_name> [magisk
 DISPLAY_NAME="${2:?Missing display name}"
 TARGET="${3:-magisk}"
 
+# The id goes straight into module.prop, and lint_module.sh — this project's
+# own linter — rejects anything outside this pattern as "Magisk requires a
+# restricted id format". Nothing checked it here, so the generator happily
+# produced modules its own linter fails, and you found out only after
+# building one. Same rule, enforced at the point the id is chosen.
+if [[ ! "$MODULE_ID" =~ ^[a-zA-Z][a-zA-Z0-9_.-]*$ ]]; then
+  echo "Invalid module id '$MODULE_ID'." >&2
+  echo "Must start with a letter and contain only [a-zA-Z0-9_.-] — the same rule" >&2
+  echo "lint_module.sh enforces, because Magisk requires a restricted id format." >&2
+  exit 1
+fi
+# That pattern also can't contain '/' or start with '.', so the id cannot
+# climb out of modules/ — which it previously could: an id of '../escaped'
+# scaffolded the module a directory above where it belongs.
+
+case "$TARGET" in
+  magisk|kernelsu|xposed) ;;
+  # An unrecognized target used to fall through to the magisk path and then
+  # announce "Scaffolded magsik module", which reads as if it did something
+  # it didn't.
+  *) echo "Unknown target '$TARGET' (expected magisk, kernelsu or xposed)" >&2; exit 1 ;;
+esac
+
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 MODULE_DIR="$ROOTFORGE_HOME/modules/$MODULE_ID"
 
@@ -27,7 +50,10 @@ fi
 if [[ "$TARGET" == "xposed" ]]; then
   # LSPosed/Xposed modules are Android app projects (a hook class + manifest
   # metadata), not a Magisk-style zip — scaffold a minimal Gradle project instead.
-  mkdir -p "$MODULE_DIR"/app/src/main/{java/com/victorious/"$(echo "$MODULE_ID" | tr -cd 'a-zA-Z0-9')",assets,res/values}
+  # The java/ path here was built from a separate sanitisation of the id and
+  # then created again, correctly, from $PKG_PATH below — leaving one of the
+  # two as a stray directory whenever they disagreed.
+  mkdir -p "$MODULE_DIR"/app/src/main/{assets,res/values}
 
   PKG="com.victorious.$(echo "$MODULE_ID" | tr -cd 'a-zA-Z0-9')"
   PKG_PATH="${PKG//./\/}"
