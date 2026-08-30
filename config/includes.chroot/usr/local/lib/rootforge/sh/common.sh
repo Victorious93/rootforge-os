@@ -113,6 +113,46 @@ rf_have_fastboot_device() {
   [ -n "$(rf_fastboot_serials | head -n 1)" ]
 }
 
+# --- secrets -------------------------------------------------------------
+
+# rf_shell_quote <string> — print the string single-quoted and safe to
+# re-source from a shell script.
+#
+# setup_ai_tools.sh writes API keys into ~/.rootforge/ai-keys.env, which the
+# shell rc files source on every startup. It used to emit them as
+# `export VAR='$key'` with no escaping, so a key containing a single quote
+# terminated the quoting early: at best the whole file became a syntax error
+# and *no* keys loaded, at worst the remainder of the key ran as shell
+# commands in every new shell. Keys get pasted from password managers and
+# passed in by automation, so "the user typed it themselves" is not a
+# safety argument.
+#
+# Emits POSIX-portable '...'\''...' rather than bash's printf %q, whose
+# $'...' form the file's POSIX-sh readers would not understand.
+rf_shell_quote() {
+  local q="'\\''"
+  printf "'%s'" "${1//\'/$q}"
+}
+
+# rf_write_private <path> — read stdin and write it to <path> with mode 0600
+# from the moment it exists.
+#
+# The rewrite-through-a-temp-file pattern used to create that temp at the
+# default umask (0644), fill it with every stored key, then `mv` it over the
+# real file — which inherited 0644 — and only then chmod 0600. On a
+# multi-user box that is a real window in which every key is world-readable.
+rf_write_private() {
+  local path="$1"
+  local old_umask
+  old_umask="$(umask)"
+  umask 077
+  cat > "$path"
+  umask "$old_umask"
+  # Belt and braces: an existing file keeps its own mode through a
+  # redirect, so umask alone is not enough when the file already exists.
+  chmod 600 "$path"
+}
+
 # --- misc ----------------------------------------------------------------
 
 # rf_require_cmd <cmd> <install hint> — exit 1 with a useful message rather

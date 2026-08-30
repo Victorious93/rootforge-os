@@ -115,13 +115,21 @@ The same suite runs in CI (the `tests` job in `.github/workflows/lint.yml`).
 2. `chmod 0755` it
 3. Add it to the script count in `BUILD.md`
 4. Sign it: `# Victorious Framework | Origin Source Labs` in the header comment
-5. If it does anything destructive (writes a partition, wipes data), gate it with
+5. Validate arguments before inspecting state, so a bad flag is reported as a bad
+   flag rather than as whatever unrelated precondition is checked first. Give
+   every option loop a catch-all `*)` arm — a silently-ignored typo'd flag means
+   the script runs with defaults and says nothing.
+6. If it does anything destructive (writes a partition, wipes data), gate it with
    `rf_confirm` from `usr/local/lib/rootforge/sh/common.sh` rather than a bare
    `read -r -p`. `rf_confirm` prompts on `/dev/tty`, so the gate stays visible when
    `fleet_orchestrate.sh` runs the script with stdout redirected to a per-device log
    — a plain `read` prompt disappears into that log and the run looks hung.
-6. Add a test to `tests/run-tests.sh` for its argument handling and, if it has one,
-   both sides of its confirmation gate.
+7. Add a test to `tests/run-tests.sh` for its argument handling and, if it has one,
+   both sides of its confirmation gate. Pair every exit-code assertion with a
+   check on the specific message: a script that exits 1 for an unrelated reason
+   would otherwise make the test pass for the wrong reason.
+8. Never write a secret into a file with `echo "export VAR='$value'"`. Use
+   `rf_shell_quote` and `rf_write_private` — see "Shared shell helpers".
 
 ## Shared shell helpers
 
@@ -137,6 +145,8 @@ reimplemented inconsistently across scripts:
 | `rf_sha256_file` / `rf_sha256_verify` | Backup/restore integrity |
 | `rf_adb_serials` / `rf_fastboot_serials` | One correct answer to "what's connected" |
 | `rf_require_cmd` | A useful message instead of "command not found" under `set -e` |
+| `rf_shell_quote` | Escaping a secret before it is written into a file the shell sources |
+| `rf_write_private` | Writing a secrets file that is 0600 from the moment it exists |
 
 Keep it small. A helper belongs here when a second script needs it, not before.
 

@@ -52,6 +52,14 @@ case "$CMD" in
 
   peer-qr)
     PEER_NAME="${2:?Usage: setup_vpn.sh peer-qr <peer-name>}"
+    # Validate the argument before inspecting any state, so a bad name is
+    # reported as a bad name rather than as whatever unrelated precondition
+    # happens to be checked first.
+    #
+    # The name becomes a directory under $WG_DIR/peers; keep it to something
+    # that cannot climb out of it.
+    [[ "$PEER_NAME" =~ ^[A-Za-z0-9._-]+$ && "$PEER_NAME" != "." && "$PEER_NAME" != ".." ]] \
+      || { echo "Peer name must be [A-Za-z0-9._-] (got '$PEER_NAME')" >&2; exit 1; }
     [[ -f "$WG_DIR/privatekey" ]] || { echo "No local keypair yet — run 'init' first." >&2; exit 1; }
     command -v qrencode >/dev/null 2>&1 || sudo apt-get install -y qrencode | tee -a "$LOG_FILE"
 
@@ -61,13 +69,30 @@ case "$CMD" in
     umask 077
     wg genkey | tee "$PEER_KEY_DIR/privatekey" | wg pubkey > "$PEER_KEY_DIR/publickey"
 
+    # Peer addresses used to be `10.66.66.$((RANDOM % 200 + 10))/32` — 200
+    # slots picked at random with no check against the peers already issued.
+    # That is a birthday-problem collision: ~20% chance of a duplicate by the
+    # 10th peer and ~63% by the 20th. Two peers sharing an AllowedIPs address
+    # doesn't fail loudly; it silently breaks routing for whichever one the
+    # server saw last, which is a miserable thing to debug. Hand out the
+    # lowest address not already taken instead.
+    PEER_OCTET=""
+    for candidate in $(seq 10 250); do
+      if ! grep -rqs "^Address = 10\.66\.66\.${candidate}/32\b" "$WG_DIR/peers"; then
+        PEER_OCTET="$candidate"
+        break
+      fi
+    done
+    [[ -n "$PEER_OCTET" ]] || { echo "No free address left in 10.66.66.10-250 — retire an old peer under $WG_DIR/peers." >&2; exit 1; }
+    log "Assigned 10.66.66.${PEER_OCTET}/32 to '$PEER_NAME'"
+
     THIS_PUBKEY="$(cat "$WG_DIR/publickey" 2>/dev/null || echo "SET-THIS-BOXS-PUBKEY")"
     read -r -p "This box's WireGuard endpoint (host:port) as the peer should reach it: " ENDPOINT
 
     PEER_CONF=$(cat <<EOF
 [Interface]
 PrivateKey = $(cat "$PEER_KEY_DIR/privatekey")
-Address = 10.66.66.$((RANDOM % 200 + 10))/32
+Address = 10.66.66.${PEER_OCTET}/32
 DNS = 1.1.1.1
 
 [Peer]

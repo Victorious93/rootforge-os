@@ -376,11 +376,17 @@ plugged in over USB.
 **Intercepting proxy** (`scripts/setup_intercept_proxy.sh`) — installs mitmproxy
 and automates the part that's usually manual: pushing its CA cert into a rooted
 device's *system* trust store (`/system/etc/security/cacerts`), not just the user
-store most modern apps ignore.
+store most modern apps ignore. `trust-cert` verifies adbd is actually running as
+root and that `/system` remounted before it pushes, rather than surfacing the
+failure as a confusing permission error. `start` takes the listen port as its
+first argument (`start 9090`).
 
 **VPN quick-connect** (`scripts/setup_vpn.sh`) — WireGuard keypair generation,
 interface up/down, and a `peer-qr` mode that generates a phone-scannable config
-QR code directly in the terminal.
+QR code directly in the terminal. Peer addresses are handed out as the lowest
+free slot in `10.66.66.0/24` and recorded per peer, so two peers can't be issued
+the same `AllowedIPs` — a collision there doesn't fail loudly, it just silently
+breaks routing for one of them.
 
 **Headscale mesh join** (`scripts/join_headscale.sh`) — joins an *existing*
 Headscale control server as a client node via the Tailscale client (API-compatible)
