@@ -279,6 +279,58 @@ assert_eq "failed flash -> non-zero exit" "$RC" "1"
 assert_contains "failed flash -> says so" "$OUT" "RESTORE INCOMPLETE"
 drop_sandbox
 
+# Regression: the codename and timestamp are interpolated straight into a
+# path under $ROOTFORGE_HOME/devices/, and nothing validated them. Before the
+# guard, `backup_partitions.sh '../../escaped'` wrote to $HOME/escaped, and
+# `restore_partitions.sh testdev '../../../../evil'` read every .img from an
+# arbitrary directory and flashed it — the SHA256SUMS gate degrades to a
+# warning when the directory has no SHA256SUMS, so the write went ahead.
+new_sandbox
+export RF_STUB_ADB_DEVICES="X1\tdevice"
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/backup_partitions.sh" '../../escaped'
+assert_eq "a traversing codename aborts the backup" "$RC" "1"
+assert_contains "the codename abort explains itself" "$OUT" "Invalid device codename"
+if [ -e "$SANDBOX/home/escaped" ]; then
+  fail "a traversing codename writes nothing outside devices/" "$SANDBOX/home/escaped exists"
+else
+  pass "a traversing codename writes nothing outside devices/"
+fi
+
+new_sandbox
+# The escape target is a real directory holding a real image, so the only
+# thing standing between it and the device is the guard.
+# ../../../../evil resolves out of devices/ to $HOME/evil, four levels up
+# from $ROOTFORGE_HOME/devices/<codename>/backups. The backups directory has
+# to exist for the traversal to resolve, which it does for any device the
+# user has ever backed up.
+mkdir -p "$ROOTFORGE_HOME/devices/testdev/backups" "$HOME/evil"
+printf 'attacker' > "$HOME/evil/boot.img"
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev "../../../../evil"
+assert_eq "a traversing timestamp aborts the restore" "$RC" "1"
+assert_contains "the timestamp abort explains itself" "$OUT" "Invalid backup timestamp"
+assert_not_contains "a traversing timestamp flashes nothing" "$(cat "$RF_STUB_LOG")" "flash"
+
+new_sandbox
+# A codename with a separator but no '..' is just as much an escape.
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" 'testdev/../../elsewhere'
+assert_eq "a codename containing a separator is rejected" "$RC" "1"
+
+new_sandbox
+# The guard must not reject the codenames people actually use. Real device
+# codenames carry digits, underscores and hyphens.
+BACKUP="$ROOTFORGE_HOME/devices/oriole_5g-2/backups/20240101_000000"
+mkdir -p "$BACKUP"
+printf 'realboot' > "$BACKUP/boot.img"
+( cd "$BACKUP" && sha256sum boot.img > SHA256SUMS )
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" oriole_5g-2 20240101_000000
+assert_eq "an ordinary codename still restores" "$RC" "0"
+assert_contains "an ordinary codename still flashes" "$(cat "$RF_STUB_LOG")" "flash boot"
+drop_sandbox
+
 section "kernelsu_patch_boot.sh --flash"
 
 new_sandbox
@@ -1031,6 +1083,160 @@ OUT="$(cd "$SANDBOX" && RF module scaffold spacedmod "Name With Spaces" 2>&1)"; 
 assert_eq "a display name with spaces scaffolds" "$RC" "0"
 assert_contains "the spaced name reaches module.prop intact" \
   "$(cat "$ROOTFORGE_HOME/modules/spacedmod/module.prop")" "name=Name With Spaces"
+drop_sandbox
+
+section "rootforge flash / backup — the wrapped path end to end"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+export ROOTFORGE_ASSUME_YES=1
+
+# The happy path: the wrapper must reach fastboot with the image as an image,
+# not as a serial. This is the shell bug the CLI is meant to make unreachable.
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img"
+assert_eq "CLI flash boot succeeds" "$RC" "0"
+assert_contains "CLI flash boot reaches fastboot" "$(cat "$RF_STUB_LOG")" "flash boot"
+assert_not_contains "CLI never passes the image as a serial" \
+  "$(cat "$RF_STUB_LOG")" "-s $SANDBOX/boot.img"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" \
+  --partition init_boot --serial SERIAL9
+assert_contains "CLI honors --partition" "$(cat "$RF_STUB_LOG")" "flash init_boot"
+assert_contains "CLI honors --serial" "$(cat "$RF_STUB_LOG")" "-s SERIAL9"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_SLOT=a
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" --both-slots
+assert_contains "CLI --both-slots mirrors to the other slot" "$(cat "$RF_STUB_LOG")" "--set-active=b"
+assert_contains "CLI --both-slots restores the original slot" "$(cat "$RF_STUB_LOG")" "--set-active=a"
+assert_not_contains "CLI --both-slots is never read as a partition" \
+  "$(cat "$RF_STUB_LOG")" "flash --both-slots"
+
+# argparse prefix matching accepted --both-slot for --both-slots until
+# allow_abbrev=False was set on every parser (subparsers do not inherit it).
+# A near-miss flag must be an error, not a silent guess at what was meant.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" --both-slot
+assert_eq "an abbreviated flag is rejected, not guessed" "$RC" "2"
+assert_contains "the abbreviated flag is named" "$OUT" "unrecognized arguments"
+assert_not_contains "a rejected flag flashes nothing" "$(cat "$RF_STUB_LOG")" "flash"
+
+# Validation the shell did after picking a device up: argparse does it before
+# fastboot is invoked at all.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/missing.img"
+assert_eq "a missing image is rejected" "$RC" "2"
+assert_contains "a missing image says so" "$OUT" "image not found"
+assert_eq "a missing image touches no device" "$(wc -l < "$RF_STUB_LOG")" "0"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+: > "$SANDBOX/empty.img"
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/empty.img"
+assert_eq "a zero-byte image is rejected" "$RC" "2"
+assert_contains "a zero-byte image says so" "$OUT" "image is empty"
+assert_eq "a zero-byte image touches no device" "$(wc -l < "$RF_STUB_LOG")" "0"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" --partition system
+assert_eq "an unsupported partition is rejected" "$RC" "2"
+assert_contains "the supported partitions are listed" "$OUT" "init_boot"
+assert_not_contains "an unsupported partition is never written" "$(cat "$RF_STUB_LOG")" "flash system"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" --serial
+assert_eq "a missing option value is rejected" "$RC" "2"
+assert_contains "the missing value names its option" "$OUT" "--serial"
+
+# The wrapper must pass a real failure through rather than reporting success.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_FLASH_RC=1
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img"
+assert_eq "a failed flash propagates its exit code" "$RC" "1"
+
+# --- backup / restore through the CLI ---
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+BACKUP="$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000"
+mkdir -p "$BACKUP"
+printf 'realboot' > "$BACKUP/boot.img"
+( cd "$BACKUP" && sha256sum boot.img > SHA256SUMS )
+export ROOTFORGE_ASSUME_YES=1
+
+run_script python3 -m rootforge.core.cli backup list testdev
+assert_eq "backup list succeeds" "$RC" "0"
+assert_contains "backup list shows the stored backup" "$OUT" "20240101_000000"
+assert_eq "backup list touches no device" "$(wc -l < "$RF_STUB_LOG")" "0"
+
+run_script python3 -m rootforge.core.cli backup restore testdev 20240101_000000
+assert_eq "backup restore succeeds" "$RC" "0"
+assert_contains "backup restore flashes the stored image" "$(cat "$RF_STUB_LOG")" "flash boot"
+
+# Path traversal, now rejected by argparse before the script runs. Passing
+# these through used to write a backup outside devices/, and — on restore —
+# read .img files from an arbitrary directory and flash them to the device.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli backup create ../../escaped
+assert_eq "a traversing codename is rejected" "$RC" "2"
+assert_contains "the codename error cites the rule" "$OUT" "devices/"
+if [ -e "$SANDBOX/home/escaped" ]; then
+  fail "a rejected codename creates nothing outside devices/" "$SANDBOX/home/escaped exists"
+else
+  pass "a rejected codename creates nothing outside devices/"
+fi
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli backup restore testdev ../../../../evil
+assert_eq "a traversing timestamp is rejected" "$RC" "2"
+assert_not_contains "a traversing timestamp flashes nothing" "$(cat "$RF_STUB_LOG")" "flash"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli backup restore testdev .
+assert_eq "a bare '.' timestamp is rejected" "$RC" "2"
+
+# A serial is a serial, not a path: it is interpolated into a fastboot
+# command line by the scripts.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli backup create testdev --serial 'x; rm -rf /'
+assert_eq "a serial with shell metacharacters is rejected" "$RC" "2"
+assert_contains "the serial error shows the expected shape" "$OUT" "device serial"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+run_script python3 -m rootforge.core.cli backup
+assert_eq "a missing backup subcommand is rejected" "$RC" "2"
+run_script python3 -m rootforge.core.cli flash
+assert_eq "a missing flash subcommand is rejected" "$RC" "2"
 drop_sandbox
 
 section "lint_module.sh"
