@@ -715,6 +715,70 @@ COUNT="$(grep -cE '^[[:space:]]*allow' "$POLICY" || true)"
 assert_eq "a populated policy is counted correctly" "$COUNT" "2"
 drop_sandbox
 
+section "rpi_fleet_tools.sh"
+
+new_sandbox
+# The nmap output shapes that matter: a host WITH a PTR record is reported as
+# "for <name> (<ip>)", one WITHOUT as "for <ip>". Matching only the
+# parenthesised form dropped every Pi lacking reverse DNS — common on a home
+# LAN — so `run` skipped those hosts forever with nothing to say so.
+cat > "$SANDBOX/nmap.txt" <<'NMAPOUT'
+Nmap scan report for raspberrypi.local (192.168.1.5)
+Host is up (0.0021s latency).
+MAC Address: DC:A6:32:11:22:33 (Raspberry Pi Trading)
+Nmap scan report for 192.168.1.9
+Host is up (0.0034s latency).
+MAC Address: B8:27:EB:44:55:66 (Raspberry Pi Foundation)
+Nmap scan report for pi-node3.lan (192.168.1.14)
+Host is up (0.0012s latency).
+MAC Address: E4:5F:01:77:88:99 (Raspberry Pi Trading)
+NMAPOUT
+
+# Drive the real scan path with recorded nmap output rather than copying the
+# extraction expression into this file — a test that re-implements what it
+# checks passes whether or not the shipped code is right.
+export ROOTFORGE_NMAP_OUTPUT="$SANDBOX/nmap.txt"
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh" scan
+FLEET="$ROOTFORGE_HOME/devices/pi-fleet.txt"
+assert_eq "scan succeeds" "$RC" "0"
+assert_eq "all three Pis are found, PTR or not" "$(wc -l < "$FLEET" | tr -d ' ')" "3"
+assert_contains "a Pi without reverse DNS is included" "$(cat "$FLEET")" "192.168.1.9"
+assert_contains "a Pi with reverse DNS is included" "$(cat "$FLEET")" "192.168.1.5"
+assert_contains "a third Pi is included" "$(cat "$FLEET")" "192.168.1.14"
+
+new_sandbox
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh"
+assert_eq "no subcommand is rejected" "$RC" "1"
+
+new_sandbox
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh" bogus-subcommand
+assert_eq "unknown subcommand is rejected" "$RC" "1"
+assert_contains "unknown subcommand prints usage" "$OUT" "Usage:"
+
+new_sandbox
+# `run` with no hosts and no prior scan must fail rather than silently
+# iterating over nothing.
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh" run "uptime"
+assert_eq "run with no hosts and no scan file is rejected" "$RC" "1"
+
+new_sandbox
+# A fleet file of only blank lines used to produce `ssh pi@` per line.
+mkdir -p "$ROOTFORGE_HOME/devices"
+printf '\n\n   \n' > "$ROOTFORGE_HOME/devices/pi-fleet.txt"
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh" run "uptime"
+assert_eq "an all-blank fleet file is rejected" "$RC" "1"
+assert_contains "an all-blank fleet file says so" "$OUT" "No usable hosts"
+
+new_sandbox
+# Every host failing must not exit 0: ssh to a reserved-for-doc address
+# fails fast under ConnectTimeout.
+mkdir -p "$ROOTFORGE_HOME/devices"
+printf '192.0.2.1\n' > "$ROOTFORGE_HOME/devices/pi-fleet.txt"
+run_script bash "$BIN_DIR/rpi_fleet_tools.sh" run "true"
+assert_eq "a run where every host fails exits non-zero" "$RC" "1"
+assert_contains "a failed run names the hosts" "$OUT" "host(s) failed"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox
