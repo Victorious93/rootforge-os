@@ -62,7 +62,7 @@ rootforge-os/
     │   │                    avbtool/mkbootimg's wrapper scripts)
     │   ├── etc/udev/        Android USB rules
     │   ├── etc/systemd/     first-boot service
-    │   ├── usr/local/bin/   all 29 automation scripts (incl. `rootforge`,
+    │   ├── usr/local/bin/   all 30 automation scripts (incl. `rootforge`,
     │   │                    the thin wrapper for usr/local/lib/rootforge/core/,
     │   │                    and `brain`, the second-brain CLI wrapper)
     │   ├── usr/local/lib/rootforge/core/  rootforge CLI's Python package —
@@ -109,6 +109,40 @@ against real hardware. `HOME` is redirected per test, so nothing touches your re
 
 The same suite runs in CI (the `tests` job in `.github/workflows/lint.yml`).
 
+## Adding a command: prefer the CLI over a new script
+
+New user-facing functionality should be a `rootforge` subcommand, not another
+standalone script in `usr/local/bin/`.
+
+The reason is concrete. Every bug sweep over the existing scripts re-found the
+same four shell-specific failures, in a different file each time:
+
+| Failure | In shell | In argparse |
+|---|---|---|
+| Missing option value | `"$2"` under `set -u` → raw "unbound variable" | rejected, names the option |
+| Unknown flag | no catch-all `*)` arm → runs with defaults, silently | rejected, names the flag |
+| Lying exit code | failures logged then discarded → exits 0 | the wrapper passes the real code through |
+| `pipefail` abort | dies before its own error message | not applicable |
+
+Each needs a hand-written guard in every script, and every new script is a
+fresh chance to forget one. `argparse` handles all four structurally.
+
+The pattern, from `rootforge/core/module.py`:
+
+1. A module per command group, exposing `add_parser(subparsers)` and
+   `dispatch(args)`. The group owns its parser, so adding one doesn't mean
+   editing a growing if/elif in `cli.py`.
+2. Validation as argparse `type=` functions. Reject before anything runs, and
+   make the message name the rule (`valid_module_id` cites the linter's).
+3. Delegate the actual work to the existing script through
+   `runner.exec_script(name, [args])` — a **list**, never a string, so a value
+   containing spaces cannot re-split.
+4. Pass the script's exit code through untouched. Several of these use
+   non-zero to report a finding rather than a crash.
+
+Wrap, don't rewrite: `docs/IMPLEMENTATION_PLAN.md` is explicit that the shell
+scripts keep working standalone until a wrapped path is proven equivalent.
+
 ## Adding a script
 
 1. Write it to `config/includes.chroot/usr/local/bin/your_script.sh`
@@ -149,6 +183,34 @@ reimplemented inconsistently across scripts:
 | `rf_write_private` | Writing a secrets file that is 0600 from the moment it exists |
 
 Keep it small. A helper belongs here when a second script needs it, not before.
+
+## The two Android on-device flavours
+
+`termux/build-rootfs.sh --flavor proot|chroot` builds two different rootfs
+images, and they are not interchangeable:
+
+- **proot** — unrooted. Runs under `proot-distro`; PRoot fakes uid 0 by
+  intercepting syscalls with `ptrace`.
+- **chroot** — rooted. A real `chroot(2)` entered via `su`, launched by
+  `termux/rootforge-chroot.sh`.
+
+The flavour decides which scripts get copied in (`EXCLUDE_SCRIPTS` in
+build-rootfs.sh). When adding a script, decide which flavours can actually
+run it, and remember the distinction that governs it: **both run on Android's
+own kernel.** Root gives you uid 0 and real device nodes; it does not give
+you a different kernel. So
+
+- needs only files → both flavours
+- needs a real device node (`/dev/net/tun`, loop, USB) → chroot only
+- needs a kernel subsystem Android doesn't ship (AppArmor, auditd, nftables,
+  USBGuard, KVM) → neither, however rooted the phone is
+
+Shipping a script in the chroot flavour that needs the third category would
+be promising something the environment cannot deliver. `harden_kernel.sh`
+and `harden_system.sh` are excluded from both for exactly that reason.
+
+The capability matrix in README section 17 is the user-facing version of
+this; keep the two in step.
 
 ## Downloading things in a script or hook
 

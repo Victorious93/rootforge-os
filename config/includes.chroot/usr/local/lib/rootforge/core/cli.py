@@ -11,7 +11,7 @@ import json
 import sys
 from typing import Optional, Sequence
 
-from rootforge.core import __version__
+from rootforge.core import __version__, module as module_cmd
 from rootforge.core.devices import list_devices
 from rootforge.core.doctor import run_doctor
 
@@ -52,6 +52,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Also query each device for codename/slot/lock state (slower).",
     )
+
+    # P2 of docs/IMPLEMENTATION_PLAN.md: command groups that wrap the
+    # standalone scripts. Each group owns its own parser so adding one does
+    # not mean editing a growing if/elif here.
+    module_cmd.add_parser(subparsers)
 
     return parser
 
@@ -102,6 +107,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return run_doctor(as_json=args.json, quiet=args.quiet, strict=args.strict)
     if args.command == "devices":
         return cmd_devices(args)
+    if args.command == "module":
+        return module_cmd.dispatch(args)
 
     parser.print_help()
     return 0

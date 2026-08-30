@@ -855,6 +855,184 @@ assert_eq "an unknown target is refused" "$RC" "1"
 assert_contains "an unknown target lists the real ones" "$OUT" "expected magisk, kernelsu or xposed"
 drop_sandbox
 
+section "Termux variants — build flavours"
+
+new_sandbox
+BUILD="$REPO_ROOT/termux/build-rootfs.sh"
+run_script bash "$BUILD" --flavor bogus
+assert_eq "an unknown flavour is rejected" "$RC" "1"
+assert_contains "an unknown flavour lists the real ones" "$OUT" "expected proot or chroot"
+
+new_sandbox
+run_script bash "$BUILD" --flavor
+assert_eq "--flavor without a value is rejected" "$RC" "1"
+
+new_sandbox
+run_script bash "$BUILD" --bogus-flag
+assert_eq "an unknown flag is rejected" "$RC" "1"
+
+new_sandbox
+run_script bash "$BUILD" --help
+assert_eq "--help succeeds" "$RC" "0"
+assert_contains "--help documents both flavours" "$OUT" "flavor proot|chroot"
+assert_contains "--help documents the desktop layer" "$OUT" "with-x11"
+
+# The flavours differ in which scripts they ship. That difference is the
+# whole point of having two, so pin it: the chroot flavour keeps the network
+# scripts (a real /dev gives it /dev/net/tun), both drop the kernel-hardening
+# ones (Android's kernel ships none of what they drive, rooted or not).
+assert_contains "chroot keeps the VPN scripts" \
+  "$(sed -n '/FLAVOR" == "chroot"/,/^fi$/p' "$BUILD")" 'EXCLUDE_SCRIPTS="00_bootstrap_distro.sh harden_kernel.sh harden_system.sh"'
+assert_contains "proot drops the VPN scripts too" \
+  "$(sed -n '/FLAVOR" == "chroot"/,/^fi$/p' "$BUILD")" "setup_vpn.sh join_headscale.sh"
+assert_contains "both drop harden_kernel.sh" "$(cat "$BUILD")" "harden_kernel.sh"
+drop_sandbox
+
+section "Termux variants — X11 desktop launcher"
+
+new_sandbox
+DESKTOP="$BIN_DIR/rootforge_desktop.sh"
+run_script bash "$DESKTOP" --bogus
+assert_eq "an unknown argument is rejected" "$RC" "1"
+assert_contains "an unknown argument lists the real ones" "$OUT" "expected --start, --check, --install"
+
+new_sandbox
+export ROOTFORGE_X11_SOCKET_DIR="$SANDBOX/nope"
+run_script bash "$DESKTOP" --check
+assert_eq "--check reports without failing" "$RC" "0"
+assert_contains "--check names the missing socket dir" "$OUT" "missing"
+assert_contains "--check tells you about --shared-tmp" "$OUT" "shared-tmp"
+
+new_sandbox
+# The socket directory existing but empty is the other common failure: the
+# user logged in correctly but never opened the Termux:X11 app.
+mkdir -p "$SANDBOX/x11"
+export ROOTFORGE_X11_SOCKET_DIR="$SANDBOX/x11"
+run_script bash "$DESKTOP" --check
+assert_contains "--check distinguishes an empty socket dir from a missing one" "$OUT" "directory exists but is empty"
+
+new_sandbox
+export ROOTFORGE_X11_SOCKET_DIR="$SANDBOX/nope"
+run_script bash "$DESKTOP" --start
+assert_eq "starting with no desktop installed fails" "$RC" "1"
+assert_contains "starting with no desktop says how to get one" "$OUT" "--install"
+drop_sandbox
+
+section "Termux variants — rooted chroot launcher"
+
+new_sandbox
+CHROOT_LAUNCHER="$REPO_ROOT/termux/rootforge-chroot.sh"
+run_script bash "$CHROOT_LAUNCHER" bogus-command
+assert_eq "an unknown command is rejected" "$RC" "1"
+assert_contains "an unknown command lists the real ones" "$OUT" "expected install, login, umount"
+
+new_sandbox
+run_script bash "$CHROOT_LAUNCHER"
+assert_eq "no command exits non-zero" "$RC" "1"
+assert_contains "no command prints usage" "$OUT" "Usage"
+
+new_sandbox
+# An unrooted Termux has no `su` at all, and the launcher must say so and
+# point at the PRoot variant rather than failing deep inside a mount.
+#
+# Isolating that needs care: /bin/su exists on the test host, so leaving it on
+# PATH sends the script down its other branch — and this container runs as
+# root, so su there even succeeds, which would make the assertion pass for the
+# wrong reason. But emptying PATH hides `bash` too. A directory holding only
+# the interpreter gives a PATH with bash and without su.
+mkdir -p "$SANDBOX/nosu-bin"
+ln -sf "$(command -v bash)" "$SANDBOX/nosu-bin/bash"
+OUT="$(cd "$SANDBOX" && PATH="$SANDBOX/nosu-bin" "$SANDBOX/nosu-bin/bash" "$CHROOT_LAUNCHER" login 2>&1 </dev/null)"; RC=$?
+assert_eq "no su present is refused" "$RC" "1"
+assert_contains "no su present points at the PRoot variant" "$OUT" "proot-distro login rootforge"
+
+new_sandbox
+export PATH="$SANDBOX:$ORIGINAL_PATH"
+run_script bash "$CHROOT_LAUNCHER" install
+assert_eq "install with no tarball is rejected" "$RC" "1"
+assert_contains "install with no tarball prints usage" "$OUT" "install <rootfs.tar.xz>"
+
+new_sandbox
+# Android's `su -c` takes one string, so every privileged command in this
+# launcher is built as text and re-parsed by a shell. ROOTFORGE_CHROOT_DIR is
+# user-settable, so that quoting has to survive spaces and quotes. A first
+# draft of rf_q used a sed pipeline with two backslashes where it needed
+# four; that collapses to ''' and silently breaks the first path containing a
+# quote while still reading as correct.
+eval "$(sed -n '/^rf_q()/,/^}/p' "$CHROOT_LAUNCHER")"
+SQ="'"
+for hostile in "/data/local/rootforge" "/data/local/my dir" '/data/local/a$HOME' '/data/local/"dq"' '/data/local/back\slash'; do
+  got="$(sh -c "printf %s $(rf_q "$hostile")")"
+  assert_eq "rf_q round-trips [$hostile]" "$got" "$hostile"
+done
+QUOTED="/data/local/o${SQ}brien"
+got="$(sh -c "printf %s $(rf_q "$QUOTED")")"
+assert_eq "rf_q round-trips a path containing a quote" "$got" "$QUOTED"
+
+rm -f "$SANDBOX/pwned"
+EVIL="/data/local/x${SQ};touch $SANDBOX/pwned;${SQ}"
+sh -c "printf %s $(rf_q "$EVIL")" >/dev/null 2>&1 || true
+if [ -f "$SANDBOX/pwned" ]; then
+  fail "rf_q blocks command injection through a rootfs path" "the payload executed"
+else
+  pass "rf_q blocks command injection through a rootfs path"
+fi
+drop_sandbox
+
+section "rootforge module — the wrapped path end to end"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+RF() { python3 -m rootforge.core.cli "$@"; }
+
+# Scaffold -> lint -> build, driven through the CLI rather than the scripts,
+# so the wrapper is exercised as shipped.
+OUT="$(cd "$SANDBOX" && RF module scaffold mymod "My Module" --target magisk 2>&1)"; RC=$?
+assert_eq "module scaffold succeeds" "$RC" "0"
+assert_contains "module scaffold reports where it landed" "$OUT" "modules/mymod"
+
+OUT="$(cd "$SANDBOX" && RF module lint "$ROOTFORGE_HOME/modules/mymod" 2>&1)"; RC=$?
+assert_eq "a CLI-scaffolded module lints clean" "$RC" "0"
+assert_contains "lint reports PASS" "$OUT" "PASS"
+
+OUT="$(cd "$SANDBOX" && RF module build mymod 2>&1)"; RC=$?
+assert_eq "module build succeeds" "$RC" "0"
+
+# The wrapper must not swallow a real failure into a success.
+mkdir -p "$SANDBOX/broken"
+printf 'id=x\n' > "$SANDBOX/broken/module.prop"
+OUT="$(cd "$SANDBOX" && RF module lint "$SANDBOX/broken" 2>&1)"; RC=$?
+assert_eq "a failing lint propagates its exit code" "$RC" "1"
+
+# The four shell failure modes, now rejected by argparse before any script
+# runs. Each was a real bug found in the hand-written parsing.
+OUT="$(cd "$SANDBOX" && RF module build mymod --framework 2>&1)"; RC=$?
+assert_eq "a missing option value is rejected" "$RC" "2"
+assert_contains "a missing option value names the option" "$OUT" "--framework"
+
+OUT="$(cd "$SANDBOX" && RF module build mymod --frmework magisk 2>&1)"; RC=$?
+assert_eq "an unknown flag is rejected, not ignored" "$RC" "2"
+assert_contains "an unknown flag is named" "$OUT" "unrecognized arguments"
+
+OUT="$(cd "$SANDBOX" && RF module 2>&1)"; RC=$?
+assert_eq "a missing subcommand is rejected" "$RC" "2"
+
+OUT="$(cd "$SANDBOX" && RF module scaffold '9bad!' "Bad" 2>&1)"; RC=$?
+assert_eq "an id the linter would reject never reaches the shell" "$RC" "2"
+assert_contains "the id error cites the linter's rule" "$OUT" "lint_module.sh"
+if [ -d "$ROOTFORGE_HOME/modules/9bad!" ]; then
+  fail "a rejected id creates nothing" "the directory was created anyway"
+else
+  pass "a rejected id creates nothing"
+fi
+
+# A display name with spaces must stay one argument through the wrapper.
+OUT="$(cd "$SANDBOX" && RF module scaffold spacedmod "Name With Spaces" 2>&1)"; RC=$?
+assert_eq "a display name with spaces scaffolds" "$RC" "0"
+assert_contains "the spaced name reaches module.prop intact" \
+  "$(cat "$ROOTFORGE_HOME/modules/spacedmod/module.prop")" "name=Name With Spaces"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox
