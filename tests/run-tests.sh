@@ -979,6 +979,60 @@ else
 fi
 drop_sandbox
 
+section "rootforge module — the wrapped path end to end"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+RF() { python3 -m rootforge.core.cli "$@"; }
+
+# Scaffold -> lint -> build, driven through the CLI rather than the scripts,
+# so the wrapper is exercised as shipped.
+OUT="$(cd "$SANDBOX" && RF module scaffold mymod "My Module" --target magisk 2>&1)"; RC=$?
+assert_eq "module scaffold succeeds" "$RC" "0"
+assert_contains "module scaffold reports where it landed" "$OUT" "modules/mymod"
+
+OUT="$(cd "$SANDBOX" && RF module lint "$ROOTFORGE_HOME/modules/mymod" 2>&1)"; RC=$?
+assert_eq "a CLI-scaffolded module lints clean" "$RC" "0"
+assert_contains "lint reports PASS" "$OUT" "PASS"
+
+OUT="$(cd "$SANDBOX" && RF module build mymod 2>&1)"; RC=$?
+assert_eq "module build succeeds" "$RC" "0"
+
+# The wrapper must not swallow a real failure into a success.
+mkdir -p "$SANDBOX/broken"
+printf 'id=x\n' > "$SANDBOX/broken/module.prop"
+OUT="$(cd "$SANDBOX" && RF module lint "$SANDBOX/broken" 2>&1)"; RC=$?
+assert_eq "a failing lint propagates its exit code" "$RC" "1"
+
+# The four shell failure modes, now rejected by argparse before any script
+# runs. Each was a real bug found in the hand-written parsing.
+OUT="$(cd "$SANDBOX" && RF module build mymod --framework 2>&1)"; RC=$?
+assert_eq "a missing option value is rejected" "$RC" "2"
+assert_contains "a missing option value names the option" "$OUT" "--framework"
+
+OUT="$(cd "$SANDBOX" && RF module build mymod --frmework magisk 2>&1)"; RC=$?
+assert_eq "an unknown flag is rejected, not ignored" "$RC" "2"
+assert_contains "an unknown flag is named" "$OUT" "unrecognized arguments"
+
+OUT="$(cd "$SANDBOX" && RF module 2>&1)"; RC=$?
+assert_eq "a missing subcommand is rejected" "$RC" "2"
+
+OUT="$(cd "$SANDBOX" && RF module scaffold '9bad!' "Bad" 2>&1)"; RC=$?
+assert_eq "an id the linter would reject never reaches the shell" "$RC" "2"
+assert_contains "the id error cites the linter's rule" "$OUT" "lint_module.sh"
+if [ -d "$ROOTFORGE_HOME/modules/9bad!" ]; then
+  fail "a rejected id creates nothing" "the directory was created anyway"
+else
+  pass "a rejected id creates nothing"
+fi
+
+# A display name with spaces must stay one argument through the wrapper.
+OUT="$(cd "$SANDBOX" && RF module scaffold spacedmod "Name With Spaces" 2>&1)"; RC=$?
+assert_eq "a display name with spaces scaffolds" "$RC" "0"
+assert_contains "the spaced name reaches module.prop intact" \
+  "$(cat "$ROOTFORGE_HOME/modules/spacedmod/module.prop")" "name=Name With Spaces"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox

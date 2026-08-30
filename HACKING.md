@@ -109,6 +109,40 @@ against real hardware. `HOME` is redirected per test, so nothing touches your re
 
 The same suite runs in CI (the `tests` job in `.github/workflows/lint.yml`).
 
+## Adding a command: prefer the CLI over a new script
+
+New user-facing functionality should be a `rootforge` subcommand, not another
+standalone script in `usr/local/bin/`.
+
+The reason is concrete. Every bug sweep over the existing scripts re-found the
+same four shell-specific failures, in a different file each time:
+
+| Failure | In shell | In argparse |
+|---|---|---|
+| Missing option value | `"$2"` under `set -u` → raw "unbound variable" | rejected, names the option |
+| Unknown flag | no catch-all `*)` arm → runs with defaults, silently | rejected, names the flag |
+| Lying exit code | failures logged then discarded → exits 0 | the wrapper passes the real code through |
+| `pipefail` abort | dies before its own error message | not applicable |
+
+Each needs a hand-written guard in every script, and every new script is a
+fresh chance to forget one. `argparse` handles all four structurally.
+
+The pattern, from `rootforge/core/module.py`:
+
+1. A module per command group, exposing `add_parser(subparsers)` and
+   `dispatch(args)`. The group owns its parser, so adding one doesn't mean
+   editing a growing if/elif in `cli.py`.
+2. Validation as argparse `type=` functions. Reject before anything runs, and
+   make the message name the rule (`valid_module_id` cites the linter's).
+3. Delegate the actual work to the existing script through
+   `runner.exec_script(name, [args])` — a **list**, never a string, so a value
+   containing spaces cannot re-split.
+4. Pass the script's exit code through untouched. Several of these use
+   non-zero to report a finding rather than a crash.
+
+Wrap, don't rewrite: `docs/IMPLEMENTATION_PLAN.md` is explicit that the shell
+scripts keep working standalone until a wrapped path is proven equivalent.
+
 ## Adding a script
 
 1. Write it to `config/includes.chroot/usr/local/bin/your_script.sh`
