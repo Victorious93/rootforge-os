@@ -779,6 +779,40 @@ assert_eq "a run where every host fails exits non-zero" "$RC" "1"
 assert_contains "a failed run names the hosts" "$OUT" "host(s) failed"
 drop_sandbox
 
+section "check_root_detection.sh — silence is not a pass"
+
+new_sandbox
+# Every probe in this script concludes "clean" from empty output. A device
+# whose `pm list packages` or mountinfo query returns nothing therefore used
+# to be reported as fully clean — the worst direction to fail in for a tool
+# whose entire job is telling you whether your hiding config holds.
+cp "$STUB_DIR/adb-quiet-probes" "$SANDBOX/adb"
+chmod +x "$SANDBOX/adb"
+export PATH="$SANDBOX:$ORIGINAL_PATH"
+run_script bash "$BIN_DIR/check_root_detection.sh"
+assert_contains "an empty package list is reported as unknown, not clean" "$OUT" \
+  "'pm list packages' returned nothing"
+assert_contains "unreadable mountinfo is reported as unknown, not clean" "$OUT" \
+  "mountinfo came back empty"
+assert_not_contains "the empty package probe no longer reports a pass" "$OUT" \
+  "**PASS** — known root manager package names"
+assert_not_contains "the empty mount probe no longer reports a pass" "$OUT" \
+  "**PASS** — mount namespace leak"
+# The probes that genuinely ran must still pass, so this isn't just blanket
+# pessimism.
+assert_contains "a probe that really ran still passes" "$OUT" "**PASS** — ro.build.tags"
+
+new_sandbox
+# A device that answers nothing at all must be refused outright rather than
+# producing a report at all.
+printf '#!/bin/sh\ncase "$1" in wait-for-device) exit 0;; *) exit 1;; esac\n' > "$SANDBOX/adb"
+chmod +x "$SANDBOX/adb"
+export PATH="$SANDBOX:$ORIGINAL_PATH"
+run_script bash "$BIN_DIR/check_root_detection.sh"
+assert_eq "an unreachable device is refused" "$RC" "1"
+assert_contains "an unreachable device explains why no report is produced" "$OUT" "Cannot reach the device"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox
