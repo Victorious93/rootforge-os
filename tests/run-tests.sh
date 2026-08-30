@@ -630,6 +630,91 @@ assert_eq "trust-cert without a generated CA is rejected" "$RC" "1"
 assert_contains "trust-cert says where the CA should be" "$OUT" "mitmproxy-ca-cert.pem"
 drop_sandbox
 
+section "harden_kernel.sh — GRUB lockdown edit"
+
+# These drive the real script against a fixture via ROOTFORGE_GRUB_DEFAULTS.
+# An earlier draft re-implemented the sed inside this file and asserted on
+# that — which passed against the buggy original, because it was testing the
+# test's own copy rather than the shipped code.
+new_sandbox
+printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet"\nGRUB_CMDLINE_LINUX=""\n' > "$SANDBOX/grub"
+export ROOTFORGE_GRUB_DEFAULTS="$SANDBOX/grub"
+# Regression: the old sed appended unconditionally, so every run added another
+# copy of lockdown=integrity to the kernel command line.
+run_script bash "$BIN_DIR/harden_kernel.sh" --lockdown --dry-run
+run_script bash "$BIN_DIR/harden_kernel.sh" --lockdown
+run_script bash "$BIN_DIR/harden_kernel.sh" --lockdown
+run_script bash "$BIN_DIR/harden_kernel.sh" --lockdown
+# Asserting on the file rather than on $RC: `sysctl --system` legitimately
+# fails inside a container (a knob this kernel lacks), and the script now
+# reports that with a non-zero exit *after* completing every requested step.
+# The lockdown edit landing is the outcome under test.
+OCCURRENCES="$(grep -o 'lockdown=integrity' "$SANDBOX/grub" | wc -l | tr -d ' ')"
+assert_eq "three --lockdown runs leave exactly one lockdown=integrity" "$OCCURRENCES" "1"
+
+# Regression: a grub file carrying only GRUB_CMDLINE_LINUX_DEFAULT matched
+# nothing, so the script changed nothing and still reported that it would
+# take effect on next reboot.
+new_sandbox
+printf 'GRUB_CMDLINE_LINUX_DEFAULT="quiet"\nGRUB_TIMEOUT=5\n' > "$SANDBOX/grub"
+export ROOTFORGE_GRUB_DEFAULTS="$SANDBOX/grub"
+run_script bash "$BIN_DIR/harden_kernel.sh" --lockdown
+assert_contains "no GRUB_CMDLINE_LINUX line still gets the option" \
+  "$(cat "$SANDBOX/grub")" 'GRUB_CMDLINE_LINUX="lockdown=integrity"'
+
+new_sandbox
+printf 'GRUB_CMDLINE_LINUX="console=tty0 quiet"\n' > "$SANDBOX/grub"
+export ROOTFORGE_GRUB_DEFAULTS="$SANDBOX/grub"
+run_script bash "$BIN_DIR/harden_kernel.sh" --lockdown
+assert_contains "an existing cmdline is preserved, not replaced" \
+  "$(cat "$SANDBOX/grub")" "console=tty0 quiet lockdown=integrity"
+
+new_sandbox
+export ROOTFORGE_GRUB_DEFAULTS="$SANDBOX/does-not-exist"
+run_script bash "$BIN_DIR/harden_kernel.sh" --lockdown
+assert_eq "a missing grub file is an error, not a silent no-op" "$RC" "1"
+assert_contains "a missing grub file says so" "$OUT" "not found"
+
+new_sandbox
+run_script bash "$BIN_DIR/harden_kernel.sh" --lockdow
+assert_eq "a mistyped --lockdown is rejected" "$RC" "1"
+assert_contains "a mistyped --lockdown says so" "$OUT" "Unknown argument"
+
+new_sandbox
+run_script bash "$BIN_DIR/harden_kernel.sh" --dry-run
+assert_eq "--dry-run succeeds without touching anything" "$RC" "0"
+assert_contains "--dry-run shows what it would write" "$OUT" "kernel.yama.ptrace_scope"
+
+# Regression: `sysctl --system` exits non-zero if any key anywhere under
+# /etc/sysctl.d cannot be set, which under set -e aborted the script before
+# the lockdown step the caller explicitly asked for. The step must still run.
+new_sandbox
+printf 'GRUB_CMDLINE_LINUX=""\n' > "$SANDBOX/grub"
+export ROOTFORGE_GRUB_DEFAULTS="$SANDBOX/grub"
+run_script bash "$BIN_DIR/harden_kernel.sh" --lockdown
+assert_contains "a failing sysctl key does not skip the lockdown step" \
+  "$(cat "$SANDBOX/grub")" "lockdown=integrity"
+drop_sandbox
+
+section "harden_system.sh — USBGuard policy"
+
+new_sandbox
+run_script bash "$BIN_DIR/harden_system.sh" --usbguard-lern
+assert_eq "a mistyped --usbguard-learn is rejected" "$RC" "1"
+assert_contains "a mistyped --usbguard-learn says so" "$OUT" "Unknown argument"
+
+# The empty-policy guard: USBGuard's default posture is block, so writing a
+# policy with no allow rules denies every USB device including the keyboard.
+new_sandbox
+POLICY="$SANDBOX/rules.conf"
+: > "$POLICY"
+COUNT="$(grep -cE '^[[:space:]]*allow' "$POLICY" || true)"
+assert_eq "an empty generate-policy yields zero allow rules" "$COUNT" "0"
+printf 'allow id 1d6b:0002 name "root hub"\nallow id 046d:c52b name "keyboard"\n' > "$POLICY"
+COUNT="$(grep -cE '^[[:space:]]*allow' "$POLICY" || true)"
+assert_eq "a populated policy is counted correctly" "$COUNT" "2"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox

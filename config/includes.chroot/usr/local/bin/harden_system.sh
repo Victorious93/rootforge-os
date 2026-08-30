@@ -16,8 +16,22 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
+# Only $1 was ever looked at, and an unrecognized argument was ignored, so
+# `--usbguard-lern` ran the script without learning and reported success.
 USBGUARD_LEARN=0
-[[ "${1:-}" == "--usbguard-learn" ]] && USBGUARD_LEARN=1
+for arg in "$@"; do
+  case "$arg" in
+    --usbguard-learn) USBGUARD_LEARN=1 ;;
+    -h|--help)
+      echo "Usage: harden_system.sh [--usbguard-learn]"
+      exit 0
+      ;;
+    *) echo "Unknown argument: $arg (expected --usbguard-learn)" >&2; exit 1 ;;
+  esac
+done
 
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
@@ -50,14 +64,51 @@ log "  use --usbguard-learn once with only trusted gear connected first."
 
 if [[ $USBGUARD_LEARN -eq 1 ]]; then
   log "Generating allow-list from currently connected devices"
-  sudo usbguard generate-policy | sudo tee /etc/usbguard/rules.conf > /dev/null
+
+  # This wrote generate-policy's output straight over rules.conf. USBGuard's
+  # default ImplicitPolicyTarget is "block", so an empty or near-empty
+  # rules.conf means *every* USB device is denied — including the keyboard
+  # you would need to fix it with. `generate-policy` legitimately produces
+  # nothing when nothing is plugged in, and that emptiness is not an error,
+  # so nothing caught it. Build the policy in a temp file and check it
+  # before it replaces anything.
+  USBGUARD_TMP="$(mktemp)"
+  trap 'rm -f "$USBGUARD_TMP"' EXIT
+  sudo usbguard generate-policy > "$USBGUARD_TMP"
+
+  RULE_COUNT="$(grep -cE '^[[:space:]]*allow' "$USBGUARD_TMP" || true)"
+  if [[ "$RULE_COUNT" -eq 0 ]]; then
+    log "ERROR: 'usbguard generate-policy' produced no allow rules."
+    log "       Writing that as the policy would block every USB device on this box,"
+    log "       keyboard included, with USBGuard's default block posture."
+    log "       Plug in the devices you want allowed and re-run. Nothing was changed."
+    exit 1
+  fi
+
+  log "Generated $RULE_COUNT allow rule(s) from the currently connected devices."
+  log "Everything NOT connected right now will be blocked once USBGuard is enabled."
+  if ! rf_confirm USBGUARD \
+      "" \
+      "About to replace /etc/usbguard/rules.conf and enable USBGuard." \
+      "Devices allowed by the new policy ($RULE_COUNT rule(s)):" \
+      "$(grep -E '^[[:space:]]*allow' "$USBGUARD_TMP" | sed 's/^/  /' | head -20)" \
+      "" \
+      "A USB keyboard or mouse not in that list will stop working after this."; then
+    log "Confirmation not given — aborting. USBGuard policy unchanged."
+    exit 1
+  fi
+
+  sudo cp "$USBGUARD_TMP" /etc/usbguard/rules.conf
+  sudo chmod 600 /etc/usbguard/rules.conf
   log "Policy written from current device snapshot. Review /etc/usbguard/rules.conf"
   log "  before relying on it — this allow-lists whatever was plugged in just now."
+  sudo systemctl enable --now usbguard 2>&1 | tee -a "$LOG_FILE"
 else
-  log "Leaving existing/default USBGuard policy in place. Run with"
-  log "  --usbguard-learn to generate a fresh allow-list from connected devices."
+  log "Leaving existing/default USBGuard policy in place, and NOT enabling the"
+  log "  service — enabling it against an empty policy would block every USB"
+  log "  device on this box. Run with --usbguard-learn (with your trusted"
+  log "  devices connected) to generate an allow-list and enable it."
 fi
-sudo systemctl enable --now usbguard 2>&1 | tee -a "$LOG_FILE"
 
 # ---- auditd ---------------------------------------------------------------
 log "Configuring auditd baseline rules"
