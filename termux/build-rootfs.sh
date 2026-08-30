@@ -26,13 +26,60 @@
 # binfmt registration; building natively on an arm64 host skips that step.
 #
 # Usage: sudo termux/build-rootfs.sh [arm64|amd64] [output-dir]
+#                                     [--flavor proot|chroot] [--with-x11]
 #   arm64 (default) — real Android hardware, almost always arm64
 #   amd64           — x86 Android devices, or a desktop-Linux PRoot sandbox
+#
+#   --flavor proot  (default) unrooted device: runs under proot-distro.
+#   --flavor chroot rooted device: runs in a real chroot via `su`, launched by
+#                   termux/rootforge-chroot.sh. The rootfs contents differ:
+#                   the chroot flavor keeps the scripts that need real device
+#                   nodes (VPN over /dev/net/tun, loop-mounting a partition
+#                   image, USB adb/fastboot), which PRoot cannot provide.
+#                   It does NOT keep harden_kernel.sh/harden_system.sh: those
+#                   need kernel subsystems (AppArmor, auditd, nftables,
+#                   USBGuard) that Android kernels do not ship, and root does
+#                   not change which kernel you are on.
+#
+#   --with-x11      also install the XFCE desktop layer, for use with the
+#                   Termux:X11 app. Roughly triples the tarball, hence opt-in.
 
 set -euo pipefail
 
-ARCH="${1:-arm64}"
-OUT_DIR="${2:-$(pwd)/dist}"
+ARCH="arm64"
+OUT_DIR="$(pwd)/dist"
+FLAVOR="proot"
+WITH_X11=0
+
+# Positional arch and output-dir are kept for backward compatibility with the
+# documented `build-rootfs.sh arm64 /some/dir` form; flags may follow them in
+# any order.
+POSITIONAL=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --flavor)
+      [[ $# -ge 2 ]] || { echo "--flavor needs a value (proot|chroot)" >&2; exit 1; }
+      FLAVOR="$2"; shift 2 ;;
+    --with-x11) WITH_X11=1; shift ;;
+    -h|--help)
+      sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    -*) echo "Unknown option: $1" >&2; exit 1 ;;
+    *)
+      case $POSITIONAL in
+        0) ARCH="$1" ;;
+        1) OUT_DIR="$1" ;;
+        *) echo "Unexpected argument: $1" >&2; exit 1 ;;
+      esac
+      POSITIONAL=$((POSITIONAL + 1))
+      shift ;;
+  esac
+done
+
+case "$FLAVOR" in
+  proot|chroot) ;;
+  *) echo "Unknown flavor '$FLAVOR' — expected proot or chroot" >&2; exit 1 ;;
+esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STAMP="$(date +%Y%m%d_%H%M%S)"
@@ -116,6 +163,13 @@ PKGLIST="$(grep -v '^#' "$SCRIPT_DIR/package-lists/rootforge-proot.list.chroot" 
 # shellcheck disable=SC2086
 DEBIAN_FRONTEND=noninteractive chroot "$ROOTFS" apt-get install -y --no-install-recommends $PKGLIST
 
+if [[ $WITH_X11 -eq 1 ]]; then
+  log "Installing the X11 desktop layer (--with-x11)"
+  X11LIST="$(grep -v '^#' "$SCRIPT_DIR/package-lists/rootforge-x11.list.chroot" | grep -v '^[[:space:]]*$')"
+  # shellcheck disable=SC2086
+  DEBIAN_FRONTEND=noninteractive chroot "$ROOTFS" apt-get install -y --no-install-recommends $X11LIST
+fi
+
 log "Stage 3: running build-time hooks shared with the full ISO"
 mkdir -p "$ROOTFS/hooks"
 SHARED_HOOKS="0010-nodesource 0020-ollama 0030-claude-code 0050-starship-eza
@@ -131,7 +185,24 @@ rm -rf "$ROOTFS/hooks"
 
 log "Stage 4: copying RootForge scripts (dropping root/kernel-only ones)"
 mkdir -p "$ROOTFS/usr/local/bin" "$ROOTFS/usr/local/share/rootforge" "$ROOTFS/etc/profile.d"
-EXCLUDE_SCRIPTS="00_bootstrap_distro.sh harden_kernel.sh harden_system.sh setup_vpn.sh join_headscale.sh"
+# What each flavor can actually run.
+#
+# Both drop the kernel-hardening scripts and 00_bootstrap_distro.sh. That is
+# not about root: harden_kernel.sh edits GRUB and sets sysctls on a kernel
+# you control, and harden_system.sh drives AppArmor, auditd, nftables and
+# USBGuard. Android kernels ship none of those (SELinux instead), and there
+# is no GRUB on a phone. A rooted device is still running Android's kernel,
+# so root does not bring them back — shipping them in the chroot flavor
+# would just be a promise the environment cannot keep.
+#
+# The chroot flavor DOES keep the network scripts: a real chroot with /dev
+# bind-mounted has /dev/net/tun, which is what a userspace WireGuard or
+# tailscaled actually needs.
+if [[ "$FLAVOR" == "chroot" ]]; then
+  EXCLUDE_SCRIPTS="00_bootstrap_distro.sh harden_kernel.sh harden_system.sh"
+else
+  EXCLUDE_SCRIPTS="00_bootstrap_distro.sh harden_kernel.sh harden_system.sh setup_vpn.sh join_headscale.sh"
+fi
 # [Certain] plain *.sh was silently dropping extensionless wrappers like
 # rootforge and brain (same convention as avbtool/mkbootimg: a thin wrapper
 # in usr/local/bin/ with no extension, calling into usr/local/lib/rootforge/)
@@ -162,7 +233,17 @@ if [[ -d "$REPO_ROOT/config/includes.chroot/etc/skel/second-brain" ]]; then
   cp -r "$REPO_ROOT/config/includes.chroot/etc/skel/second-brain/." "$ROOTFS/etc/skel/second-brain/"
 fi
 
-log "Stage 5: PRoot-specific setup (motd, workspace skeleton)"
+log "Stage 5: recording build flavor and running container setup"
+# A tarball on a phone is easy to lose track of; put the answer inside it.
+mkdir -p "$ROOTFS/etc/rootforge"
+cat > "$ROOTFS/etc/rootforge/build-info" <<BUILDINFO
+flavor=$FLAVOR
+arch=$ARCH
+x11=$WITH_X11
+built=$STAMP
+BUILDINFO
+
+log "Stage 5b: PRoot-specific setup (motd, workspace skeleton)"
 install -m 0755 "$SCRIPT_DIR/proot-setup.sh" "$ROOTFS/usr/local/bin/proot-setup.sh"
 chroot "$ROOTFS" /usr/local/bin/proot-setup.sh
 rm -f "$ROOTFS/usr/local/bin/proot-setup.sh"
@@ -182,7 +263,12 @@ for m in dev/pts dev sys proc; do
 done
 
 mkdir -p "$OUT_DIR"
-TARBALL="$OUT_DIR/rootforge-proot-${ARCH}-${STAMP}.tar.xz"
+# The flavor and the desktop layer are both in the filename: a chroot rootfs
+# and a proot rootfs are not interchangeable, and silently overwriting one
+# with the other would be a miserable thing to debug on a phone.
+X11_SUFFIX=""
+[[ $WITH_X11 -eq 1 ]] && X11_SUFFIX="-x11"
+TARBALL="$OUT_DIR/rootforge-${FLAVOR}-${ARCH}${X11_SUFFIX}-${STAMP}.tar.xz"
 log "Stage 7: packing $TARBALL"
 tar -C "$ROOTFS" -cJf "$TARBALL" .
 sha256sum "$TARBALL" | awk '{print $1}' > "${TARBALL}.sha256"

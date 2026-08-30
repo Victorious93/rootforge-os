@@ -62,7 +62,7 @@ rootforge-os/
     │   │                    avbtool/mkbootimg's wrapper scripts)
     │   ├── etc/udev/        Android USB rules
     │   ├── etc/systemd/     first-boot service
-    │   ├── usr/local/bin/   all 29 automation scripts (incl. `rootforge`,
+    │   ├── usr/local/bin/   all 30 automation scripts (incl. `rootforge`,
     │   │                    the thin wrapper for usr/local/lib/rootforge/core/,
     │   │                    and `brain`, the second-brain CLI wrapper)
     │   ├── usr/local/lib/rootforge/core/  rootforge CLI's Python package —
@@ -149,6 +149,34 @@ reimplemented inconsistently across scripts:
 | `rf_write_private` | Writing a secrets file that is 0600 from the moment it exists |
 
 Keep it small. A helper belongs here when a second script needs it, not before.
+
+## The two Android on-device flavours
+
+`termux/build-rootfs.sh --flavor proot|chroot` builds two different rootfs
+images, and they are not interchangeable:
+
+- **proot** — unrooted. Runs under `proot-distro`; PRoot fakes uid 0 by
+  intercepting syscalls with `ptrace`.
+- **chroot** — rooted. A real `chroot(2)` entered via `su`, launched by
+  `termux/rootforge-chroot.sh`.
+
+The flavour decides which scripts get copied in (`EXCLUDE_SCRIPTS` in
+build-rootfs.sh). When adding a script, decide which flavours can actually
+run it, and remember the distinction that governs it: **both run on Android's
+own kernel.** Root gives you uid 0 and real device nodes; it does not give
+you a different kernel. So
+
+- needs only files → both flavours
+- needs a real device node (`/dev/net/tun`, loop, USB) → chroot only
+- needs a kernel subsystem Android doesn't ship (AppArmor, auditd, nftables,
+  USBGuard, KVM) → neither, however rooted the phone is
+
+Shipping a script in the chroot flavour that needs the third category would
+be promising something the environment cannot deliver. `harden_kernel.sh`
+and `harden_system.sh` are excluded from both for exactly that reason.
+
+The capability matrix in README section 17 is the user-facing version of
+this; keep the two in step.
 
 ## Downloading things in a script or hook
 
