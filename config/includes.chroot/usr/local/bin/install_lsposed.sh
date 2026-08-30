@@ -36,7 +36,7 @@ log() { echo "[lsposed] $*" | tee -a "$LOG_FILE"; }
 command -v jq >/dev/null 2>&1 || { echo "jq is required (apt install jq)" >&2; exit 1; }
 
 log "Querying latest LSPosed release from GitHub"
-RELEASE_JSON="$(curl -sSL https://api.github.com/repos/LSPosed/LSPosed/releases/latest)"
+RELEASE_JSON="$(curl -fsSL https://api.github.com/repos/LSPosed/LSPosed/releases/latest)"
 ASSET_URL="$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("zip$")) | .browser_download_url' | head -1)"
 ASSET_NAME="$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("zip$")) | .name' | head -1)"
 
@@ -51,7 +51,7 @@ if [[ -f "$LOCAL_ZIP" ]]; then
   log "Using cached $ASSET_NAME"
 else
   log "Downloading $ASSET_NAME"
-  curl -sSL -o "$LOCAL_ZIP" "$ASSET_URL"
+  curl -fsSL -o "$LOCAL_ZIP" "$ASSET_URL"
 fi
 
 $ADB wait-for-device

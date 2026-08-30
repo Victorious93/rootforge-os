@@ -24,7 +24,20 @@ sudo apt-get install -y --no-install-recommends tmux fzf bat eza zoxide | tee -a
 command -v bat >/dev/null 2>&1 || command -v batcat >/dev/null 2>&1 || log "bat/batcat unavailable in this repo — skipping, not fatal."
 
 log "Installing starship prompt"
-command -v starship >/dev/null 2>&1 || curl -sS https://starship.rs/install.sh | sh -s -- -y 2>&1 | tee -a "$LOG_FILE"
+# `curl -sS <url> | sh` has two holes: without -f curl exits 0 on an HTTP
+# error and pipes the error *body* into sh, which tries to run it; and the
+# `command -v ... ||` guard binds to the curl alone, so the pipeline ran even
+# when starship was already installed. Fetch to a file, check it is
+# non-empty, then run it.
+if ! command -v starship >/dev/null 2>&1; then
+  STARSHIP_INSTALLER="$(mktemp)"
+  if curl -fsSL -o "$STARSHIP_INSTALLER" https://starship.rs/install.sh && [[ -s "$STARSHIP_INSTALLER" ]]; then
+    sh "$STARSHIP_INSTALLER" -y 2>&1 | tee -a "$LOG_FILE"
+  else
+    log "Could not download the starship installer — skipping (not fatal; the prompt just won't be configured)."
+  fi
+  rm -f "$STARSHIP_INSTALLER"
+fi
 
 # ---- tmux: RootForge session layout ------------------------------------
 TMUX_CONF="$HOME/.tmux.conf"

@@ -78,7 +78,7 @@ ensure_payload_dumper() {
   command -v jq >/dev/null 2>&1 || { echo "jq is required (apt install jq)" >&2; exit 1; }
   local api="https://api.github.com/repos/ssut/payload-dumper-go/releases/latest"
   local json url
-  json="$(curl -sSL "$api")"
+  json="$(curl -fsSL "$api")"
   url="$(echo "$json" | jq -r '.assets[] | select(.name | test("linux.*amd64")) | .browser_download_url' | head -1)"
   if [[ -z "$url" || "$url" == "null" ]]; then
     log "Could not resolve a release asset automatically. Install payload-dumper-go"
@@ -94,7 +94,7 @@ ensure_payload_dumper() {
   local extract="$workdir/extract"
   mkdir -p "$extract"
 
-  curl -sSL -o "$tmp" "$url"
+  curl -fsSL -o "$tmp" "$url"
   local found=""
   if tar -xzf "$tmp" -C "$extract" 2>/dev/null; then
     found="$(find "$extract" -type f -name 'payload-dumper-go*' -print -quit)"

@@ -39,14 +39,14 @@ case "$CMD" in
     if [[ ! -f "$APK_PATH" ]]; then
       log "Fetching latest ADBKeyboard release"
       command -v jq >/dev/null 2>&1 || { echo "jq is required (apt install jq)" >&2; exit 1; }
-      URL="$(curl -sSL https://api.github.com/repos/senzhk/ADBKeyBoard/releases/latest \
+      URL="$(curl -fsSL https://api.github.com/repos/senzhk/ADBKeyBoard/releases/latest \
         | jq -r '.assets[] | select(.name | test("apk$")) | .browser_download_url' | head -1)"
       if [[ -z "$URL" || "$URL" == "null" ]]; then
         log "Could not resolve a release APK automatically — check"
         log "  https://github.com/senzhk/ADBKeyBoard/releases and place the APK at $APK_PATH manually."
         exit 1
       fi
-      curl -sSL -o "$APK_PATH" "$URL"
+      curl -fsSL -o "$APK_PATH" "$URL"
     else
       log "Using cached APK at $APK_PATH"
     fi

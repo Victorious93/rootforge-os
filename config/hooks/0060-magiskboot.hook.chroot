@@ -50,8 +50,19 @@ echo "==> Downloading Magisk APK from $APK_URL"
 curl -fsSL -o "$WORK_DIR/magisk.apk" "$APK_URL"
 
 echo "==> Extracting magiskboot ($MAGISK_ABI) from APK"
-unzip -p "$WORK_DIR/magisk.apk" "lib/${MAGISK_ABI}/libmagiskboot.so" > /usr/local/bin/magiskboot
-chmod +x /usr/local/bin/magiskboot
+# The redirect creates /usr/local/bin/magiskboot before unzip writes a byte,
+# so a member path that no longer matches (Magisk changing its APK layout,
+# or an unexpected ABI) leaves a zero-length file behind that chmod then
+# marks executable. Extract to a temporary path and only install it once
+# there is actually something there.
+unzip -p "$WORK_DIR/magisk.apk" "lib/${MAGISK_ABI}/libmagiskboot.so" > "$WORK_DIR/magiskboot"
+if [ ! -s "$WORK_DIR/magiskboot" ]; then
+  echo "ERROR: lib/${MAGISK_ABI}/libmagiskboot.so was not found in the Magisk APK" >&2
+  echo "       (or extracted empty) — the APK layout may have changed." >&2
+  rm -rf "$WORK_DIR"
+  exit 1
+fi
+install -m 0755 "$WORK_DIR/magiskboot" /usr/local/bin/magiskboot
 rm -rf "$WORK_DIR"
 
 echo "==> magiskboot installed: $(magiskboot 2>&1 | head -1 || true)"
