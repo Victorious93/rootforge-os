@@ -26,6 +26,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 KEY_FILE="$HOME/.rootforge/ai-keys.env"
 LOG_DIR="$ROOTFORGE_HOME/logs"
@@ -54,10 +57,13 @@ usage() {
 
 ensure_key_file() {
   mkdir -p "$(dirname "$KEY_FILE")"
-  [[ -f "$KEY_FILE" ]] || {
-    echo "# RootForge OS — AI tool API keys" > "$KEY_FILE"
-    echo "# Victorious Framework — chmod 600, not committed anywhere" >> "$KEY_FILE"
-  }
+  chmod 700 "$(dirname "$KEY_FILE")" 2>/dev/null || true
+  if [[ ! -f "$KEY_FILE" ]]; then
+    rf_write_private "$KEY_FILE" <<'HEADER'
+# RootForge OS — AI tool API keys
+# Victorious Framework — chmod 600, not committed anywhere
+HEADER
+  fi
   chmod 600 "$KEY_FILE"
 }
 
@@ -74,46 +80,81 @@ ensure_shell_sourcing() {
 
 # Prints "ok" (HTTP 200), "skip" (no known check for this provider), or the
 # raw HTTP status/000 on failure — callers branch on the returned string.
+#
+# The request is handed to curl as a config file on stdin (-K -) rather than
+# as command-line flags. Process arguments are readable from
+# /proc/<pid>/cmdline by other users on the box, so `curl -H "Authorization:
+# Bearer $key"` published the key for the lifetime of the request; gemini's
+# check was worse still, carrying it in the URL. Nothing about the request
+# changes — only where curl reads it from.
 verify_provider_key() {
-  local provider="$1" key="$2" code
+  local provider="$1" key="$2" url="" code
+  local -a headers=()
 
   case "$provider" in
     anthropic)
-      code="$(curl -sS -o /dev/null -w '%{http_code}' https://api.anthropic.com/v1/models \
-        -H "x-api-key: $key" -H "anthropic-version: 2023-06-01" 2>>"$LOG_FILE" || echo 000)" ;;
+      url="https://api.anthropic.com/v1/models"
+      headers=("x-api-key: $key" "anthropic-version: 2023-06-01") ;;
     openai)
-      code="$(curl -sS -o /dev/null -w '%{http_code}' https://api.openai.com/v1/models \
-        -H "Authorization: Bearer $key" 2>>"$LOG_FILE" || echo 000)" ;;
+      url="https://api.openai.com/v1/models"
+      headers=("Authorization: Bearer $key") ;;
     xai)
-      code="$(curl -sS -o /dev/null -w '%{http_code}' https://api.x.ai/v1/models \
-        -H "Authorization: Bearer $key" 2>>"$LOG_FILE" || echo 000)" ;;
+      url="https://api.x.ai/v1/models"
+      headers=("Authorization: Bearer $key") ;;
     mistral)
-      code="$(curl -sS -o /dev/null -w '%{http_code}' https://api.mistral.ai/v1/models \
-        -H "Authorization: Bearer $key" 2>>"$LOG_FILE" || echo 000)" ;;
+      url="https://api.mistral.ai/v1/models"
+      headers=("Authorization: Bearer $key") ;;
     cohere)
-      code="$(curl -sS -o /dev/null -w '%{http_code}' https://api.cohere.ai/v1/models \
-        -H "Authorization: Bearer $key" 2>>"$LOG_FILE" || echo 000)" ;;
+      url="https://api.cohere.ai/v1/models"
+      headers=("Authorization: Bearer $key") ;;
     openrouter)
-      code="$(curl -sS -o /dev/null -w '%{http_code}' https://openrouter.ai/api/v1/models \
-        -H "Authorization: Bearer $key" 2>>"$LOG_FILE" || echo 000)" ;;
+      url="https://openrouter.ai/api/v1/models"
+      headers=("Authorization: Bearer $key") ;;
     deepseek)
-      code="$(curl -sS -o /dev/null -w '%{http_code}' https://api.deepseek.com/v1/models \
-        -H "Authorization: Bearer $key" 2>>"$LOG_FILE" || echo 000)" ;;
+      url="https://api.deepseek.com/v1/models"
+      headers=("Authorization: Bearer $key") ;;
     groq)
-      code="$(curl -sS -o /dev/null -w '%{http_code}' https://api.groq.com/openai/v1/models \
-        -H "Authorization: Bearer $key" 2>>"$LOG_FILE" || echo 000)" ;;
+      url="https://api.groq.com/openai/v1/models"
+      headers=("Authorization: Bearer $key") ;;
     huggingface)
-      code="$(curl -sS -o /dev/null -w '%{http_code}' https://huggingface.co/api/whoami-v2 \
-        -H "Authorization: Bearer $key" 2>>"$LOG_FILE" || echo 000)" ;;
+      url="https://huggingface.co/api/whoami-v2"
+      headers=("Authorization: Bearer $key") ;;
     gemini)
-      code="$(curl -sS -o /dev/null -w '%{http_code}' "https://generativelanguage.googleapis.com/v1beta/models?key=$key" \
-        2>>"$LOG_FILE" || echo 000)" ;;
+      # Gemini authenticates with a query parameter rather than a header.
+      url="https://generativelanguage.googleapis.com/v1beta/models?key=${key}" ;;
     *)
       echo "skip"; return 0 ;;
   esac
 
+  code="$(build_curl_config "$url" "${headers[@]+"${headers[@]}"}" \
+    | curl -K - 2>>"$LOG_FILE" || echo 000)"
+
   [[ "$code" == "200" ]] && { echo "ok"; return 0; }
-  echo "$code"
+  echo "${code:-000}"
+}
+
+# Emit a curl config for one request. Values in a curl config file are
+# double-quoted with backslash escapes, so escape both characters rather
+# than assuming a key contains neither.
+build_curl_config() {
+  local url="$1"; shift
+  local header
+  printf 'silent\n'
+  printf 'show-error\n'
+  printf 'max-time = 20\n'
+  printf 'output = "/dev/null"\n'
+  printf 'write-out = "%%{http_code}"\n'
+  printf 'url = "%s"\n' "$(escape_curl_value "$url")"
+  for header in "$@"; do
+    printf 'header = "%s"\n' "$(escape_curl_value "$header")"
+  done
+}
+
+escape_curl_value() {
+  local v="$1"
+  v="${v//\\/\\\\}"
+  v="${v//\"/\\\"}"
+  printf '%s' "$v"
 }
 
 # Writes/replaces one provider's export + tracking-comment lines in
@@ -121,13 +162,25 @@ verify_provider_key() {
 store_provider_key() {
   local provider="$1" env_var="$2" key="$3"
   ensure_key_file
-  grep -v -e "^export ${env_var}=" -e "^# provider:${provider}:" "$KEY_FILE" > "${KEY_FILE}.tmp" || true
-  mv "${KEY_FILE}.tmp" "$KEY_FILE"
+
+  # The key is escaped rather than dropped into '...' as-is: this file is
+  # sourced by every interactive shell, so an unescaped quote in a key made
+  # the whole file a syntax error (silently loading NO keys at all) or, with
+  # a hostile key, ran shell commands at every startup. See rf_shell_quote.
+  local quoted
+  quoted="$(rf_shell_quote "$key")"
+
+  # Build the new contents in memory, then write once through
+  # rf_write_private — the previous temp-file dance created a 0644 file
+  # holding every key, and `mv` handed that mode to the real file.
+  local rest
+  rest="$(grep -v -e "^export ${env_var}=" -e "^# provider:${provider}:" "$KEY_FILE" || true)"
   {
-    echo "export ${env_var}='$key'"
-    echo "# provider:${provider}:${env_var}"
-  } >> "$KEY_FILE"
-  chmod 600 "$KEY_FILE"
+    printf '%s\n' "$rest"
+    printf 'export %s=%s\n' "$env_var" "$quoted"
+    printf '# provider:%s:%s\n' "$provider" "$env_var"
+  } | rf_write_private "$KEY_FILE"
+
   ensure_shell_sourcing
 }
 
@@ -135,11 +188,16 @@ cmd_add() {
   local provider="" key="" env_var="" no_verify=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --key) key="$2"; shift 2 ;;
-      --env-var) env_var="$2"; shift 2 ;;
+      # Without the count check, a trailing bare `--key` reads an unset $2
+      # and aborts with a raw "unbound variable" under `set -u`.
+      --key)     [[ $# -ge 2 ]] || die "--key needs a value"; key="$2"; shift 2 ;;
+      --env-var) [[ $# -ge 2 ]] || die "--env-var needs a value"; env_var="$2"; shift 2 ;;
       --no-verify) no_verify=1; shift ;;
       -*) die "Unknown option: $1" ;;
-      *) provider="$1"; shift ;;
+      *)
+        [[ -z "$provider" ]] || die "Provider given twice: '$provider' and '$1'"
+        provider="$1"; shift
+        ;;
     esac
   done
   [[ -z "$provider" ]] && die "Usage: setup_ai_tools.sh add <provider> [--key KEY] [--env-var NAME] [--no-verify]"
@@ -181,14 +239,17 @@ cmd_remove() {
   provider="$(echo "$provider" | tr '[:upper:]' '[:lower:]')"
   [[ -f "$KEY_FILE" ]] || die "No key file at $KEY_FILE — nothing configured yet."
 
+  # `env_var="$(grep ... | cut ...)"` exits the whole script under
+  # `set -o pipefail` when grep matches nothing, so `remove <unknown>` died
+  # silently and the "No stored key found" message below could never print.
   local env_var
-  env_var="$(grep -m1 "^# provider:${provider}:" "$KEY_FILE" | cut -d: -f3)"
+  env_var="$(grep -m1 "^# provider:${provider}:" "$KEY_FILE" | cut -d: -f3 || true)"
   [[ -z "$env_var" ]] && env_var="${PROVIDER_ENV[$provider]:-}"
   [[ -z "$env_var" ]] && die "No stored key found for provider '$provider'"
 
-  grep -v -e "^export ${env_var}=" -e "^# provider:${provider}:" "$KEY_FILE" > "${KEY_FILE}.tmp" || true
-  mv "${KEY_FILE}.tmp" "$KEY_FILE"
-  chmod 600 "$KEY_FILE"
+  local rest
+  rest="$(grep -v -e "^export ${env_var}=" -e "^# provider:${provider}:" "$KEY_FILE" || true)"
+  printf '%s\n' "$rest" | rf_write_private "$KEY_FILE"
   log "Removed $provider ($env_var) from $KEY_FILE"
 }
 
@@ -218,11 +279,21 @@ cmd_setup() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --non-interactive) noninteractive=1 ;;
-      --anthropic-key) anthropic_key_arg="$2"; shift ;;
-      --xai-key) xai_key_arg="$2"; shift ;;
+      --anthropic-key) [[ $# -ge 2 ]] || die "--anthropic-key needs a value"; anthropic_key_arg="$2"; shift ;;
+      --xai-key)       [[ $# -ge 2 ]] || die "--xai-key needs a value";       xai_key_arg="$2";       shift ;;
+      # An unrecognized flag used to be skipped in silence, so a typo like
+      # --noninteractive left the run waiting on an interactive prompt that
+      # an automated caller was never going to answer.
+      *) die "Unknown option: $1 (expected --non-interactive, --anthropic-key, --xai-key)" ;;
     esac
     shift
   done
+
+  if [[ -n "$anthropic_key_arg" || -n "$xai_key_arg" ]]; then
+    log "NOTE: a key passed on the command line is visible to other users on this box"
+    log "      via 'ps', and lands in your shell history. Prefer the interactive prompt,"
+    log "      or 'setup_ai_tools.sh add <provider>' which reads the key without echo."
+  fi
 
   # ---- 1. API key configuration -----------------------------------------
   log "Configuring API keys at $KEY_FILE (mode 600, not world-readable)"

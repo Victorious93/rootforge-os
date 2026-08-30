@@ -386,6 +386,250 @@ run_script bash "$BIN_DIR/build_magisk_module.sh" testmod --install
 assert_eq "failed module install exits non-zero" "$RC" "1"
 drop_sandbox
 
+section "common.sh — secret handling"
+
+new_sandbox
+. "$LIB_DIR/rootforge/sh/common.sh"
+
+# A key containing a single quote used to terminate the '...' wrapper early:
+# the whole sourced file became a syntax error and NO keys loaded. A crafted
+# key ran as shell commands in every new shell.
+SQ="'"   # a literal single quote, without the unreadable '"'"' dance
+for hostile in "simple" "abc${SQ}def" "sp ace" 'has$dollar' 'back\slash' '"dq"'; do
+  printf 'export K=%s\n' "$(rf_shell_quote "$hostile")" > "$SANDBOX/k.env"
+  got="$(bash -c ". '$SANDBOX/k.env'; printf %s \"\$K\"")"
+  assert_eq "rf_shell_quote round-trips [$hostile]" "$got" "$hostile"
+done
+
+# The specific injection: a key that closes the quote and appends a command.
+rm -f "$SANDBOX/PWNED"
+INJECT="x${SQ};touch $SANDBOX/PWNED;${SQ}"
+printf 'export K=%s\n' "$(rf_shell_quote "$INJECT")" > "$SANDBOX/k.env"
+bash -c ". '$SANDBOX/k.env'" 2>/dev/null || true
+if [ -f "$SANDBOX/PWNED" ]; then
+  fail "rf_shell_quote blocks command injection" "the payload executed"
+else
+  pass "rf_shell_quote blocks command injection"
+fi
+
+# rf_write_private must never leave the file world-readable, including when
+# it is replacing an existing 0644 file.
+printf 'secret\n' | rf_write_private "$SANDBOX/priv.env"
+assert_eq "rf_write_private creates 0600" "$(stat -c %a "$SANDBOX/priv.env")" "600"
+: > "$SANDBOX/pre.env"; chmod 644 "$SANDBOX/pre.env"
+printf 'secret\n' | rf_write_private "$SANDBOX/pre.env"
+assert_eq "rf_write_private tightens an existing 0644 file" "$(stat -c %a "$SANDBOX/pre.env")" "600"
+drop_sandbox
+
+section "setup_ai_tools.sh — key storage"
+
+new_sandbox
+# --no-verify keeps this offline; the point is what lands on disk.
+run_script bash "$BIN_DIR/setup_ai_tools.sh" add openai --key "sk-plain123" --no-verify
+assert_eq "add stores a key" "$RC" "0"
+KEYFILE="$HOME/.rootforge/ai-keys.env"
+assert_eq "key file is 0600" "$(stat -c %a "$KEYFILE")" "600"
+assert_contains "key file records the provider" "$(cat "$KEYFILE")" "# provider:openai:OPENAI_API_KEY"
+GOT="$(bash -c ". '$KEYFILE'; printf %s \"\$OPENAI_API_KEY\"")"
+assert_eq "key sources back correctly" "$GOT" "sk-plain123"
+
+# The regression: a quote in the key used to break the file for every key.
+new_sandbox
+run_script bash "$BIN_DIR/setup_ai_tools.sh" add openai --key "sk-plain" --no-verify
+SQ="'"
+run_script bash "$BIN_DIR/setup_ai_tools.sh" add anthropic --key "ab${SQ}cd" --no-verify
+KEYFILE="$HOME/.rootforge/ai-keys.env"
+if bash -n "$KEYFILE" 2>/dev/null; then
+  pass "key file stays syntactically valid with a quote in a key"
+else
+  fail "key file stays syntactically valid with a quote in a key" "bash -n rejected it"
+fi
+BOTH="$(bash -c ". '$KEYFILE'; printf '%s|%s' \"\$OPENAI_API_KEY\" \"\$ANTHROPIC_API_KEY\"")"
+assert_eq "a quoted key does not clobber the others" "$BOTH" "sk-plain|ab${SQ}cd"
+
+# Keys must accumulate, and remove must only touch its own provider.
+new_sandbox
+run_script bash "$BIN_DIR/setup_ai_tools.sh" add openai --key "k-openai" --no-verify
+run_script bash "$BIN_DIR/setup_ai_tools.sh" add groq --key "k-groq" --no-verify
+run_script bash "$BIN_DIR/setup_ai_tools.sh" remove openai
+assert_eq "remove succeeds" "$RC" "0"
+KEYFILE="$HOME/.rootforge/ai-keys.env"
+LEFT="$(bash -c ". '$KEYFILE'; printf '%s|%s' \"\${OPENAI_API_KEY:-}\" \"\${GROQ_API_KEY:-}\"")"
+assert_eq "remove drops only its own provider" "$LEFT" "|k-groq"
+assert_eq "key file still 0600 after remove" "$(stat -c %a "$KEYFILE")" "600"
+
+# Regression: `remove <unknown>` died inside a pipefail'd command
+# substitution before its own error message could print.
+new_sandbox
+run_script bash "$BIN_DIR/setup_ai_tools.sh" add groq --key "k-groq" --no-verify
+run_script bash "$BIN_DIR/setup_ai_tools.sh" remove doesnotexist
+assert_eq "remove of an unknown provider exits 1" "$RC" "1"
+assert_contains "remove of an unknown provider explains itself" "$OUT" "No stored key found"
+
+new_sandbox
+run_script bash "$BIN_DIR/setup_ai_tools.sh" add openai --key
+assert_eq "--key without a value is rejected" "$RC" "1"
+assert_contains "--key without a value explains itself" "$OUT" "needs a value"
+drop_sandbox
+
+section "setup_rooted_avd.sh — profile handling"
+
+new_sandbox
+mkdir -p "$ROOTFORGE_HOME/avd-profiles"
+# Regression: a profile missing any key aborted list/boot under pipefail
+# before a single line was printed.
+printf 'NAME=partial\n' > "$ROOTFORGE_HOME/avd-profiles/partial.conf"
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" list
+assert_eq "list survives a profile missing keys" "$RC" "0"
+assert_contains "list still names the profile" "$OUT" "partial"
+
+new_sandbox
+mkdir -p "$ROOTFORGE_HOME/avd-profiles"
+printf 'NAME=full\nMODE=rooted\nAPI=34\nDEVICE=pixel_6\nABI=x86_64\nTAG=google_apis\n' \
+  > "$ROOTFORGE_HOME/avd-profiles/full.conf"
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" list
+assert_contains "list reads a complete profile" "$OUT" "mode=rooted"
+assert_contains "list reads the api level" "$OUT" "api=34"
+# Regression: a trailing `[[ $found -eq 0 ]] && echo` made the function
+# return the condition's status, so a successful listing exited 1 and an
+# empty one exited 0 — exactly backwards.
+assert_eq "list exits 0 when it found profiles" "$RC" "0"
+
+new_sandbox
+mkdir -p "$ROOTFORGE_HOME/avd-profiles"
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" list
+assert_eq "list exits 0 when there are no profiles" "$RC" "0"
+assert_contains "list says so when there are none" "$OUT" "(none)"
+
+new_sandbox
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" create --name
+assert_eq "--name without a value is rejected" "$RC" "1"
+assert_contains "--name without a value explains itself" "$OUT" "requires a value"
+
+new_sandbox
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" create --name test --mode unrooted --api notanumber
+assert_eq "non-numeric --api is rejected" "$RC" "1"
+assert_contains "non-numeric --api names the option" "$OUT" "--api must be a number"
+
+new_sandbox
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" create --name test --mode unrooted --abi mips
+assert_eq "unknown --abi is rejected" "$RC" "1"
+assert_contains "unknown --abi names the option" "$OUT" "--abi must be"
+
+new_sandbox
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" create --name test --mode sideways
+assert_eq "unknown --mode is rejected" "$RC" "1"
+assert_contains "unknown --mode names the option" "$OUT" "--mode must be"
+
+new_sandbox
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" create --name test --mode rooted --tag google_apis_playstore
+assert_eq "rooted + Play image is refused" "$RC" "1"
+assert_contains "rooted + Play image explains why" "$OUT" "Play images are signed"
+drop_sandbox
+
+section "flash_pi_image.sh"
+
+new_sandbox
+head -c 64 /dev/zero > "$SANDBOX/pi.img"
+mkdir -p "$HOME/.ssh"; printf 'ssh-ed25519 AAAA test\n' > "$HOME/.ssh/id_ed25519.pub"
+# Regression: an unvalidated role selected no branch in the case at the end,
+# so a typo wrote the image and then silently did nothing role-related.
+run_script bash "$BIN_DIR/flash_pi_image.sh" "$SANDBOX/pi.img" /dev/null --role hoomlab
+assert_eq "unknown --role is rejected" "$RC" "1"
+assert_contains "unknown --role explains itself" "$OUT" "Unknown role"
+
+new_sandbox
+head -c 64 /dev/zero > "$SANDBOX/pi.img"
+run_script bash "$BIN_DIR/flash_pi_image.sh" "$SANDBOX/pi.img" /dev/null --role
+assert_eq "--role without a value is rejected" "$RC" "1"
+assert_contains "--role without a value says so" "$OUT" "needs a value"
+
+new_sandbox
+head -c 64 /dev/zero > "$SANDBOX/pi.img"
+run_script bash "$BIN_DIR/flash_pi_image.sh" "$SANDBOX/pi.img" /dev/null --rol bare
+assert_eq "unknown flag is rejected" "$RC" "1"
+assert_contains "unknown flag explains itself" "$OUT" "Unknown argument"
+
+new_sandbox
+head -c 64 /dev/zero > "$SANDBOX/pi.img"
+run_script bash "$BIN_DIR/flash_pi_image.sh" "$SANDBOX/pi.img" /dev/null --hostname "bad_host!"
+assert_eq "invalid hostname is rejected" "$RC" "1"
+assert_contains "invalid hostname says so" "$OUT" "Invalid hostname"
+drop_sandbox
+
+section "join_headscale.sh"
+
+new_sandbox
+run_script bash "$BIN_DIR/join_headscale.sh" https://hs.example.com --advertise-exitnode
+assert_eq "mistyped flag is rejected, not ignored" "$RC" "1"
+assert_contains "mistyped flag explains itself" "$OUT" "Unknown argument"
+
+new_sandbox
+run_script bash "$BIN_DIR/join_headscale.sh" https://hs.example.com --hostname
+assert_eq "--hostname without a value is rejected" "$RC" "1"
+assert_contains "--hostname without a value says so" "$OUT" "needs a value"
+
+new_sandbox
+run_script bash "$BIN_DIR/join_headscale.sh" "not-a-url"
+assert_eq "non-URL login server is rejected" "$RC" "1"
+assert_contains "non-URL login server explains itself" "$OUT" "http(s) URL"
+drop_sandbox
+
+section "setup_vpn.sh — peer address allocation"
+
+new_sandbox
+WGP="$ROOTFORGE_HOME/keys/wireguard/peers"
+mkdir -p "$WGP"
+# Regression: addresses were `10.66.66.$((RANDOM % 200 + 10))` with no check
+# against peers already issued — a birthday collision (~63% by the 20th
+# peer). A duplicate AllowedIPs doesn't fail loudly, it silently breaks
+# routing for one of them. Replay the allocator over many peers and assert
+# every address is distinct.
+alloc_octet() {
+  local c
+  for c in $(seq 10 250); do
+    grep -rqs "^Address = 10\.66\.66\.${c}/32\b" "$WGP" || { printf '%s' "$c"; return 0; }
+  done
+  return 1
+}
+for i in $(seq 1 25); do
+  oct="$(alloc_octet)"
+  mkdir -p "$WGP/peer$i"
+  printf 'Address = 10.66.66.%s/32\n' "$oct" > "$WGP/peer$i/peer.conf"
+done
+TOTAL="$(grep -rh '^Address = ' "$WGP" | wc -l | tr -d ' ')"
+UNIQUE="$(grep -rh '^Address = ' "$WGP" | sort -u | wc -l | tr -d ' ')"
+assert_eq "25 peers get 25 distinct addresses" "$UNIQUE" "$TOTAL"
+assert_eq "allocation starts at .10" "$(head -1 "$WGP/peer1/peer.conf")" "Address = 10.66.66.10/32"
+
+new_sandbox
+run_script bash "$BIN_DIR/setup_vpn.sh" peer-qr "../../escape"
+assert_eq "a peer name that climbs out of the dir is rejected" "$RC" "1"
+assert_contains "path-traversal peer name explains itself" "$OUT" "Peer name must be"
+drop_sandbox
+
+section "setup_intercept_proxy.sh"
+
+new_sandbox
+run_script bash "$BIN_DIR/setup_intercept_proxy.sh" start 99999
+assert_eq "out-of-range port is rejected" "$RC" "1"
+assert_contains "out-of-range port explains itself" "$OUT" "Invalid port"
+
+new_sandbox
+run_script bash "$BIN_DIR/setup_intercept_proxy.sh" start notaport
+assert_eq "non-numeric port is rejected" "$RC" "1"
+
+new_sandbox
+run_script bash "$BIN_DIR/setup_intercept_proxy.sh" bogus-subcommand
+assert_eq "unknown subcommand is rejected" "$RC" "1"
+assert_contains "unknown subcommand prints usage" "$OUT" "Usage:"
+
+new_sandbox
+run_script bash "$BIN_DIR/setup_intercept_proxy.sh" trust-cert
+assert_eq "trust-cert without a generated CA is rejected" "$RC" "1"
+assert_contains "trust-cert says where the CA should be" "$OUT" "mitmproxy-ca-cert.pem"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox

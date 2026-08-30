@@ -21,10 +21,25 @@ HOSTNAME_OVERRIDE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --advertise-exit-node) ADVERTISE_EXIT=1 ;;
-    --hostname) HOSTNAME_OVERRIDE="$2"; shift ;;
+    --hostname)
+      [[ $# -ge 2 ]] || { echo "--hostname needs a value" >&2; exit 1; }
+      HOSTNAME_OVERRIDE="$2"; shift
+      ;;
+    # A silently-ignored flag matters here: mistyping --advertise-exit-node
+    # left the node joined but not offering to be an exit node, with nothing
+    # in the output saying so — you'd go looking on the Headscale server for
+    # a route that was never advertised.
+    *) echo "Unknown argument: $1 (expected --advertise-exit-node, --hostname NAME)" >&2; exit 1 ;;
   esac
   shift
 done
+
+# The URL is handed to `tailscale up --login-server`; catch an obviously
+# wrong value here rather than after the client is already installed.
+case "$SERVER_URL" in
+  http://*|https://*) ;;
+  *) echo "Login server must be a http(s) URL (got '$SERVER_URL')" >&2; exit 1 ;;
+esac
 
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
