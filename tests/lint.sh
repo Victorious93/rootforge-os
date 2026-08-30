@@ -49,6 +49,13 @@ while IFS= read -r -d '' f; do
 done < <(find config/hooks -name '*.hook.chroot' -print0)
 shellcheck -S error -s sh auto/config || { echo "   ^ auto/config" >&2; FAIL=1; }
 
+echo "==> chroot hook safety"
+# Static checks for the class of hook bug an ISO build takes an hour to
+# reveal: a swallowed download failure that ships an ISO missing the tool.
+if ! "$REPO_ROOT/tests/check-hooks.sh"; then
+  FAIL=1
+fi
+
 echo "==> python: byte-compile"
 if python3 -m compileall -q config/includes.chroot/usr/local/lib; then
   :

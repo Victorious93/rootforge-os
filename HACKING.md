@@ -150,6 +150,26 @@ reimplemented inconsistently across scripts:
 
 Keep it small. A helper belongs here when a second script needs it, not before.
 
+## Downloading things in a script or hook
+
+Two rules, both enforced by `tests/check-hooks.sh` (which `make lint` runs):
+
+- **Always pass `curl -f`.** Without it curl exits 0 on a 404 and writes the
+  error page to wherever the output was going — into a `.zip` that then fails
+  as "not a zipfile", or into a `.apk` that fails at install time, several
+  steps from the actual problem.
+- **Never pipe a download straight into `sh`.** Fetch to a file, check it is
+  non-empty, then run it. live-build runs hooks under `/bin/sh` (dash) which
+  has no `set -o pipefail`, so the pipeline's status is `sh`'s — and `sh`
+  reading an empty stdin exits 0. A failed download therefore installed
+  nothing and the build carried on to produce an ISO missing the tool, with
+  one line in a very long log to say so. An ISO build takes about an hour of
+  CI to discover that.
+
+A hook's final "installed: ..." line must not fabricate success either
+(`... || echo 'ok'` once printed `payload-dumper-go installed: ok` for a
+binary that was not there). Verify the thing exists and fail if it doesn't.
+
 ## Adding a package
 
 Add it to the correct `.list.chroot` file:

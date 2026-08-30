@@ -12,7 +12,25 @@ set -e
 
 # --- starship ---
 echo "==> Installing starship prompt"
-curl -sS https://starship.rs/install.sh | sh -s -- --yes
+# Two problems with `curl -sS <url> | sh -s -- --yes`:
+#   - no -f, so curl exits 0 on an HTTP error and pipes the error *body*
+#     into sh, which then tries to execute it as a shell script;
+#   - no pipefail (dash has none), so the pipeline reports sh's status, and
+#     sh fed an empty stdin exits 0.
+# Fetch to a file with -f, check it is non-empty, then run it.
+STARSHIP_INSTALLER="$(mktemp)"
+if ! curl -fsSL -o "$STARSHIP_INSTALLER" https://starship.rs/install.sh; then
+  rm -f "$STARSHIP_INSTALLER"
+  echo "ERROR: could not download the starship installer." >&2
+  exit 1
+fi
+if [ ! -s "$STARSHIP_INSTALLER" ]; then
+  rm -f "$STARSHIP_INSTALLER"
+  echo "ERROR: the starship installer downloaded empty." >&2
+  exit 1
+fi
+sh "$STARSHIP_INSTALLER" --yes
+rm -f "$STARSHIP_INSTALLER"
 starship --version
 
 # --- eza ---

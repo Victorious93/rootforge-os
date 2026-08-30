@@ -81,8 +81,11 @@ chmod 700 "$ROOTFORGE_HOME/keys"
 
 log "Fetching Android cmdline-tools"
 sudo -u "$TARGET_USER" mkdir -p "$SDK_ROOT/cmdline-tools"
-CMDTOOLS_ZIP="/tmp/cmdline-tools.zip"
-curl -sSL -o "$CMDTOOLS_ZIP" \
+# A fixed /tmp path is predictable and this script runs partly as root.
+CMDTOOLS_ZIP="$(mktemp)"
+# -f: without it curl exits 0 on an HTTP error and writes the error page
+# into the zip, which then fails as "not a zipfile" several lines later.
+curl -fsSL -o "$CMDTOOLS_ZIP" \
   "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
 sudo -u "$TARGET_USER" unzip -q "$CMDTOOLS_ZIP" -d "$SDK_ROOT/cmdline-tools"
 sudo -u "$TARGET_USER" mv "$SDK_ROOT/cmdline-tools/cmdline-tools" "$SDK_ROOT/cmdline-tools/latest"

@@ -40,4 +40,15 @@ tar -xz -C "$TMPDIR" -f "$TMPDIR/pd.tar.gz"
 find "$TMPDIR" -name "payload-dumper-go" -exec install -m 0755 {} "$INSTALL_DIR/payload-dumper-go" \;
 rm -rf "$TMPDIR"
 
-echo "==> payload-dumper-go installed: $("$INSTALL_DIR/payload-dumper-go" --version 2>/dev/null || echo 'ok')"
+# `find -exec` reports success when it matches nothing, so a tarball whose
+# layout changed installed nothing and the hook carried on. The old report
+# line was `... || echo 'ok'`, which turned the resulting
+# "no such file or directory" into the word "ok" — the build log claimed
+# "payload-dumper-go installed: ok" for a binary that was not there.
+if [ ! -x "$INSTALL_DIR/payload-dumper-go" ]; then
+  echo "ERROR: no payload-dumper-go binary found in the release tarball —" >&2
+  echo "       its archive layout may have changed. Nothing was installed." >&2
+  exit 1
+fi
+
+echo "==> payload-dumper-go installed: $("$INSTALL_DIR/payload-dumper-go" --version 2>&1 | head -1)"

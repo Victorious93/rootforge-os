@@ -14,7 +14,33 @@
 set -e
 
 echo "==> Installing Ollama"
-curl -fsSL https://ollama.com/install.sh | sh
+# `curl ... | sh` hides a failed download. live-build runs hooks under
+# /bin/sh (dash) with `set -e` and no `pipefail` — dash has no pipefail — so
+# the pipeline's status is sh's, and sh fed an empty stdin exits 0. A network
+# blip therefore installed nothing and the build carried on to produce an ISO
+# with no Ollama in it, the only trace being a WARNING buried in thousands of
+# lines of build log. Fetch to a file, check we actually got something, and
+# only then run it.
+INSTALLER="$(mktemp)"
+if ! curl -fsSL -o "$INSTALLER" https://ollama.com/install.sh; then
+  rm -f "$INSTALLER"
+  echo "ERROR: could not download the Ollama installer." >&2
+  exit 1
+fi
+if [ ! -s "$INSTALLER" ]; then
+  rm -f "$INSTALLER"
+  echo "ERROR: the Ollama installer downloaded empty." >&2
+  exit 1
+fi
+sh "$INSTALLER"
+rm -f "$INSTALLER"
+
+# The install is only real if the binary is on PATH. This used to be
+# `ollama --version || true`, which reported nothing either way.
+if ! command -v ollama >/dev/null 2>&1; then
+  echo "ERROR: the Ollama installer ran but left no 'ollama' binary on PATH." >&2
+  exit 1
+fi
 
 # Confirm the service unit was created by the installer
 if [ -f /etc/systemd/system/ollama.service ]; then
@@ -25,5 +51,5 @@ else
   echo "WARNING: ollama.service not found after install — manual check needed"
 fi
 
-ollama --version || true
+ollama --version
 echo "==> Ollama install complete"
