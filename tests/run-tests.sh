@@ -951,6 +951,32 @@ export PATH="$SANDBOX:$ORIGINAL_PATH"
 run_script bash "$CHROOT_LAUNCHER" install
 assert_eq "install with no tarball is rejected" "$RC" "1"
 assert_contains "install with no tarball prints usage" "$OUT" "install <rootfs.tar.xz>"
+
+new_sandbox
+# Android's `su -c` takes one string, so every privileged command in this
+# launcher is built as text and re-parsed by a shell. ROOTFORGE_CHROOT_DIR is
+# user-settable, so that quoting has to survive spaces and quotes. A first
+# draft of rf_q used a sed pipeline with two backslashes where it needed
+# four; that collapses to ''' and silently breaks the first path containing a
+# quote while still reading as correct.
+eval "$(sed -n '/^rf_q()/,/^}/p' "$CHROOT_LAUNCHER")"
+SQ="'"
+for hostile in "/data/local/rootforge" "/data/local/my dir" '/data/local/a$HOME' '/data/local/"dq"' '/data/local/back\slash'; do
+  got="$(sh -c "printf %s $(rf_q "$hostile")")"
+  assert_eq "rf_q round-trips [$hostile]" "$got" "$hostile"
+done
+QUOTED="/data/local/o${SQ}brien"
+got="$(sh -c "printf %s $(rf_q "$QUOTED")")"
+assert_eq "rf_q round-trips a path containing a quote" "$got" "$QUOTED"
+
+rm -f "$SANDBOX/pwned"
+EVIL="/data/local/x${SQ};touch $SANDBOX/pwned;${SQ}"
+sh -c "printf %s $(rf_q "$EVIL")" >/dev/null 2>&1 || true
+if [ -f "$SANDBOX/pwned" ]; then
+  fail "rf_q blocks command injection through a rootfs path" "the payload executed"
+else
+  pass "rf_q blocks command injection through a rootfs path"
+fi
 drop_sandbox
 
 section "lint_module.sh"

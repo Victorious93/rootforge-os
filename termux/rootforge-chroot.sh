@@ -44,8 +44,29 @@ ROOTFS_DIR="${ROOTFORGE_CHROOT_DIR:-/data/local/rootforge}"
 log()  { echo "[rootforge-chroot] $*"; }
 die()  { echo "[rootforge-chroot] ERROR: $*" >&2; exit 1; }
 
-# Every privileged action goes through this, so a device whose `su` wants
-# different arguments only needs changing in one place.
+# Android's `su -c` takes one string and hands it to a shell, so the command
+# has to be built as text — which makes quoting the whole ballgame.
+# `as_root "$*"` re-joins its arguments and re-parses them, so a rootfs path
+# containing a space or a quote (ROOTFORGE_CHROOT_DIR is user-settable)
+# silently becomes several arguments, or a syntax error, at every mount.
+#
+# rf_q quotes one value so it survives that round trip. Every call site below
+# passes paths through it rather than hand-wrapping them in single quotes:
+# hand-quoting works right up until someone edits a call site, which is
+# exactly how this class of bug gets reintroduced.
+rf_q() {
+  # Wrap in single quotes, escaping embedded single quotes as '\''.
+  # Deliberately parameter expansion, not a sed pipeline: the sed form needs
+  # four backslashes to emit one, and a two-backslash version collapses to
+  # ''' — which looks correct, passes a casual read, and silently breaks the
+  # first path containing a quote. This is the same implementation as
+  # rf_shell_quote in usr/local/lib/rootforge/sh/common.sh, which the test
+  # suite covers; that file can't be sourced here because this script runs
+  # on the Termux side, outside the container.
+  local q="'\\''"
+  printf "'%s'" "${1//\'/$q}"
+}
+
 as_root() {
   su -c "$*"
 }
@@ -67,19 +88,19 @@ cmd_install() {
 
   # A partly-unpacked rootfs from an interrupted run is worse than none: it
   # looks installed and fails deep inside. Make the caller be explicit.
-  if as_root "[ -d '$ROOTFS_DIR' ]"; then
+  if as_root "[ -d $(rf_q "$ROOTFS_DIR") ]"; then
     die "$ROOTFS_DIR already exists. Remove it first if you mean to reinstall:
        su -c 'rm -rf $ROOTFS_DIR'"
   fi
 
   log "Unpacking $tarball to $ROOTFS_DIR (this takes a while)"
-  as_root "mkdir -p '$ROOTFS_DIR'"
-  as_root "tar -xJf '$tarball' -C '$ROOTFS_DIR'"
+  as_root "mkdir -p $(rf_q "$ROOTFS_DIR")"
+  as_root "tar -xJf $(rf_q "$tarball") -C $(rf_q "$ROOTFS_DIR")"
 
   # Without a resolver the container has no DNS at all; Android's own
   # resolv.conf is not in a place the chroot can see.
-  as_root "printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > '$ROOTFS_DIR/etc/resolv.conf'"
-  as_root "printf 'rootforge-chroot\n' > '$ROOTFS_DIR/etc/hostname'"
+  as_root "printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > $(rf_q "$ROOTFS_DIR/etc/resolv.conf")"
+  as_root "printf 'rootforge-chroot\n' > $(rf_q "$ROOTFS_DIR/etc/hostname")"
 
   log "Installed. Enter it with: $0 login"
 }
@@ -87,28 +108,28 @@ cmd_install() {
 # Mounts the kernel filesystems the container needs. Ordering matters: /dev
 # before /dev/pts, and everything before the chroot itself.
 mount_all() {
-  as_root "mkdir -p '$ROOTFS_DIR/proc' '$ROOTFS_DIR/sys' '$ROOTFS_DIR/dev' '$ROOTFS_DIR/dev/pts' '$ROOTFS_DIR/tmp'"
+  as_root "mkdir -p $(rf_q "$ROOTFS_DIR/proc") $(rf_q "$ROOTFS_DIR/sys") $(rf_q "$ROOTFS_DIR/dev") $(rf_q "$ROOTFS_DIR/dev/pts") $(rf_q "$ROOTFS_DIR/tmp")"
 
-  as_root "mountpoint -q '$ROOTFS_DIR/proc' || mount -t proc proc '$ROOTFS_DIR/proc'"
-  as_root "mountpoint -q '$ROOTFS_DIR/sys'  || mount -t sysfs sysfs '$ROOTFS_DIR/sys'"
+  as_root "mountpoint -q $(rf_q "$ROOTFS_DIR/proc") || mount -t proc proc $(rf_q "$ROOTFS_DIR/proc")"
+  as_root "mountpoint -q $(rf_q "$ROOTFS_DIR/sys")  || mount -t sysfs sysfs $(rf_q "$ROOTFS_DIR/sys")"
   # A bind of the real /dev is what makes loop devices, block devices and
   # /dev/net/tun reachable — the whole point of the rooted variant.
-  as_root "mountpoint -q '$ROOTFS_DIR/dev'  || mount -o bind /dev '$ROOTFS_DIR/dev'"
-  as_root "mountpoint -q '$ROOTFS_DIR/dev/pts' || mount -t devpts devpts '$ROOTFS_DIR/dev/pts'"
+  as_root "mountpoint -q $(rf_q "$ROOTFS_DIR/dev")  || mount -o bind /dev $(rf_q "$ROOTFS_DIR/dev")"
+  as_root "mountpoint -q $(rf_q "$ROOTFS_DIR/dev/pts") || mount -t devpts devpts $(rf_q "$ROOTFS_DIR/dev/pts")"
 
   # Termux's tmp carries the Termux:X11 socket. Binding it here is what lets
   # rootforge_desktop.sh find an X server, exactly as --shared-tmp does for
   # the PRoot variant.
   local termux_tmp="/data/data/com.termux/files/usr/tmp"
   if [[ -d "$termux_tmp" ]]; then
-    as_root "mountpoint -q '$ROOTFS_DIR/tmp' || mount -o bind '$termux_tmp' '$ROOTFS_DIR/tmp'"
+    as_root "mountpoint -q $(rf_q "$ROOTFS_DIR/tmp") || mount -o bind $(rf_q "$termux_tmp") $(rf_q "$ROOTFS_DIR/tmp")"
   fi
 
   # Shared storage, so files can be moved in and out without root on the
   # Termux side. Absent on some devices/profiles, hence the guard.
   if [[ -d /sdcard ]]; then
-    as_root "mkdir -p '$ROOTFS_DIR/sdcard'"
-    as_root "mountpoint -q '$ROOTFS_DIR/sdcard' || mount -o bind /sdcard '$ROOTFS_DIR/sdcard'"
+    as_root "mkdir -p $(rf_q "$ROOTFS_DIR/sdcard")"
+    as_root "mountpoint -q $(rf_q "$ROOTFS_DIR/sdcard") || mount -o bind /sdcard $(rf_q "$ROOTFS_DIR/sdcard")"
   fi
 }
 
@@ -118,14 +139,14 @@ cmd_umount() {
   # Reverse order, and lazily: a shell still open inside the container would
   # otherwise hold /dev busy and leave the rest half-torn-down.
   for m in sdcard tmp dev/pts dev sys proc; do
-    as_root "mountpoint -q '$ROOTFS_DIR/$m' && umount -l '$ROOTFS_DIR/$m'" || true
+    as_root "mountpoint -q $(rf_q "$ROOTFS_DIR/$m") && umount -l $(rf_q "$ROOTFS_DIR/$m")" || true
   done
   log "Done."
 }
 
 cmd_login() {
   require_root
-  as_root "[ -d '$ROOTFS_DIR' ]" || die "No rootfs at $ROOTFS_DIR — run: $0 install <rootfs.tar.xz>"
+  as_root "[ -d $(rf_q "$ROOTFS_DIR") ]" || die "No rootfs at $ROOTFS_DIR — run: $0 install <rootfs.tar.xz>"
 
   mount_all
 
@@ -136,10 +157,10 @@ cmd_login() {
   # /data/data/com.termux/... paths that do not exist inside the container.
   as_root "env -i \
     HOME=/root \
-    TERM='${TERM:-xterm-256color}' \
+    TERM=$(rf_q "${TERM:-xterm-256color}") \
     PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     ROOTFORGE_CONTAINER=chroot \
-    chroot '$ROOTFS_DIR' /bin/bash --login"
+    chroot $(rf_q "$ROOTFS_DIR") /bin/bash --login"
 }
 
 CMD="${1:-}"
