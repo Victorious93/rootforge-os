@@ -1813,6 +1813,60 @@ assert_eq "an ordinary codename still patches" "$RC" "0"
 assert_contains "the patched image is named after the device" "$OUT" "boot-ksu-patched-pixel_6a"
 drop_sandbox
 
+section "rootforge boot — the wrapped path end to end"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_ksu_stubs
+
+run_script python3 -m rootforge.core.cli boot patch \
+  --stock-boot "$SANDBOX/boot.img" --android-version 14 --device pixel_6a
+assert_eq "CLI boot patch succeeds" "$RC" "0"
+assert_contains "the patched image is named after the device" "$OUT" "boot-ksu-patched-pixel_6a"
+assert_contains "the default tag reaches the API path" "$(cat "$RF_STUB_LOG")" "releases/latest"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_ksu_stubs
+# The tag that redirected the API query to another repository, now refused by
+# argparse before a single request is made.
+run_script python3 -m rootforge.core.cli boot patch \
+  --stock-boot "$SANDBOX/boot.img" --android-version 14 \
+  --ksu-version '../../../../octocat/Hello-World/releases/latest'
+assert_eq "a URL-redirecting tag is rejected" "$RC" "2"
+assert_contains "the rejection explains what the tag would do" "$OUT" "different repository"
+assert_eq "a rejected tag makes no request" "$(wc -l < "$RF_STUB_LOG")" "0"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_ksu_stubs
+run_script python3 -m rootforge.core.cli boot patch \
+  --stock-boot "$SANDBOX/missing.img" --android-version 14
+assert_eq "a missing stock image is rejected" "$RC" "2"
+assert_contains "a missing stock image says so" "$OUT" "boot image not found"
+assert_eq "a missing stock image downloads nothing" "$(wc -l < "$RF_STUB_LOG")" "0"
+
+run_script python3 -m rootforge.core.cli boot patch \
+  --stock-boot "$SANDBOX/boot.img" --android-version 140
+assert_eq "an implausible Android version is rejected" "$RC" "2"
+
+run_script python3 -m rootforge.core.cli boot patch \
+  --stock "$SANDBOX/boot.img" --android-version 14
+assert_eq "an abbreviated flag is rejected, not guessed" "$RC" "2"
+
+run_script python3 -m rootforge.core.cli boot
+assert_eq "a missing boot subcommand is rejected" "$RC" "2"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_ksu_stubs
+# flash-last writes the boot partition. With no patched image to flash it must
+# say so rather than reaching fastboot.
+run_script python3 -m rootforge.core.cli boot flash-last
+assert_eq "flash-last with nothing patched fails" "$RC" "1"
+assert_contains "flash-last says what to do first" "$OUT" "run without --flash first"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox

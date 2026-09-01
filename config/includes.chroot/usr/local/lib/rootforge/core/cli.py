@@ -16,6 +16,7 @@ from rootforge.core import (
     flashing as flashing_cmd,
     module as module_cmd,
     ota as ota_cmd,
+    boot as boot_cmd,
 )
 from rootforge.core.devices import list_devices
 from rootforge.core.doctor import run_doctor
@@ -72,6 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
     module_cmd.add_parser(subparsers)
     flashing_cmd.add_parser(subparsers)
     ota_cmd.add_parser(subparsers)
+    boot_cmd.add_parser(subparsers)
 
     return parser
 
@@ -128,6 +130,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return flashing_cmd.dispatch(args)
     if args.command == "ota":
         return ota_cmd.dispatch(args)
+    if args.command == "boot":
+        return boot_cmd.dispatch(args)
 
     parser.print_help()
     return 0
