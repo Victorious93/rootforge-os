@@ -1416,6 +1416,17 @@ OUT="$(cd "$SANDBOX" && env -u USER -u SUDO_USER -u ROOTFORGE_HOME HOME=/root \
 assert_eq "an unexported USER is not a crash" "$RC" "0"
 assert_not_contains "an unexported USER is not a crash (message)" "$OUT" "unbound variable"
 
+# rootforge-firstboot.service runs this script, and a systemd unit with no
+# User= is documented to get no $HOME. The old first line was
+# `${ROOTFORGE_HOME:-$HOME/rootforge}` under set -u, so an empty environment
+# ended the script at line 18 with "HOME: unbound variable" — and with
+# Type=oneshot a failed ExecStart skips ExecStartPost, so the completion
+# sentinel was never written and first boot failed the same way every time.
+OUT="$(cd "$SANDBOX" && env -i /bin/bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
+assert_eq "an empty environment is survivable" "$RC" "0"
+assert_not_contains "an empty environment is not an unbound-variable crash" "$OUT" "unbound variable"
+assert_contains "an empty environment still resolves a workspace" "$OUT" "ROOTFORGE_HOME:"
+
 # A system account's home is /nonexistent; a 15 GB SDK must not be aimed there.
 # ROOTFORGE_HOME is cleared because the sandbox exports it, and an explicit
 # value is exactly what suppresses this guard.
