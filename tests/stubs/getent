@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Test stub for getent. Passes through to the real getent unless
+# RF_STUB_PASSWD is set, in which case it answers `getent passwd <user>` from
+# that variable: newline-separated passwd lines.
+#
+# This exists because the bug being pinned is "the workspace follows $HOME
+# instead of the invoking user", and a test for that needs a user whose home
+# is *not* the ambient one. Depending on whoever happens to run the suite
+# makes the test pass or fail for reasons unrelated to the code — running as
+# root, it degenerates to comparing /root with /root.
+if [ -n "${RF_STUB_PASSWD:-}" ] && [ "${1:-}" = "passwd" ]; then
+  printf '%s\n' "$RF_STUB_PASSWD" | grep "^${2:-}:" || exit 2
+  exit 0
+fi
+exec /usr/bin/getent "$@"

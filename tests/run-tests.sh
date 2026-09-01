@@ -1368,6 +1368,130 @@ run_script bash "$BIN_DIR/install_adb_ime.sh" install --foo
 assert_eq "install rejects a flag in the serial position too" "$RC" "1"
 drop_sandbox
 
+section "00_bootstrap_distro.sh — where the workspace lands"
+
+new_sandbox
+# Regression, and the worst one found so far: ROOTFORGE_HOME was
+# "${ROOTFORGE_HOME:-$HOME/rootforge}", and sudo sets HOME to /root. So the
+# workspace resolved to /root/rootforge, and the next use of it was
+#
+#   sudo -u "$TARGET_USER" mkdir -p "$ROOTFORGE_HOME"/{devices,modules,...}
+#
+# — the unprivileged user creating directories inside /root, which is mode
+# 0700. It fails, set -e ends the run, and by then apt upgrade, the whole
+# cross-toolchain, GNOME and the udev rules are already installed. The
+# bootstrap could not finish on an ordinary machine.
+#
+# --check resolves the paths and exits without touching anything, which is
+# what makes this testable at all.
+OUT="$(cd "$SANDBOX" && HOME=/root SUDO_USER=root ROOTFORGE_HOME= \
+  bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
+assert_eq "--check succeeds without root" "$RC" "0"
+assert_contains "the workspace follows the sudo user, not \$HOME" "$OUT" "target user:     root"
+
+# The real shape of the bug: HOME says /root while the invoking user is
+# someone else. The workspace must follow the user, not HOME. The getent stub
+# supplies that user, so the assertion does not depend on who runs the suite —
+# as root, the ambient user's home *is* /root and the test would prove nothing.
+mkdir -p "$SANDBOX/devhome"
+export RF_STUB_PASSWD="dev:x:1000:1000::$SANDBOX/devhome:/bin/bash"
+OUT="$(cd "$SANDBOX" && HOME=/root SUDO_USER=dev ROOTFORGE_HOME= \
+  bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
+assert_eq "--check resolves for a non-root sudo user" "$RC" "0"
+assert_contains "the workspace is under the invoking user's home" "$OUT" "ROOTFORGE_HOME:  $SANDBOX/devhome/rootforge"
+assert_not_contains "the workspace is never placed under /root by accident" "$OUT" "ROOTFORGE_HOME:  /root/rootforge"
+assert_contains "the SDK follows the workspace" "$OUT" "SDK_ROOT:        $SANDBOX/devhome/rootforge/android-sdk"
+
+# A user getent does not know at all is a hard stop, not a guess.
+OUT="$(cd "$SANDBOX" && HOME=/root SUDO_USER=ghost ROOTFORGE_HOME= \
+  bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
+assert_eq "an unknown user is refused" "$RC" "1"
+assert_contains "the refusal names getent" "$OUT" "getent"
+unset RF_STUB_PASSWD
+
+# `${SUDO_USER:-$USER}` was itself an unbound-variable crash under set -u
+# wherever USER is not exported — cron, `sh -c`, some CI runners.
+OUT="$(cd "$SANDBOX" && env -u USER -u SUDO_USER -u ROOTFORGE_HOME HOME=/root \
+  bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
+assert_eq "an unexported USER is not a crash" "$RC" "0"
+assert_not_contains "an unexported USER is not a crash (message)" "$OUT" "unbound variable"
+
+# A system account's home is /nonexistent; a 15 GB SDK must not be aimed there.
+# ROOTFORGE_HOME is cleared because the sandbox exports it, and an explicit
+# value is exactly what suppresses this guard.
+OUT="$(cd "$SANDBOX" && SUDO_USER=nobody ROOTFORGE_HOME= bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
+assert_eq "a system account is refused" "$RC" "1"
+assert_contains "the refusal names the missing home" "$OUT" "does not exist"
+
+OUT="$(cd "$SANDBOX" && SUDO_USER=nobody ROOTFORGE_HOME=/srv/rf \
+  bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
+assert_eq "an explicit ROOTFORGE_HOME overrides the refusal" "$RC" "0"
+assert_contains "an explicit ROOTFORGE_HOME is honored" "$OUT" "ROOTFORGE_HOME:  /srv/rf"
+
+# Regression: `[[ "${1:-}" == "--headless" ]] && HEADLESS=1` ignored anything
+# else, so a typo installed the full desktop on a build server with no sign
+# the flag had been dropped.
+OUT="$(cd "$SANDBOX" && SUDO_USER=root bash "$BIN_DIR/00_bootstrap_distro.sh" --headles --check 2>&1)"; RC=$?
+assert_eq "a typo'd --headless is rejected" "$RC" "1"
+assert_contains "the typo'd flag is named" "$OUT" "Unknown option: --headles"
+
+OUT="$(cd "$SANDBOX" && SUDO_USER=root bash "$BIN_DIR/00_bootstrap_distro.sh" --headless --check 2>&1)"; RC=$?
+assert_contains "--headless is actually reflected" "$OUT" "desktop install: skipped"
+drop_sandbox
+
+section "esp32_toolkit.sh"
+
+new_sandbox
+mkdir -p "$SANDBOX/pathdir"
+cat > "$SANDBOX/pathdir/esptool.py" <<'EOS'
+#!/usr/bin/env bash
+printf 'esptool %s\n' "$*" >> "$RF_STUB_LOG"
+EOS
+chmod +x "$SANDBOX/pathdir/esptool.py"
+export PATH="$SANDBOX/pathdir:$STUB_DIR:$ORIGINAL_PATH"
+head -c 2048 /dev/zero > "$SANDBOX/firmware.bin"
+
+# Regression: `write_flash 0x0 "$FW"`. `pio run` — which this script's own
+# scaffold tells you to run — emits an APPLICATION image, and the app
+# partition starts at 0x10000. 0x0 on an ESP32-S3, the target in that same
+# scaffold, is the second-stage bootloader. The old command wrote the app
+# over the bootloader and the board stopped booting.
+run_script bash "$BIN_DIR/esp32_toolkit.sh" flash "$SANDBOX/firmware.bin" /dev/ttyFAKE
+assert_contains "a plain firmware.bin goes to the app offset" "$(cat "$RF_STUB_LOG")" "write_flash 0x10000"
+assert_not_contains "a plain firmware.bin does not overwrite the bootloader" \
+  "$(cat "$RF_STUB_LOG")" "write_flash 0x0 "
+
+# A merged image genuinely does belong at 0x0, so that stays reachable —
+# explicitly, and with a warning.
+: > "$RF_STUB_LOG"
+run_script bash "$BIN_DIR/esp32_toolkit.sh" flash "$SANDBOX/firmware.bin" /dev/ttyFAKE 0x0
+assert_contains "an explicit 0x0 is still honored" "$(cat "$RF_STUB_LOG")" "write_flash 0x0"
+assert_contains "an explicit 0x0 warns about the bootloader" "$OUT" "overwrites the bootloader"
+
+: > "$RF_STUB_LOG"
+run_script bash "$BIN_DIR/esp32_toolkit.sh" flash "$SANDBOX/firmware.bin" /dev/ttyFAKE notanoffset
+assert_eq "a non-numeric offset is rejected" "$RC" "1"
+assert_eq "a rejected offset flashes nothing" "$(wc -l < "$RF_STUB_LOG")" "0"
+
+# The same directory-name traversal the backup paths had.
+run_script bash "$BIN_DIR/esp32_toolkit.sh" new-project ../../escaped
+assert_eq "a traversing project name is rejected" "$RC" "1"
+assert_contains "the rejection explains itself" "$OUT" "Invalid project name"
+if [ -e "$SANDBOX/home/escaped" ]; then
+  fail "a traversing project name scaffolds nothing outside the tree" "it was created anyway"
+else
+  pass "a traversing project name scaffolds nothing outside the tree"
+fi
+
+run_script bash "$BIN_DIR/esp32_toolkit.sh" new-project tool-node_1
+assert_eq "an ordinary project name still scaffolds" "$RC" "0"
+if [ -f "$ROOTFORGE_HOME/esp32-projects/tool-node_1/platformio.ini" ]; then
+  pass "the scaffold lands under esp32-projects/"
+else
+  fail "the scaffold lands under esp32-projects/" "platformio.ini missing"
+fi
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox
