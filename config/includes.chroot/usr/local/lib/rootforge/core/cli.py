@@ -11,7 +11,12 @@ import json
 import sys
 from typing import Optional, Sequence
 
-from rootforge.core import __version__, flashing as flashing_cmd, module as module_cmd
+from rootforge.core import (
+    __version__,
+    flashing as flashing_cmd,
+    module as module_cmd,
+    ota as ota_cmd,
+)
 from rootforge.core.devices import list_devices
 from rootforge.core.doctor import run_doctor
 
@@ -66,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     # not mean editing a growing if/elif here.
     module_cmd.add_parser(subparsers)
     flashing_cmd.add_parser(subparsers)
+    ota_cmd.add_parser(subparsers)
 
     return parser
 
@@ -120,6 +126,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return module_cmd.dispatch(args)
     if args.command in ("flash", "backup"):
         return flashing_cmd.dispatch(args)
+    if args.command == "ota":
+        return ota_cmd.dispatch(args)
 
     parser.print_help()
     return 0

@@ -206,6 +206,13 @@ cat > "$ROOTFORGE_HOME/bin/payload-dumper-go" <<'STUB'
 #!/usr/bin/env bash
 printf 'payload-dumper-go %s
 ' "$*" >> "$RF_STUB_LOG"
+# Produces a file, because extract_ota.sh now treats an empty output
+# directory as a failure. This stub used to write nothing, so the
+# "extraction succeeds" assertion below was pinning the very bug that
+# check fixes: exit 0 and "Extraction complete" over zero files.
+OUT=""; prev=""
+for a in "$@"; do [ "$prev" = "-o" ] && OUT="$a"; prev="$a"; done
+[ -n "$OUT" ] && head -c 1024 /dev/zero > "$OUT/boot.img"
 STUB
 chmod +x "$ROOTFORGE_HOME/bin/payload-dumper-go"
 
@@ -1501,6 +1508,95 @@ if [ -f "$ROOTFORGE_HOME/esp32-projects/tool-node_1/platformio.ini" ]; then
 else
   fail "the scaffold lands under esp32-projects/" "platformio.ini missing"
 fi
+drop_sandbox
+
+section "extract_ota.sh — an empty extraction is not a success"
+
+# A dumper that exits 0 and writes whatever RF_STUB_DUMPER_WRITES names. That
+# is not a contrived failure: a payload that simply does not contain the
+# requested partitions is the ordinary way to reach it.
+plant_dumper() {
+  mkdir -p "$ROOTFORGE_HOME/bin"
+  cat > "$ROOTFORGE_HOME/bin/payload-dumper-go" <<'EOS'
+#!/usr/bin/env bash
+OUT=""
+prev=""
+for a in "$@"; do [ "$prev" = "-o" ] && OUT="$a"; prev="$a"; done
+[ -n "${RF_STUB_LOG:-}" ] && printf 'dumper %s\n' "$*" >> "$RF_STUB_LOG"
+for f in ${RF_STUB_DUMPER_WRITES:-}; do
+  head -c 1024 /dev/zero > "$OUT/$f"
+done
+exit 0
+EOS
+  chmod +x "$ROOTFORGE_HOME/bin/payload-dumper-go"
+}
+
+new_sandbox
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+# Regression: the script printed "Extraction complete" and exited 0 over an
+# empty output directory. The failure then surfaced one step later as a
+# confusing "no such file" from whatever was going to patch the boot image.
+run_script bash "$BIN_DIR/extract_ota.sh" "$SANDBOX/payload.bin" "$SANDBOX/out" --partitions boot
+assert_eq "an extraction that produced nothing fails" "$RC" "1"
+assert_contains "the empty extraction says what to check" "$OUT" "produced no files"
+assert_not_contains "an empty extraction is never called complete" "$OUT" "Extraction complete"
+
+new_sandbox
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+export RF_STUB_DUMPER_WRITES="boot.img"
+run_script bash "$BIN_DIR/extract_ota.sh" "$SANDBOX/payload.bin" "$SANDBOX/out" --partitions boot
+assert_eq "a real extraction still succeeds" "$RC" "0"
+assert_contains "a real extraction counts what it produced" "$OUT" "Extraction complete (1 file(s))"
+drop_sandbox
+
+section "rootforge ota — the wrapped path end to end"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+export RF_STUB_DUMPER_WRITES="boot.img init_boot.img"
+
+# The shell bug this group exists to make unrepresentable: with an optional
+# positional output directory, `extract_ota.sh ota.zip --partitions boot` read
+# the flag as the directory name and left the partition list at its default.
+run_script python3 -m rootforge.core.cli ota extract "$SANDBOX/payload.bin" \
+  --partitions boot --output "$SANDBOX/out"
+assert_eq "CLI ota extract succeeds" "$RC" "0"
+assert_contains "the partition list reaches the dumper" "$(cat "$RF_STUB_LOG")" "-p boot"
+assert_contains "the output directory reaches the dumper" "$(cat "$RF_STUB_LOG")" "-o $SANDBOX/out"
+if [ -d "$SANDBOX/--partitions" ]; then
+  fail "no directory is ever named after a flag" "$SANDBOX/--partitions was created"
+else
+  pass "no directory is ever named after a flag"
+fi
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_dumper
+run_script python3 -m rootforge.core.cli ota extract "$SANDBOX/missing.zip"
+assert_eq "a missing input is rejected" "$RC" "2"
+assert_contains "a missing input says so" "$OUT" "not found"
+assert_eq "a missing input never runs the dumper" "$(wc -l < "$RF_STUB_LOG")" "0"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+# 'boot,' reaches payload-dumper-go as a request for a partition named '',
+# which is a silent no-op rather than an error.
+run_script python3 -m rootforge.core.cli ota extract "$SANDBOX/payload.bin" --partitions "boot,"
+assert_eq "a trailing comma in the partition list is rejected" "$RC" "2"
+assert_contains "the trailing comma is named" "$OUT" "trailing comma"
+
+run_script python3 -m rootforge.core.cli ota extract "$SANDBOX/payload.bin" --partition boot
+assert_eq "an abbreviated flag is rejected, not guessed" "$RC" "2"
+assert_eq "a rejected flag never runs the dumper" "$(wc -l < "$RF_STUB_LOG")" "0"
+
+run_script python3 -m rootforge.core.cli ota
+assert_eq "a missing ota subcommand is rejected" "$RC" "2"
 drop_sandbox
 
 section "lint_module.sh"
