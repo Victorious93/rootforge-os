@@ -62,6 +62,19 @@ usage() {
   exit "${1:-0}"
 }
 
+# The AVD name becomes a profile filename, an AVD directory name and a work
+# directory name. `create` validated it; `boot` did not, so
+#
+#   setup_rooted_avd.sh boot --name '../../escaped'
+#
+# read its mode from a .conf outside the profile directory and handed the
+# name straight to `emulator`. One helper, both commands, so the two cannot
+# drift apart again.
+require_valid_avd_name() {
+  [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]] \
+    || die "--name must be [A-Za-z0-9._-] (got '$1') — it becomes a profile filename and an AVD directory name"
+}
+
 # `x="$(grep -m1 KEY= file | cut ...)"` aborts the whole script under
 # `set -o pipefail` when the key isn't present — so a profile that was
 # hand-edited, truncated, or written by an older version of this script made
@@ -116,6 +129,7 @@ cmd_boot() {
     esac
   done
   [[ -z "$name" ]] && die "--name required"
+  require_valid_avd_name "$name"
 
   local profile="$PROFILE_DIR/${name}.conf"
   local mode="unrooted"
@@ -158,14 +172,32 @@ root_avd() {
 
   mkdir -p "$ROOTFORGE_HOME/bin"
   local MAGISK_APK="$ROOTFORGE_HOME/bin/magisk.apk"
-  if [[ ! -f "$MAGISK_APK" ]]; then
+  # `[[ ! -f ]]` treated any file at this path as a usable cache, and curl
+  # wrote straight to it — so a download cut short left a partial APK that
+  # every later run reused. `unzip -p` then extracted nothing and the script
+  # died with
+  #
+  #   magiskinit not present in this Magisk APK for abi=x86_64 — pick an ABI
+  #   Magisk actually ships lib/<abi>/ for
+  #
+  # which sends the user to change an ABI that was never wrong. Verified with
+  # a 13-byte cached APK. A confidently wrong error is worse than none.
+  #
+  # rf_download_cached treats an implausibly small file as absent, so it also
+  # recovers a cache the old code already poisoned. A Magisk APK is ~10 MB.
+  if [[ ! -f "$MAGISK_APK" ]] || [[ "$(wc -c < "$MAGISK_APK")" -lt 1048576 ]]; then
     log "Fetching latest Magisk release APK (cached at $MAGISK_APK for future runs)"
     local url
     url=$(curl -fsSL "https://api.github.com/repos/topjohnwu/Magisk/releases/latest" \
       | python3 -c "import sys,json; a=[x['browser_download_url'] for x in json.load(sys.stdin)['assets'] if x['name'].endswith('.apk') and 'stub' not in x['name']]; print(a[0] if a else '')")
     [[ -z "$url" ]] && die "Could not resolve latest Magisk APK download URL"
-    curl -fsSL -o "$MAGISK_APK" "$url"
+    rf_download_cached "$url" "$MAGISK_APK" 1048576 \
+      || die "Could not download a usable Magisk APK — nothing was patched."
   fi
+
+  # Distinguish "this APK is not readable" from "this ABI is not shipped".
+  unzip -l "$MAGISK_APK" >/dev/null 2>&1 \
+    || die "$MAGISK_APK is not a readable zip — delete it and re-run to refetch."
 
   local rwork="$WORK_DIR/${name}-root-${STAMP}"
   mkdir -p "$rwork"
@@ -185,6 +217,8 @@ root_avd() {
   done
   chmod 755 "$rwork"/magisk* 2>/dev/null || true
 
+  # Reached only when the APK itself is readable, so this really is about the
+  # ABI now rather than standing in for a broken download.
   [[ -f "$rwork/magiskinit" ]] || die "magiskinit not present in this Magisk APK for abi=$abi — pick an ABI Magisk actually ships lib/<abi>/ for (x86, x86_64, armeabi-v7a, arm64-v8a)"
 
   log "Patching ramdisk.img with magiskboot (init -> magiskinit, overlay.d payload)"
@@ -282,7 +316,7 @@ cmd_create() {
   # and $name into a profile filename — keep them to what those accept so a
   # typo fails here with a clear message rather than deep inside sdkmanager.
   [[ "$api" =~ ^[0-9]{1,3}$ ]] || die "--api must be a number like 33 or 34 (got '$api')"
-  [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || die "--name must be [A-Za-z0-9._-] (got '$name')"
+  require_valid_avd_name "$name"
   case "$abi" in
     x86_64|x86|arm64-v8a|armeabi-v7a) ;;
     *) die "--abi must be x86_64, x86, arm64-v8a or armeabi-v7a (got '$abi')" ;;

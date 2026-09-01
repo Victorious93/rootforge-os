@@ -1867,6 +1867,133 @@ assert_eq "flash-last with nothing patched fails" "$RC" "1"
 assert_contains "flash-last says what to do first" "$OUT" "run without --flash first"
 drop_sandbox
 
+section "setup_rooted_avd.sh — name validation and the cached Magisk APK"
+
+new_sandbox
+mkdir -p "$SANDBOX/avdbin"
+cat > "$SANDBOX/avdbin/emulator" <<'EOS'
+#!/usr/bin/env bash
+printf 'emulator %s\n' "$*" >> "$RF_STUB_LOG"
+EOS
+cat > "$SANDBOX/avdbin/avdmanager" <<'EOS'
+#!/usr/bin/env bash
+printf 'avdmanager %s\n' "$*" >> "$RF_STUB_LOG"
+EOS
+chmod +x "$SANDBOX/avdbin"/*
+export PATH="$SANDBOX/avdbin:$STUB_DIR:$ORIGINAL_PATH"
+
+# Regression: `create` validated --name and `boot` did not, so
+# `boot --name '../../escaped'` read MODE from a .conf outside the profile
+# directory and handed the name straight to `emulator`.
+mkdir -p "$ROOTFORGE_HOME/avd-profiles"
+printf 'MODE=rooted\n' > "$HOME/escaped.conf"
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" boot --name '../../escaped'
+assert_eq "boot rejects a traversing name, as create already did" "$RC" "1"
+assert_contains "the rejection explains what the name becomes" "$OUT" "profile filename"
+assert_not_contains "a rejected name never reaches the emulator" "$(cat "$RF_STUB_LOG")" "emulator"
+
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" create --name '../../escaped' --mode unrooted
+assert_eq "create still rejects it too" "$RC" "1"
+
+# An ordinary name must still boot.
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" boot --name testavd
+assert_eq "an ordinary name still boots" "$RC" "0"
+assert_contains "the ordinary name reaches the emulator" "$(cat "$RF_STUB_LOG")" "emulator -avd testavd"
+
+new_sandbox
+# Regression: a truncated cached magisk.apk was reused, unzip extracted
+# nothing, and the script died with "magiskinit not present ... pick an ABI
+# Magisk actually ships lib/<abi>/ for" — sending the user to change an ABI
+# that was never wrong.
+#
+# Driving the real `create --mode rooted` for this needs the SDK tools
+# stubbed; grepping the script for the fix would test the grep, which is the
+# shape tests/check-tests.sh exists to catch.
+mkdir -p "$SANDBOX/avdbin" "$ROOTFORGE_HOME/bin" "$HOME/.android/avd/rooty.avd"
+head -c 1024 /dev/zero > "$HOME/.android/avd/rooty.avd/ramdisk.img"
+for t in avdmanager sdkmanager emulator magiskboot; do
+  cat > "$SANDBOX/avdbin/$t" <<'EOS'
+#!/usr/bin/env bash
+printf '%s %s\n' "$(basename "$0")" "$*" >> "$RF_STUB_LOG"
+exit 0
+EOS
+  chmod +x "$SANDBOX/avdbin/$t"
+done
+cat > "$SANDBOX/avdbin/curl" <<'EOS'
+#!/usr/bin/env bash
+printf 'curl %s\n' "$*" >> "$RF_STUB_LOG"
+OUT=""; prev=""
+for a in "$@"; do [ "$prev" = "-o" ] && OUT="$a"; prev="$a"; done
+if [ -n "$OUT" ]; then head -c "${RF_STUB_DL_BYTES:-12000000}" /dev/zero > "$OUT"; exit 0; fi
+echo '{"assets":[{"name":"Magisk-v27.apk","browser_download_url":"https://example.invalid/m.apk"}]}'
+EOS
+chmod +x "$SANDBOX/avdbin/curl"
+export PATH="$SANDBOX/avdbin:$STUB_DIR:$ORIGINAL_PATH"
+
+# A truncated cache entry is now treated as absent, so it is refetched — and
+# the refetched file (zeros, not a zip) is caught by the readability check
+# rather than being blamed on the ABI.
+printf 'PK\003\004TRUNCATED' > "$ROOTFORGE_HOME/bin/magisk.apk"
+run_script bash "$BIN_DIR/setup_rooted_avd.sh" create --name rooty --mode rooted --abi x86_64
+assert_eq "a bad Magisk APK fails the rooted create" "$RC" "1"
+assert_contains "the failure names the APK, not the ABI" "$OUT" "not a readable zip"
+assert_not_contains "the failure does not blame the ABI" "$OUT" "pick an ABI"
+assert_contains "the truncated cache entry was refetched, not reused" "$(cat "$RF_STUB_LOG")" "curl"
+drop_sandbox
+
+section "rootforge avd — the wrapped path end to end"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+mkdir -p "$SANDBOX/avdbin"
+cat > "$SANDBOX/avdbin/emulator" <<'EOS'
+#!/usr/bin/env bash
+printf 'emulator %s\n' "$*" >> "$RF_STUB_LOG"
+EOS
+cat > "$SANDBOX/avdbin/avdmanager" <<'EOS'
+#!/usr/bin/env bash
+printf 'avdmanager %s\n' "$*" >> "$RF_STUB_LOG"
+EOS
+chmod +x "$SANDBOX/avdbin"/*
+export PATH="$SANDBOX/avdbin:$STUB_DIR:$ORIGINAL_PATH"
+
+run_script python3 -m rootforge.core.cli avd list
+assert_eq "CLI avd list succeeds" "$RC" "0"
+assert_contains "avd list names the profile directory" "$OUT" "RootForge profiles"
+
+run_script python3 -m rootforge.core.cli avd boot --name testavd
+assert_eq "CLI avd boot succeeds" "$RC" "0"
+assert_contains "CLI avd boot reaches the emulator" "$(cat "$RF_STUB_LOG")" "emulator -avd testavd"
+
+run_script python3 -m rootforge.core.cli avd boot --name '../../escaped'
+assert_eq "a traversing name is rejected by the CLI" "$RC" "2"
+assert_contains "the CLI rejection names the profile directory" "$OUT" "avd-profiles"
+
+run_script python3 -m rootforge.core.cli avd create --name t --mode semirooted
+assert_eq "an unknown mode is rejected" "$RC" "2"
+assert_contains "the valid modes are listed" "$OUT" "unrooted"
+
+run_script python3 -m rootforge.core.cli avd create --name t --mode rooted --abi mips
+assert_eq "an unknown ABI is rejected" "$RC" "2"
+
+# A rooted AVD cannot be built from a Play image. Refusing here means the
+# error arrives before sdkmanager downloads a multi-GB system image.
+# Reset the recorded calls: this block has already run `avd boot`, and the
+# assertion below is about what this one command did.
+: > "$RF_STUB_LOG"
+run_script python3 -m rootforge.core.cli avd create --name t --mode rooted \
+  --tag google_apis_playstore
+assert_eq "rooted on a Play image is refused" "$RC" "1"
+assert_contains "the refusal explains why" "$OUT" "signed and locked"
+assert_not_contains "the refusal downloads nothing" "$(cat "$RF_STUB_LOG")" "avdmanager"
+
+run_script python3 -m rootforge.core.cli avd create --nam t --mode rooted
+assert_eq "an abbreviated flag is rejected, not guessed" "$RC" "2"
+
+run_script python3 -m rootforge.core.cli avd
+assert_eq "a missing avd subcommand is rejected" "$RC" "2"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox

@@ -54,6 +54,12 @@ INVOKES = re.compile(
     r'|\$[A-Z_]*(BUILD|LAUNCHER|DESKTOP|CHROOT|SCRIPT)[A-Z_]*'
     r'|\brf_[a-z_]+\b'
 )
+
+# ...but a script path handed to grep or sed is being READ, not run. I wrote a
+# block that greps setup_rooted_avd.sh for the string of its own fix — the
+# exact shape this check exists to catch — and the first version of the check
+# passed it, because "$BIN_DIR/setup_rooted_avd.sh" appeared on the line.
+READS_ONLY = re.compile(r'\b(grep|sed|awk|cat|head|tail|wc|diff|shellcheck)\b')
 ASSERTS = re.compile(r'^\s*(assert_\w+|pass|fail)\b')
 
 # Granularity is the block, not the section. The USBGuard section that
@@ -93,7 +99,7 @@ for n, line in enumerate(lines, 1):
         close()
         current = {"section": section, "line": n, "invokes": False, "asserts": 0}
         continue
-    if INVOKES.search(line):
+    if INVOKES.search(line) and not READS_ONLY.search(line):
         current["invokes"] = True
     if ASSERTS.match(line):
         current["asserts"] += 1
