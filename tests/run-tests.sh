@@ -496,6 +496,48 @@ printf 'secret\n' | rf_write_private "$SANDBOX/pre.env"
 assert_eq "rf_write_private tightens an existing 0644 file" "$(stat -c %a "$SANDBOX/pre.env")" "600"
 drop_sandbox
 
+section "setup_ai_tools.sh — a key must not reach the log"
+
+new_sandbox
+# Regression: gemini authenticated with ?key= in the URL. curl's own error
+# text quotes the URL it was trying to reach, that text is appended to
+# $LOG_FILE, and the key landed there in plaintext — in a mode-644 file,
+# while this same script chmod 600s the key file and chmod 700s its
+# directory. A curl that fails the way a real one does makes it visible.
+mkdir -p "$SANDBOX/curlbin"
+cat > "$SANDBOX/curlbin/curl" <<'EOS'
+#!/usr/bin/env bash
+CFG="$(cat)"
+URL="$(printf '%s' "$CFG" | sed -n 's/^url = "\(.*\)"$/\1/p')"
+echo "curl: (6) Could not resolve host for $URL" >&2
+echo "000"
+EOS
+chmod +x "$SANDBOX/curlbin/curl"
+export PATH="$SANDBOX/curlbin:$STUB_DIR:$ORIGINAL_PATH"
+
+run_script bash "$BIN_DIR/setup_ai_tools.sh" add gemini --key "AIzaSECRETKEY123"
+LOGF="$(find "$ROOTFORGE_HOME/logs" -name 'ai_tools_*.log' | head -1)"
+if [ -z "$LOGF" ]; then
+  fail "a log was written" "no ai_tools log found"
+else
+  pass "a log was written"
+  assert_not_contains "the gemini key never reaches the log" "$(cat "$LOGF")" "AIzaSECRETKEY123"
+  assert_eq "the log is not world-readable" "$(stat -c %a "$LOGF")" "600"
+fi
+# The key must still be stored and sourceable — the fix moves where it
+# travels, not whether it works.
+KEYFILE="$HOME/.rootforge/ai-keys.env"
+assert_eq "the key is still stored" \
+  "$(bash -c ". '$KEYFILE'; printf %s \"\$GEMINI_API_KEY\"")" "AIzaSECRETKEY123"
+
+# Every other provider authenticates with a header already; check one, so a
+# future provider added with a query parameter shows up here.
+run_script bash "$BIN_DIR/setup_ai_tools.sh" add openai --key "sk-SECRETOPENAI"
+for f in "$ROOTFORGE_HOME"/logs/ai_tools_*.log; do
+  assert_not_contains "no key reaches any ai_tools log" "$(cat "$f")" "sk-SECRETOPENAI"
+done
+drop_sandbox
+
 section "setup_ai_tools.sh — key storage"
 
 new_sandbox

@@ -34,6 +34,11 @@ KEY_FILE="$HOME/.rootforge/ai-keys.env"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$LOG_DIR" "$HOME/.rootforge"
 LOG_FILE="$LOG_DIR/ai_tools_$(date +%Y%m%d_%H%M%S).log"
+# This script handles API keys, and its log collects curl's stderr. Even with
+# the key out of the URL, a log written by a secret-handling tool should not
+# be created world-readable — the default umask made it 0644.
+: > "$LOG_FILE"
+chmod 600 "$LOG_FILE"
 log() { echo "[ai-tools] $*" | tee -a "$LOG_FILE"; }
 die() { echo "[ai-tools] ERROR: $*" >&2; exit 1; }
 
@@ -120,8 +125,19 @@ verify_provider_key() {
       url="https://huggingface.co/api/whoami-v2"
       headers=("Authorization: Bearer $key") ;;
     gemini)
-      # Gemini authenticates with a query parameter rather than a header.
-      url="https://generativelanguage.googleapis.com/v1beta/models?key=${key}" ;;
+      # Gemini accepts either ?key= or the x-goog-api-key header. The query
+      # parameter leaked the key: curl's own error text quotes the URL it was
+      # trying to reach, that text is appended to $LOG_FILE, and the key
+      # landed there in plaintext. Verified:
+      #
+      #   curl: (6) Could not resolve host for
+      #     https://generativelanguage.googleapis.com/v1beta/models?key=AIza...
+      #
+      # in a mode-644 file, while this same script chmod 600s the key file and
+      # chmod 700s its directory. A key in a URL also reaches proxy logs and
+      # shell history in a way a header does not. Use the header.
+      url="https://generativelanguage.googleapis.com/v1beta/models"
+      headers=("x-goog-api-key: $key") ;;
     *)
       echo "skip"; return 0 ;;
   esac
