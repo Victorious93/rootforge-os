@@ -56,6 +56,11 @@ new_sandbox() {
   export RF_STUB_LOG="$SANDBOX/stub.log"
   : > "$RF_STUB_LOG"
   export PATH="$STUB_DIR:$ORIGINAL_PATH"
+  # harden_kernel.sh writes a sysctl drop-in and runs `sysctl --system`.
+  # Without this the suite modifies the machine it runs on — verified: the
+  # drop-in was present on the host, timestamped by the last run. Set here
+  # rather than per-section so a future test cannot forget it.
+  export ROOTFORGE_SYSCTL_FILE="$SANDBOX/sysctl-dropin.conf"
   unset RF_STUB_ADB_DEVICES RF_STUB_FASTBOOT_DEVICES RF_STUB_SLOT \
         RF_STUB_FLASH_RC RF_STUB_GETVAR_ALL RF_STUB_ADB_SHELL_OUT \
         RF_STUB_FLASH_FAIL_ON_CALL RF_STUB_ADB_SHELL_RC \
@@ -741,8 +746,27 @@ assert_contains "a mistyped --lockdown says so" "$OUT" "Unknown argument"
 
 new_sandbox
 run_script bash "$BIN_DIR/harden_kernel.sh" --dry-run
-assert_eq "--dry-run succeeds without touching anything" "$RC" "0"
+assert_eq "--dry-run succeeds" "$RC" "0"
 assert_contains "--dry-run shows what it would write" "$OUT" "kernel.yama.ptrace_scope"
+# The label used to say "without touching anything" and never checked it.
+if [ -e "$ROOTFORGE_SYSCTL_FILE" ]; then
+  fail "--dry-run writes no sysctl drop-in" "$ROOTFORGE_SYSCTL_FILE was created"
+else
+  pass "--dry-run writes no sysctl drop-in"
+fi
+
+# And the non-dry path must write to the seam, never to /etc.
+new_sandbox
+printf 'GRUB_CMDLINE_LINUX=""\n' > "$SANDBOX/grub"
+export ROOTFORGE_GRUB_DEFAULTS="$SANDBOX/grub"
+run_script bash "$BIN_DIR/harden_kernel.sh"
+if [ -f "$ROOTFORGE_SYSCTL_FILE" ]; then
+  pass "a real run writes the drop-in where it was told to"
+else
+  fail "a real run writes the drop-in where it was told to" "$ROOTFORGE_SYSCTL_FILE missing"
+fi
+assert_contains "the drop-in has the expected content" "$(cat "$ROOTFORGE_SYSCTL_FILE")" "kernel.yama.ptrace_scope"
+assert_contains "a redirected drop-in is not applied with sysctl --system" "$OUT" "did not run 'sysctl --system'"
 
 # Regression: `sysctl --system` exits non-zero if any key anywhere under
 # /etc/sysctl.d cannot be set, which under set -e aborted the script before
@@ -764,14 +788,60 @@ assert_contains "a mistyped --usbguard-learn says so" "$OUT" "Unknown argument"
 
 # The empty-policy guard: USBGuard's default posture is block, so writing a
 # policy with no allow rules denies every USB device including the keyboard.
+#
+# This section used to build a policy file itself and grep it — which tested
+# grep, not harden_system.sh, and would have passed whether or not the guard
+# existed. It now drives the real script through --dry-run, which reaches the
+# guard without installing packages or enabling services on the machine
+# running the tests.
+plant_priv_stubs() {
+  mkdir -p "$SANDBOX/priv"
+  cat > "$SANDBOX/priv/sudo" <<'EOS'
+#!/usr/bin/env bash
+printf 'sudo %s
+' "$*" >> "$RF_STUB_LOG"
+exec "$@"
+EOS
+  cat > "$SANDBOX/priv/usbguard" <<'EOS'
+#!/usr/bin/env bash
+printf '%b' "${RF_STUB_USB_POLICY:-}"
+EOS
+  chmod +x "$SANDBOX/priv/sudo" "$SANDBOX/priv/usbguard"
+  export PATH="$SANDBOX/priv:$STUB_DIR:$ORIGINAL_PATH"
+}
+
 new_sandbox
-POLICY="$SANDBOX/rules.conf"
-: > "$POLICY"
-COUNT="$(grep -cE '^[[:space:]]*allow' "$POLICY" || true)"
-assert_eq "an empty generate-policy yields zero allow rules" "$COUNT" "0"
-printf 'allow id 1d6b:0002 name "root hub"\nallow id 046d:c52b name "keyboard"\n' > "$POLICY"
-COUNT="$(grep -cE '^[[:space:]]*allow' "$POLICY" || true)"
-assert_eq "a populated policy is counted correctly" "$COUNT" "2"
+plant_priv_stubs
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_USB_POLICY=""
+export ROOTFORGE_USBGUARD_RULES="$SANDBOX/rules.conf"
+run_script bash "$BIN_DIR/harden_system.sh" --usbguard-learn --dry-run
+assert_eq "an empty generated policy aborts" "$RC" "1"
+assert_contains "the abort explains what it would have done" "$OUT" "produced no allow rules"
+if [ -e "$SANDBOX/rules.conf" ]; then
+  fail "an empty policy is never written" "rules.conf was created"
+else
+  pass "an empty policy is never written"
+fi
+
+new_sandbox
+plant_priv_stubs
+export ROOTFORGE_ASSUME_YES=1
+export RF_STUB_USB_POLICY='allow id 1d6b:0002 name "root hub"\nallow id 046d:c52b name "keyboard"\n'
+export ROOTFORGE_USBGUARD_RULES="$SANDBOX/rules.conf"
+run_script bash "$BIN_DIR/harden_system.sh" --usbguard-learn --dry-run
+assert_contains "a populated policy is counted" "$OUT" "Generated 2 allow rule(s)"
+assert_contains "the devices that would be allowed are shown before writing" "$OUT" "046d:c52b"
+
+# --dry-run must not be a partial run: nothing installed, nothing enabled.
+assert_not_contains "--dry-run installs no packages" "$(cat "$RF_STUB_LOG")" "apt-get install"
+assert_not_contains "--dry-run enables no services" "$(cat "$RF_STUB_LOG")" "systemctl enable"
+assert_contains "--dry-run says what it would have run instead" "$OUT" "would run: apt-get install"
+
+new_sandbox
+plant_priv_stubs
+run_script bash "$BIN_DIR/harden_system.sh" --dry-run --bogus
+assert_eq "an unknown flag is still rejected alongside --dry-run" "$RC" "1"
+assert_eq "a rejected flag runs nothing privileged" "$(wc -l < "$RF_STUB_LOG")" "0"
 drop_sandbox
 
 section "rpi_fleet_tools.sh"

@@ -22,14 +22,19 @@ set -euo pipefail
 # Only $1 was ever looked at, and an unrecognized argument was ignored, so
 # `--usbguard-lern` ran the script without learning and reported success.
 USBGUARD_LEARN=0
+DRY_RUN=0
 for arg in "$@"; do
   case "$arg" in
     --usbguard-learn) USBGUARD_LEARN=1 ;;
+    --dry-run) DRY_RUN=1 ;;
     -h|--help)
-      echo "Usage: harden_system.sh [--usbguard-learn]"
+      echo "Usage: harden_system.sh [--usbguard-learn] [--dry-run]"
+      echo "  --usbguard-learn  build a USB allow-list from what is connected now"
+      echo "  --dry-run         install nothing, enable no services, change no"
+      echo "                    files; show what the USB policy would allow"
       exit 0
       ;;
-    *) echo "Unknown argument: $arg (expected --usbguard-learn)" >&2; exit 1 ;;
+    *) echo "Unknown argument: $arg (expected --usbguard-learn or --dry-run)" >&2; exit 1 ;;
   esac
 done
 
@@ -39,9 +44,27 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/harden_system_$(date +%Y%m%d_%H%M%S).log"
 log() { echo "[harden-system] $*" | tee -a "$LOG_FILE"; }
 
+# --dry-run exists because this script's default USB posture is block-all: it
+# can lock you out of the keyboard you would need to undo it. Being able to
+# see the allow-list it would write, before it writes anything, is the
+# difference between a reviewable change and a gamble. It is also what makes
+# the empty-policy guard below testable without installing packages and
+# enabling services on the machine running the test.
+if [[ $DRY_RUN -eq 1 ]]; then
+  log "DRY RUN — installing nothing, enabling no services, changing no files."
+fi
+
+run_priv() {
+  if [[ $DRY_RUN -eq 1 ]]; then
+    log "would run: $*"
+    return 0
+  fi
+  sudo "$@"
+}
+
 log "Installing hardening packages"
-sudo apt-get update -y | tee -a "$LOG_FILE"
-sudo apt-get install -y --no-install-recommends \
+run_priv apt-get update -y | tee -a "$LOG_FILE"
+run_priv apt-get install -y --no-install-recommends \
   apparmor apparmor-utils apparmor-profiles \
   usbguard \
   auditd audispd-plugins \
@@ -51,8 +74,8 @@ sudo apt-get install -y --no-install-recommends \
 
 # ---- AppArmor -----------------------------------------------------------
 log "Enabling AppArmor enforce mode for available profiles"
-sudo systemctl enable --now apparmor 2>&1 | tee -a "$LOG_FILE"
-sudo aa-enforce /etc/apparmor.d/* 2>>"$LOG_FILE" || log "Some profiles couldn't be set to enforce — check aa-status for details."
+run_priv systemctl enable --now apparmor 2>&1 | tee -a "$LOG_FILE"
+run_priv aa-enforce /etc/apparmor.d/* 2>>"$LOG_FILE" || log "Some profiles couldn't be set to enforce — check aa-status for details."
 
 # ---- USBGuard -------------------------------------------------------------
 log "Configuring USBGuard"
@@ -73,7 +96,11 @@ if [[ $USBGUARD_LEARN -eq 1 ]]; then
   # so nothing caught it. Build the policy in a temp file and check it
   # before it replaces anything.
   USBGUARD_TMP="$(mktemp)"
+  # Same seam as ROOTFORGE_GRUB_DEFAULTS and ROOTFORGE_SYSCTL_FILE.
+  USBGUARD_RULES="${ROOTFORGE_USBGUARD_RULES:-/etc/usbguard/rules.conf}"
   trap 'rm -f "$USBGUARD_TMP"' EXIT
+  # Not run_priv: a dry run still needs the real policy so it can show what
+  # would be allowed. generate-policy only reads the USB bus.
   sudo usbguard generate-policy > "$USBGUARD_TMP"
 
   RULE_COUNT="$(grep -cE '^[[:space:]]*allow' "$USBGUARD_TMP" || true)"
@@ -89,7 +116,7 @@ if [[ $USBGUARD_LEARN -eq 1 ]]; then
   log "Everything NOT connected right now will be blocked once USBGuard is enabled."
   if ! rf_confirm USBGUARD \
       "" \
-      "About to replace /etc/usbguard/rules.conf and enable USBGuard." \
+      "About to replace $USBGUARD_RULES and enable USBGuard." \
       "Devices allowed by the new policy ($RULE_COUNT rule(s)):" \
       "$(grep -E '^[[:space:]]*allow' "$USBGUARD_TMP" | sed 's/^/  /' | head -20)" \
       "" \
@@ -98,11 +125,11 @@ if [[ $USBGUARD_LEARN -eq 1 ]]; then
     exit 1
   fi
 
-  sudo cp "$USBGUARD_TMP" /etc/usbguard/rules.conf
-  sudo chmod 600 /etc/usbguard/rules.conf
-  log "Policy written from current device snapshot. Review /etc/usbguard/rules.conf"
+  run_priv cp "$USBGUARD_TMP" "$USBGUARD_RULES"
+  run_priv chmod 600 "$USBGUARD_RULES"
+  log "Policy written from current device snapshot. Review $USBGUARD_RULES"
   log "  before relying on it — this allow-lists whatever was plugged in just now."
-  sudo systemctl enable --now usbguard 2>&1 | tee -a "$LOG_FILE"
+  run_priv systemctl enable --now usbguard 2>&1 | tee -a "$LOG_FILE"
 else
   log "Leaving existing/default USBGuard policy in place, and NOT enabling the"
   log "  service — enabling it against an empty policy would block every USB"
@@ -112,8 +139,8 @@ fi
 
 # ---- auditd ---------------------------------------------------------------
 log "Configuring auditd baseline rules"
-AUDIT_RULES="/etc/audit/rules.d/rootforge.rules"
-sudo tee "$AUDIT_RULES" > /dev/null <<'EOF'
+AUDIT_RULES="${ROOTFORGE_AUDIT_RULES:-/etc/audit/rules.d/rootforge.rules}"
+run_priv tee "$AUDIT_RULES" > /dev/null <<'EOF'
 # RootForge OS — audit baseline
 # Victorious Framework
 -w /etc/passwd -p wa -k rootforge-identity
@@ -122,13 +149,13 @@ sudo tee "$AUDIT_RULES" > /dev/null <<'EOF'
 -w /etc/usbguard/rules.conf -p wa -k rootforge-usbguard
 -a always,exit -F arch=b64 -S execve -F path=/usr/bin/su -k rootforge-su-exec
 EOF
-sudo augenrules --load 2>&1 | tee -a "$LOG_FILE" || log "augenrules load failed — check auditd is running."
-sudo systemctl enable --now auditd 2>&1 | tee -a "$LOG_FILE"
+run_priv augenrules --load 2>&1 | tee -a "$LOG_FILE" || log "augenrules load failed — check auditd is running."
+run_priv systemctl enable --now auditd 2>&1 | tee -a "$LOG_FILE"
 
 # ---- nftables firewall ------------------------------------------------------
 log "Configuring default-deny inbound nftables firewall"
-NFT_FILE="/etc/nftables.conf"
-sudo tee "$NFT_FILE" > /dev/null <<'EOF'
+NFT_FILE="${ROOTFORGE_NFT_FILE:-/etc/nftables.conf}"
+run_priv tee "$NFT_FILE" > /dev/null <<'EOF'
 #!/usr/sbin/nft -f
 # RootForge OS — default firewall
 # Victorious Framework
@@ -149,13 +176,13 @@ table inet filter {
   chain output { type filter hook output priority 0; policy accept; }
 }
 EOF
-sudo systemctl enable --now nftables 2>&1 | tee -a "$LOG_FILE"
+run_priv systemctl enable --now nftables 2>&1 | tee -a "$LOG_FILE"
 log "Default policy: deny inbound except SSH (22) and established connections."
 log "  ADB/fastboot are USB, not network, so this doesn't affect device access."
 
 # ---- fail2ban ---------------------------------------------------------------
 log "Enabling fail2ban for SSH"
-sudo systemctl enable --now fail2ban 2>&1 | tee -a "$LOG_FILE"
+run_priv systemctl enable --now fail2ban 2>&1 | tee -a "$LOG_FILE"
 
 log "System hardening complete. Check status with:"
 log "  sudo aa-status && sudo usbguard list-devices && sudo auditctl -l && sudo nft list ruleset"
