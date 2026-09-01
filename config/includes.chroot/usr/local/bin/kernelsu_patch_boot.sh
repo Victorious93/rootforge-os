@@ -97,6 +97,31 @@ if [[ $FLASH_ONLY -eq 1 ]]; then
 fi
 
 # --- Validation ---
+# KSU_VERSION is interpolated into a GitHub API URL path:
+#
+#   curl -fsSL "https://api.github.com/repos/tiann/KernelSU/releases/tags/$KSU_TAG"
+#
+# curl resolves ../ segments in a URL path before sending the request — RFC
+# 3986 remove_dot_segments — so an unvalidated tag redirects the query to any
+# repository. Verified against the real API:
+#
+#   --ksu-version '../../../../octocat/Hello-World/releases/latest'
+#     > GET /repos/octocat/Hello-World/releases/latest HTTP/1.1
+#
+# The query has left tiann/KernelSU entirely. What comes back names an asset,
+# that asset is downloaded, and it is written in as the KERNEL of a boot image
+# the user then flashes. A release tag is [A-Za-z0-9._-]; nothing legitimate
+# needs a slash.
+[[ "$KSU_VERSION" =~ ^[A-Za-z0-9._-]+$ ]] \
+  || die "--ksu-version must be a release tag like v0.9.5 or 'latest' (got '$KSU_VERSION')"
+
+# DEVICE_CODENAME becomes part of the output filename. It is not a traversal —
+# a name containing '/' just makes a path whose parent does not exist — but it
+# failed at the very last step, with a raw cp error, after the kernel had been
+# downloaded and magiskboot had run twice. Say so before any of that happens.
+[[ "$DEVICE_CODENAME" =~ ^[A-Za-z0-9._-]+$ ]] \
+  || die "--device must be [A-Za-z0-9._-] (got '$DEVICE_CODENAME') — it becomes part of the output filename"
+
 [[ -z "$STOCK_BOOT" ]]   && die "--stock-boot <boot.img> required"
 [[ -z "$ANDROID_VER" ]]  && die "--android-version <12|13|14> required"
 [[ -f "$STOCK_BOOT" ]]   || die "Boot image not found: $STOCK_BOOT"
@@ -137,7 +162,18 @@ print(matches[0] if matches else '')
 
 KSU_IMAGE="$WORK_DIR/Image-ksu-android${ANDROID_VER}-${KSU_TAG}"
 log "Downloading: $ASSET_URL"
-curl -fsSL -o "$KSU_IMAGE" "$ASSET_URL"
+# curl wrote straight to $KSU_IMAGE, and nothing checked what landed. A
+# download cut short by a dropped connection or a full disk left a truncated
+# file that was copied in as the kernel and repacked — verified: a 12-byte
+# "kernel" produced a patched boot image with no complaint, and the script
+# printed "Patched image: ..." as if nothing were wrong. Flashing that leaves
+# the device unbootable until it is reflashed, which is the one outcome this
+# whole script exists to avoid.
+#
+# A GKI Image.gz is several megabytes. 1 MB is far below any real one and far
+# above an error page.
+rf_download_cached "$ASSET_URL" "$KSU_IMAGE" 1048576 \
+  || die "Could not download a usable KernelSU kernel image — nothing was patched."
 
 # --- Unpack stock boot image ---
 UNPACK_DIR="$WORK_DIR/unpack-${STAMP}"

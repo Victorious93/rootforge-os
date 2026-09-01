@@ -1723,6 +1723,96 @@ run_script python3 -m rootforge.core.cli ota
 assert_eq "a missing ota subcommand is rejected" "$RC" "2"
 drop_sandbox
 
+section "kernelsu_patch_boot.sh — what ends up as the kernel"
+
+# curl and magiskboot shaped like the real ones: the release API answers with
+# a KernelSU-style asset list, and a download writes RF_STUB_DL_BYTES bytes,
+# which is how a truncated transfer is simulated.
+plant_ksu_stubs() {
+  mkdir -p "$SANDBOX/ksubin"
+  cat > "$SANDBOX/ksubin/curl" <<'EOS'
+#!/usr/bin/env bash
+printf 'curl %s\n' "$*" >> "$RF_STUB_LOG"
+OUT=""; prev=""
+for a in "$@"; do [ "$prev" = "-o" ] && OUT="$a"; prev="$a"; done
+if [ -n "$OUT" ]; then head -c "${RF_STUB_DL_BYTES:-4000000}" /dev/zero > "$OUT"; exit 0; fi
+case "$*" in
+  *releases/latest*) echo '{"tag_name":"v1.0.0"}' ;;
+  *tags/*) echo '{"assets":[{"name":"android14-5.15-Image.gz","browser_download_url":"https://example.invalid/Image.gz"}]}' ;;
+esac
+EOS
+  cat > "$SANDBOX/ksubin/magiskboot" <<'EOS'
+#!/usr/bin/env bash
+case "${1:-}" in
+  unpack) head -c 100 /dev/zero > kernel ;;
+  repack) head -c 200 /dev/zero > new-boot.img ;;
+esac
+EOS
+  chmod +x "$SANDBOX/ksubin/curl" "$SANDBOX/ksubin/magiskboot"
+  export PATH="$SANDBOX/ksubin:$STUB_DIR:$ORIGINAL_PATH"
+  head -c 2048 /dev/zero > "$SANDBOX/boot.img"
+}
+
+new_sandbox
+plant_ksu_stubs
+# Regression, and the highest-consequence input bug in this repository.
+# KSU_VERSION is interpolated into a GitHub API URL path, and curl resolves
+# ../ segments before sending the request (RFC 3986 remove_dot_segments).
+# Verified against the real api.github.com:
+#
+#   tags/../../../../octocat/Hello-World/releases/latest
+#     > GET /repos/octocat/Hello-World/releases/latest HTTP/1.1
+#
+# The query has left tiann/KernelSU. Whatever that release names is
+# downloaded and written in as the KERNEL of a boot image the user flashes.
+run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --stock-boot "$SANDBOX/boot.img" \
+  --android-version 14 --ksu-version '../../../../octocat/Hello-World/releases/latest'
+assert_eq "a tag that redirects the API query is rejected" "$RC" "1"
+assert_contains "the rejection says what a tag looks like" "$OUT" "release tag"
+assert_eq "a rejected tag makes no request at all" "$(wc -l < "$RF_STUB_LOG")" "0"
+
+# An ordinary tag must still work.
+new_sandbox
+plant_ksu_stubs
+run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --stock-boot "$SANDBOX/boot.img" \
+  --android-version 14 --ksu-version v0.9.5 --device pixel
+assert_eq "an ordinary tag is accepted" "$RC" "0"
+assert_contains "the ordinary tag reaches the API path" "$(cat "$RF_STUB_LOG")" "tags/v0.9.5"
+
+new_sandbox
+plant_ksu_stubs
+# Regression: a truncated download was copied in as the kernel and repacked,
+# and the script reported "Patched image: ..." as if nothing were wrong.
+# Verified: a 12-byte "kernel" produced a patched boot image. Flashing that
+# leaves the device unbootable — the one outcome this script exists to avoid.
+export RF_STUB_DL_BYTES=12
+run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --stock-boot "$SANDBOX/boot.img" \
+  --android-version 14 --device pixel
+assert_eq "a truncated kernel download fails the patch" "$RC" "1"
+assert_contains "the truncated download says why" "$OUT" "below the"
+assert_eq "no boot image is produced from a truncated kernel" \
+  "$(find "$ROOTFORGE_HOME/kernelsu-work" -name 'boot-ksu-patched-*' 2>/dev/null | wc -l)" "0"
+
+new_sandbox
+plant_ksu_stubs
+# Not a traversal — a codename containing '/' just names a path whose parent
+# does not exist. But it failed at the very last step with a raw cp error,
+# after the kernel had been downloaded and magiskboot had run twice.
+run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --stock-boot "$SANDBOX/boot.img" \
+  --android-version 14 --device '../../escaped'
+assert_eq "an unusable device codename is rejected" "$RC" "1"
+assert_contains "the codename rejection explains itself" "$OUT" "output filename"
+assert_eq "the codename is rejected before anything is downloaded" \
+  "$(wc -l < "$RF_STUB_LOG")" "0"
+
+new_sandbox
+plant_ksu_stubs
+run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --stock-boot "$SANDBOX/boot.img" \
+  --android-version 14 --device pixel_6a
+assert_eq "an ordinary codename still patches" "$RC" "0"
+assert_contains "the patched image is named after the device" "$OUT" "boot-ksu-patched-pixel_6a"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox
