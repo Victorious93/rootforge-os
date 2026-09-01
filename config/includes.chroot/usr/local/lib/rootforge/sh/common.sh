@@ -162,3 +162,55 @@ rf_require_cmd() {
   printf '%s not found — %s\n' "$1" "$2" >&2
   exit 1
 }
+
+# --- downloads -----------------------------------------------------------
+
+# rf_download_cached <url> <destination> [min_bytes] — fetch <url> to
+# <destination>, reusing an existing file only if it is plausibly complete.
+#
+# The pattern this replaces was:
+#
+#   if [[ -f "$LOCAL" ]]; then log "using cached"; else curl -fsSL -o "$LOCAL" "$URL"; fi
+#
+# curl writes straight to the final path, so a download interrupted by
+# Ctrl-C, a dropped connection or a full disk leaves a partial file *at the
+# cache path*. Every later run then takes the `-f` branch, logs "using
+# cached", and hands the truncated file to the device — verified: a 9-byte
+# stub was pushed to /data/local/tmp and installed as a Magisk module.
+# Nothing downstream notices, because a zip that will not open is a device-
+# side failure, not a script-side one.
+#
+# Two changes fix it. Download to a sibling temp file and rename only after
+# curl succeeds, so the cache path never holds a partial file; and treat a
+# cached file below min_bytes as absent, which recovers a cache already
+# poisoned by the old code.
+rf_download_cached() {
+  local url="$1" dest="$2" min_bytes="${3:-1024}"
+  local size=0
+  if [ -f "$dest" ]; then
+    size="$(wc -c < "$dest" 2>/dev/null || echo 0)"
+    if [ "$size" -ge "$min_bytes" ]; then
+      return 0
+    fi
+    printf 'Cached file %s is only %s bytes — treating it as an incomplete download and refetching.\n' \
+      "$dest" "$size" >&2
+    rm -f "$dest"
+  fi
+
+  local tmp="$dest.part.$$"
+  if ! curl -fsSL -o "$tmp" "$url"; then
+    rm -f "$tmp"
+    printf 'Download failed: %s\n' "$url" >&2
+    return 1
+  fi
+
+  size="$(wc -c < "$tmp" 2>/dev/null || echo 0)"
+  if [ "$size" -lt "$min_bytes" ]; then
+    rm -f "$tmp"
+    printf 'Downloaded %s bytes from %s — below the %s-byte minimum, refusing to cache it.\n' \
+      "$size" "$url" "$min_bytes" >&2
+    return 1
+  fi
+
+  mv -f "$tmp" "$dest"
+}

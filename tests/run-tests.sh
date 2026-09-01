@@ -1239,6 +1239,135 @@ run_script python3 -m rootforge.core.cli flash
 assert_eq "a missing flash subcommand is rejected" "$RC" "2"
 drop_sandbox
 
+section "install_lsposed.sh — argument handling and asset selection"
+
+new_sandbox
+cp "$STUB_DIR/curl-github-releases" "$SANDBOX/curl"
+chmod +x "$SANDBOX/curl"
+export PATH="$SANDBOX:$STUB_DIR:$ORIGINAL_PATH"
+
+# Regression: `--framework) FRAMEWORK="$2"` with nothing after it hit "$2"
+# under set -u and died with a raw bash message naming a line number.
+run_script bash "$BIN_DIR/install_lsposed.sh" --framework
+assert_eq "--framework with no value is rejected" "$RC" "1"
+assert_contains "--framework with no value explains itself" "$OUT" "needs a value"
+assert_not_contains "--framework with no value is not a bash crash" "$OUT" "unbound variable"
+
+# Regression: the catch-all arm took an unknown FLAG as a device serial, then
+# its value replaced it. `--frmework kernelsu` ran `adb -s kernelsu`, left the
+# framework at magisk, and exited 0 — a wrong install reported as a success.
+run_script bash "$BIN_DIR/install_lsposed.sh" --frmework kernelsu
+assert_eq "a typo'd flag is rejected, not read as a serial" "$RC" "1"
+assert_contains "the typo'd flag is named" "$OUT" "Unknown option: --frmework"
+assert_not_contains "a typo'd flag never reaches adb" "$(cat "$RF_STUB_LOG")" "adb"
+
+# Regression: the framework was validated only after the download and the
+# push, so a typo left an unusable zip sitting in /data/local/tmp.
+run_script bash "$BIN_DIR/install_lsposed.sh" --framework bogus
+assert_eq "an unknown framework is rejected" "$RC" "1"
+assert_contains "an unknown framework says what it expected" "$OUT" "magisk|kernelsu"
+assert_not_contains "an unknown framework downloads nothing" "$(cat "$RF_STUB_LOG")" "curl"
+assert_not_contains "an unknown framework pushes nothing" "$(cat "$RF_STUB_LOG")" "push"
+
+new_sandbox
+cp "$STUB_DIR/curl-github-releases" "$SANDBOX/curl"
+chmod +x "$SANDBOX/curl"
+export PATH="$SANDBOX:$STUB_DIR:$ORIGINAL_PATH"
+# Regression: `jq ... | head -1` installed whichever zip the API listed first.
+# The stub lists the riru build first and the zygisk release build last, which
+# is the wrong way round for a Zygisk-based framework.
+run_script bash "$BIN_DIR/install_lsposed.sh"
+assert_eq "a default run succeeds" "$RC" "0"
+assert_contains "the zygisk release build is selected" "$OUT" "zygisk-release.zip"
+assert_not_contains "the riru build is not what gets pushed" \
+  "$(grep push "$RF_STUB_LOG" || true)" "riru"
+assert_contains "the alternatives are named so a wrong pick is visible" "$OUT" "not installed"
+
+new_sandbox
+cp "$STUB_DIR/curl-github-releases" "$SANDBOX/curl"
+chmod +x "$SANDBOX/curl"
+export PATH="$SANDBOX:$STUB_DIR:$ORIGINAL_PATH"
+# Regression: curl wrote straight to the cache path, so a download interrupted
+# by Ctrl-C or a dropped connection left a partial file there. Every later run
+# took the "-f" branch, logged "Using cached", and pushed the truncated zip to
+# the device to be installed as a module.
+mkdir -p "$ROOTFORGE_HOME/modules/.cache"
+printf 'PK\003\004TRUNC' > "$ROOTFORGE_HOME/modules/.cache/LSPosed-v1.9.2-zygisk-release.zip"
+run_script bash "$BIN_DIR/install_lsposed.sh"
+assert_eq "a truncated cache entry does not fail the run" "$RC" "0"
+assert_contains "a truncated cache entry is detected" "$OUT" "incomplete download"
+assert_eq "the cache entry is replaced with the full download" \
+  "$(wc -c < "$ROOTFORGE_HOME/modules/.cache/LSPosed-v1.9.2-zygisk-release.zip")" "200000"
+
+new_sandbox
+cp "$STUB_DIR/curl-github-releases" "$SANDBOX/curl"
+chmod +x "$SANDBOX/curl"
+export PATH="$SANDBOX:$STUB_DIR:$ORIGINAL_PATH"
+# A short download must leave nothing behind: no cache entry for the next run
+# to trust, and nothing pushed to the device.
+export RF_STUB_DL_BYTES=10
+run_script bash "$BIN_DIR/install_lsposed.sh"
+assert_eq "a short download fails the run" "$RC" "1"
+assert_contains "a short download says why" "$OUT" "below the"
+assert_eq "a short download caches nothing" \
+  "$(find "$ROOTFORGE_HOME/modules/.cache" -name '*.zip' | wc -l)" "0"
+assert_not_contains "a short download pushes nothing" "$(cat "$RF_STUB_LOG")" "push"
+drop_sandbox
+
+section "install_adb_ime.sh — text reaches the device intact"
+
+new_sandbox
+cp "$STUB_DIR/adb-device-shell" "$SANDBOX/adb"
+chmod +x "$SANDBOX/adb"
+export PATH="$SANDBOX:$STUB_DIR:$ORIGINAL_PATH"
+
+# `adb shell a b c` joins its arguments with spaces and hands the string to
+# the device's /system/bin/sh. The text being typed was interpolated into that
+# string, so it was parsed as shell source on the phone. This script exists
+# precisely to type text that ordinary input handling mangles, so the bug
+# defeated its own purpose before it was ever a security question.
+run_script bash "$BIN_DIR/install_adb_ime.sh" type "it's a test"
+assert_eq "typing text with an apostrophe succeeds" "$RC" "0"
+DECODED="$(grep 'AM-RECEIVED' "$RF_STUB_LOG" | sed 's/.*msg //' | base64 -d 2>/dev/null || true)"
+assert_eq "an apostrophe reaches the device intact" "$DECODED" "it's a test"
+
+new_sandbox
+cp "$STUB_DIR/adb-device-shell" "$SANDBOX/adb"
+chmod +x "$SANDBOX/adb"
+export PATH="$SANDBOX:$STUB_DIR:$ORIGINAL_PATH"
+# Before the fix, `am` received only "hello" and `touch` ran as a second
+# command on the device shell.
+run_script bash "$BIN_DIR/install_adb_ime.sh" type "hello; touch $SANDBOX/EXECUTED"
+DECODED="$(grep 'AM-RECEIVED' "$RF_STUB_LOG" | sed 's/.*msg //' | base64 -d 2>/dev/null || true)"
+assert_eq "a semicolon is text, not a command separator" "$DECODED" "hello; touch $SANDBOX/EXECUTED"
+if [ -e "$SANDBOX/EXECUTED" ]; then
+  fail "nothing runs on the device shell" "the injected command executed"
+else
+  pass "nothing runs on the device shell"
+fi
+
+new_sandbox
+cp "$STUB_DIR/adb-device-shell" "$SANDBOX/adb"
+chmod +x "$SANDBOX/adb"
+export PATH="$SANDBOX:$STUB_DIR:$ORIGINAL_PATH"
+# The stated purpose: characters `adb shell input text` chokes on.
+run_script bash "$BIN_DIR/install_adb_ime.sh" type 'héllo 🌍 "quoted" $HOME `x` \'
+DECODED="$(grep 'AM-RECEIVED' "$RF_STUB_LOG" | sed 's/.*msg //' | base64 -d 2>/dev/null || true)"
+assert_eq "non-ASCII, quotes, \$, backticks and a backslash all survive" \
+  "$DECODED" 'héllo 🌍 "quoted" $HOME `x` \'
+
+new_sandbox
+cp "$STUB_DIR/adb-device-shell" "$SANDBOX/adb"
+chmod +x "$SANDBOX/adb"
+export PATH="$SANDBOX:$STUB_DIR:$ORIGINAL_PATH"
+# A flag in the serial position used to become `adb -s --whatever`.
+run_script bash "$BIN_DIR/install_adb_ime.sh" type "x" --serial
+assert_eq "a flag is not accepted as a device serial" "$RC" "1"
+assert_contains "the rejected flag is named" "$OUT" "Unknown option: --serial"
+run_script bash "$BIN_DIR/install_adb_ime.sh" install --foo
+assert_eq "install rejects a flag in the serial position too" "$RC" "1"
+drop_sandbox
+
 section "lint_module.sh"
 
 new_sandbox

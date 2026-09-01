@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Test stub for curl, for the two scripts that resolve a GitHub release and
+# download an asset. With -o it writes RF_STUB_DL_BYTES bytes (default 200000)
+# to the named path, which is how a short/truncated download is simulated.
+# Otherwise it prints RF_STUB_RELEASE_JSON, defaulting to a payload shaped
+# like a real LSPosed release: several zips, the riru one listed first.
+[ -n "${RF_STUB_LOG:-}" ] && printf 'curl %s\n' "$*" >> "$RF_STUB_LOG"
+
+OUT=""; prev=""
+for a in "$@"; do
+  [ "$prev" = "-o" ] && OUT="$a"
+  prev="$a"
+done
+
+if [ -n "$OUT" ]; then
+  [ "${RF_STUB_DL_RC:-0}" != "0" ] && exit "$RF_STUB_DL_RC"
+  head -c "${RF_STUB_DL_BYTES:-200000}" /dev/zero > "$OUT"
+  exit 0
+fi
+
+if [ -n "${RF_STUB_RELEASE_JSON:-}" ]; then
+  printf '%s\n' "$RF_STUB_RELEASE_JSON"
+else
+  cat <<'JSON'
+{"assets":[
+ {"name":"LSPosed-v1.9.2-riru-release.zip","browser_download_url":"https://example.invalid/riru.zip"},
+ {"name":"LSPosed-v1.9.2-zygisk-debug.zip","browser_download_url":"https://example.invalid/zd.zip"},
+ {"name":"LSPosed-v1.9.2-zygisk-release.zip","browser_download_url":"https://example.invalid/zr.zip"},
+ {"name":"ADBKeyboard.apk","browser_download_url":"https://example.invalid/kb.apk"}]}
+JSON
+fi
