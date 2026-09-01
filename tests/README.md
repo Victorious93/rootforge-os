@@ -22,7 +22,31 @@ each destination, and `new_sandbox` sets them:
 Two rules follow from this. A test that reaches a script writing outside the
 sandbox must use the seam, and `00_bootstrap_distro.sh` must always be given
 `--check` — without it the script really does run `apt-get upgrade`, and a
-suite run as root will let it. They exist because every bug they cover was a *silent* one:
+suite run as root will let it.
+
+`new_sandbox` also unsets every seam and stub variable. A value leaking into
+the next sandbox makes a test pass or fail for a reason that is nowhere in its
+own body; that has happened twice here.
+
+## Checks on the suite itself
+
+    tests/check-tests.sh        # run by tests/lint.sh and by CI
+
+A suite can be wrong in ways that running it will never reveal, because a
+wrong suite still passes. Two such failures were real here, so they are now
+checked statically:
+
+- **A block that never invokes the code it names.** One block built a USBGuard
+  policy file and grepped it; another re-implemented the WireGuard address
+  allocator and asserted on its own output. Both would have passed whether or
+  not the shipped code had the fix. Granularity is the `new_sandbox` block,
+  not the `section` — the USBGuard section *did* run the script, in a
+  different block, so a section-level check passes it.
+
+- **A write destination with no seam.** Covered by the table above.
+
+Running new checks against the pre-fix tree catches tests that pass for the
+wrong reason. It does not catch tests that were already wrong. This does. They exist because every bug they cover was a *silent* one:
 wrong-but-plausible behavior that a build would not catch and a human would
 only notice with a phone in hand halfway through a flash.
 

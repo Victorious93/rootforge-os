@@ -61,10 +61,21 @@ new_sandbox() {
   # drop-in was present on the host, timestamped by the last run. Set here
   # rather than per-section so a future test cannot forget it.
   export ROOTFORGE_SYSCTL_FILE="$SANDBOX/sysctl-dropin.conf"
+  # Everything a previous section may have exported. A value leaking into the
+  # next sandbox makes a test pass or fail for a reason that is nowhere in
+  # its own body — already hit once with PATH, and again with
+  # ROOTFORGE_WG_ENDPOINT.
   unset RF_STUB_ADB_DEVICES RF_STUB_FASTBOOT_DEVICES RF_STUB_SLOT \
         RF_STUB_FLASH_RC RF_STUB_GETVAR_ALL RF_STUB_ADB_SHELL_OUT \
         RF_STUB_FLASH_FAIL_ON_CALL RF_STUB_ADB_SHELL_RC \
-        ROOTFORGE_ASSUME_YES 2>/dev/null || true
+        RF_STUB_DL_BYTES RF_STUB_DL_RC RF_STUB_RELEASE_JSON \
+        RF_STUB_DUMPER_WRITES RF_STUB_PASSWD RF_STUB_USB_POLICY \
+        RF_STUB_CURRENT_IME \
+        ROOTFORGE_ASSUME_YES ROOTFORGE_GRUB_DEFAULTS ROOTFORGE_NMAP_OUTPUT \
+        ROOTFORGE_USBGUARD_RULES ROOTFORGE_AUDIT_RULES ROOTFORGE_NFT_FILE \
+        ROOTFORGE_PROFILE_D ROOTFORGE_WG_CONF ROOTFORGE_WG_ENDPOINT \
+        ROOTFORGE_X11_SOCKET_DIR ROOTFORGE_X11_DISPLAY \
+        2>/dev/null || true
 }
 
 drop_sandbox() { [ -n "${SANDBOX:-}" ] && rm -rf "$SANDBOX"; }
@@ -643,28 +654,71 @@ section "setup_vpn.sh — peer address allocation"
 
 new_sandbox
 WGP="$ROOTFORGE_HOME/keys/wireguard/peers"
-mkdir -p "$WGP"
 # Regression: addresses were `10.66.66.$((RANDOM % 200 + 10))` with no check
 # against peers already issued — a birthday collision (~63% by the 20th
 # peer). A duplicate AllowedIPs doesn't fail loudly, it silently breaks
-# routing for one of them. Replay the allocator over many peers and assert
-# every address is distinct.
-alloc_octet() {
-  local c
-  for c in $(seq 10 250); do
-    grep -rqs "^Address = 10\.66\.66\.${c}/32\b" "$WGP" || { printf '%s' "$c"; return 0; }
-  done
-  return 1
-}
+# routing for one of them.
+#
+# This block used to re-implement the allocator here and assert on files it
+# had written itself, which tested the copy in this file rather than the one
+# that ships. Drive the real script instead: 25 real peer-qr runs.
+mkdir -p "$SANDBOX/wgbin"
+cat > "$SANDBOX/wgbin/wg" <<'EOS'
+#!/usr/bin/env bash
+case "${1:-}" in
+  genkey) printf 'PRIVKEY%s\n' "$RANDOM" ;;
+  pubkey) cat >/dev/null; printf 'PUBKEY\n' ;;
+esac
+EOS
+cat > "$SANDBOX/wgbin/qrencode" <<'EOS'
+#!/usr/bin/env bash
+cat >/dev/null
+EOS
+chmod +x "$SANDBOX/wgbin/wg" "$SANDBOX/wgbin/qrencode"
+export PATH="$SANDBOX/wgbin:$STUB_DIR:$ORIGINAL_PATH"
+export ROOTFORGE_WG_CONF="$SANDBOX/wg0.conf"
+export ROOTFORGE_WG_ENDPOINT="vpn.example:51820"
+
+run_script bash "$BIN_DIR/setup_vpn.sh" init
+assert_eq "init creates a keypair" "$RC" "0"
 for i in $(seq 1 25); do
-  oct="$(alloc_octet)"
-  mkdir -p "$WGP/peer$i"
-  printf 'Address = 10.66.66.%s/32\n' "$oct" > "$WGP/peer$i/peer.conf"
+  run_script bash "$BIN_DIR/setup_vpn.sh" peer-qr "peer$i"
 done
+assert_eq "the 25th peer still succeeds" "$RC" "0"
 TOTAL="$(grep -rh '^Address = ' "$WGP" | wc -l | tr -d ' ')"
 UNIQUE="$(grep -rh '^Address = ' "$WGP" | sort -u | wc -l | tr -d ' ')"
+assert_eq "25 peers get 25 addresses" "$TOTAL" "25"
 assert_eq "25 peers get 25 distinct addresses" "$UNIQUE" "$TOTAL"
-assert_eq "allocation starts at .10" "$(head -1 "$WGP/peer1/peer.conf")" "Address = 10.66.66.10/32"
+assert_eq "allocation starts at .10" \
+  "$(grep '^Address = ' "$WGP/peer1/peer.conf")" "Address = 10.66.66.10/32"
+assert_eq "allocation is sequential, not random" \
+  "$(grep '^Address = ' "$WGP/peer25/peer.conf")" "Address = 10.66.66.34/32"
+assert_eq "the interface config is never written to /etc" \
+  "$([ -e /etc/wireguard/wg0.conf ] && echo leaked || echo clean)" "clean"
+
+# Regression: `read -r -p` reads stdin, so an unattended run (stdin closed)
+# ended the script at set -e right after generating the peer's keypair and
+# assigning it an address — no message, half a peer left behind.
+new_sandbox
+mkdir -p "$SANDBOX/wgbin"
+cat > "$SANDBOX/wgbin/wg" <<'EOS'
+#!/usr/bin/env bash
+case "${1:-}" in
+  genkey) printf 'PRIVKEY\n' ;;
+  pubkey) cat >/dev/null; printf 'PUBKEY\n' ;;
+esac
+EOS
+cat > "$SANDBOX/wgbin/qrencode" <<'EOS'
+#!/usr/bin/env bash
+cat >/dev/null
+EOS
+chmod +x "$SANDBOX/wgbin/wg" "$SANDBOX/wgbin/qrencode"
+export PATH="$SANDBOX/wgbin:$STUB_DIR:$ORIGINAL_PATH"
+export ROOTFORGE_WG_CONF="$SANDBOX/wg0.conf"
+run_script bash "$BIN_DIR/setup_vpn.sh" init
+run_script bash "$BIN_DIR/setup_vpn.sh" peer-qr nokeyboard
+assert_eq "no terminal and no endpoint is an error" "$RC" "1"
+assert_contains "the missing endpoint names the way to supply it" "$OUT" "ROOTFORGE_WG_ENDPOINT"
 
 new_sandbox
 run_script bash "$BIN_DIR/setup_vpn.sh" peer-qr "../../escape"

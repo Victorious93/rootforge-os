@@ -21,7 +21,10 @@ LOG_FILE="$LOG_DIR/vpn_$(date +%Y%m%d_%H%M%S).log"
 log() { echo "[vpn] $*" | tee -a "$LOG_FILE"; }
 
 IFACE="wg0"
-CONF="/etc/wireguard/${IFACE}.conf"
+# Seam, same as ROOTFORGE_GRUB_DEFAULTS / ROOTFORGE_SYSCTL_FILE: a destination
+# outside $ROOTFORGE_HOME has to be redirectable, or testing the script means
+# writing to /etc on the machine running the test.
+CONF="${ROOTFORGE_WG_CONF:-/etc/wireguard/${IFACE}.conf}"
 
 case "$CMD" in
   init)
@@ -87,7 +90,20 @@ case "$CMD" in
     log "Assigned 10.66.66.${PEER_OCTET}/32 to '$PEER_NAME'"
 
     THIS_PUBKEY="$(cat "$WG_DIR/publickey" 2>/dev/null || echo "SET-THIS-BOXS-PUBKEY")"
-    read -r -p "This box's WireGuard endpoint (host:port) as the peer should reach it: " ENDPOINT
+    # `read -r -p` reads stdin, so with stdin closed — any unattended run —
+    # it returned non-zero and `set -e` ended the script right here, after
+    # the peer keypair had already been generated and an address assigned.
+    # No message, and a half-created peer left behind. Say what is missing,
+    # and take it from the environment when there is no terminal to ask.
+    if [[ -n "${ROOTFORGE_WG_ENDPOINT:-}" ]]; then
+      ENDPOINT="$ROOTFORGE_WG_ENDPOINT"
+    elif [[ -t 0 ]]; then
+      read -r -p "This box's WireGuard endpoint (host:port) as the peer should reach it: " ENDPOINT
+    else
+      echo "No terminal to prompt on for this box's WireGuard endpoint." >&2
+      echo "Set ROOTFORGE_WG_ENDPOINT=host:port and re-run." >&2
+      exit 1
+    fi
 
     PEER_CONF=$(cat <<EOF
 [Interface]

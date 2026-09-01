@@ -56,6 +56,15 @@ if ! "$REPO_ROOT/tests/check-hooks.sh"; then
   FAIL=1
 fi
 
+echo "==> checks on the test suite itself"
+# A suite that is wrong in these two ways still passes, so running it proves
+# nothing about them: a section that never invokes the script it names, and a
+# script that writes to a system path with no seam to redirect it. Both were
+# real here.
+if ! "$REPO_ROOT/tests/check-tests.sh"; then
+  FAIL=1
+fi
+
 echo "==> python: byte-compile"
 if python3 -m compileall -q config/includes.chroot/usr/local/lib; then
   :

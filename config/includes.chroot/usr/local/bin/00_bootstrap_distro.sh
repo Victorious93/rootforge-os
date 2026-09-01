@@ -173,7 +173,7 @@ sudo -u "$TARGET_USER" env JAVA_HOME="$JAVA_HOME" "$SDKMANAGER" --sdk_root="$SDK
   | tee -a "$LOG_FILE"
 
 log "Writing environment profile"
-PROFILE_D="/etc/profile.d/rootforge.sh"
+PROFILE_D="${ROOTFORGE_PROFILE_D:-/etc/profile.d/rootforge.sh}"
 cat > "$PROFILE_D" <<EOF
 export ROOTFORGE_HOME="$ROOTFORGE_HOME"
 export ANDROID_SDK_ROOT="$SDK_ROOT"
