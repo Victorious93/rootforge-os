@@ -37,7 +37,12 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/harden_kernel_$(date +%Y%m%d_%H%M%S).log"
 log() { echo "[harden-kernel] $*" | tee -a "$LOG_FILE"; }
 
-SYSCTL_FILE="/etc/sysctl.d/90-rootforge-hardening.conf"
+# Overridable for the same reason ROOTFORGE_GRUB_DEFAULTS is: without it the
+# test suite runs `sudo tee /etc/sysctl.d/...` and `sudo sysctl --system`
+# against the machine running the tests. tests/README.md calls the suite
+# hermetic; it was not — the drop-in was verifiably being written to the host
+# on every run made as root.
+SYSCTL_FILE="${ROOTFORGE_SYSCTL_FILE:-/etc/sysctl.d/90-rootforge-hardening.conf}"
 
 CONTENT=$(cat <<'EOF'
 # RootForge OS — kernel hardening baseline
@@ -86,7 +91,14 @@ else
   # lockdown step the caller explicitly asked for. Record the failure,
   # finish the run, and report it at the end instead.
   SYSCTL_STATUS=0
-  sudo sysctl --system 2>&1 | tee -a "$LOG_FILE" || SYSCTL_STATUS=$?
+  if [[ -n "${ROOTFORGE_SYSCTL_FILE:-}" ]]; then
+    # The drop-in was redirected somewhere sysctl does not read, so applying
+    # it would either do nothing or apply whatever else is in /etc/sysctl.d
+    # — neither of which is what the caller asked for.
+    log "ROOTFORGE_SYSCTL_FILE is set — wrote $SYSCTL_FILE but did not run 'sysctl --system'."
+  else
+    sudo sysctl --system 2>&1 | tee -a "$LOG_FILE" || SYSCTL_STATUS=$?
+  fi
   if [[ $SYSCTL_STATUS -ne 0 ]]; then
     log "WARNING: sysctl --system exited $SYSCTL_STATUS — at least one key could not be set."
     log "  That is common on a kernel that lacks one of these knobs, or inside a container."

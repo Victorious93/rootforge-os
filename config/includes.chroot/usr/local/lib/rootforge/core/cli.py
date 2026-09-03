@@ -11,14 +11,29 @@ import json
 import sys
 from typing import Optional, Sequence
 
-from rootforge.core import __version__, module as module_cmd
+from rootforge.core import (
+    __version__,
+    flashing as flashing_cmd,
+    module as module_cmd,
+    ota as ota_cmd,
+    boot as boot_cmd,
+    avd as avd_cmd,
+)
 from rootforge.core.devices import list_devices
 from rootforge.core.doctor import run_doctor
 
 
 def build_parser() -> argparse.ArgumentParser:
+    # allow_abbrev=False: argparse otherwise accepts any unambiguous prefix,
+    # so `--both-slot` silently means `--both-slots`. Worse, adding a flag
+    # later can change what an existing abbreviation resolves to, or make it
+    # ambiguous — a silent behaviour change in scripts that already work.
+    # These commands write boot partitions; four saved keystrokes is not
+    # worth that. Subparsers do not inherit this, so each sets it too.
     parser = argparse.ArgumentParser(
-        prog="rootforge", description="RootForge OS unified CLI."
+        prog="rootforge",
+        description="RootForge OS unified CLI.",
+        allow_abbrev=False,
     )
     parser.add_argument(
         "--version", action="version", version=f"rootforge {__version__}"
@@ -57,6 +72,10 @@ def build_parser() -> argparse.ArgumentParser:
     # standalone scripts. Each group owns its own parser so adding one does
     # not mean editing a growing if/elif here.
     module_cmd.add_parser(subparsers)
+    flashing_cmd.add_parser(subparsers)
+    ota_cmd.add_parser(subparsers)
+    boot_cmd.add_parser(subparsers)
+    avd_cmd.add_parser(subparsers)
 
     return parser
 
@@ -109,6 +128,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return cmd_devices(args)
     if args.command == "module":
         return module_cmd.dispatch(args)
+    if args.command in ("flash", "backup"):
+        return flashing_cmd.dispatch(args)
+    if args.command == "ota":
+        return ota_cmd.dispatch(args)
+    if args.command == "boot":
+        return boot_cmd.dispatch(args)
+    if args.command == "avd":
+        return avd_cmd.dispatch(args)
 
     parser.print_help()
     return 0

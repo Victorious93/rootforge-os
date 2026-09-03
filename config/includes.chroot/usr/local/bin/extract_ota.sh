@@ -79,7 +79,10 @@ ensure_payload_dumper() {
   local api="https://api.github.com/repos/ssut/payload-dumper-go/releases/latest"
   local json url
   json="$(curl -fsSL "$api")"
-  url="$(echo "$json" | jq -r '.assets[] | select(.name | test("linux.*amd64")) | .browser_download_url' | head -1)"
+  # `first(...)` inside jq rather than `| head -1`: head closing the pipe
+  # hands jq a SIGPIPE, which pipefail turns into a failed assignment and
+  # set -e turns into a silent exit.
+  url="$(echo "$json" | jq -r 'first(.assets[] | select(.name | test("linux.*amd64")) | .browser_download_url) // empty')"
   if [[ -z "$url" || "$url" == "null" ]]; then
     log "Could not resolve a release asset automatically. Install payload-dumper-go"
     log "manually (https://github.com/ssut/payload-dumper-go) and place the binary at $bin"
@@ -122,6 +125,7 @@ if [[ "$INPUT" == *.zip ]]; then
   unzip -o -q "$INPUT" payload.bin -d "$TMP_EXTRACT" 2>>"$LOG_FILE" || {
     log "No payload.bin at zip root — this OTA format may be pre-A/B (full image zip)."
     log "Check the zip contents manually: unzip -l '$INPUT'"
+    rm -rf "$TMP_EXTRACT"
     exit 1
   }
   PAYLOAD_BIN="$TMP_EXTRACT/payload.bin"
@@ -136,7 +140,22 @@ log "Dumping partitions [$PARTITIONS] from $PAYLOAD_BIN -> $OUTPUT_DIR"
 
 [[ $CLEANUP_PAYLOAD -eq 1 ]] && rm -rf "$(dirname "$PAYLOAD_BIN")"
 
-log "Extraction complete. Contents:"
+# Silence is not a pass. payload-dumper-go can exit 0 having written nothing —
+# a payload that simply does not contain the requested partitions is the
+# ordinary way to get here. The old code then printed "Extraction complete"
+# over an empty directory and exited 0, and the failure surfaced one step
+# later as a confusing "no such file" from whatever was going to patch the
+# boot image. Verified: with a dumper that exits 0 and writes nothing, this
+# script reported success and produced 0 files.
+EXTRACTED_COUNT="$(find "$OUTPUT_DIR" -maxdepth 1 -type f | wc -l)"
+if [[ "$EXTRACTED_COUNT" -eq 0 ]]; then
+  log "payload-dumper-go exited 0 but produced no files in $OUTPUT_DIR."
+  log "The payload most likely does not contain [$PARTITIONS]. List what it does"
+  log "contain with: $DUMPER -l '$PAYLOAD_BIN'"
+  exit 1
+fi
+
+log "Extraction complete ($EXTRACTED_COUNT file(s)). Contents:"
 ls -la "$OUTPUT_DIR" | tee -a "$LOG_FILE"
 log ""
 log "Sparse .img files here are typically already raw from payload-dumper-go, but if"

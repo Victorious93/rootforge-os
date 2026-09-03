@@ -109,6 +109,12 @@ against real hardware. `HOME` is redirected per test, so nothing touches your re
 
 The same suite runs in CI (the `tests` job in `.github/workflows/lint.yml`).
 
+A test that touches `00_bootstrap_distro.sh` must pass `--check`. Without it
+the script really does run `apt-get upgrade`, install the toolchain and write
+udev rules — and a suite run as root (a CI container, for instance) will let
+it. `--check` resolves and prints the paths, then exits before `require_root`
+and before anything is created.
+
 ## Adding a command: prefer the CLI over a new script
 
 New user-facing functionality should be a `rootforge` subcommand, not another

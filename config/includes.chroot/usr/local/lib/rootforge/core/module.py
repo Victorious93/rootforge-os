@@ -43,13 +43,15 @@ def valid_module_id(value: str) -> str:
 
 def add_parser(subparsers) -> None:
     module = subparsers.add_parser(
-        "module", help="Scaffold, lint and build Magisk/KernelSU/Xposed modules."
+        "module",
+        help="Scaffold, lint and build Magisk/KernelSU/Xposed modules.",
+        allow_abbrev=False,
     )
     # required=True so `rootforge module` with no verb is an error naming the
     # verbs, rather than silently doing nothing.
     actions = module.add_subparsers(dest="module_command", required=True)
 
-    scaffold = actions.add_parser("scaffold", help="Generate a new module skeleton.")
+    scaffold = actions.add_parser("scaffold", help="Generate a new module skeleton.", allow_abbrev=False)
     scaffold.add_argument("module_id", type=valid_module_id)
     scaffold.add_argument("display_name", help="Human-readable name for module.prop")
     scaffold.add_argument(
@@ -57,10 +59,10 @@ def add_parser(subparsers) -> None:
         help="Module type to scaffold (default: magisk)",
     )
 
-    lint = actions.add_parser("lint", help="Check a module directory or zip.")
+    lint = actions.add_parser("lint", help="Check a module directory or zip.", allow_abbrev=False)
     lint.add_argument("target", help="Module source directory, or a built .zip")
 
-    build = actions.add_parser("build", help="Package a module, and optionally install it.")
+    build = actions.add_parser("build", help="Package a module, and optionally install it.", allow_abbrev=False)
     build.add_argument("module_id", type=valid_module_id)
     build.add_argument(
         "--install", action="store_true", help="Push and install on a connected device"

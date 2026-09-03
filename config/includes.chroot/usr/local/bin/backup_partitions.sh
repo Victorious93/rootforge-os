@@ -22,6 +22,35 @@ set -euo pipefail
 CODENAME="${1:?Usage: backup_partitions.sh <device_codename> [serial]}"
 SERIAL="${2:-}"
 
+# CODENAME and TIMESTAMP below are interpolated straight into a path under
+# $ROOTFORGE_HOME/devices/. Nothing validated them, so a value containing
+# ".." or "/" escaped that tree entirely:
+#
+#   backup_partitions.sh '../../escaped'
+#     wrote the backup to $ROOTFORGE_HOME/../../escaped/backups/... — outside
+#     devices/ altogether.
+#   restore_partitions.sh testdev '../../../../evil'
+#     read every .img from an arbitrary directory and FLASHED them to the
+#     device. The SHA256SUMS gate does not catch it: an arbitrary directory
+#     has no SHA256SUMS, so integrity checking degrades to a warning and the
+#     flash proceeds.
+#
+# Both are realistically reached by mistake — a copy-pasted path, a value
+# from a script — rather than by malice, and the consequence is writing
+# unverified images to a device's boot partition.
+rf_reject_path_component() {
+  local label="$1" value="$2"
+  case "$value" in
+    ""|*/*|*..*)
+      echo "Invalid $label '$value' — must not be empty or contain '/' or '..'." >&2
+      echo "It is used as a directory name under \$ROOTFORGE_HOME/devices/." >&2
+      exit 1
+      ;;
+  esac
+}
+
+rf_reject_path_component "device codename" "$CODENAME"
+
 FASTBOOT="fastboot"; ADB="adb"
 [[ -n "$SERIAL" ]] && { FASTBOOT="fastboot -s $SERIAL"; ADB="adb -s $SERIAL"; }
 
