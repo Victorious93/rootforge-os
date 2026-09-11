@@ -9,6 +9,35 @@ Status: Specification / Build Guide (v1.0) — living document, update in place 
 
 ---
 
+## 🚀 Introducing RootForge-OS
+
+Android gives you a powerful device. RootForge-OS is about giving you more control over it.
+
+RootForge-OS is an Android-focused project built around root access, customization, automation, privacy, and deeper system control—with the goal of turning your device into something you can actually shape around the way you use it.
+
+This isn't about adding a few tweaks and calling it an OS.
+
+It's about building a foundation for a more capable Android experience:
+
+- 🔓 Root & advanced system control
+- ⚙️ Deep customization
+- 🤖 Automation & scripting
+- 🛠️ Developer-focused tools
+- 🔐 Privacy & security
+- 📱 Device-level control
+- 🧩 Modular architecture
+- 🚀 Built for experimentation and power users
+
+RootForge-OS is for people who don't want their hardware to dictate what their software can do.
+
+This is just the beginning.
+
+Follow the project as RootForge-OS evolves from an idea into a full platform.
+
+Build it. Control it. Make Android yours.
+
+---
+
 ## 0. The assumption worth surfacing first
 
 **[Certain]** A single automated "unlock and root" script cannot work uniformly across OEMs. Pixel, OnePlus, and most Nexus-lineage devices unlock via `fastboot flashing unlock` / `fastboot oem unlock`. Samsung uses Download Mode and Knox, not fastboot, and Knox trips permanently on unlock — no script fixes that. Xiaomi requires an OEM-approved unlock permit tied to account and a wait timer. **[Likely]** the more valuable design is a distro that auto-detects the vendor and either runs the correct fastboot sequence or tells you which out-of-band tool (Odin, Mi Unlock, MSM tool) is required, rather than one that pretends every device is a Pixel. The scripts below are written that way.
@@ -547,33 +576,4 @@ XFCE rather than GNOME: GNOME wants systemd/logind and a compositor stack that n
 Bootloader unlock permits for Xiaomi/OnePlus regional variants that require an account-linked waiting period, Samsung Download Mode flashing (Odin/Heimdall, not fastboot), and initial OEM driver installation on the host for less common vendors. RootForge's scripts detect these cases and stop with an explanation rather than failing silently or guessing.
 
 -Victorious Framework
-
----
-
-## 🚀 Introducing RootForge-OS
-
-Android gives you a powerful device. RootForge-OS is about giving you more control over it.
-
-RootForge-OS is an Android-focused project built around root access, customization, automation, privacy, and deeper system control—with the goal of turning your device into something you can actually shape around the way you use it.
-
-This isn't about adding a few tweaks and calling it an OS.
-
-It's about building a foundation for a more capable Android experience:
-
-- 🔓 Root & advanced system control
-- ⚙️ Deep customization
-- 🤖 Automation & scripting
-- 🛠️ Developer-focused tools
-- 🔐 Privacy & security
-- 📱 Device-level control
-- 🧩 Modular architecture
-- 🚀 Built for experimentation and power users
-
-RootForge-OS is for people who don't want their hardware to dictate what their software can do.
-
-This is just the beginning.
-
-Follow the project as RootForge-OS evolves from an idea into a full platform.
-
-Build it. Control it. Make Android yours.
 
