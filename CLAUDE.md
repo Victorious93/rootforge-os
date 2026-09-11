@@ -416,3 +416,186 @@ Development proceeds through 8 phases (0–7). Phases 1–5 build the documentat
 7. Document external resource links
 8. Build a table of contents for this file
 9. Final accuracy review — cross-check every claim against actual code
+
+**Deliverable:** `## CURRENT STATE AUDIT`, `## RECOMMENDED DEVELOPMENT PRIORITY`, `## QUICK REFERENCE` sections, written into this file.
+
+**Exit Criteria:** Documentation foundation (Phases 1–5) is complete, accurate, and actionable. This is the point at which CLAUDE.md is considered "established" and Phase 6 (active development) begins.
+
+---
+
+### Phase 6 — Active Development (Ongoing)
+
+**Objective:** Implement actual RootForge-OS functionality using the documented architecture as the contract, and keep the documentation synchronized with reality.
+
+**Session workflow for every development session in this phase:**
+1. Read PROJECT STATE — what was being worked on last session?
+2. Inspect the relevant code directly — do not trust stale documentation
+3. Determine current implementation state of the target area
+4. Identify dependencies and architectural constraints
+5. Create a plan before writing code
+6. Implement the smallest correct change
+7. Run relevant tests and report actual results
+8. Inspect resulting changes to verify they work
+9. Update this file's relevant sections if architecture changed
+10. Update PROJECT STATE with exactly what changed, what was tested, what remains incomplete
+
+**Priority order for new work** (adjust if actual repo architecture demonstrates a better order):
+1. Core architecture
+2. Platform abstraction
+3. Configuration/state
+4. Security/identity/permissions
+5. Core services
+6. CLI/API
+7. Linux platform
+8. Windows platform
+9. Android platform
+10. Termux integration
+11. Remote management
+12. GUI
+13. Automation
+14. Advanced features
+
+**Autonomous vs. ask-first:**
+- **Proceed autonomously:** clear non-destructive feature work, bug fixes following established patterns, isolated changes, following existing architectural patterns.
+- **Ask first:** destructive operations (`rm -rf`, disk/partition changes, DB/volume deletion, git history rewrite, root ops), changes risking data loss/production breakage/secret exposure, new major dependencies, core architecture/API changes, privilege escalation changes, major multi-component refactors.
+
+**Feature completion standard:** A feature is NOT complete merely because a class/function/UI button exists, a README mentions it, a TODO exists, a stub returns a value, or an API endpoint exists without working behavior. It's implemented only when actual behavior works and is tested or otherwise verifiable.
+
+**Exit Criteria** (per session, not per phase — this phase is ongoing): Session's changes are implemented, tested, reported accurately, and PROJECT STATE is updated.
+
+---
+
+### Phase 7 — Pull Request / Build & Release
+
+**Objective:** Package completed work for review, integration, and release.
+
+**Tasks:**
+
+*Pre-PR checklist:*
+- Run full test suite and report actual results
+- Run relevant builds for affected platform targets and report actual results
+- Confirm no secrets, credentials, or user data are staged for commit
+- Confirm no unintended build artifacts are staged
+- Confirm CLAUDE.md is updated if architecture changed
+- Confirm commit messages accurately describe changes (no inflated claims)
+
+*Pull request creation:*
+- Write a PR description covering: what changed, why, what was tested, what remains incomplete or out of scope, any breaking changes
+- Link related issues/roadmap items if applicable
+- Flag any scope-boundary judgment calls made during the work for reviewer attention
+
+*Build & packaging (when applicable):*
+- Document/execute the actual build command(s) for affected targets (Linux/Windows/Android/CLI/GUI)
+- Verify build artifacts are produced correctly
+- Do not claim a build succeeded unless it was actually run and verified
+
+*Release (when applicable):*
+- Follow the repository's actual release process (only if one is documented/discovered — do not invent one)
+- Document version bump, changelog update, signing/packaging steps actually performed
+
+**Deliverable:** PR opened (or ready-to-open PR description provided), with accurate test/build evidence attached.
+
+**Exit Criteria:** Changes are reviewable, test/build evidence is real and reported, CLAUDE.md reflects the resulting state, and PROJECT STATE is updated to reflect the PR/release outcome.
+
+---
+
+## RULES FOR CLAUDE CODE (APPLY IN EVERY PHASE)
+
+**Do's**
+- ✓ Inspect code before modifying
+- ✓ Run tests after changes
+- ✓ Report actual verified results
+- ✓ Update CLAUDE.md when architecture changes
+- ✓ Follow scope boundaries
+- ✓ Prioritize architecture over features
+- ✓ Prioritize correctness over code quantity
+- ✓ Update PROJECT STATE at the end of every session
+
+**Don'ts**
+- ✗ Fabricate facts or test results
+- ✗ Claim features exist without verifying
+- ✗ Introduce scope creep
+- ✗ Duplicate external projects
+- ✗ Commit secrets or credentials
+- ✗ Make destructive changes without justification
+- ✗ Present planned work as implemented
+- ✗ Override architectural constraints without discussion
+- ✗ Leave PROJECT STATE stale or inaccurate at session end
+
+---
+
+## SOURCE OF TRUTH
+
+- When this file and the implementation disagree → implementation is correct; update this file.
+- When this file and other documentation disagree → verify against implementation, then correct the wrong document.
+- When this file and roadmap/issues/plans disagree → plans reflect future work; this file reflects current state.
+
+---
+
+## INSPECTION REPORT
+
+`[Populated during Phase 1. Not yet run.]`
+
+---
+
+## CURRENT ARCHITECTURE & IMPLEMENTATION STATE
+
+`[Populated during Phase 2. Not yet run.]`
+
+---
+
+## BUILD SYSTEM & TOOLING
+
+`[Populated during Phase 3. Not yet run.]`
+
+---
+
+## TESTING
+
+`[Populated during Phase 3. Not yet run.]`
+
+---
+
+## DEVELOPMENT WORKFLOW
+
+`[Populated during Phase 4. Not yet run.]`
+
+---
+
+## ARCHITECTURAL DECISIONS
+
+`[Populated during Phase 4. Not yet run.]`
+
+---
+
+## SECURITY CONSIDERATIONS
+
+`[Populated during Phase 4. Not yet run.]`
+
+---
+
+## KNOWN LIMITATIONS & CONSTRAINTS
+
+`[Populated during Phase 4. Not yet run.]`
+
+---
+
+## CURRENT STATE AUDIT
+
+`[Populated during Phase 5. Not yet run.]`
+
+---
+
+## RECOMMENDED DEVELOPMENT PRIORITY
+
+`[Populated during Phase 5. Not yet run.]`
+
+---
+
+## QUICK REFERENCE
+
+`[Populated during Phase 5. Not yet run.]`
+
+---
+
+*End of CLAUDE.md*
