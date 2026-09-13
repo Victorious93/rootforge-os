@@ -5,37 +5,61 @@
 # payload-dumper-go extracts partition images from Android OTA payload.bin files.
 # extract_ota.sh self-installs it at first run, but baking it into the squashfs
 # means it's available immediately in the live session without a network fetch.
+#
+# Pinned to a specific release + SHA-256 rather than "latest": this project's
+# goreleaser config publishes a payload-dumper-go_sha256checksums.txt
+# alongside each release; the hashes below were verified against that file
+# at pin time (and match a hash computed directly from the downloaded
+# tarballs).
+#
+# To bump: check https://github.com/ssut/payload-dumper-go/releases for the
+# current tag, download payload-dumper-go_sha256checksums.txt from that
+# release plus the linux_amd64/linux_arm64 tarballs, verify they match, and
+# update PD_VERSION and the two PD_SHA256_* values together.
 
 set -e
 
-PD_API="https://api.github.com/repos/ssut/payload-dumper-go/releases/latest"
+PD_VERSION="2.0.2"
+PD_BASE="https://github.com/ssut/payload-dumper-go/releases/download/${PD_VERSION}"
 INSTALL_DIR="/usr/local/bin"
 
 DPKG_ARCH="$(dpkg --print-architecture)"
 case "$DPKG_ARCH" in
-  amd64|arm64) PD_ARCH="$DPKG_ARCH" ;;
-  *) PD_ARCH="" ;;
+  amd64)
+    PD_ASSET="payload-dumper-go_${PD_VERSION}_linux_amd64.tar.gz"
+    PD_SHA256="8d81854caeacd9223a6882340959869b0a210d44a1e597329830713abd2b4dcc"
+    ;;
+  arm64)
+    PD_ASSET="payload-dumper-go_${PD_VERSION}_linux_arm64.tar.gz"
+    PD_SHA256="161da9bcd7993a483f58574fcb466fa24b91504876bf50747aabfcb9a4171645"
+    ;;
+  *)
+    PD_ASSET=""
+    ;;
 esac
 
-if [ -z "$PD_ARCH" ]; then
+if [ -z "$PD_ASSET" ]; then
   echo "WARNING: no known payload-dumper-go release asset for dpkg architecture '$DPKG_ARCH' — extract_ota.sh will self-install it at runtime if that arch is supported there."
   exit 0
 fi
 
-echo "==> Fetching payload-dumper-go latest release ($PD_ARCH)"
-PD_URL=$(curl -fsSL "$PD_API" | PD_ARCH="$PD_ARCH" python3 -c "
-import sys, json, os
-assets = json.load(sys.stdin)['assets']
-pattern = 'linux_' + os.environ['PD_ARCH']
-match = [a for a in assets if pattern in a['name'] and a['name'].endswith('.tar.gz')]
-print(match[0]['browser_download_url'] if match else '')
-")
-
-[ -z "$PD_URL" ] && { echo "WARNING: payload-dumper-go release not found — extract_ota.sh will self-install it at runtime."; exit 0; }
-
-echo "==> Downloading: $PD_URL"
+echo "==> Fetching payload-dumper-go ${PD_VERSION} ($PD_ASSET)"
 TMPDIR=$(mktemp -d)
-curl -fsSL -o "$TMPDIR/pd.tar.gz" "$PD_URL"
+if ! curl -fsSL -o "$TMPDIR/pd.tar.gz" "${PD_BASE}/${PD_ASSET}"; then
+  echo "WARNING: payload-dumper-go download failed — extract_ota.sh will self-install it at runtime."
+  rm -rf "$TMPDIR"
+  exit 0
+fi
+
+ACTUAL_SHA256="$(sha256sum "$TMPDIR/pd.tar.gz" | awk '{print $1}')"
+if [ "$ACTUAL_SHA256" != "$PD_SHA256" ]; then
+  echo "ERROR: payload-dumper-go tarball SHA-256 mismatch — refusing to install." >&2
+  echo "  expected: $PD_SHA256" >&2
+  echo "  actual:   $ACTUAL_SHA256" >&2
+  rm -rf "$TMPDIR"
+  exit 1
+fi
+
 tar -xz -C "$TMPDIR" -f "$TMPDIR/pd.tar.gz"
 find "$TMPDIR" -name "payload-dumper-go" -exec install -m 0755 {} "$INSTALL_DIR/payload-dumper-go" \;
 rm -rf "$TMPDIR"

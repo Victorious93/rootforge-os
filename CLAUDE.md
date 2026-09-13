@@ -9,11 +9,11 @@
 ## 🔖 PROJECT STATE (READ THIS FIRST)
 
 **Last Updated:** `2026-09-13`
-**Last Session Summary:** `Phases 2-5 completed in one session (branch claude/phase-5-continuation-vy64cu was named for a "Phase 5 continuation" that, per actual git history and this file's own prior state, had never happened — Phases 2-4 had not been started. Rather than fabricate a Phase 5 audit on top of missing prerequisites, this session did Phases 2, 3, and 4 for real first, grounded in re-reads of cli.py/runner.py/doctor.py/common.sh/flash_patched_boot.sh/the Makefile/IMPLEMENTATION_PLAN.md and two fresh full test-suite runs (129/129 Python tests, 420/0 shell+python checks — matching Phase 1's count, not the unexplained 421 from 2026-09-11), then did Phase 5 on top of that real foundation. Populated CURRENT ARCHITECTURE & IMPLEMENTATION STATE, BUILD SYSTEM & TOOLING, TESTING, DEVELOPMENT WORKFLOW, ARCHITECTURAL DECISIONS, SECURITY CONSIDERATIONS, KNOWN LIMITATIONS & CONSTRAINTS, CURRENT STATE AUDIT, RECOMMENDED DEVELOPMENT PRIORITY, and QUICK REFERENCE sections below. Also fixed the README.md scripts/ path bug Phase 1 had flagged and deferred (26 of 27 occurrences corrected to config/includes.chroot/usr/local/bin/<name>.sh; the 27th, a reference to Magisk's own upstream scripts/boot_patch.sh, correctly left alone). Documentation-only session — no rootforge-core code changed.`
+**Last Session Summary:** `First real Phase 6 (Active Development) session, on branch claude/continue-per-claude-md-f67jn8. Before doing any of the "What To Do Next" list from the prior session, re-verified it against actual code per the SOURCE OF TRUTH rule — and found item 1 ("dedupe Dockerfile.ndk-matrix, still open") was false: only one copy of the file exists (find confirms it), and git history shows the duplicate was removed in commit 6dbd7dd, before every one of this file's own documentation sessions, all of which repeated the stale "still open" claim from docs/ARCHITECTURE_AUDIT.md (2026-08-08) without re-checking the filesystem. Corrected docs/IMPLEMENTATION_PLAN.md item 4 and every stale mention of this in CLAUDE.md itself rather than doing fake work on an already-solved problem. Also found this file self-contradicted on the README.md scripts/ path fix — the top-of-file summary correctly said it was fixed two sessions ago, but the CURRENT STATE AUDIT section (Phase 5) claimed it was still open; direct grep confirms the fix is real (only 1 "scripts/" match left in README.md, and it is the intentional exception — Magisk's own upstream scripts/boot_patch.sh). Corrected that section too. Then did real Phase 6 work on item 2, P1 item 9 (artifact integrity at build time) — the most consequential open security gap: added version pinning + SHA-256 verification to all 6 chroot hooks that fetch external content during the ISO build (0040-rpi-imager, 0050-starship-eza, 0060-magiskboot, 0062-payload-dumper, 0085-avbtool, 0095-zygisk-headers). Every pinned hash was computed from a real, freshly downloaded copy of the actual artifact (rpi-imager 2.0.4; starship v1.26.0 + eza v0.23.5; Magisk v31.0 APK; payload-dumper-go 2.0.2; the LineageOS avbtool/mkbootimg mirrors pinned to specific commit SHAs instead of the mutable lineage-22.2 branch name; Magisk v31.0's zygisk.hpp) — none were invented. Where upstream publishes its own checksum sidecar (starship, payload-dumper-go), the computed hash was cross-checked against it and matched; where it doesn't (rpi-imager, eza, Magisk, the LineageOS raw files), the hash is trust-on-first-use, verified on every build from here on. Network access to github.com/api.github.com is scoped per-repo in this environment (blocked for repos not attached to the session); reached the needed upstream repos via anonymous shallow git clone (add_repo confirmed this works for public repos without any explicit attach) to get real commit SHAs and release tags rather than guessing them. Verified: dash -n on all 6 rewritten hooks; tests/check-hooks.sh and tests/check-tests.sh both still pass; python3 -m unittest discover (129/129) and bash tests/run-tests.sh (420/0) both still pass; a standalone script re-ran all 14 pinned hashes against the real downloaded files (all matched) plus one deliberate-mismatch negative test (correctly detected and rejected). Did not start P1 items 5-7 (rootforge.core.device/config/log) this session — device abstraction is real, scoped work that deserved its own session rather than being rushed after the security fix, and config additionally introduces this repo's first third-party Python dependency (python3-yaml), which DEVELOPMENT WORKFLOW's own "ask first" list flags explicitly. rootforge-core Python code unchanged this session; only config/hooks/*.hook.chroot, docs/IMPLEMENTATION_PLAN.md, and this file were touched.`
 
 ### Current Phase
 
-`[x] PHASES 1-5 COMPLETE — DOCUMENTATION FOUNDATION ESTABLISHED — READY FOR PHASE 6`
+`[x] PHASES 1-5 COMPLETE — PHASE 6 (ACTIVE DEVELOPMENT) IN PROGRESS`
 
 | Phase | Status | Completed Date | Notes |
 |-------|--------|-----------------|-------|
@@ -23,14 +23,14 @@
 | Phase 3 — Build System, Testing & Tooling | ✅ Complete | 2026-09-13 | See "BUILD SYSTEM & TOOLING" and "TESTING" below |
 | Phase 4 — Workflow & Architecture Rules | ✅ Complete | 2026-09-13 | See "DEVELOPMENT WORKFLOW", "ARCHITECTURAL DECISIONS", "SECURITY CONSIDERATIONS", "KNOWN LIMITATIONS & CONSTRAINTS" below |
 | Phase 5 — Final Audit & Next Steps | ✅ Complete | 2026-09-13 | See "CURRENT STATE AUDIT", "RECOMMENDED DEVELOPMENT PRIORITY", "QUICK REFERENCE" below |
-| Phase 6 — Active Development (ongoing) | ⬜ Not Started | — | — |
+| Phase 6 — Active Development (ongoing) | 🟨 In Progress | started 2026-09-13 | P1 item 9 (build-time artifact integrity) landed this session; P0 item 4 (Dockerfile dedup) found already-done and corrected in the docs instead of redone. See RECOMMENDED DEVELOPMENT PRIORITY below for what's left. |
 | Phase 7 — Pull Request / Build & Release | ⬜ Not Started | — | — |
 
 **Status Legend:** ⬜ Not Started · 🟨 In Progress · ✅ Complete · 🔁 Needs Revisit
 
 ### What To Do Next
 
-`The documentation foundation (Phases 1-5) is now established — begin Phase 6 (Active Development) using RECOMMENDED DEVELOPMENT PRIORITY below as the ordered task list. First concrete items, in order: (1) dedupe Dockerfile.ndk-matrix (P0 item 4, still open, trivial); (2) add SHA-256 verification to the 6 chroot hooks that fetch external content during the ISO build (P1 item 9 — the most consequential open security gap documented in SECURITY CONSIDERATIONS); (3) build rootforge.core.device, then rootforge.core.config (P1 items 5-6, in that dependency order per IMPLEMENTATION_PLAN.md); (4) rootforge.core.log (P1 item 7). Do not start any P3 item (rootforge-kernel, dynamic-partition tooling, GUI) before P0-P2 are stable. Every new phase-6 session should re-verify code before trusting this file's prose, per the SOURCE OF TRUTH rule — this file has already gone stale once (the 2026-08-08 ARCHITECTURE_AUDIT.md) and was itself handed to this session under a mistaken premise (a "Phase 5 continuation" that had not actually started).`
+`Continue Phase 6 using RECOMMENDED DEVELOPMENT PRIORITY below. P0 item 4 (Dockerfile dedup) and P1 item 9 (build-time SHA-256 verification on the 6 chroot hooks) are both done as of 2026-09-13 — do not redo them; re-verify against code first if something seems off, per the recurring lesson below. Next up, in order: (1) rootforge.core.device (P1 item 5) — device abstraction, no new dependencies needed, removes real duplication across flash_patched_boot.sh/backup_partitions.sh/unlock_bootloader.sh; (2) rootforge.core.config (P1 item 6) — depends on item 5's device model for its per-device override layer, and introduces this repo's first third-party Python dependency (python3-yaml) — flag that explicitly and consider asking before adding it, per DEVELOPMENT WORKFLOW's "ask first" list; (3) rootforge.core.log (P1 item 7); (4) backup integrity CLI (P1 item 8). Do not start any P3 item (rootforge-kernel, dynamic-partition tooling, GUI) before P0-P2 are stable. Every new phase-6 session should re-verify code before trusting this file's prose, per the SOURCE OF TRUTH rule — this file has now gone stale at least twice: the 2026-08-08 ARCHITECTURE_AUDIT.md's claims were carried forward uncritically for weeks, and the "Phase 5 continuation" premise for one session's own branch name turned out to be false. The 2026-09-13 Phase 6 session found and fixed a third instance (the Dockerfile dedup claim) — treat every status claim in this file, including this one, as something to spot-check against the actual repo rather than trust outright.`
 
 ### Open Questions / Blockers
 
@@ -40,6 +40,9 @@
 - **Resolved this session:** `docker`'s role — it is an in-ISO runtime package (`docker.io`, installed via `config/package-lists/*.list.chroot` and the bootstrap hook that adds the login user to the `docker` group) used exclusively by `build_matrix.sh` for isolated NDK/API version-matrix builds *on a running RootForge OS install*. It is not used by this repo's own build, lint, or test tooling — the `docker` binary present in this dev container is incidental (base image tooling) and irrelevant to RootForge-OS's own pipeline.
 - **New:** `tests/run-tests.sh` reported **420 passed, 0 failed** this session, not the "421-check" figure recorded in the prior session's summary (2026-09-11). The 129-test Python unittest count matches exactly. The 1-check delta in the shell suite is unexplained — `[Guessing]` it reflects either a since-removed/merged check or an environment-conditional check (a tool-presence branch) that counts differently here than in the prior session's container. Not investigated further this session (documentation-inventory scope, not a suite audit) — worth a `git log -p` on `tests/run-tests.sh`/`tests/check-tests.sh` between the two session dates if the exact count matters for Phase 3.
 - **New:** `docs/ARCHITECTURE_AUDIT.md` is dated 2026-08-08 and states as fact that no `rootforge` CLI, no `tests/` directory, and no Python package exist in this repository. All three claims are now false — confirmed by direct inspection this session (see INSPECTION REPORT). This is not a contradiction to resolve by editing that file (it's a dated audit, valid as of its own commit), but Phase 2 documentation must not cite it uncritically — cite the current tree instead. `docs/IMPLEMENTATION_PLAN.md`'s own "P0.5 (landed)" section already documents that this gap was closed after the audit was written, which is consistent with what direct inspection shows.
+- **Resolved 2026-09-13 (Phase 6 session):** the Dockerfile.ndk-matrix dedup (P0 item 4) that every prior session (including the one that wrote the "What To Do Next" line handed to this session) reported as still open was actually already done, in commit `6dbd7dd`, which predates Phase 0 of this whole documentation effort. `find . -iname Dockerfile.ndk-matrix` returns exactly one match; `git log --all` on the second path shows it removed and never restored. The false claim traces back to `docs/ARCHITECTURE_AUDIT.md` (2026-08-08), which every later session cited without re-running `find`/`diff` to check. Corrected in `docs/IMPLEMENTATION_PLAN.md` item 4 and everywhere this file repeated the claim. Lesson for future sessions: a "confirmed this session" claim in a prior CLAUDE.md session is not itself confirmation — re-run the actual check.
+- **Resolved 2026-09-13 (Phase 6 session):** this file self-contradicted on the README.md `scripts/` path fix — the PROJECT STATE summary two sessions ago said it was fixed, but the CURRENT STATE AUDIT section (written in the *same* session, Phase 5) said it was still open. Direct check: `grep -c "scripts/" README.md` → 1, and that one match is the intentional exception (Magisk's own upstream `scripts/boot_patch.sh`). The fix is real; the CURRENT STATE AUDIT section's claim was wrong and has been corrected.
+- **New:** GitHub access (`github.com`/`api.github.com`/`codeload.github.com`) in this remote execution environment is scoped per-repository to whatever this session has attached — requests for any other repo return a proxy-injected 403 with an `add_repo`-pointing error body, not a real GitHub error. `raw.githubusercontent.com` was *not* subject to this restriction in this session (plain content fetches succeeded for arbitrary public repos without attaching them first). Anonymous shallow `git clone` of public GitHub repos also worked directly without needing `add_repo` at all (confirmed for eza-community/eza, topjohnwu/Magisk, ssut/payload-dumper-go, starship/starship, and two LineageOS mirror repos) — `add_repo`'s own response for public repos says as much. Relevant to any future session that needs to verify an external hash/version: don't assume `api.github.com` "latest release" lookups work for third-party repos; clone shallow and read tags/commits directly instead.
 
 ---
 
@@ -625,7 +628,7 @@ A repo-wide grep for `TODO|FIXME|XXX|placeholder|not.?implemented|stub` across `
 
 No other stub/placeholder/dead-code pattern was found in source. (`docs/IMPLEMENTATION_PLAN.md` itself lists many genuinely unimplemented *future* items — P3 kernel tooling, dynamic-partition support, GUI, CI VM-boot testing — but those are tracked as a plan, not disguised as shipped code.)
 
-One real, byte-identical file duplication the audit flagged (`Dockerfile.ndk-matrix` under both `opt/rootforge/docker/` and `usr/local/share/rootforge/docker/`) was checked this session and **both copies still exist** — `docs/IMPLEMENTATION_PLAN.md` item 4 ("Deduplicate Dockerfile.ndk-matrix") is listed under P0 but is **not** in the "P0.5 (landed)" section, so this is confirmed still-open work, not yet done despite being P0-priority.
+One real, byte-identical file duplication the audit flagged (`Dockerfile.ndk-matrix` under both `opt/rootforge/docker/` and `usr/local/share/rootforge/docker/`) was claimed here as still-open. **Correction (2026-09-13, Phase 6 session):** this was wrong — a fresh `find . -iname Dockerfile.ndk-matrix` returns exactly one match, and `git log --all` on the second path shows it was removed in commit `6dbd7dd`, which predates this Phase 1 session entirely. Whatever check produced the "both copies still exist" claim above did not actually re-verify the filesystem; it repeated `docs/ARCHITECTURE_AUDIT.md`'s (2026-08-08) claim uncritically. `docs/IMPLEMENTATION_PLAN.md` item 4 has been updated to reflect this as landed.
 
 ### 8. Test infrastructure — run and verified this session **[Certain]**
 
@@ -644,7 +647,7 @@ One real, byte-identical file duplication the audit flagged (`Dockerfile.ndk-mat
 | `docker.io` | `build_matrix.sh` only, on a *running RootForge OS install* | Optional (only for NDK/API matrix builds) | **Resolved this session** — see Open Questions. Not used by this repo's own CI/build/test tooling. |
 | Ollama | `setup_ai_tools.sh`, `brain.py`, `doctor.py`'s optional AI-tooling check | Optional | `doctor` degrades gracefully (warns, doesn't fail hard) when unreachable, per `doctor.py`. |
 | Claude Code CLI | `setup_ai_tools.sh`, checked by `doctor.py` | Optional | Same graceful-degradation pattern. |
-| `magiskboot`, `avbtool`, `mkbootimg`/`unpack_bootimg`/`repack_bootimg` | Boot-image tooling, baked into ISO at build time from AOSP/Magisk upstream sources | Required (baked in) | Fetched from real upstream sources per hooks `0060`/`0085`; **no SHA-256 verification of these downloads exists** — confirmed still true this session (grepped the 6 hooks the audit named; none pipe through a checksum check). This is `docs/IMPLEMENTATION_PLAN.md` item 9, P1, and remains open. |
+| `magiskboot`, `avbtool`, `mkbootimg`/`unpack_bootimg`/`repack_bootimg` | Boot-image tooling, baked into ISO at build time from AOSP/Magisk upstream sources | Required (baked in) | Fetched from real upstream sources per hooks `0060`/`0085`. ~~**no SHA-256 verification of these downloads exists**~~ **Fixed 2026-09-13 (Phase 6 session)** — hooks `0060`/`0085` (and the other 4 named in `docs/IMPLEMENTATION_PLAN.md` item 9) now pin a version/commit and verify a SHA-256 hash before installing. |
 | `jq`, `e2fsprogs` | `extract_ota.sh`/`install_lsposed.sh` (GitHub API parsing), `inspect_partition_image.sh` (loopback ext4 mount) | Required for those scripts | |
 | `adb`, `fastboot`, `repo`, `aapt` (host/device tooling) | Nearly every device-facing script | Required for real device work | Not installed in this container; stubbed in tests. |
 
@@ -675,16 +678,16 @@ No hard scope violation found — no unrelated OS/distro embedded, no unrelated 
 | Lint pipeline | IMPLEMENTED (verified via CI design; not locally runnable in this container) |
 | CI (lint.yml) | IMPLEMENTED, presumed green (not re-run this session; last-known status from repo history) |
 | CI (release.yml) | IMPLEMENTED but unexercised on real GitHub infra per its own comment |
-| Artifact SHA-256 verification (fetched build-time tools) | MISSING |
+| Artifact SHA-256 verification (fetched build-time tools) | ~~MISSING~~ **IMPLEMENTED as of 2026-09-13** (Phase 6 session — all 6 hooks now pin version + SHA-256) |
 | Reproducibility manifest (`system-manifest.json`) | MISSING |
-| Dockerfile.ndk-matrix dedup | MISSING (P0 item, not yet done) |
+| Dockerfile.ndk-matrix dedup | ~~MISSING (P0 item, not yet done)~~ **Correction (2026-09-13): this was already done in commit `6dbd7dd`, before this Phase 1 session ran — the original claim here was never actually re-verified against the filesystem.** |
 | Windows platform | MISSING |
 | Android APK application | MISSING |
 | RootForge GUI | MISSING |
 | Remote/multi-node administration | MISSING |
 | `rootforge-kernel` subsystem | MISSING |
 | Dynamic-partition (`lpunpack`/`lpmake`) tooling | MISSING |
-| README `scripts/` path references | INCORRECT (documentation bug, not a code bug) |
+| README `scripts/` path references | ~~INCORRECT (documentation bug, not a code bug)~~ **Fixed in a later session** — confirmed 2026-09-13 (Phase 6): only 1 `scripts/` match remains in README.md, and it is the intentional exception (Magisk's own upstream `scripts/boot_patch.sh`). |
 
 **Exit criteria met:** actual code and structure inventoried directly (not from memory or prior docs' claims alone); IMPLEMENTED / PARTIALLY IMPLEMENTED / PLANNED / MISSING breakdown produced above for every major area; no fabricated claims — items not run this session (ISO boot, release.yml, CI green-status, secret scan) are explicitly marked as not independently verified rather than assumed. Phase 2 can proceed.
 
@@ -975,7 +978,7 @@ Feature branches named `claude/<slug>-<random>` merged into `main` via PR — co
 
 ### What's explicitly NOT implemented (gaps, not oversights the docs hide)
 
-- **No SHA-256 verification of build-time tool downloads.** Six chroot hooks (`0040-rpi-imager`, `0050-starship-eza`, `0060-magiskboot`, `0062-payload-dumper`, `0085-avbtool`, `0095-zygisk-headers`) fetch external content during the ISO build with no checksum pinning — confirmed still true this session (`docs/IMPLEMENTATION_PLAN.md` P1 item 9, not yet landed). A compromised or mutated upstream artifact would be baked into the ISO undetected. This is the single most consequential unresolved security gap identified anywhere in this repo's own documentation.
+- ~~**No SHA-256 verification of build-time tool downloads.**~~ **RESOLVED 2026-09-13 (Phase 6 session).** All six chroot hooks (`0040-rpi-imager`, `0050-starship-eza`, `0060-magiskboot`, `0062-payload-dumper`, `0085-avbtool`, `0095-zygisk-headers`) now pin a specific upstream version/commit and verify a SHA-256 hash before installing anything, failing the build hard on a mismatch. See `docs/IMPLEMENTATION_PLAN.md` P1 item 9 for the pinned versions and hashes, and how each hash was obtained/verified. This was the single most consequential unresolved security gap identified anywhere in this repo's own documentation; it is no longer open. (Historical note, left for context: this bullet previously read "confirmed still true this session," referring to the 2026-09-13 Phase 2-5 session — that was accurate at the time.)
 - **No authentication/authorization layer.** As stated in ARCHITECTURE §11: there is no concept of which user is permitted to run a destructive `rootforge` subcommand beyond OS file permissions and physical access to the device. Anyone who can run the CLI and pass `rf_confirm`'s typed-word prompt (or set `ROOTFORGE_ASSUME_YES=1`) can flash a device.
 - **No secret redaction in logging**, because there is no unified logging module yet (`rootforge.core.log`, PLANNED) — individual scripts' plain-text logs under `${ROOTFORGE_HOME}/logs` have no designed-in redaction pass. (Note: this session's own git log shows a prior, already-fixed instance of exactly this class of bug — commit `d6d812c "An API key was written in plaintext to a world-readable log"` — so the risk is not hypothetical; the fix for that specific instance landed, but no systemic redaction mechanism exists to prevent a recurrence elsewhere.)
 - **`proot-distro` plugin ships a placeholder checksum**, not a verified one, pending a real tagged release (ARCHITECTURE §7) — this is disclosed honestly in the script's own comment rather than silently shipping a wrong hash, but it means checksum verification for that specific install path is not yet actually protective.
@@ -995,7 +998,7 @@ Least-privilege and secure-defaults are respected in the specific mechanisms abo
 2. **Windows and Android-application support are both 0% started.** Not partially implemented, not scaffolded — no files exist for either.
 3. **This dev container cannot build or verify the ISO/Termux rootfs, and cannot run `shellcheck`.** Every claim in this file about those paths working rests on script/CI inspection and documented prior CI runs, not on independent execution in this environment. Say so explicitly whenever it's relevant, rather than implying local verification that didn't happen.
 4. **The 421-vs-420 shell-test-count discrepancy from the 2026-09-11 session remains unexplained** — carried forward again this session (re-confirmed 420 this session, not re-investigated further; flagged for whoever next has reason to touch `tests/run-tests.sh`/`tests/check-tests.sh`).
-5. **No build-time artifact integrity verification** (SECURITY CONSIDERATIONS above) is the most significant concrete security gap, and it is a documented, prioritized, not-yet-done P1 item — not a surprise finding.
+5. ~~**No build-time artifact integrity verification**~~ **Fixed 2026-09-13 (Phase 6 session)** — see SECURITY CONSIDERATIONS above. This was the most significant concrete security gap when this item was written; it no longer applies.
 6. **No formal API/IPC layer** means any future GUI or remote client has exactly two integration options today: shell out to `rootforge`, or import `rootforge.core` modules directly in-process. Neither is a stable, versioned interface yet.
 7. **This file (CLAUDE.md) is large and manually maintained.** Its own accuracy depends entirely on future sessions actually re-verifying claims against code rather than trusting this file's prose — the same discipline this file required of itself regarding `docs/ARCHITECTURE_AUDIT.md`.
 
@@ -1043,9 +1046,9 @@ Least-privilege and secure-defaults are respected in the specific mechanisms abo
 | Lint pipeline | IMPLEMENTED (CI-verified design; not locally runnable here) |
 | CI `lint.yml` | IMPLEMENTED, presumed green (not re-run this session) |
 | CI `release.yml` | IMPLEMENTED, unexercised on real infra per its own comment |
-| Build-time artifact SHA-256 verification | MISSING |
+| Build-time artifact SHA-256 verification | ~~MISSING~~ **IMPLEMENTED 2026-09-13 (Phase 6)** — all 6 hooks pin version + hash |
 | Reproducibility manifest (`system-manifest.json`) | MISSING |
-| `Dockerfile.ndk-matrix` dedup | MISSING (still-open P0 item) |
+| `Dockerfile.ndk-matrix` dedup | ~~MISSING (still-open P0 item)~~ **Correction (2026-09-13): already done in commit `6dbd7dd`, before this Phase 5 session ran** |
 | Windows platform | MISSING |
 | Android APK application | MISSING |
 | RootForge management GUI | MISSING |
@@ -1055,13 +1058,13 @@ Least-privilege and secure-defaults are respected in the specific mechanisms abo
 | Unified structured logging/audit | MISSING |
 | `rootforge-kernel` subsystem | MISSING |
 | Dynamic-partition (`lpunpack`/`lpmake`) tooling | MISSING |
-| README `scripts/` path references | INCORRECT (documentation bug — see item 2 below, still unfixed) |
+| README `scripts/` path references | ~~INCORRECT (documentation bug — see item 2 below, still unfixed)~~ **Fixed** — confirmed 2026-09-13 (Phase 6): only the intentional exception remains |
 
 ### 2. Scope-adherence audit
 
 No new scope violation found this session beyond what Phase 1 already identified. Two items carried forward, unresolved:
 
-- **README.md's `scripts/` path references remain uncorrected.** Phase 1 flagged this as a documentation-only, low-risk fix and explicitly deferred it to Phase 2 ("opportunistically... low-risk"). It was not fixed during Phase 2 of this session either — this session's Phase 2 work focused on writing the architecture documentation into this file, and the README fix was not re-prioritized into that work. **This is a real gap in this session's own execution against Phase 1's stated plan**, not a new finding — flagging it plainly rather than letting it quietly drop. It should be the first small fix of a Phase 6 session, or done immediately now if the user wants it in this session.
+- ~~**README.md's `scripts/` path references remain uncorrected.**~~ **Correction (2026-09-13, Phase 6 session): this claim contradicted this very file's own PROJECT STATE summary for the same session, which said the README fix landed. Direct check confirms the fix is real** — only 1 `scripts/` match remains in README.md, and it's the intentional exception (Magisk's own upstream `scripts/boot_patch.sh`). Whichever half of that self-contradiction was true at the time, it is resolved now.
 - **`esp32_toolkit.sh`, `rpi_fleet_tools.sh`, and `brain`** sit outside the narrower charter of the older `docs/ARCHITECTURE_AUDIT.md` but inside CLAUDE.md's own broader "complete operating-system/platform ecosystem" scope — Phase 1's judgment call that these are not violations under this file's actual governing scope stands; re-confirmed by reading this file's own SCOPE section again this session, no change in reasoning.
 
 No secrets, credentials, or committed user data were found in tracked files this session — but, consistent with Phase 1's own caveat, no dedicated secret-scanning tool was run; this is inspection-based, not scan-verified.
@@ -1072,12 +1075,12 @@ Of the 7 platform-support items in CLAUDE.md's vision: 2 are implemented (Linux 
 
 ### 4. Known bugs and incomplete work (still open, confirmed this session)
 
-- No build-time SHA-256 verification on 6 chroot hooks fetching external content (P1 item 9).
-- `Dockerfile.ndk-matrix` byte-identical duplicate not yet removed (P0 item 4) — confirmed both copies still present this session was not re-checked with a fresh `diff`, carried forward from Phase 1's confirmation since nothing in this session touched that path.
-- `boot` CLI group missing `inspect`/`unpack`/`repack`/`verify` (P2 item 11, partial).
+- ~~No build-time SHA-256 verification on 6 chroot hooks fetching external content (P1 item 9).~~ **Fixed 2026-09-13 (Phase 6 session)** — all 6 hooks now pin version + SHA-256.
+- ~~`Dockerfile.ndk-matrix` byte-identical duplicate not yet removed (P0 item 4)~~ **Correction (2026-09-13): this was never actually true — the duplicate was removed in commit `6dbd7dd`, before this Phase 5 session or any of its predecessors ran. The claim here was carried forward from `docs/ARCHITECTURE_AUDIT.md` without re-checking.**
+- `boot` CLI group missing `inspect`/`unpack`/`repack`/`verify` (P2 item 11, partial). Still open.
 - No CI VM-boot test for the produced ISO (P3 item 18) — the single highest-value testing gap per the plan's own words, still open.
-- The 421-vs-420 shell-check-count discrepancy from 2026-09-11 remains unexplained.
-- README's `scripts/` path drift (§2 above), unfixed.
+- The 421-vs-420 shell-check-count discrepancy from 2026-09-11 remains unexplained. Still open (not investigated in the 2026-09-13 Phase 6 session either — both suite runs that session again reported 420/0, consistent with every session since 2026-09-13's Phase 1).
+- ~~README's `scripts/` path drift (§2 above), unfixed.~~ Fixed — see §2 above.
 
 ### 5. External resource links (as they appear in this repo's own tracked files — not independently fetched/verified this session)
 
@@ -1098,19 +1101,22 @@ Every status claim in this Phase 5 audit traces to either: a file read directly 
 
 ## RECOMMENDED DEVELOPMENT PRIORITY
 
-**Run:** 2026-09-13. This order follows `docs/IMPLEMENTATION_PLAN.md`'s own P0→P3 sequencing (verified sound by this session's reading of it — the dependency reasoning holds up: e.g. device abstraction genuinely must precede config's per-device override layer), adjusted only where this session's own findings add detail.
+**Run:** 2026-09-13, updated 2026-09-13 (Phase 6 session). This order follows `docs/IMPLEMENTATION_PLAN.md`'s own P0→P3 sequencing (the dependency reasoning holds up: e.g. device abstraction genuinely must precede config's per-device override layer).
 
-1. **P0 remainder — `Dockerfile.ndk-matrix` dedup (item 4).** Small, isolated, no dependencies, already fully specified in the plan. The cheapest correct next commit.
-2. **P1 item 9 — SHA-256 verification on the 6 fetch-and-run-in-chroot hooks.** This is the most consequential open security gap (SECURITY CONSIDERATIONS above) and is independent of the config/device/logging work — it should not wait behind them.
-3. **P1 item 5 — `rootforge.core.device` (Device abstraction).** Explicitly sequenced before config per the plan's own reasoning (config's per-device override layer needs it); also removes the current duplication where `flash_patched_boot.sh`, `backup_partitions.sh`, and `unlock_bootloader.sh` each independently re-derive device state.
-4. **P1 item 6 — `rootforge.core.config`.** Depends on item 3. Introduces the repo's first third-party Python dependency (`python3-yaml`) — flag this explicitly when it lands, since CLAUDE.md's ask-first list includes new dependencies.
-5. **P1 item 7 — `rootforge.core.log`.** Independent of items 3–4 but most valuable once they exist (structured logs can then include device/config context). Also the natural place to close the plaintext-secret-in-logs risk class systemically, rather than one-off per incident as commit `d6d812c` was.
-6. **P1 item 8 — backup integrity CLI (`rootforge backup verify`).** Builds on the SHA256SUMS mechanism that already exists in `common.sh`/the scripts; mostly CLI surface work at this point.
-7. **P2 item 11 remainder — finish the `boot` subcommand group** (`inspect`/`unpack`/`repack`/`verify`), now that `patch`/`flash-last` establish the pattern.
-8. **Documentation debt — fix README's `scripts/` path references.** Low-risk, zero dependencies, flagged in Phase 1 and still open per this session's own scope audit above — there's no remaining reason to keep deferring it.
-9. **P3 — do not start** (`rootforge-kernel`, dynamic-partition tooling, GUI, CI VM-boot testing) **until P0–P2 above are stable**, per the plan's own explicit rule. GUI in particular should wait until `rootforge.core` (config/device/log) is stable enough to be a real dependency for a GUI to call into — building a GUI against today's core would mean rebuilding it once that core lands.
+**Done as of the Phase 6 session (2026-09-13) — do not redo these:**
+- ~~P0 remainder — `Dockerfile.ndk-matrix` dedup (item 4).~~ Turned out to already be done (commit `6dbd7dd`, predating this whole documentation effort) — the "still open" claim in every prior session was a stale-carry-forward error, corrected this session. No code change was needed.
+- ~~P1 item 9 — SHA-256 verification on the 6 fetch-and-run-in-chroot hooks.~~ Landed this session: all 6 hooks pin a specific version/commit and verify a real SHA-256 before installing anything. See `docs/IMPLEMENTATION_PLAN.md` item 9 for the pinned versions/hashes and how they were obtained.
+- ~~Documentation debt — fix README's `scripts/` path references.~~ Already fixed in an earlier session; this session corrected this file's own self-contradictory claim that it was still open.
 
-**Rationale for this ordering:** security gaps (item 2) and genuine architectural dependencies (items 3–4's sequencing) come before convenience/completeness work (items 6–8), which comes before net-new subsystems (P3). This matches CLAUDE.md's own stated priority: correctness → architecture → security → testability → maintainability → functionality — though note items 1–2 here are prioritized ahead of "architecture" specifically because they are small, already-fully-specified, and one is a live security gap, not because security universally outranks architecture in general.
+**Remaining, in order:**
+1. **P1 item 5 — `rootforge.core.device` (Device abstraction).** Explicitly sequenced before config per the plan's own reasoning (config's per-device override layer needs it); also removes the current duplication where `flash_patched_boot.sh`, `backup_partitions.sh`, and `unlock_bootloader.sh` each independently re-derive device state. No new dependencies needed — good next session to pick up.
+2. **P1 item 6 — `rootforge.core.config`.** Depends on item 1. Introduces the repo's first third-party Python dependency (`python3-yaml`) — flag this explicitly when it lands, since CLAUDE.md's ask-first list includes new dependencies; consider asking before adding it.
+3. **P1 item 7 — `rootforge.core.log`.** Independent of items 1–2 but most valuable once they exist (structured logs can then include device/config context). Also the natural place to close the plaintext-secret-in-logs risk class systemically, rather than one-off per incident as commit `d6d812c` was.
+4. **P1 item 8 — backup integrity CLI (`rootforge backup verify`).** Builds on the SHA256SUMS mechanism that already exists in `common.sh`/the scripts; mostly CLI surface work at this point.
+5. **P2 item 11 remainder — finish the `boot` subcommand group** (`inspect`/`unpack`/`repack`/`verify`), now that `patch`/`flash-last` establish the pattern.
+6. **P3 — do not start** (`rootforge-kernel`, dynamic-partition tooling, GUI, CI VM-boot testing) **until P0–P2 above are stable**, per the plan's own explicit rule. GUI in particular should wait until `rootforge.core` (config/device/log) is stable enough to be a real dependency for a GUI to call into — building a GUI against today's core would mean rebuilding it once that core lands.
+
+**Rationale for this ordering:** now that P0 and the highest-value P1 security item are actually done, genuine architectural dependencies (device before config) come before convenience/completeness work (log, backup CLI, boot subcommands), which comes before net-new subsystems (P3). This matches CLAUDE.md's own stated priority: correctness → architecture → security → testability → maintainability → functionality.
 
 ---
 
@@ -1164,7 +1170,7 @@ sudo make flash USB=/dev/sdX
 | Test hermeticity mechanism | `tests/README.md` |
 
 ### Known gaps to keep in mind before claiming a feature works
-No build-artifact checksum verification · no `rootforge.core.config`/`device`/`log` · no Windows/Android-app/GUI/remote-admin · README's `scripts/` paths are wrong · `shellcheck`/device tooling not installed in this container.
+No `rootforge.core.config`/`device`/`log` · no Windows/Android-app/GUI/remote-admin · `shellcheck`/device tooling not installed in this container. (Build-artifact checksum verification and README's `scripts/` paths were both fixed as of the 2026-09-13 Phase 6 session — don't assume either is still a gap without checking.)
 
 ---
 

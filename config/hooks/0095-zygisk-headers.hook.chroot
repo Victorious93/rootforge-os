@@ -16,38 +16,49 @@
 # native/include/{zygisk.hpp,zygisk.h} and native/src/zygisk/zygisk.cpp —
 # verified by direct HTTP request against the real v30.7 release tag that
 # none of those three paths exist (all 404). The header actually lives at
-# native/src/core/zygisk/zygisk.hpp (confirmed 200 at v30.7); there is no
-# zygisk.h (C++-only header) and no zygisk.cpp (the .cpp implementation
-# files — entry.cpp, hook.cpp, module.cpp — are Magisk daemon internals,
-# not part of the module-developer-facing API, and aren't needed to build
-# a Zygisk module). This hook's own --head-then-fetch guard meant the old
-# wrong paths never errored the build — it just silently produced an empty
-# zygisk-api/ directory (nothing but the CMakeLists stub) on every build,
-# ever, until now.
+# native/src/core/zygisk/zygisk.hpp (confirmed 200 at v30.7, and again at
+# v31.0 below); there is no zygisk.h (C++-only header) and no zygisk.cpp
+# (the .cpp implementation files — entry.cpp, hook.cpp, module.cpp — are
+# Magisk daemon internals, not part of the module-developer-facing API, and
+# aren't needed to build a Zygisk module). This hook's own --head-then-fetch
+# guard meant the old wrong paths never errored the build — it just silently
+# produced an empty zygisk-api/ directory (nothing but the CMakeLists stub)
+# on every build, ever, until now.
+#
+# Pinned to a specific Magisk tag + SHA-256 rather than "latest" (matching
+# the pin 0060-magiskboot.hook.chroot uses for the same release, so both
+# hooks reference the same Magisk version). The hash below was computed
+# directly from this exact file at that tag.
+#
+# To bump: check https://github.com/topjohnwu/Magisk/releases for the
+# current tag, fetch native/src/core/zygisk/zygisk.hpp at that tag,
+# sha256sum it, and update MAGISK_VERSION and ZYGISK_HPP_SHA256 together
+# (and consider bumping 0060-magiskboot.hook.chroot's pin to match).
 
 set -e
+
+MAGISK_VERSION="v31.0"
+HEADER_URL="https://raw.githubusercontent.com/topjohnwu/Magisk/${MAGISK_VERSION}/native/src/core/zygisk/zygisk.hpp"
+ZYGISK_HPP_SHA256="2ceb99b045ffb5c6cb7c4d911323b2e9bfd96cc702be560d6a298c9dc264e42f"
 
 INSTALL_DIR="/usr/local/share/rootforge/zygisk-api"
 mkdir -p "$INSTALL_DIR"
 
-MAGISK_API="https://api.github.com/repos/topjohnwu/Magisk/releases/latest"
-# strict=False: confirmed by a real build failure (in 0060-magiskboot,
-# which hits this same API) that GitHub's release JSON for this repo can
-# carry a raw control character somewhere in the payload (most likely the
-# free-text release-notes body) — Python's default strict json.load
-# rejects that even though we only need the small, well-formed tag_name
-# field, never the body itself.
-TAG=$(curl -fsSL "$MAGISK_API" | python3 -c "import sys,json; print(json.load(sys.stdin, strict=False)['tag_name'])")
-
-BASE="https://raw.githubusercontent.com/topjohnwu/Magisk/${TAG}"
-HEADER_URL="${BASE}/native/src/core/zygisk/zygisk.hpp"
-
-echo "==> Fetching Zygisk API header from Magisk $TAG"
+echo "==> Fetching Zygisk API header from Magisk ${MAGISK_VERSION}"
 if ! curl -fsSL -o "$INSTALL_DIR/zygisk.hpp" "$HEADER_URL"; then
   echo "WARNING: failed to fetch $HEADER_URL"
   echo "         zygisk.hpp not installed — Magisk may have moved the file again;"
-  echo "         check native/src/core/zygisk/ under the $TAG tag."
+  echo "         check native/src/core/zygisk/ under the $MAGISK_VERSION tag."
   exit 0
+fi
+
+ACTUAL_SHA256="$(sha256sum "$INSTALL_DIR/zygisk.hpp" | awk '{print $1}')"
+if [ "$ACTUAL_SHA256" != "$ZYGISK_HPP_SHA256" ]; then
+  echo "ERROR: zygisk.hpp SHA-256 mismatch — refusing to install." >&2
+  echo "  expected: $ZYGISK_HPP_SHA256" >&2
+  echo "  actual:   $ACTUAL_SHA256" >&2
+  rm -f "$INSTALL_DIR/zygisk.hpp"
+  exit 1
 fi
 echo "    zygisk.hpp"
 

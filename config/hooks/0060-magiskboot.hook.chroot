@@ -6,15 +6,27 @@
 # used by kernelsu_patch_boot.sh, flash_patched_boot.sh, and others.
 # It lives in Magisk's native tree and isn't in any apt repo.
 #
-# Strategy: fetch the latest Magisk release APK (it's a zip), extract the
+# Strategy: fetch a pinned Magisk release APK (it's a zip), extract the
 # magiskboot binary matching this chroot's own architecture from the assets
 # inside, install to /usr/local/bin. This is the same binary Magisk ships
 # on-device — it runs fine on a matching-arch Linux host (or, for the
 # Termux/PRoot rootfs build, matching-arch Android).
+#
+# Pinned to a specific release + whole-APK SHA-256 rather than "latest":
+# Magisk does not publish a checksum sidecar for its APK, so the hash below
+# was computed directly from that exact APK at pin time. One hash covers
+# the APK regardless of which arch's libmagiskboot.so gets extracted from
+# it, since it's the same file either way.
+#
+# To bump: check https://github.com/topjohnwu/Magisk/releases for the
+# current tag, download its Magisk-<tag>.apk, `sha256sum` it, update
+# MAGISK_VERSION and MAGISK_APK_SHA256 together.
 
 set -e
 
-MAGISK_API="https://api.github.com/repos/topjohnwu/Magisk/releases/latest"
+MAGISK_VERSION="v31.0"
+MAGISK_APK_URL="https://github.com/topjohnwu/Magisk/releases/download/${MAGISK_VERSION}/Magisk-${MAGISK_VERSION}.apk"
+MAGISK_APK_SHA256="2c8a488b9a5293e578e95ae4f07e3c57aba4feec4a52ca4dd852a2692d6dd4e8"
 WORK_DIR="/tmp/magiskboot-extract"
 mkdir -p "$WORK_DIR"
 
@@ -27,27 +39,21 @@ case "$DPKG_ARCH" in
   *) echo "WARNING: unrecognized dpkg architecture '$DPKG_ARCH' — defaulting to x86_64 magiskboot, which likely won't run here."; MAGISK_ABI="x86_64" ;;
 esac
 
-echo "==> Fetching latest Magisk release metadata"
-RELEASE_JSON=$(curl -fsSL "$MAGISK_API")
+echo "==> Fetching Magisk ${MAGISK_VERSION} APK"
+if ! curl -fsSL -o "$WORK_DIR/magisk.apk" "$MAGISK_APK_URL"; then
+  echo "WARNING: Magisk APK download failed — magiskboot will be absent. Scripts will error at runtime if it's needed."
+  rm -rf "$WORK_DIR"
+  exit 0
+fi
 
-# Magisk releases the APK as magisk-<version>.apk — it's a zip containing
-# lib/<abi>/libmagiskboot.so which is a standalone ELF, despite the .so name
-APK_URL=$(echo "$RELEASE_JSON" | python3 -c "
-import sys, json
-# strict=False: confirmed by a real build failure that GitHub's release
-# JSON for this repo can carry a raw control character somewhere in the
-# payload (most likely the free-text release-notes body) — Python's
-# default strict json.load rejects that even though we only need the
-# small, well-formed 'assets' field, never the body itself.
-assets = json.load(sys.stdin, strict=False)['assets']
-apk = [a for a in assets if a['name'].endswith('.apk') and 'stub' not in a['name']]
-print(apk[0]['browser_download_url'] if apk else '')
-")
-
-[ -z "$APK_URL" ] && { echo "WARNING: Could not find Magisk APK URL — magiskboot will be absent. Scripts will error at runtime if it's needed."; exit 0; }
-
-echo "==> Downloading Magisk APK from $APK_URL"
-curl -fsSL -o "$WORK_DIR/magisk.apk" "$APK_URL"
+ACTUAL_SHA256="$(sha256sum "$WORK_DIR/magisk.apk" | awk '{print $1}')"
+if [ "$ACTUAL_SHA256" != "$MAGISK_APK_SHA256" ]; then
+  echo "ERROR: Magisk APK SHA-256 mismatch — refusing to extract magiskboot from it." >&2
+  echo "  expected: $MAGISK_APK_SHA256" >&2
+  echo "  actual:   $ACTUAL_SHA256" >&2
+  rm -rf "$WORK_DIR"
+  exit 1
+fi
 
 echo "==> Extracting magiskboot ($MAGISK_ABI) from APK"
 # The redirect creates /usr/local/bin/magiskboot before unzip writes a byte,

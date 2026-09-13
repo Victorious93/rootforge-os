@@ -6,14 +6,36 @@
 # .deb from raspberrypi.com. scripts/flash_pi_image.sh wraps its CLI.
 # If the download fails at build time, the hook exits cleanly and
 # flash_pi_image.sh will error with a helpful message at runtime.
+#
+# Pinned to a specific version + SHA-256 rather than "latest": raspberrypi.com
+# does not publish a checksum sidecar for this asset, so the hash below was
+# computed directly from this exact .deb at pin time. A hash mismatch means
+# the artifact changed since — either a new upstream release (bump the
+# version below and recompute the hash from the new file) or something more
+# concerning; either way, this hook must not silently install an unverified
+# binary into the ISO.
+#
+# To bump: check https://downloads.raspberrypi.com/imager/ for the current
+# version, download it, `sha256sum` it, update IMAGER_VERSION and
+# IMAGER_SHA256 together.
 
 set -e
 
-IMAGER_URL="https://downloads.raspberrypi.com/imager/imager_latest_amd64.deb"
+IMAGER_VERSION="2.0.4"
+IMAGER_URL="https://downloads.raspberrypi.com/imager/rpi-imager_${IMAGER_VERSION}_amd64.deb"
+IMAGER_SHA256="09b24e869edbb4fa95aaadfdcc76ef5f1e3bbb4c37c0cae0458d4934870caaf1"
 IMAGER_DEB="/tmp/rpi-imager.deb"
 
-echo "==> Fetching rpi-imager .deb from raspberrypi.com"
+echo "==> Fetching rpi-imager ${IMAGER_VERSION} .deb from raspberrypi.com"
 if curl -fsSL -o "$IMAGER_DEB" "$IMAGER_URL"; then
+  ACTUAL_SHA256="$(sha256sum "$IMAGER_DEB" | awk '{print $1}')"
+  if [ "$ACTUAL_SHA256" != "$IMAGER_SHA256" ]; then
+    echo "ERROR: rpi-imager .deb SHA-256 mismatch — refusing to install." >&2
+    echo "  expected: $IMAGER_SHA256" >&2
+    echo "  actual:   $ACTUAL_SHA256" >&2
+    rm -f "$IMAGER_DEB"
+    exit 1
+  fi
   apt-get install -y --no-install-recommends "$IMAGER_DEB" || \
     apt-get install -f -y
   rm -f "$IMAGER_DEB"
