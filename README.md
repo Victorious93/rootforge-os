@@ -93,7 +93,7 @@ Build it. Control it. Make Android yours.
 
 A Magisk/KernelSU module is fundamentally a zip with a specific directory layout and a small set of lifecycle scripts. RootForge's job is to make the edit → package → push → test → logcat loop as short as possible.
 
-**Module skeleton** (see `scripts/new_module_scaffold.sh`):
+**Module skeleton** (see `config/includes.chroot/usr/local/bin/new_module_scaffold.sh`):
 ```
 module_name/
 ├── META-INF/com/google/android/{update-binary,updater-script}   # boilerplate, don't touch
@@ -111,21 +111,21 @@ module_name/
 
 **KernelSU modules** use the same `module.prop`/lifecycle-script convention as Magisk (KernelSU's manager deliberately mirrors it), but *cannot* rely on Zygisk — KernelSU has no Zygisk implementation itself unless paired with an overlay like `zygisksu`. RootForge's scaffolding tool asks which framework you're targeting and drops the correct template, including the zygisksu overlay wiring if you want Zygisk-style hooking under KernelSU.
 
-**Testing loop:** `scripts/build_magisk_module.sh` packages the zip, `adb push`es it to `/data/local/tmp`, and drives the framework's CLI (`magisk --install-module` or KernelSU's `ksud module install`) instead of requiring you to tap through the manager app UI every iteration. Combine with `adb logcat -s Magisk:* KernelSU:*` for boot-script debugging.
+**Testing loop:** `config/includes.chroot/usr/local/bin/build_magisk_module.sh` packages the zip, `adb push`es it to `/data/local/tmp`, and drives the framework's CLI (`magisk --install-module` or KernelSU's `ksud module install`) instead of requiring you to tap through the manager app UI every iteration. Combine with `adb logcat -s Magisk:* KernelSU:*` for boot-script debugging.
 
 ## 4. Bootloader unlock & rooting automation
 
 Three scripts, deliberately separated because they're destructive operations you want to reason about independently rather than one script that does everything silently:
 
-- `scripts/unlock_bootloader.sh` — detects vendor via `fastboot getvar all`, runs the correct unlock command for AOSP-standard devices (Pixel/Nexus-lineage: `fastboot flashing unlock`; older bootloaders: `fastboot oem unlock`), and **refuses to proceed** with a clear message rather than guessing on Samsung/Xiaomi/other vendors that need out-of-band tools. Requires typed confirmation before wiping data (unlocking always wipes on unlockable devices — this is a hardware/firmware guarantee, not a script choice).
-- `scripts/flash_patched_boot.sh` — takes a stock `boot.img`/`init_boot.img`, runs it through Magisk's patch routine (either via a connected already-rooted device's Magisk app in "patch a file" headless mode, or `magiskboot` directly for KernelSU-style kernel patch application), and flashes the result to the correct slot with an A/B-aware fallback flash to the other slot if the device uses seamless updates.
-- `scripts/kernelsu_patch_boot.sh` (referenced, template provided) — for KernelSU, patches happen at the kernel/boot image level rather than via an on-device app, so this script wraps the "download/build GKI kernel with KernelSU built in → flash boot" flow for GKI (Generic Kernel Image) devices, which covers most Pixels and a growing set of Treble devices since Android 12.
+- `config/includes.chroot/usr/local/bin/unlock_bootloader.sh` — detects vendor via `fastboot getvar all`, runs the correct unlock command for AOSP-standard devices (Pixel/Nexus-lineage: `fastboot flashing unlock`; older bootloaders: `fastboot oem unlock`), and **refuses to proceed** with a clear message rather than guessing on Samsung/Xiaomi/other vendors that need out-of-band tools. Requires typed confirmation before wiping data (unlocking always wipes on unlockable devices — this is a hardware/firmware guarantee, not a script choice).
+- `config/includes.chroot/usr/local/bin/flash_patched_boot.sh` — takes a stock `boot.img`/`init_boot.img`, runs it through Magisk's patch routine (either via a connected already-rooted device's Magisk app in "patch a file" headless mode, or `magiskboot` directly for KernelSU-style kernel patch application), and flashes the result to the correct slot with an A/B-aware fallback flash to the other slot if the device uses seamless updates.
+- `config/includes.chroot/usr/local/bin/kernelsu_patch_boot.sh` (referenced, template provided) — for KernelSU, patches happen at the kernel/boot image level rather than via an on-device app, so this script wraps the "download/build GKI kernel with KernelSU built in → flash boot" flow for GKI (Generic Kernel Image) devices, which covers most Pixels and a growing set of Treble devices since Android 12.
 
 All three log every fastboot/adb command and their exit codes to `~/.rootforge/logs/`, since "what exactly did the last unlock attempt run" is the first question you ask when a device won't boot.
 
 ## 5. Emulator support — rooted and unrooted
 
-`scripts/setup_rooted_avd.sh` generates both profiles through one interface, with the API level, device profile, ABI, and system-image tag all configurable rather than hardcoded, and auto-installs the chosen system image via `sdkmanager` if it isn't present yet:
+`config/includes.chroot/usr/local/bin/setup_rooted_avd.sh` generates both profiles through one interface, with the API level, device profile, ABI, and system-image tag all configurable rather than hardcoded, and auto-installs the chosen system image via `sdkmanager` if it isn't present yet:
 
 ```
 setup_rooted_avd.sh create --name <avd> --mode rooted|unrooted [options]
@@ -176,7 +176,7 @@ Since module and kernel work occasionally needs signals a fastboot cable can't g
 ## 8. Root-detection & stealth verification
 
 Building a module that hides successfully is a different job from building one that
-merely installs. `scripts/check_root_detection.sh` runs the static/dynamic surface
+merely installs. `config/includes.chroot/usr/local/bin/check_root_detection.sh` runs the static/dynamic surface
 that real root-detection libraries check against a connected device or emulator —
 `ro.build.tags`, verified boot state, common su binary paths, default (non-hidden)
 manager package names, Magisk DenyList enforcement status, and mount-namespace leaks
@@ -189,7 +189,7 @@ static checks.
 ## 9. LSPosed / Xposed module support
 
 A large share of real-world root-adjacent development targets Zygisk-based Xposed
-hooking rather than a bare Magisk module. `scripts/install_lsposed.sh` fetches and
+hooking rather than a bare Magisk module. `config/includes.chroot/usr/local/bin/install_lsposed.sh` fetches and
 installs the latest LSPosed release the same way any other module gets installed —
 it *is* a Magisk/KernelSU module itself, wrapping the Zygisk hook framework. Because
 an actual Xposed module is a hook class inside a real APK rather than a Magisk-style
@@ -203,7 +203,7 @@ disabled by default until toggled there.
 ## 10. Partition backup & restore
 
 `flash_patched_boot.sh` always recommended keeping the stock image around; it never
-automated that. `scripts/backup_partitions.sh` now pulls boot/init_boot/vendor_boot/
+automated that. `config/includes.chroot/usr/local/bin/backup_partitions.sh` now pulls boot/init_boot/vendor_boot/
 dtbo/vbmeta before you touch anything, trying `fastboot fetch` first (supported on
 many Pixel-lineage bootloaders), falling back to `adb root` + `dd` from
 `/dev/block/by-name/<partition>` if the device is already rooted, and printing exact
@@ -211,7 +211,7 @@ manual `dd` instructions rather than silently skipping a partition it can't reac
 Backups land in `devices/<codename>/backups/<timestamp>/` with a manifest and a
 `SHA256SUMS` sidecar — verify one at any time with
 `(cd <backup_dir> && sha256sum -c SHA256SUMS)`.
-`scripts/restore_partitions.sh` flashes an entire backup back in one confirmed
+`config/includes.chroot/usr/local/bin/restore_partitions.sh` flashes an entire backup back in one confirmed
 command — pass no timestamp to list what's available for that device. It verifies
 every image against `SHA256SUMS` **before** flashing and refuses outright on a
 mismatch: a truncated or bit-rotted `boot`/`vendor_boot` image is the one failure
@@ -220,18 +220,18 @@ in which any partition failed to flash exits non-zero and says which.
 
 ## 11. Firmware / OTA extraction
 
-`scripts/extract_ota.sh` pulls partitions directly out of an official OTA zip or raw
+`config/includes.chroot/usr/local/bin/extract_ota.sh` pulls partitions directly out of an official OTA zip or raw
 `payload.bin`, so you can get a real stock `boot.img` to patch without a physical
 device connected at all — useful for pre-building patched images for a device model
 before you have hardware in hand, or for diffing what changed between firmware
 versions. It self-installs `payload-dumper-go` from its GitHub releases on first run.
-`scripts/inspect_partition_image.sh` complements it with a **read-only** loopback
+`config/includes.chroot/usr/local/bin/inspect_partition_image.sh` complements it with a **read-only** loopback
 mount of an extracted ext4/erofs image for browsing contents without flashing
 anything — it refuses to mount anything other than `-o ro`.
 
 ## 12. Module linting
 
-`scripts/lint_module.sh` catches the two bugs that account for most "why won't this
+`config/includes.chroot/usr/local/bin/lint_module.sh` catches the two bugs that account for most "why won't this
 install" reports: a nested top-level folder in the zip (module.prop has to sit at
 zip root, not one directory down — the single most common mistake when zipping a
 module directory by hand) and CRLF line endings in the lifecycle shell scripts,
@@ -244,7 +244,7 @@ runs against either a raw module directory or an already-built zip.
 Magisk and KernelSU native builds are sensitive to exact NDK versions in ways that
 are easy to miss testing against a single pinned toolchain on the host.
 `docker/Dockerfile.ndk-matrix` is a parameterized image — NDK version and API level
-as build args, nothing else baked in — and `scripts/build_matrix.sh` builds your
+as build args, nothing else baked in — and `config/includes.chroot/usr/local/bin/build_matrix.sh` builds your
 project against a small default matrix of NDK/API combinations (or a custom
 `matrix.tsv`), bind-mounting the project directory into each container so nothing
 touches the host toolchain. Output is a pass/fail Markdown table with a build log
@@ -318,7 +318,7 @@ reasonably current Node), the Claude Code CLI itself (`npm install -g
 Ollama's own install script at build time — the binary is tens of MB, not the
 multi-GB territory that pushed the Android SDK to first-boot).
 
-**First-run, not automatic** (`scripts/setup_ai_tools.sh`): API key configuration
+**First-run, not automatic** (`config/includes.chroot/usr/local/bin/setup_ai_tools.sh`): API key configuration
 is personal and shouldn't be baked into a shared image or run unattended. Beyond
 the original Claude Code (Anthropic) / Grok (xAI) prompts, the script is now a
 general key manager for any number of providers:
@@ -388,21 +388,21 @@ pull in a genuine tension with the rest of the distro rather than pretending
 without friction — each is written to flag that instead of silently picking one
 side.
 
-**Kernel hardening** (`scripts/harden_kernel.sh`) — a sysctl hardening baseline
+**Kernel hardening** (`config/includes.chroot/usr/local/bin/harden_kernel.sh`) — a sysctl hardening baseline
 (`kptr_restrict`, `unprivileged_bpf_disabled`, BPF JIT hardening, reverse-path
 filtering, disabled SUID core dumps) via a `/etc/sysctl.d/` drop-in. Kernel lockdown
 mode is available via `--lockdown` but **not on by default** — `lockdown=integrity`
 blocks loading unsigned out-of-tree modules, which directly conflicts with KernelSU
 development. Enable it only on a box that isn't doing kernel-module work.
 
-**Security hardening** (`scripts/harden_system.sh`) — AppArmor enforce mode,
+**Security hardening** (`config/includes.chroot/usr/local/bin/harden_system.sh`) — AppArmor enforce mode,
 auditd watching identity/SSH/USBGuard-policy files, a default-deny nftables
 firewall, fail2ban for SSH, and USBGuard with a `--usbguard-learn` mode to
 snapshot an allow-list from trusted gear. USBGuard matters more here than on a
 typical desktop — this box's whole job is having unfamiliar Android devices
 plugged in over USB.
 
-**Intercepting proxy** (`scripts/setup_intercept_proxy.sh`) — installs mitmproxy
+**Intercepting proxy** (`config/includes.chroot/usr/local/bin/setup_intercept_proxy.sh`) — installs mitmproxy
 and automates the part that's usually manual: pushing its CA cert into a rooted
 device's *system* trust store (`/system/etc/security/cacerts`), not just the user
 store most modern apps ignore. `trust-cert` verifies adbd is actually running as
@@ -410,49 +410,49 @@ root and that `/system` remounted before it pushes, rather than surfacing the
 failure as a confusing permission error. `start` takes the listen port as its
 first argument (`start 9090`).
 
-**VPN quick-connect** (`scripts/setup_vpn.sh`) — WireGuard keypair generation,
+**VPN quick-connect** (`config/includes.chroot/usr/local/bin/setup_vpn.sh`) — WireGuard keypair generation,
 interface up/down, and a `peer-qr` mode that generates a phone-scannable config
 QR code directly in the terminal. Peer addresses are handed out as the lowest
 free slot in `10.66.66.0/24` and recorded per peer, so two peers can't be issued
 the same `AllowedIPs` — a collision there doesn't fail loudly, it just silently
 breaks routing for one of them.
 
-**Headscale mesh join** (`scripts/join_headscale.sh`) — joins an *existing*
+**Headscale mesh join** (`config/includes.chroot/usr/local/bin/join_headscale.sh`) — joins an *existing*
 Headscale control server as a client node via the Tailscale client (API-compatible)
 rather than deploying a second, competing control plane. Built for exactly the
 case where a homelab already runs Headscale somewhere and this box should join
 that mesh, not start its own.
 
-**ESP32 toolkit** (`scripts/esp32_toolkit.sh`) — esptool.py + PlatformIO, with
+**ESP32 toolkit** (`config/includes.chroot/usr/local/bin/esp32_toolkit.sh`) — esptool.py + PlatformIO, with
 library dependencies pre-selected for CC1101 (sub-GHz) and PN532 (NFC) rather than
 generic ESP32 boilerplate, and a bare tool-node firmware scaffold (serial
 command-loop skeleton) as a starting point for ESP32-based tool nodes.
 
-**Raspberry Pi image flasher** (`scripts/flash_pi_image.sh`) — wraps the official
+**Raspberry Pi image flasher** (`config/includes.chroot/usr/local/bin/flash_pi_image.sh`) — wraps the official
 `rpi-imager` CLI (doesn't reimplement SD/USB writing) and adds SSH key + hostname
 pre-injection plus a `--role` label (`homelab-node` / `dispatcher` / `bare`) so a
 freshly flashed Pi is labeled with its intended purpose from the first boot, even
 though the actual provisioning of that role happens after boot via SSH, not baked
 into the image.
 
-**Raspberry Pi fleet tools** (`scripts/rpi_fleet_tools.sh`) — local-network
+**Raspberry Pi fleet tools** (`config/includes.chroot/usr/local/bin/rpi_fleet_tools.sh`) — local-network
 discovery via MAC-OUI matching, SSH key distribution, and a batch command runner
 across however many Pis answer — built for a small homelab fleet, not a
 datacenter inventory system.
 
-**Device-fleet automation** (`scripts/fleet_orchestrate.sh`) — the one script that
+**Device-fleet automation** (`config/includes.chroot/usr/local/bin/fleet_orchestrate.sh`) — the one script that
 breaks the rest of this spec's "one device at a time" convention on purpose: runs
 a chosen operation (lint, root-detect, backup, module-install, or the destructive
 unlock/flash — gated behind `--allow-destructive`) across every currently
 connected device in sequence, with a per-device log and a pass/fail summary table.
 
-**Scripted IME** (`scripts/install_adb_ime.sh`) — installs a broadcast-receiver
+**Scripted IME** (`config/includes.chroot/usr/local/bin/install_adb_ime.sh`) — installs a broadcast-receiver
 keyboard (the ADBKeyboard pattern) so automated text input via
 `am broadcast -a ADB_INPUT_TEXT` bypasses the on-screen IME's text-processing
 pipeline entirely — the standard fix for `adb shell input text` mangling non-ASCII
 characters and emoji during scripted UI testing.
 
-**Upgraded terminal** (`scripts/setup_terminal.sh`) — tmux with a
+**Upgraded terminal** (`config/includes.chroot/usr/local/bin/setup_terminal.sh`) — tmux with a
 `rootforge-session` launcher (logcat / device-watch / build-shell three-pane
 layout), starship prompt with a custom segment showing live connected-device
 count, plus fzf/eza/bat/zoxide.
