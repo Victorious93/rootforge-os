@@ -120,14 +120,50 @@ and wrapping code with a silent argument-parsing bug just moves the bug.
 
 ## P1 — High priority
 
-5. **Device abstraction (`rootforge.core.device`).**
-   A `Device` dataclass (codename, vendor, slots A/B or single, bootloader
-   state, detected root method if any) plus detection logic that queries
-   `adb`/`fastboot` once and is reused by every subcommand that currently
-   re-derives this state independently (`flash_patched_boot.sh`,
-   `backup_partitions.sh`, `unlock_bootloader.sh`). Unsupported/unknown
-   vendors must produce the "DETECTED DEVICE ... RootForge cannot safely
-   continue" message specified in the governing directive, not a guess.
+5. **Device abstraction (`rootforge.core.device`).** — **Landed** (module +
+   CLI verb + tests, 2026-09-13 Phase 6 session; shell-script retrofit
+   still open — see below). Added `config/includes.chroot/usr/local/lib/
+   rootforge/core/device.py`: a `DeviceProfile` dataclass (codename,
+   vendor, `slot_mode` "single"/"ab"/"unknown", `current_slot`,
+   `bootloader_unlocked`, `root_method`) plus `profile_fastboot()` (one
+   `fastboot getvar all` call) and `profile_adb()` (one `getprop` call per
+   field), reusing `rootforge.core.devices._run` rather than duplicating
+   its no-raise subprocess handling. Named `DeviceProfile`, not `Device`,
+   because `rootforge.core.devices.Device` (plural module, enumeration-only)
+   already uses that name — a same-named class in a sibling module would
+   be a real hazard, not a cosmetic one. Wired into a new `rootforge device
+   info [SERIAL] [--json]` CLI verb in `cli.py`, with `_select_device()`
+   auto-picking the sole usable device when no serial is given and refusing
+   (not guessing) when zero or multiple are attached. 32 new unit tests in
+   `tests/test_device.py`, mirroring `tests/test_devices.py`'s style
+   (canned `getvar`/`getprop` text fed via monkeypatched `_run`); full
+   suite re-verified green (161 Python tests, 420/0 shell+python via
+   `tests/run-tests.sh`).
+
+   **Unsupported-vendor refusal message:** no "governing directive"
+   document exists anywhere in this repository — grepping for that exact
+   phrase finds only the two sentences citing it in this file and
+   `docs/ARCHITECTURE_AUDIT.md`, no separate checked-in file. The verbatim
+   spec for the "DETECTED DEVICE ... cannot safely continue" message is
+   therefore not independently verifiable from this repo. `DeviceProfile.
+   refusal_message()` reconstructs it from `docs/ARCHITECTURE_AUDIT.md`
+   §3.2's own example (`DETECTED DEVICE / Vendor: Samsung / Automatic
+   fastboot workflow unavailable`) and `unlock_bootloader.sh`'s existing
+   Samsung/Xiaomi refusal text — this is stated plainly in the module's own
+   docstring rather than presented as a verified quote. If the actual
+   governing-directive text surfaces later, `refusal_message()` is the one
+   place to correct it.
+
+   **Still open — not done this session, by explicit scope decision:**
+   `flash_patched_boot.sh`, `backup_partitions.sh`, and
+   `unlock_bootloader.sh` still each independently re-derive device state
+   via their own `fastboot getvar`/`grep` calls; none of them consume
+   `device.py` yet. Retrofitting them was deliberately deferred to a
+   separate session/changeset — they are destructive/irreversible scripts
+   (boot-partition writes, bootloader unlock), and this plan's own
+   sequencing note says P2-style wrapping work "should land as separate
+   changesets per subsystem." See CLAUDE.md's "What To Do Next" for this as
+   the immediate next priority.
 
 6. **Central config system (`rootforge.core.config`).**
    `~/.config/rootforge/config.yaml` for user-level settings,
