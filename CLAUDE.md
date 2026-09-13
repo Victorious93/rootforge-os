@@ -11,6 +11,8 @@
 **Last Updated:** `2026-09-13`
 **Last Session Summary:** `Phase 4 completed (same session as Phases 1-3). Read the remainder of HACKING.md (Adding a script, Shared shell helpers, the two Android flavours' capability rules, download discipline, Adding a package/hook, Calamares module configs, Desktop/first-boot split, Commit style) and the full sudoers.d/rootforge-live file (previously flagged as unread in Phase 2). Documented four sections: DEVELOPMENT WORKFLOW (this file's own protocol reflected on after 4 phases; HACKING.md's real coding standards; a concretized scope-decision framework; concrete ask-first-vs-autonomous rules for this repo), ARCHITECTURAL DECISIONS (a cited table of 11 real decisions plus the P1-config/device sequencing debt), SECURITY CONSIDERATIONS (what's real and working vs. confirmed-open gaps vs. what this session explicitly didn't check), and KNOWN LIMITATIONS & CONSTRAINTS (a consolidated summary, all cross-referenced to earlier phases rather than re-derived). New findings: the live-session sudoers file grants passwordless root, removed post-install by Calamares per its own comment — but Calamares's actual removeuser/packages module content was never read in any session, so that removal claim rests on one comment, not verified config; and a third minor doc-drift item (HACKING.md's commit-style example names a stale Claude model version). Phases 1-5 documentation foundation is now one phase from complete.`
 
+**Addendum (same day, follow-up request):** Added a durable "After every merge" rule to the SESSION PROTOCOL section and a matching Do's bullet in RULES FOR CLAUDE CODE — whenever a PR merges into `main` (this session's own or one discovered later via `git log`), CLAUDE.md must be re-verified and updated (the specific section a merge touches, plus PROJECT STATE) before new phase/feature work proceeds, with that update committed and pushed as its own step. No phase-table change from this addendum; still Phase 4 complete / Phase 5 next.
+
 ### Current Phase
 
 `[x] PHASE 4 COMPLETE — READY FOR PHASE 5`
@@ -86,6 +88,18 @@ Every Claude Code session working on RootForge-OS must follow this protocol:
 6. **Commit the updated CLAUDE.md** along with any other changes, so the next session (yours or a teammate's) picks up exactly where this one left off.
 
 **This file is not a static planning document — it is a living state file.** Treat every session like resuming a saved game: read state → act → save state.
+
+### After every merge
+
+Whenever a pull request merges into `main` — whether it's this session's own PR or someone else's, discovered on the next session's `git log`/`git fetch` — **CLAUDE.md must be updated before any new phase or feature work proceeds**, not left to drift until the next scheduled documentation pass:
+
+1. **Detect it.** At session start, after the usual `git status`/`git branch --show-current`, also check whether `main` has moved since this file's `PROJECT STATE` was last updated (`git log --oneline <last-known-commit>..origin/main`, or compare against the commit this file's INSPECTION REPORT/other sections cite as "as of this session").
+2. **Re-verify, don't assume.** If the merge touched code any section of this file describes (a new CLI subcommand, a changed test count, a fixed doc-drift item, a new dependency), re-read the actual changed files — do not update this file's claims based on the PR title or commit message alone.
+3. **Update the affected section(s) in place**, not just `PROJECT STATE` — if the merge changed something Phase 1–5's sections describe (e.g. one of the three outstanding doc-drift items gets fixed, or `rootforge.core.config` finally lands), correct that section directly so it keeps describing current reality, and note in `PROJECT STATE` that it was revised and why.
+4. **Update `PROJECT STATE`** regardless, even if the merge didn't require changing any other section — record what merged and that it was checked, so the next session doesn't have to re-derive whether this merge was ever accounted for.
+5. **Commit and push the CLAUDE.md update as its own step** before starting whatever new work prompted the session, so the documentation catch-up isn't silently bundled into or lost inside unrelated changes.
+
+This applies even on a session that wasn't asked to do documentation work — a merge that goes unrecorded is exactly how this file drifted stale enough for Phase 1 to find a CLI/test-suite/tests-directory claim in `docs/ARCHITECTURE_AUDIT.md` that had been false for weeks.
 
 ---
 
@@ -508,6 +522,7 @@ Development proceeds through 8 phases (0–7). Phases 1–5 build the documentat
 - ✓ Run tests after changes
 - ✓ Report actual verified results
 - ✓ Update CLAUDE.md when architecture changes
+- ✓ Update CLAUDE.md after every merge into `main` — see "After every merge" above; never let it drift silently
 - ✓ Follow scope boundaries
 - ✓ Prioritize architecture over features
 - ✓ Prioritize correctness over code quantity
