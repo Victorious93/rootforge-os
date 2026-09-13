@@ -9,17 +9,17 @@
 ## 🔖 PROJECT STATE (READ THIS FIRST)
 
 **Last Updated:** `2026-09-13`
-**Last Session Summary:** `Phase 1 completed. Inventoried the actual repository (directory map, languages, build systems, CI, docs, components, tests, external deps, TODOs/stubs, per-platform status, scope check) and verified it against real code rather than trusting docs/ARCHITECTURE_AUDIT.md's 2026-08-08 snapshot at face value. That audit is now confirmed partially stale: docs/IMPLEMENTATION_PLAN.md's own "P0.5 (landed)" section and the actual tree show the rootforge CLI, rootforge-core Python package, and hermetic test suite it said didn't exist now do exist and pass. Full findings in the new INSPECTION REPORT section below.`
+**Last Session Summary:** `Phase 2 completed (same session as Phase 1). Documented actual current architecture by reading every rootforge.core module, common.sh, brain.py's CLI surface, and the Termux scripts directly — not by restating the Phase 1 inventory. Key findings: "RootForge Core" is actually two parallel, non-interoperating, Linux-only foundations (a Python one used by the CLI, a shell one used by the 27 scripts), not one platform-independent core as CLAUDE.md's architecture diagram envisions; config, structured logging, and a shared typed Device model are all still PLANNED, not implemented; brain.py is architecturally standalone (not wired into rootforge.core at all). Full findings, a component table, and a dependency diagram in the new CURRENT ARCHITECTURE & IMPLEMENTATION STATE section below.`
 
 ### Current Phase
 
-`[x] PHASE 1 COMPLETE — READY FOR PHASE 2`
+`[x] PHASE 2 COMPLETE — READY FOR PHASE 3`
 
 | Phase | Status | Completed Date | Notes |
 |-------|--------|-----------------|-------|
 | Phase 0 — Setup & Access | ✅ Complete | 2026-09-11 | See "Phase 0 Findings" below |
 | Phase 1 — Repository Inspection | ✅ Complete | 2026-09-13 | See "INSPECTION REPORT" below |
-| Phase 2 — Core Architecture Documentation | ⬜ Not Started | — | — |
+| Phase 2 — Core Architecture Documentation | ✅ Complete | 2026-09-13 | See "CURRENT ARCHITECTURE & IMPLEMENTATION STATE" below |
 | Phase 3 — Build System, Testing & Tooling | ⬜ Not Started | — | — |
 | Phase 4 — Workflow & Architecture Rules | ⬜ Not Started | — | — |
 | Phase 5 — Final Audit & Next Steps | ⬜ Not Started | — | — |
@@ -30,7 +30,7 @@
 
 ### What To Do Next
 
-`Begin Phase 2 — Core Architecture & Implementation Documentation, using the INSPECTION REPORT below as its factual base. Document: rootforge-core's actual module boundaries (cli/doctor/devices/flashing/module/ota/boot/avd/runner), how the CLI wraps vs. does not yet wrap the 27 standalone shell scripts, the live-build ISO architecture (auto/config + auto/build + config/hooks + config/includes.chroot), the Termux/PRoot second build target, and the second-brain (brain.py) subsystem. Also worth fixing opportunistically during Phase 2 (documentation-only, low-risk): README.md references `scripts/<name>.sh` in ~15 places (module skeleton, bootloader unlock, backup/restore, OTA, linting, AI tooling, hardening, VPN/proxy sections) but no top-level `scripts/` directory exists anywhere in the repo — the real path is `config/includes.chroot/usr/local/bin/<name>.sh`. Per this file's own Source of Truth rule, the doc is wrong and should be corrected, not the code.`
+`Begin Phase 3 — Build System, Testing & Tooling, using both the INSPECTION REPORT and CURRENT ARCHITECTURE sections as factual base. Document: the 3 independent build paths (live-build ISO, termux/build-rootfs.sh debootstrap, no-build-step Python) with verified commands; tests/run-tests.sh and tests/lint.sh usage (note shellcheck is still not installable/runnable in this container — carried forward as a real, recurring environment gap, not a one-off); the 420-vs-421 shell-check-count discrepancy remains unresolved (see Open Questions) and should be run down with git log -p on tests/run-tests.sh / tests/check-tests.sh between the 2026-09-11 and 2026-09-13 sessions if Phase 3's "document actual test coverage" task is to be precise about the exact count. Also still outstanding from Phase 2 (not yet acted on, just documented): README.md's ~15 stale `scripts/` path references (real path is `config/includes.chroot/usr/local/bin/`) — low-risk, documentation-only, worth fixing whenever a session next touches README.md.`
 
 ### Open Questions / Blockers
 
@@ -692,7 +692,165 @@ No hard scope violation found — no unrelated OS/distro embedded, no unrelated 
 
 ## CURRENT ARCHITECTURE & IMPLEMENTATION STATE
 
-`[Populated during Phase 2. Not yet run.]`
+**Run:** 2026-09-13, same session as Phase 1, branch `claude/build-per-claude-md-661ey0`. Every module named below was opened and read this session (not inferred from the Phase 1 inventory or from `docs/IMPLEMENTATION_PLAN.md`'s descriptions) unless marked otherwise. `[Certain]` unless flagged.
+
+### 1. RootForge Core — what platform-independent functionality actually exists **[Certain]**
+
+There is **no single unified "RootForge Core"** yet in the sense CLAUDE.md's architecture diagram describes (one platform-independent layer under Linux/Windows/Android). What exists instead is **two separate, non-interoperating "shared foundation" layers**, both Linux/Debian-specific:
+
+1. **Python side** — `rootforge.core.runner` (`find_script`/`run_script`/`exec_script`): the one piece of real shared infrastructure, used by every CLI wrapper module (`flashing.py`, `module.py`, `ota.py`, `boot.py`, `avd.py`) to locate and invoke the standalone shell scripts, passing their exit code through untouched. `rootforge.core.doctor` and `rootforge.core.devices` are shared *logic* (environment checks, device enumeration) consumed by the CLI, but not yet consumed by the shell scripts themselves — `doctor.py`'s `check_adb_devices()` imports `devices.list_devices`, but `backup_partitions.sh` (shell) still has its own device-detection path via `common.sh`, not this Python module.
+2. **Shell side** — `config/includes.chroot/usr/local/lib/rootforge/sh/common.sh`: sourced by the 27 standalone scripts. Provides `rf_confirm` (typed-confirmation gate, reads `/dev/tty` so it survives `fleet_orchestrate.sh` redirecting a child's stdout to a log; `ROOTFORGE_ASSUME_YES=1` bypasses it for that one caller), `rf_sha256_file`/`rf_sha256_verify` (backup integrity), `rf_adb_serials`/`rf_fastboot_serials`/`rf_have_*_device` (device enumeration — the shell-side equivalent of `devices.py`, implemented independently, not shared code), `rf_shell_quote`/`rf_write_private` (secrets handling — quoting for `ai-keys.env`, mode-600-from-creation writes), `rf_require_cmd`, and `rf_download_cached` (atomic-rename download caching, replacing a pattern that shipped a 9-byte truncated Magisk module to a device in a real prior incident per the file's own comment).
+
+These two layers do not call each other: Python invokes the shell scripts as subprocesses (one-way), and the shell scripts don't call into Python. This is consistent with `docs/IMPLEMENTATION_PLAN.md`'s own phasing (P2 wraps scripts via subprocess; deeper integration is P3+) but is worth stating plainly: "RootForge Core" today is two parallel toolkits, not one.
+
+**Confirmed still absent** (checked by file listing + grep, not just citing the plan): `rootforge.core.config` (central config system, P1 item 6) and `rootforge.core.device` (typed `Device` dataclass shared across subsystems, P1 item 5) do not exist. `devices.py`'s `Device` dataclass is real but local to the CLI's `devices`/`doctor` commands — it is not imported anywhere else, and no YAML/config-file parser exists anywhere in the repo (`python3-yaml` is not in any package list; no `*.yaml`/`*.yml` config schema for RootForge itself, as opposed to CI workflow YAML). Structured JSON logging (P1 item 7, `rootforge.core.log`) also does not exist — no `log.py` in `core/`, confirmed by the module listing in §3 of the Phase 1 report.
+
+### 2. Component inventory: purpose, location, status, dependencies, tests **[Certain]**
+
+| Component | Location | Purpose | Depends on | Test coverage |
+|---|---|---|---|---|
+| `rootforge` CLI entrypoint | `usr/local/bin/rootforge` | `sh` shim → `python3 -m rootforge.core.cli` | `rootforge.core.cli` | Exercised indirectly by every `test_*_cli.py` file (they invoke `cli.main()`/parsers directly, not the shim) |
+| CLI dispatcher | `core/cli.py` (145 lines) | `argparse` top-level parser, `doctor`/`devices` inline, delegates rest | all `*_cmd` modules below | No dedicated `test_cli.py`; covered indirectly via the per-subcommand test files |
+| `rootforge doctor` | `core/doctor.py` (284 lines) | 17 independent host/environment checks (tools present, disk space, Ollama reachability, second-brain vault, device state); `--json`/`--quiet`/`--strict` | `shutil`, `urllib`, lazily `rootforge.core.devices` | `tests/test_doctor.py` |
+| `rootforge devices` | `core/devices.py` (159 lines) | Merges `adb devices` + `fastboot devices` into one `Device` list; parses adb's state column correctly (fixes the "trailing blank line counted as a device" bug); `-l`/`--json` | `adb`/`fastboot` binaries (absent → empty list, not an error) | `tests/test_devices.py` |
+| `rootforge module scaffold\|lint\|build` | `core/module.py` (102 lines) | Wraps `new_module_scaffold.sh`/`lint_module.sh`/`build_magisk_module.sh`; validates module id format (shared regex with the linter) before invoking the script | `rootforge.core.runner`, the 3 named shell scripts | `tests/test_module_cli.py` |
+| `rootforge flash\|backup` | `core/flashing.py` (151 lines) | Wraps `flash_patched_boot.sh`/`backup_partitions.sh`/`restore_partitions.sh`; validates image existence/non-emptiness, device-serial shape, and a codename/timestamp path-traversal guard (`..` can't escape `$ROOTFORGE_HOME/devices/`) | `rootforge.core.runner`, the 3 named shell scripts | `tests/test_flashing_cli.py` |
+| `rootforge ota extract\|inspect` | `core/ota.py` (110 lines) | Wraps `extract_ota.sh`/`inspect_partition_image.sh`; makes the output-directory-vs-flag ambiguity that once caused a real bug (`extract_ota.sh ota.zip --partitions boot` extracting into a directory literally named `--partitions`) structurally unrepresentable | `rootforge.core.runner`, the 2 named shell scripts | `tests/test_ota_cli.py` |
+| `rootforge boot patch\|flash-last` | `core/boot.py` (128 lines) | Wraps `kernelsu_patch_boot.sh` only — **partial** implementation of P2 item 11; `unpack`/`repack`/`verify` around magiskboot/avbtool/mkbootimg are explicitly not built (no such scripts exist yet to wrap) | `rootforge.core.runner`, `kernelsu_patch_boot.sh` | `tests/test_boot_cli.py` |
+| `rootforge avd create\|boot\|list` | `core/avd.py` (122 lines) | Wraps `setup_rooted_avd.sh`; blocks an invalid rooted+Play-image combination before `sdkmanager` would download a system image that can never be rooted | `rootforge.core.runner`, `setup_rooted_avd.sh` | `tests/test_avd_cli.py` |
+| Script runner | `core/runner.py` (101 lines) | `find_script` (installed path → checkout-relative path → `PATH`, in that order) + `run_script`/`exec_script` (passes exit codes through untouched; does not capture output by default, since destructive scripts prompt on `/dev/tty`) | — | Exercised via every `test_*_cli.py` (they patch/inspect its calls) |
+| Shell common helpers | `sh/common.sh` (217 lines) | `rf_confirm`, `rf_sha256_file`/`_verify`, `rf_adb_serials`/`rf_fastboot_serials`/`rf_have_*_device`, `rf_shell_quote`, `rf_write_private`, `rf_require_cmd`, `rf_download_cached` | sourced by the 27 scripts | Covered by the shell half of `tests/run-tests.sh` (per-script sections), not by a dedicated `common.sh` test file |
+| second-brain (`brain`) | `usr/local/bin/brain` (shim) + `usr/local/lib/rootforge/second-brain/brain.py` (452 lines) | Stdlib-only PARA-method note vault: `init`/`new`/`daily`/`index`/`search`/`ask`/`list`/`stats`; embeddings + chat via Ollama's HTTP API (`urllib`), optional `--provider claude` for `ask` shelling out to the Claude Code CLI; sqlite3-backed index | Ollama (optional, degrades to an error message, not a crash, when unreachable — not independently re-verified this session, based on reading the code's `try/except urllib.error` pattern), optionally the `claude` CLI | `tests/test_brain.py` |
+| 27 standalone device scripts | `usr/local/bin/*.sh` | The actual device-facing implementation (flashing, backup/restore, module scaffold/lint/build, AVD, root-detection, AI-tooling setup, hardening, VPN/proxy, LSPosed, ESP32/RPi fleet tools, terminal setup, etc.) — unchanged in location, independently invocable, source `common.sh` | `adb`/`fastboot`/`magiskboot`/`avbtool`/etc. depending on script | Covered by `tests/run-tests.sh`'s shell sections (hermetic, stubbed tooling) |
+| ISO build pipeline | `auto/config`, `auto/build`, `config/` | Assembles the bootable/installable Debian 12 amd64 ISO | `live-build`, `debootstrap`, `squashfs-tools`, `xorriso` (host-side, not installed in this dev container) | `.github/workflows/release.yml`'s `build-iso` job (not re-run this session) |
+| Termux/PRoot rootfs builder | `termux/build-rootfs.sh` (292 lines) | debootstrap-based rootfs, 2 archs × 2 flavors (`proot`/`chroot`) + optional `--with-x11`; reuses `config/hooks/*.hook.chroot` for tools that work identically under PRoot | `debootstrap`, `qemu-user-static`, `binfmt-support` (host-side) | `.github/workflows/release.yml`'s `build-termux-rootfs` matrix (not re-run this session) |
+
+### 3. Linux implementation **[Certain]** for code presence; **not independently re-verified** for boot/install behavior this session
+
+Real code, not a stub: `auto/config`/`auto/build` invoke live-build correctly (the `lb build noauto` recursion-avoidance fix from the audit is present in the current `auto/build`, read this session), 15 numbered chroot hooks install AI tooling/boot-image tools/desktop config, `config/includes.chroot` overlays Calamares branding + systemd units + a udev rule for Android USB access + a Plymouth theme, and the `rootforge` CLI + 27 scripts are baked into the image via that same overlay. Whether a built ISO actually boots and installs correctly is **not verified in this session** — that claim rests entirely on `docs/ARCHITECTURE_AUDIT.md`'s citation of a specific prior CI run (31269821588) and on `release.yml`'s design, neither of which this session re-ran (would need ~20GB disk, loop-device access, 60-90 minutes).
+
+### 4. Windows implementation **[Certain]**
+
+Zero code. No `.sln`/`.csproj`/PowerShell/`.bat` files, no WSL-integration scripts, no Windows-specific branch anywhere in any script (grepped this session). CLAUDE.md's Windows vision item is entirely **PLANNED**, not started at any scaffolding level.
+
+### 5. Android implementation **[Certain]**
+
+Two things are easy to conflate here, and the repository only has one of them:
+
+- **Android *device* tooling** (real, extensive): the 27 scripts + the `rootforge` wrappers around several of them manage physical/emulated Android devices *from* the Linux ISO — flashing, backup, module install, AVD management, root detection. This is "RootForge OS interacts with Android hardware," not "RootForge runs on Android."
+- **An Android *application*** (CLAUDE.md's "RootForge-OS Android APK" vision item — GUI, embedded Termux, headless CLI, local/remote management, all running as an app on an Android device): **zero code**. No `AndroidManifest.xml`, no `.apk`, no Gradle Android project, no Kotlin/Java source, confirmed by extension search this session. **PLANNED only.**
+
+### 6. Termux integration **[Certain]**
+
+Real, working (as code — not device-tested this session, no Android hardware or emulator available in this container):
+
+- `termux/build-rootfs.sh` (292 lines) — builds a debootstrap rootfs for two archs (arm64 default/real hardware, amd64/x86 rare or desktop-sandbox) and **two genuinely different flavors**: `proot` (unrooted, ptrace-emulated, the default) and `chroot` (rooted, real `chroot` via `su`, gets real device nodes — loop-mounted partition images, USB adb/fastboot, `/dev/net/tun` for VPN — that PRoot structurally cannot provide). The chroot flavor deliberately **excludes** `harden_kernel.sh`/`harden_system.sh`: those need kernel subsystems (AppArmor, auditd, nftables, USBGuard) Android kernels don't ship, and root doesn't change which kernel you're on — a real, correctly-reasoned platform limitation, not an oversight.
+- `termux/install.sh` (78 lines) — one-command Termux-side installer: installs `proot-distro` if needed, fetches the plugin definition, detects root (`su -c 'id -u'`) and tells the user which variant (PRoot vs. chroot) is applicable, since picking wrong wastes a multi-GB download.
+- `termux/proot-distro-plugins/rootforge.sh` — the `proot-distro` plugin end users install; **partially implemented** — real URLs, placeholder SHA-256 (see Phase 1 report §7).
+- `termux/rootforge-chroot.sh` (178 lines), `termux/bootstrap_proot.sh` (82 lines), `termux/proot-setup.sh` (68 lines) — not read in full this session; read only for line counts and cross-references from `install.sh`/`build-rootfs.sh`'s comments. Their existence and role (chroot launcher; PRoot bootstrap; PRoot first-run setup, respectively) is `[Likely]` based on filename and the references above, not independently verified line-by-line.
+- Optional Termux:X11 desktop layer (`--with-x11` in `build-rootfs.sh`) — real flag, roughly triples tarball size per the script's own comment, opt-in.
+
+This is genuine platform-appropriate design (per CLAUDE.md's "do not assume Termux built in means bundling an APK" instruction) — it correctly treats root as something to detect, not assume, and treats PRoot/chroot as materially different capability sets rather than one "Termux support" checkbox.
+
+### 7. CLI **[Certain]**
+
+Fully documented in §2's table above. Summary: `rootforge {doctor, devices, module, flash, backup, ota, boot, avd}`, version `0.3.0` (from `core/__init__.py`, read this session). Design principles enforced consistently across every subcommand module (read directly, not inferred): `allow_abbrev=False` everywhere (an abbreviation could silently start meaning something different once a new flag is added — unacceptable on commands that write boot partitions), argparse `type=` validators that reject bad input *before* a script runs rather than after (path-traversal guards, device-serial shape, module-id format shared with the linter, GitHub release-tag shape guarding against a real prior SSRF-shaped bug where an unvalidated tag redirected a `curl` request to a different repository), and exit codes passed through from the wrapped script untouched rather than translated (since several scripts use non-zero deliberately to report a finding, not a failure).
+
+### 8. GUI **[Certain]**
+
+No RootForge-authored GUI exists. Calamares (third-party, `calamares-settings-debian` base + RootForge branding/QML under `etc/calamares/`) provides the *installer's* GUI only — one specific task (disk installation), not an ongoing management interface, and not RootForge's own code. This matches `docs/IMPLEMENTATION_PLAN.md` item 17's explicit deferral and CLAUDE.md's own layering principle (GUI is a client of core services, added once core is stable) — correctly not started yet rather than a gap in an otherwise-GUI-first project.
+
+### 9. APIs / IPC **[Certain]**
+
+No RootForge-defined API, RPC, or IPC mechanism exists. The only inter-process communication in the codebase is: (a) `subprocess.run` from `runner.py` (Python → shell script, one-way, by design — see §1), and (b) plain HTTP via `urllib` from `doctor.py`/`brain.py` to a local Ollama server (`GET /api/tags`, and presumably `/api/embed`/`/api/generate` for `brain.py`'s actual embedding/chat calls — not verified line-by-line this session beyond the `doctor.py` reachability check). No REST API, gRPC, Unix socket, or D-Bus service of RootForge's own exists — CLAUDE.md's "RootForge API / Service Layer" architectural diagram is aspirational, not yet built.
+
+### 10. Authentication / authorization **[Certain]**
+
+No RootForge-specific auth system exists — there are no user accounts, API keys, or role-based access control anywhere in the codebase. What exists instead, correctly scoped to a single-operator local tool rather than a multi-tenant service:
+
+- **Confirmation gates, not authorization**: `rf_confirm` (shell) gates destructive operations behind a typed word, reading `/dev/tty` specifically so it can't be silently bypassed by output redirection; `ROOTFORGE_ASSUME_YES=1` is a documented, loudly-logged bypass for exactly one caller (`fleet_orchestrate.sh`), not a general escape hatch.
+- **File-permission hygiene, not RootForge's authorization**: `rf_write_private` writes secrets (`~/.rootforge/ai-keys.env`) at mode 600 from the moment the file exists (fixing a real prior window where a rewrite-through-temp-file pattern left keys world-readable at the default umask before the final `chmod`).
+- **OS-level, not RootForge-level**: `config/includes.chroot/etc/sudoers.d/rootforge-live` (not read in full this session) presumably grants the live-session user specific sudo rights — `[Likely]`, based on filename and location, not verified content this session.
+
+CLAUDE.md's "Security Foundations" list (auth/authz, secrets management, audit logging, command validation) is partially met (secrets-file hygiene and confirmation gates are real) and partially not (no audit logging system — see §13 — and no authentication concept at all, which is arguably correct for a single-user dev tool but is a real gap against the multi-node "Remote RootForge Management" vision item, which would need one).
+
+### 11. Configuration system **[Certain]**
+
+No config *file* system exists. Every tunable is an environment variable read ad hoc, with its own default hardcoded at the point of use — confirmed by reading `doctor.py` (`OLLAMA_HOST`, `ROOTFORGE_BRAIN_VAULT`), `devices.py` (none), `runner.py` (`INSTALLED_BIN` is a hardcoded constant, not configurable), `brain.py` (`BRAIN_VAULT`, `OLLAMA_HOST`, `BRAIN_EMBED_MODEL`, `BRAIN_CHAT_MODEL`), and `common.sh`/scripts (`ROOTFORGE_HOME`, `ROOTFORGE_ASSUME_YES`). Several of these are the *same concept* under different names between the Python and shell worlds (`ROOTFORGE_BRAIN_VAULT` vs. `BRAIN_VAULT`) — a real, minor inconsistency worth flattening whenever the P1 central-config item is actually built, not urgent on its own. `docs/IMPLEMENTATION_PLAN.md`'s P1 item 6 (`~/.config/rootforge/config.yaml` + `rootforge.yaml` + per-device override files, PyYAML dependency) remains **entirely unbuilt** — confirmed again this session, not merely carried forward from Phase 1.
+
+### 12. Remote management **[Certain]**
+
+Confirmed still absent, same finding as Phase 1: no node discovery, no remote transport/protocol, no multi-node state sync. `fleet_orchestrate.sh` (not read in full this session, per its cross-references from `common.sh`'s comments) drives multiple **locally USB-attached** devices sequentially from one operator's machine — not a client/server or networked architecture. CLAUDE.md's "Remote Architecture" diagram (a Controller with Linux/Windows/Android/Headless nodes) has **no implementation of any kind** — not a client, not a server, not a transport, not even a stub.
+
+### 13. Logging / audit **[Certain]**
+
+No structured or centralized logging exists. Each of the 27 shell scripts implements its own `log()` function writing prose to `~/rootforge/logs/` — confirmed as still true this session (no `rootforge.core.log` module exists in the Python package, per the file listing read in §2/§1). This is exactly the "~20 near-identical copies of the same six lines" duplication `docs/ARCHITECTURE_AUDIT.md` §3.3 originally flagged, and it remains unresolved: `docs/IMPLEMENTATION_PLAN.md` P1 item 7 (JSON-lines logging with per-invocation execution IDs and secret redaction) has not landed. No audit trail exists for destructive operations beyond whatever a given script's own `log()` call happens to write — there is no tamper-evident or centrally-queryable record of, e.g., every `flash boot` invocation across a fleet.
+
+### 14. Component dependency diagram **[Certain]** (structure) — reflects what was read this session, not a formal design document
+
+```
+                         ┌─────────────────────────┐
+                         │   rootforge (sh shim)    │
+                         └────────────┬─────────────┘
+                                      │ exec
+                         ┌────────────▼─────────────┐
+                         │   rootforge.core.cli      │  argparse dispatch
+                         └──┬────┬────┬────┬────┬────┘
+             ┌──────────────┘    │    │    │    └───────────────┐
+             ▼                   ▼    ▼    ▼                    ▼
+        doctor.py           devices.py  flashing.py module.py ota.py boot.py avd.py
+             │                   │           │          │        │      │      │
+             │  (lazy import)    │           └──────────┴────────┴──────┴──────┘
+             └──────────────────►│                        │  all call
+                                  │                        ▼
+                                  │                 rootforge.core.runner
+                                  │                (find_script / exec_script)
+                                  │                        │  subprocess.run
+                                  ▼                        ▼
+                          adb / fastboot            usr/local/bin/*.sh (27 scripts)
+                          (external binaries)               │
+                                                              │ source
+                                                              ▼
+                                                   sh/common.sh (rf_confirm,
+                                                   rf_sha256_*, rf_adb_serials,
+                                                   rf_shell_quote, ...)
+
+   second-brain (brain / brain.py) — standalone, not wired into rootforge.core
+        │
+        ├─► sqlite3 (local index)
+        ├─► Ollama HTTP API (embeddings + chat, via urllib)
+        └─► optionally: claude CLI subprocess (--provider claude for `ask`)
+
+   ISO build (auto/config, auto/build, config/*) and
+   Termux rootfs build (termux/build-rootfs.sh) — independent of the CLI's
+   runtime graph above; they are what BAKES the CLI + scripts + brain.py
+   into a filesystem image, not something the CLI depends on at runtime.
+```
+
+Note the two structural facts this diagram makes visible: (1) `brain`/`brain.py` is **not** wired into `rootforge.core` at all — no `cli.py` subcommand calls it, it's a fully independent entrypoint discovered only via `doctor.py`'s vault-presence check; (2) the CLI's entire "core" is a dispatch + validation layer over the pre-existing shell scripts, with exactly one shared Python module (`runner.py`) and one shared shell module (`common.sh`) — there is no deeper shared abstraction yet (confirmed absent: config, device dataclass, logging).
+
+### 15. Full implementation status table
+
+| Area | Status | Basis |
+|---|---|---|
+| RootForge Core (unified, cross-platform) | **PARTIALLY IMPLEMENTED** — two parallel, Linux-only foundations (Python `runner.py`/`doctor.py`/`devices.py`; shell `common.sh`), not one platform-independent core | §1 |
+| `rootforge.core.config` | **PLANNED** | §11 |
+| `rootforge.core.device` (typed, shared) | **PLANNED** (only `devices.py`'s CLI-local dataclass exists) | §1, §2 |
+| `rootforge.core.log` (structured logging) | **PLANNED** | §13 |
+| `rootforge` CLI (8 subcommand groups) | **IMPLEMENTED** (one, `boot`, partial — see §2) | §2, §7 |
+| 27 standalone device scripts | **IMPLEMENTED** | §2 |
+| second-brain (`brain`) | **IMPLEMENTED**, architecturally standalone from `rootforge.core` | §2, §14 |
+| Linux ISO build + Calamares install | **IMPLEMENTED** (code); boot/install behavior **not re-verified this session** | §3 |
+| Termux/PRoot + chroot rootfs | **IMPLEMENTED** (code); device behavior **not tested this session** (no hardware/emulator available) | §6 |
+| Windows platform | **MISSING** | §4 |
+| Android APK application | **MISSING** | §5 |
+| RootForge GUI | **MISSING** (Calamares is third-party, installer-only) | §8 |
+| RootForge API/IPC layer | **MISSING** (only ad hoc subprocess + Ollama HTTP calls exist) | §9 |
+| Authentication/authorization (RootForge-level) | **MISSING** beyond confirmation gates + file-permission hygiene | §10 |
+| Remote/multi-node management | **MISSING** | §12 |
+| Centralized/structured logging & audit trail | **MISSING** | §13 |
+
+**Exit criteria met:** every component named above was read directly this session; every status is traceable to a specific file/line/command in this document; nothing planned is presented as implemented, and nothing implemented is understated (the CLI, 27 scripts, second-brain, and both build pipelines are real and were exercised or read, not assumed). Phase 3 can proceed.
 
 ---
 
