@@ -9,18 +9,18 @@
 ## 🔖 PROJECT STATE (READ THIS FIRST)
 
 **Last Updated:** `2026-09-13`
-**Last Session Summary:** `Phase 2 completed (same session as Phase 1). Documented actual current architecture by reading every rootforge.core module, common.sh, brain.py's CLI surface, and the Termux scripts directly — not by restating the Phase 1 inventory. Key findings: "RootForge Core" is actually two parallel, non-interoperating, Linux-only foundations (a Python one used by the CLI, a shell one used by the 27 scripts), not one platform-independent core as CLAUDE.md's architecture diagram envisions; config, structured logging, and a shared typed Device model are all still PLANNED, not implemented; brain.py is architecturally standalone (not wired into rootforge.core at all). Full findings, a component table, and a dependency diagram in the new CURRENT ARCHITECTURE & IMPLEMENTATION STATE section below.`
+**Last Session Summary:** `Phase 3 completed (same session as Phases 1-2). Documented the 3 build paths (live-build ISO, termux/build-rootfs.sh, no-build Python) with commands transcribed from BUILD.md/Makefile/termux scripts read directly; documented the test suite's actual organization and commands. Resolved the 420-vs-421 discrepancy as far as possible: confirmed via git log that tests/run-tests.sh and tests/check-tests.sh have been unchanged since 2026-09-01 (before both the 2026-09-11 and 2026-09-13 sessions), re-ran the suite twice more (420/0 both times, stable), and found no environment-conditional branch that could explain a genuine 1-check difference — concluded the "421" figure was most likely a recording discrepancy in the prior session, not a reproducible bug. Also found a second real doc-accuracy bug (BUILD.md's git-clone URL points to a different GitHub org than the actual remote) and confirmed this container actually has root+loop-device access for an ISO build, though one was deliberately not attempted (20-60 min, disproportionate to a documentation session, not requested). Full detail in the new BUILD SYSTEM & TOOLING and TESTING sections below.`
 
 ### Current Phase
 
-`[x] PHASE 2 COMPLETE — READY FOR PHASE 3`
+`[x] PHASE 3 COMPLETE — READY FOR PHASE 4`
 
 | Phase | Status | Completed Date | Notes |
 |-------|--------|-----------------|-------|
 | Phase 0 — Setup & Access | ✅ Complete | 2026-09-11 | See "Phase 0 Findings" below |
 | Phase 1 — Repository Inspection | ✅ Complete | 2026-09-13 | See "INSPECTION REPORT" below |
 | Phase 2 — Core Architecture Documentation | ✅ Complete | 2026-09-13 | See "CURRENT ARCHITECTURE & IMPLEMENTATION STATE" below |
-| Phase 3 — Build System, Testing & Tooling | ⬜ Not Started | — | — |
+| Phase 3 — Build System, Testing & Tooling | ✅ Complete | 2026-09-13 | See "BUILD SYSTEM & TOOLING" and "TESTING" below |
 | Phase 4 — Workflow & Architecture Rules | ⬜ Not Started | — | — |
 | Phase 5 — Final Audit & Next Steps | ⬜ Not Started | — | — |
 | Phase 6 — Active Development (ongoing) | ⬜ Not Started | — | — |
@@ -30,7 +30,7 @@
 
 ### What To Do Next
 
-`Begin Phase 3 — Build System, Testing & Tooling, using both the INSPECTION REPORT and CURRENT ARCHITECTURE sections as factual base. Document: the 3 independent build paths (live-build ISO, termux/build-rootfs.sh debootstrap, no-build-step Python) with verified commands; tests/run-tests.sh and tests/lint.sh usage (note shellcheck is still not installable/runnable in this container — carried forward as a real, recurring environment gap, not a one-off); the 420-vs-421 shell-check-count discrepancy remains unresolved (see Open Questions) and should be run down with git log -p on tests/run-tests.sh / tests/check-tests.sh between the 2026-09-11 and 2026-09-13 sessions if Phase 3's "document actual test coverage" task is to be precise about the exact count. Also still outstanding from Phase 2 (not yet acted on, just documented): README.md's ~15 stale `scripts/` path references (real path is `config/includes.chroot/usr/local/bin/`) — low-risk, documentation-only, worth fixing whenever a session next touches README.md.`
+`Begin Phase 4 — Workflow & Architecture Rules, using the INSPECTION REPORT, CURRENT ARCHITECTURE, BUILD SYSTEM & TOOLING, and TESTING sections as factual base. Document: the Claude Code session workflow specific to this repo (this file's own protocol, now exercised across 4 phases — worth reflecting on what's worked); security considerations (the confirmation-gate pattern in common.sh, the secrets-file hygiene in rf_write_private, the still-open gaps from Phase 1 §9 — no SHA-256 verification on 6 build-time download hooks, no reproducibility manifest); architectural decisions already made with rationale (Python stdlib-first per docs/ARCHITECTURE_AUDIT.md §6, wrap-not-rewrite per docs/IMPLEMENTATION_PLAN.md, allow_abbrev=False everywhere per Phase 2 §7); privilege handling (root requirement for auto/build and termux/build-rootfs.sh, the rf_confirm gate, sudoers.d/rootforge-live — still not read in full, flagged in Phase 2 §10); coding standards actually followed (HACKING.md's "Adding a command: prefer the CLI over a new script" and "Adding a script" sections, read this session, are real and specific — use them as the basis rather than inventing generic standards). Two still-outstanding, low-risk documentation fixes from Phases 1 and 3 (not yet acted on): README.md's ~15 stale scripts/ path references, and BUILD.md's git-clone URL pointing to the wrong GitHub org.`
 
 ### Open Questions / Blockers
 
@@ -38,7 +38,7 @@
 - `pytest` is not installed, but is not required: `tests/test_*.py` use Python's stdlib `unittest` and are run via `python3 -m unittest discover` / through `tests/run-tests.sh`, not pytest. Confirmed working this session (129/129 pass).
 - Android-specific tooling (`adb`, `fastboot`, `aapt`, `repo`) and image-build tooling (`mksquashfs`, `mkbootimg`, `cpio`) are not installed in this container. The test suite stubs these (see `tests/stubs/`, `tests/README.md`) so the hermetic suite does not need them; they would be required for real on-device flashing/building work, which is out of scope unless a session is explicitly asked to do it.
 - **Resolved this session:** `docker`'s role — it is an in-ISO runtime package (`docker.io`, installed via `config/package-lists/*.list.chroot` and the bootstrap hook that adds the login user to the `docker` group) used exclusively by `build_matrix.sh` for isolated NDK/API version-matrix builds *on a running RootForge OS install*. It is not used by this repo's own build, lint, or test tooling — the `docker` binary present in this dev container is incidental (base image tooling) and irrelevant to RootForge-OS's own pipeline.
-- **New:** `tests/run-tests.sh` reported **420 passed, 0 failed** this session, not the "421-check" figure recorded in the prior session's summary (2026-09-11). The 129-test Python unittest count matches exactly. The 1-check delta in the shell suite is unexplained — `[Guessing]` it reflects either a since-removed/merged check or an environment-conditional check (a tool-presence branch) that counts differently here than in the prior session's container. Not investigated further this session (documentation-inventory scope, not a suite audit) — worth a `git log -p` on `tests/run-tests.sh`/`tests/check-tests.sh` between the two session dates if the exact count matters for Phase 3.
+- **Resolved (as far as possible) in the Phase 3 session:** the 420-vs-421 shell-check-count discrepancy. `git log` confirms `tests/run-tests.sh`/`tests/check-tests.sh` unchanged since 2026-09-01 — before both the 2026-09-11 and 2026-09-13 sessions — and re-running the suite twice more this session gave 420/0 both times, with no environment-conditional branch found that could explain a genuine delta. `[Likely]` the "421" was a recording discrepancy in the 2026-09-11 session rather than a reproducible bug; full investigation in the TESTING section §3. Treat 420 as the current baseline going forward — a different count on an unmodified suite is the thing worth investigating next time, not this historical figure.
 - **New:** `docs/ARCHITECTURE_AUDIT.md` is dated 2026-08-08 and states as fact that no `rootforge` CLI, no `tests/` directory, and no Python package exist in this repository. All three claims are now false — confirmed by direct inspection this session (see INSPECTION REPORT). This is not a contradiction to resolve by editing that file (it's a dated audit, valid as of its own commit), but Phase 2 documentation must not cite it uncritically — cite the current tree instead. `docs/IMPLEMENTATION_PLAN.md`'s own "P0.5 (landed)" section already documents that this gap was closed after the audit was written, which is consistent with what direct inspection shows.
 
 ---
@@ -856,13 +856,149 @@ Note the two structural facts this diagram makes visible: (1) `brain`/`brain.py`
 
 ## BUILD SYSTEM & TOOLING
 
-`[Populated during Phase 3. Not yet run.]`
+**Run:** 2026-09-13, same session as Phases 1–2, branch `claude/build-per-claude-md-661ey0`. `BUILD.md` and the relevant `HACKING.md`/`Makefile` sections were read directly this session. **A full ISO or Termux-rootfs build was deliberately not attempted this session** — see "What was and wasn't verified" below for why, and what would be needed to verify it.
+
+### 1. The three build targets
+
+| Target | Toolchain | Entry point | Output |
+|---|---|---|---|
+| Linux ISO | `live-build` | `sudo auto/build` (or `sudo make build`, which also writes the checksum) | `rootforge-os-amd64.hybrid.iso` in the repo root |
+| Termux/PRoot or chroot rootfs | `debootstrap` + `qemu-user-static` (for cross-arch) | `sudo termux/build-rootfs.sh [arm64\|amd64] [output-dir] [--flavor proot\|chroot] [--with-x11]` | a timestamped `.tar.xz` (+ `.sha256`) under `dist/` (or the given output dir) |
+| `rootforge` CLI / `brain` / `rootforge.core` | none — plain Python 3, stdlib only | `python3 -m rootforge.core.cli ...` / the `rootforge`/`brain` shims | no build artifact; runs directly from source or from its installed location |
+
+These are independent — building the CLI requires nothing (it's source), and neither the ISO nor the Termux builds require the other to have been built first (Termux's builder reuses `config/hooks/*.hook.chroot` as source input, not a built ISO).
+
+### 2. Prerequisites (per `BUILD.md`, read this session)
+
+**ISO build**, on a Debian 12 (Bookworm) or Ubuntu 22.04+ host:
+```bash
+sudo apt-get install -y live-build debootstrap squashfs-tools xorriso isolinux syslinux-utils
+losetup -f          # confirm a free loop device; should print /dev/loopN
+modprobe loop        # if not
+```
+Must run **as root**. `BUILD.md` recommends **20 GB free disk + 4 GB RAM minimum**; the GNOME squashfs itself compresses to ~3–4 GB. Build time is documented as **20–60 minutes**, dependent on network speed, because several chroot hooks fetch external tools at build time (NodeSource, Ollama, Claude Code, magiskboot, eza, starship, `repo`, payload-dumper-go).
+
+**Termux rootfs build**, per `termux/build-rootfs.sh`'s own header (read in Phase 2):
+```bash
+apt-get install debootstrap qemu-user-static binfmt-support
+```
+Also root-required; cross-building arm64 (the common case — real Android hardware) on an amd64 host works via `qemu-user-static`'s binfmt registration.
+
+**CLI/`brain` development**: `python3` only (stdlib-only, confirmed in Phase 2 — no `requirements.txt`/`pyproject.toml` exists).
+
+**Documentation-accuracy finding (new this session):** `BUILD.md` line 31 instructs `git clone https://github.com/origin-source-labs/rootforge-os.git` — this is a **different GitHub organization** than the repository's actual remote, confirmed in Phase 0 as `https://github.com/Victorious93/rootforge-os`. This is a second real, repo-wide-relevant doc-accuracy bug (alongside Phase 1's `scripts/` path finding in README.md) — worth fixing in the same documentation pass as that one, since both are in files a new contributor reads first.
+
+### 3. Verified build commands
+
+| Command | Verified this session? | Notes |
+|---|---|---|
+| `make test` | ✅ **Yes** — ran `bash tests/run-tests.sh` directly (same script `make test` invokes), 420/420 passed | No root needed |
+| `make lint` | ❌ **No** — `shellcheck` not installed in this container; `tests/lint.sh` fails immediately with a clear "shellcheck not installed" message rather than a false pass | Confirmed same gap as Phase 0/1 |
+| `sudo make build` / `sudo auto/build` | ❌ **Not attempted this session** | See below |
+| `sudo termux/build-rootfs.sh ...` | ❌ **Not attempted this session** | See below |
+| `make checksum` | ❌ Not run (depends on an ISO existing) | Trivial (`sha256sum`), not a meaningful verification target on its own |
+| `make list-usb` | ❌ Not run | Read-only (`lsblk`), low-risk, just not exercised |
+| `sudo make flash USB=...` | ❌ Not run, and would not be run without explicit user instruction naming a target device — this overwrites a whole block device | Correctly gated behind a 5-second abort window + checksum verification in the `Makefile`, per Phase 1 reading |
+
+### 4. What was and wasn't verified, and why
+
+**This container does have root (`uid=0`), ~30 GB free disk, and working loop devices** — checked this session (`id`, `df -h`, `ls /dev/loop*`). So a real ISO build is *technically possible* here, unlike what Phase 0/1's framing might imply about tool-availability gaps. It was **not attempted** in this session because: (a) it takes 20–60 minutes and installs a large, mostly build-only package set into this container, both disproportionate to a documentation-phase session that wasn't asked to produce a built artifact; (b) 30 GB free is close to `BUILD.md`'s own stated 20 GB minimum, not comfortably above it; (c) no user request to actually produce or ship an ISO exists in this conversation. This is a **deliberate scope decision, not a capability gap** — flagging the distinction explicitly per CLAUDE.md's honesty rules, since a reader could otherwise assume "not verified" means "couldn't be verified here."
+
+Everything else in this section (prerequisites, command syntax, artifact names/locations, the `--flavor`/`--with-x11` flags) is transcribed from reading `BUILD.md`, `Makefile`, and `termux/build-rootfs.sh` directly, cross-checked against each other for consistency (they agree), but the *behavior* of actually running `lb build` or `debootstrap` end-to-end in this specific container is **not independently confirmed this session**. The most recent independent confirmation on record is `docs/ARCHITECTURE_AUDIT.md`'s citation of CI run 31269821588 (2026-08-08 era) — dated evidence, not this session's.
+
+### 5. Build artifacts and locations
+
+| Artifact | Path | Produced by | Gitignored? |
+|---|---|---|---|
+| ISO | `rootforge-os-amd64.hybrid.iso` (repo root) | `auto/build` (renamed from live-build's `binary.hybrid.iso`/`binary.iso` — no `--image-name` flag exists in this live-build version, per `auto/build`'s own comment, read in Phase 1) | Yes (`*.iso`) |
+| ISO checksum | `rootforge-os-amd64.hybrid.iso.sha256` | `make checksum` / CI | Not explicitly listed in `.gitignore` but sits alongside a gitignored `.iso`, so unlikely to be accidentally committed in practice — not independently verified this session whether `git status` would flag it if present |
+| Build log | `rootforge-build-<timestamp>.log` (repo root) | `auto/build` | Yes (`*.log`) |
+| Termux rootfs tarball | `<output-dir>/rootforge-<flavor>-<arch>-<timestamp>.tar.xz` (+ `.sha256`), default output dir `./dist` | `termux/build-rootfs.sh` | Yes (`dist/`, `rootforge-proot-*.tar.*`) |
+| live-build's own cache/intermediate dirs | `cache/`, `chroot/`, `binary/`, `live-image/`, `.build/` | `lb build` internals | Yes (all listed explicitly in `.gitignore`) |
+
+### 6. CI/CD pipeline behavior
+
+Already documented in the Phase 1 INSPECTION REPORT §5 in detail (job-by-job breakdown of `lint.yml` and `release.yml`); not re-verified again this session (would mean re-running both workflows, out of scope). Restated briefly for this section's completeness: `lint.yml` runs on every PR and push to `main` (5 jobs: shellcheck, YAML dup-key lint, package-list resolution, the hermetic test suite, a CLI smoke test); `release.yml` runs on `v*` tags or manual dispatch (ISO build, 4-way Termux matrix, then a **draft** GitHub Release with checksummed artifacts attached — never auto-published).
+
+### 7. Release/packaging process
+
+Per `release.yml` (read in Phase 1) and `BUILD.md` (read this session): the *only* documented release path is `git tag v<version> && git push --tags` (or the workflow's manual `workflow_dispatch` trigger, which builds artifacts for inspection without touching Releases, since a manual run may lack a tag ref). There is no separate changelog file (`CHANGELOG.md` does not exist — confirmed by file listing; it's listed as future work, `docs/IMPLEMENTATION_PLAN.md` P3 item 19), no version-bump script, and no code-signing step for the ISO or Termux tarballs beyond the SHA-256 checksums already covered in Phase 1's external-dependencies findings (§9: **no signing of any kind** exists — checksums prove integrity of *this* download, not authenticity against tampering at the source). **Do not invent a release process beyond what's in `release.yml`** — this is the complete, real one.
+
+### 8. Common build troubleshooting (as documented, not personally reproduced this session)
+
+Transcribed directly from `auto/build`'s own inline comments (read in Phase 1) and `BUILD.md`, since these represent real prior incidents the maintainer already fixed and documented, not speculation:
+
+- **`lb build` recurses forever / fails with a fast, mysterious "exit 126"** — caused by invoking plain `lb build` instead of `lb build noauto`; `auto/build` already does this correctly (confirmed by reading the file), so this only bites someone bypassing the wrapper and calling `lb build` directly.
+- **Build reports success but `rootforge-os-amd64.hybrid.iso.sha256` verification fails, or no ISO appears** — `auto/build` explicitly checks for `binary.hybrid.iso`/`binary.iso` after `lb build` exits 0 and errors loudly if neither exists, rather than silently producing nothing; check the timestamped `rootforge-build-*.log` (auto-tailed to the last 200 lines on failure by `auto/build` itself).
+- **"No free loop devices found"** — `auto/build` checks this before starting (`losetup -f`) and gives the exact remediation (`modprobe loop`, or free one via `losetup -a`).
+- **Termux tarball has a stale/placeholder proot-distro hash** — expected until a real tagged release publishes one; see Phase 1 report §7.
+
+No troubleshooting steps beyond what's written in these files were fabricated or inferred — this list is intentionally short because it reflects only what the repo's own maintainers documented from real incidents, per CLAUDE.md's "never invent troubleshooting steps" implication of its accuracy rules.
 
 ---
 
 ## TESTING
 
-`[Populated during Phase 3. Not yet run.]`
+**Run:** 2026-09-13, same session as the rest of Phase 3. Builds directly on Phase 1 report §8, adds the resolution of the 420-vs-421 discrepancy and a coverage-vs-gaps breakdown per Phase 3's task list.
+
+### 1. Frameworks, organization, locations
+
+| Layer | Framework | Location | Driver |
+|---|---|---|---|
+| Python unit tests | stdlib `unittest` (no pytest) | `tests/test_avd_cli.py`, `test_boot_cli.py`, `test_brain.py`, `test_devices.py`, `test_doctor.py`, `test_flashing_cli.py`, `test_module_cli.py`, `test_ota_cli.py` (8 files) | `python3 -m unittest discover -s tests -p 'test_*.py'`, or via `tests/run-tests.sh python` |
+| Shell/integration tests | Hand-rolled `assert_eq`/`assert_contains`/`assert_not_contains` harness (no BATS/shunit2) | `tests/run-tests.sh` (2,112 lines, 19 `section()`-delimited groups covering `common.sh`, `flash_patched_boot.sh`, `extract_ota.sh`, `backup_partitions.sh`/`restore_partitions.sh`, `kernelsu_patch_boot.sh`, `fleet_orchestrate.sh`, `build_matrix.sh`, `build_magisk_module.sh`, secret handling, `setup_ai_tools.sh`, `setup_rooted_avd.sh`, `flash_pi_image.sh`, `join_headscale.sh`, `setup_vpn.sh`, `setup_intercept_proxy.sh`, `harden_kernel.sh`, and more — read this session for structure, not exhaustively line-by-line) | `bash tests/run-tests.sh [shell\|python\|all]` (default `all`) |
+| Static suite self-checks | Custom (reads files, doesn't execute them) | `tests/check-hooks.sh`, `tests/check-tests.sh` | Invoked by `tests/lint.sh`, and thus by `make lint` / `lint.yml`'s `shellcheck` job |
+| Fixture stubs | Fake binaries on `PATH` | `tests/stubs/{adb, adb-device-shell, adb-quiet-probes, am, curl-github-releases, fastboot, getent}` | Sourced into `PATH` by `tests/run-tests.sh`'s sandbox setup |
+
+### 2. Actual commands to run tests
+
+| Scope | Command | Verified this session |
+|---|---|---|
+| Everything | `tests/run-tests.sh` or `tests/run-tests.sh all` | ✅ Run twice, 420/420 both times |
+| Shell tests only | `tests/run-tests.sh shell` | ❌ Not separately re-run this session (implied by the `all` run's shell section passing) |
+| Python tests only | `tests/run-tests.sh python`, or directly `python3 -m unittest discover -s tests -p 'test_*.py'` | ✅ Both forms run, 129/129 |
+| A single Python test file | `python3 -m unittest tests.test_doctor` (standard `unittest` module-path syntax — not itself re-verified this session, but it's stdlib `unittest`'s documented behavior, not a project-specific mechanism) | ❌ Not run this session |
+| A single shell test *section* | Not directly supported — `tests/run-tests.sh` has no `--section`/filter flag (confirmed by reading its `case "$WHICH" in shell\|python\|all\|*)` dispatch, the only branching point in the file); isolating one `section()` block means commenting out the others or reading its output and ignoring the rest | Confirmed by code reading, not by attempting a workaround |
+| Lint (shellcheck + hook safety + suite self-check + Python byte-compile) | `tests/lint.sh` or `make lint` | ❌ Still blocked — `shellcheck` not installed in this container, same as every prior session |
+
+### 3. The 420-vs-421 discrepancy — resolved as far as this session can resolve it
+
+Investigated this session, not carried forward unexamined:
+
+- `git log -1 -- tests/run-tests.sh` → last modified **2026-09-01** (commit `d6d812c`). `git log -1 -- tests/check-tests.sh` → last modified **2026-09-01** (commit `707ccea`). Both dates are **before** the 2026-09-11 session that recorded "421" and before this 2026-09-13 session that recorded "420".
+- This session's branch (`claude/build-per-claude-md-661ey0`) is based directly on `efacac8`, the exact commit the 2026-09-11 Phase 0 session's work was merged into `main` as. There is **no code difference whatsoever** in `tests/` between what that session ran and what this session ran — same bytes, same commit lineage.
+- Ran `bash tests/run-tests.sh` **twice more** this session: **420 passed, 0 failed**, identical both times. No run-to-run nondeterminism observed in this container.
+- Checked for environment-conditional branches that could change the total (a `command -v`-gated assert, a loop over a variable-length list): found `for`-loops over **fixed literal lists** (e.g. 5 hostile-input strings at line 473, 5 more at line 1189, `seq 1 25` at line 726, 4 tool names at line 1956) whose iteration counts are hardcoded in the script, not environment-derived — none of these would produce a different total between two runs of the identical file.
+- The suite counts the entire Python `unittest` run as **one** pass/fail entry toward `$PASS`/`$FAIL` (`pass "python unittest suite"` on success — confirmed by reading the `test_python()` function), not 129 individually, so the 420 total is (shell `assert_*` executions across all sections and loop iterations) + 1, not a sum of two independently-varying suites.
+
+**Conclusion:** the code is proven identical between the two sessions, and this session's count is stable and reproducible in its own container. The most likely explanation is a recording/transcription discrepancy in the 2026-09-11 session's summary (`[Likely]`, not `[Certain]` — this session cannot inspect that session's actual container or terminal output to rule out a genuine one-off environment difference there, such as a stray leftover file affecting one test's control flow on that run only). **This is not a currently-reproducible bug** — a fresh session running the current tree gets 420, consistently. Recommend: if a future session sees a number other than 420 from an unmodified `tests/run-tests.sh`, that is the signal worth investigating (a real regression or environment issue), not the historical "421" figure, which should now be treated as resolved/superseded rather than re-opened each session.
+
+### 4. Test coverage vs. gaps
+
+**Covered** (per Phase 1/2 findings plus this session's structural read of `tests/run-tests.sh`):
+- Every `rootforge` CLI subcommand group has a dedicated Python test file (`test_avd_cli.py`, `test_boot_cli.py`, `test_devices.py`, `test_doctor.py`, `test_flashing_cli.py`, `test_module_cli.py`, `test_ota_cli.py`) — 7 of 8 core modules. **`test_cli.py` (for `cli.py` itself) and `test_runner.py` (for `runner.py` itself) do not exist as separate files** — confirmed by the file listing in Phase 1; both are exercised only indirectly through the subcommand test files, not tested for their own dispatch/argv-parsing logic in isolation.
+- `brain.py` has `test_brain.py`.
+- A large fraction of the 27 shell scripts have dedicated `section()` blocks in `tests/run-tests.sh` (confirmed: `flash_patched_boot.sh`, `extract_ota.sh`, `backup_partitions.sh`, `restore_partitions.sh`, `kernelsu_patch_boot.sh`, `fleet_orchestrate.sh`, `build_matrix.sh`, `build_magisk_module.sh`, `setup_ai_tools.sh`, `setup_rooted_avd.sh`, `flash_pi_image.sh`, `join_headscale.sh`, `setup_vpn.sh`, `setup_intercept_proxy.sh`, `harden_kernel.sh`, `lint_module.sh`, `check_root_detection.sh` per the section-header grep in Phase 1 and this session's loop/grep passes) — **not confirmed exhaustive**: this session did not cross-check all 27 script names against all `section()` headers one-by-one to produce a definitive covered/uncovered list, so treat "most scripts are covered" as `[Likely]`, not a verified complete inventory.
+- `common.sh`'s helpers are covered by two dedicated sections (`"common.sh — device enumeration"`, `"common.sh — confirmation gate"`, `"common.sh — secret handling"`).
+
+**Confirmed gaps** (from Phase 1's findings, restated here as the "coverage vs. gaps" task requires, plus one new item):
+- **No VM boot test** — CI's `release.yml` validates that `lb build` exits 0 and produces a file of the expected shape; it has never booted the resulting ISO to confirm it works as an OS. This is `docs/IMPLEMENTATION_PLAN.md` P3 item 18, explicitly still open.
+- **No dedicated `test_cli.py`/`test_runner.py`** (new finding this session, from the file listing) — the top-level dispatcher and the shared script-invocation helper are tested only as a byproduct of testing the things that call them, not for their own behavior (e.g., `cli.py`'s `--version`/`--help`/no-args-prints-help paths, `runner.py`'s three-tier `find_script` fallback order) in isolation.
+- **No config-system tests** — moot until `rootforge.core.config` (still PLANNED per Phase 2) is actually built.
+- **`shellcheck` cannot run in this dev container** — a real, recurring gap in what can be *locally* verified before pushing, not a gap in the suite's own design; CI covers it.
+- **No test coverage measurement tool** (no `coverage.py`/`nose`/similar) — confirmed by no such dependency existing anywhere; test completeness is judged by direct reading of `tests/run-tests.sh`'s section list against `usr/local/bin/`'s script list, not by a generated coverage percentage. This means any coverage claim in this document (including "most scripts are covered" above) is a manual estimate, not a tool-verified metric.
+
+### 5. Development environment setup (reproducible from this document alone)
+
+```bash
+git clone https://github.com/Victorious93/rootforge-os.git   # NOT the origin-source-labs URL in BUILD.md — see §2 above
+cd rootforge-os
+python3 -m unittest discover -s tests -p 'test_*.py'   # 129 tests, no extra setup needed (stdlib only)
+bash tests/run-tests.sh                                  # 420 checks, no extra setup needed (self-contained sandboxing)
+```
+No virtualenv, no `pip install`, no Node/npm setup is required for CLI/test development — confirmed by this session's own successful runs using only what was already in this container (`python3`, `bash`, coreutils). `shellcheck` is the one real, recurring local-dev gap (`apt-get install shellcheck` on Debian/Ubuntu; not installable in this specific session's container per prior sessions' notes, reason not independently diagnosed).
+
+**Exit criteria met:** every build/test command above is either verified this session (marked ✅) or explicitly marked as not run, with the reason stated — nothing is presented as verified that wasn't actually run. The historical 420-vs-421 test-count question raised in Phase 1 is now investigated and resolved to the extent possible without access to the prior session's actual runtime environment. Phase 4 can proceed.
 
 ---
 
