@@ -51,14 +51,21 @@ is proven equivalent.
    per the directive's explicit ban on "placeholder implementations...
    called complete."
 
-4. **Deduplicate `Dockerfile.ndk-matrix`.**
-   Confirmed byte-identical copies at
-   `config/includes.chroot/opt/rootforge/docker/Dockerfile.ndk-matrix` and
-   `config/includes.chroot/usr/local/share/rootforge/docker/Dockerfile.ndk-matrix`,
-   with `build_matrix.sh`'s 3-path fallback only ever actually reaching the
-   first. Delete the unreachable copy, collapse `build_matrix.sh`'s fallback
-   list to the path(s) that are actually reachable, and add a code comment
-   noting why (mirrors the install layout, not stylistic preference).
+4. **Deduplicate `Dockerfile.ndk-matrix`.** — **Landed** (verified 2026-09-13,
+   Phase 6 session). This item had already been done, in commit `6dbd7dd`
+   ("Add rootforge CLI skeleton, rootforge doctor, dedupe
+   Dockerfile.ndk-matrix"), which predates every documentation session that
+   subsequently re-reported it as still open — `docs/ARCHITECTURE_AUDIT.md`
+   (2026-08-08) asserted the duplicate existed, and CLAUDE.md's Phase 1/5
+   sessions repeated that claim without re-checking the actual filesystem
+   (`find . -iname Dockerfile.ndk-matrix` returns exactly one match, at
+   `config/includes.chroot/opt/rootforge/docker/Dockerfile.ndk-matrix`;
+   `git log --all -- config/includes.chroot/usr/local/share/rootforge/docker/Dockerfile.ndk-matrix`
+   shows it was removed in `6dbd7dd` and never re-added). `build_matrix.sh`
+   already only has the one real fallback (installed path, then a
+   checkout-relative path) — there is no second copy or dead fallback branch
+   to remove. No code change was needed for this item; it was a stale-claim
+   correction only.
 
 ---
 
@@ -143,12 +150,29 @@ and wrapping code with a silent argument-parsing bug just moves the bug.
    that re-hashes and compares. The underlying `dd`/partition-read logic in
    the existing scripts is reused, not rewritten.
 
-9. **Artifact integrity at build time.**
-   Add SHA-256 verification to the six hooks that fetch external content
-   during the chroot build: `0040-rpi-imager`, `0050-starship-eza`,
-   `0060-magiskboot`, `0062-payload-dumper`, `0085-avbtool`,
-   `0095-zygisk-headers`. Pin expected hashes per pulled version; fail the
-   build loudly on mismatch rather than silently continuing.
+9. **Artifact integrity at build time.** — **Landed** (2026-09-13, Phase 6
+   session). All six hooks now pin a specific upstream version/commit and
+   verify a SHA-256 hash before installing anything: `0040-rpi-imager`
+   (rpi-imager 2.0.4), `0050-starship-eza` (starship v1.26.0, eza v0.23.5),
+   `0060-magiskboot` (Magisk v31.0 APK), `0062-payload-dumper` (2.0.2),
+   `0085-avbtool` (LineageOS mirror commits, not the mutable `lineage-22.2`
+   branch name, for `avbtool.py`/`mkbootimg.py`/`unpack_bootimg.py`/
+   `repack_bootimg.py`/`generate_gki_certificate.py`), `0095-zygisk-headers`
+   (Magisk v31.0 `zygisk.hpp`). Every pinned hash was computed from a freshly
+   downloaded copy of the real artifact at pin time (cross-checked against
+   the upstream-published `.sha256`/`sha256checksums.txt` sidecar where one
+   exists — starship and payload-dumper-go publish one; rpi-imager, eza,
+   Magisk, and the LineageOS raw-file mirrors do not, so those hashes are
+   trust-on-first-use, verified on every subsequent build from here on). A
+   hash mismatch fails the build (`exit 1`); a network failure to reach the
+   pinned URL still degrades the same way these hooks always did (warn and
+   continue, since some of what they install is optional at runtime) — the
+   two failure modes are handled differently on purpose, since one means
+   "try again later" and the other means "something about this artifact
+   changed and must not be installed silently." Versions will go stale over
+   time by design — bumping one means fetching the new artifact, computing
+   its real hash, and updating both together, per the comment at the top of
+   each hook.
 
 ---
 

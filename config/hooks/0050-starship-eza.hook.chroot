@@ -3,63 +3,112 @@
 # Victorious Framework | Origin Source Labs
 #
 # Neither starship nor eza is in Debian 12 main repos.
-#   starship: installed via its official curl installer
+#   starship: installed from the official GitHub release tarball
 #   eza:      installed from the official GitHub release .deb
 #             (replaces the deprecated 'exa'; Bookworm backports may have it
 #              but the release .deb is more reliably current)
+#
+# Both are pinned to a specific version + SHA-256 rather than "latest":
+#   - starship publishes a `.sha256` sidecar per release asset; the hashes
+#     below were verified against those sidecars at pin time.
+#   - eza does not publish a checksum sidecar; its hashes were computed
+#     directly from the release assets at pin time (trust-on-first-use,
+#     then verified on every build thereafter).
+# A hash mismatch means the artifact changed since pinning — bump the
+# version and recompute the hash from the new release, don't just widen
+# the check.
 
 set -e
 
 # --- starship ---
-echo "==> Installing starship prompt"
-# Two problems with `curl -sS <url> | sh -s -- --yes`:
-#   - no -f, so curl exits 0 on an HTTP error and pipes the error *body*
-#     into sh, which then tries to execute it as a shell script;
-#   - no pipefail (dash has none), so the pipeline reports sh's status, and
-#     sh fed an empty stdin exits 0.
-# Fetch to a file with -f, check it is non-empty, then run it.
-STARSHIP_INSTALLER="$(mktemp)"
-if ! curl -fsSL -o "$STARSHIP_INSTALLER" https://starship.rs/install.sh; then
-  rm -f "$STARSHIP_INSTALLER"
-  echo "ERROR: could not download the starship installer." >&2
-  exit 1
-fi
-if [ ! -s "$STARSHIP_INSTALLER" ]; then
-  rm -f "$STARSHIP_INSTALLER"
-  echo "ERROR: the starship installer downloaded empty." >&2
-  exit 1
-fi
-sh "$STARSHIP_INSTALLER" --yes
-rm -f "$STARSHIP_INSTALLER"
-starship --version
+STARSHIP_VERSION="v1.26.0"
+STARSHIP_BASE="https://github.com/starship/starship/releases/download/${STARSHIP_VERSION}"
 
-# --- eza ---
-echo "==> Installing eza"
 DPKG_ARCH="$(dpkg --print-architecture)"
 case "$DPKG_ARCH" in
-  amd64) EZA_TARGET="x86_64-unknown-linux-gnu" ;;
-  arm64) EZA_TARGET="aarch64-unknown-linux-gnu" ;;
-  *) EZA_TARGET="" ;;
+  amd64)
+    STARSHIP_ASSET="starship-x86_64-unknown-linux-gnu.tar.gz"
+    STARSHIP_SHA256="321f0dd7af8340a5f2e6a8fec6538a04f617486f9ec70d878f91c09cd8deef22"
+    ;;
+  arm64)
+    # starship does not publish a gnu build for aarch64 linux — musl is the
+    # only aarch64-linux target it ships.
+    STARSHIP_ASSET="starship-aarch64-unknown-linux-musl.tar.gz"
+    STARSHIP_SHA256="dc30189378d2f2e287384e8a692d3f95ad1df64cf0e8c36aa9201516028aed6b"
+    ;;
+  *)
+    STARSHIP_ASSET=""
+    ;;
 esac
 
-if [ -z "$EZA_TARGET" ]; then
-  echo "WARNING: no known eza release target for dpkg architecture '$DPKG_ARCH' — skipping eza install."
+if [ -z "$STARSHIP_ASSET" ]; then
+  echo "WARNING: no known starship release asset for dpkg architecture '$DPKG_ARCH' — skipping starship install."
 else
-  # strict=False: a sibling hook hitting a different GitHub releases API
-  # (0060-magiskboot) hit a real "Invalid control character" JSONDecodeError
-  # from a raw control char somewhere in the payload (likely a release-notes
-  # body) — relaxing strictness here too since we only need tag_name, never
-  # the body, and the same class of API can carry the same class of quirk.
-  EZA_TAG=$(curl -fsSL https://api.github.com/repos/eza-community/eza/releases/latest \
-    | python3 -c "import sys,json; print(json.load(sys.stdin, strict=False)['tag_name'])")
-  EZA_URL="https://github.com/eza-community/eza/releases/download/${EZA_TAG}/eza_${EZA_TARGET}.tar.gz"
+  echo "==> Fetching starship ${STARSHIP_VERSION} ($STARSHIP_ASSET)"
+  STARSHIP_TARBALL="$(mktemp)"
+  if ! curl -fsSL -o "$STARSHIP_TARBALL" "${STARSHIP_BASE}/${STARSHIP_ASSET}"; then
+    rm -f "$STARSHIP_TARBALL"
+    echo "ERROR: could not download the starship release tarball." >&2
+    exit 1
+  fi
+  ACTUAL_SHA256="$(sha256sum "$STARSHIP_TARBALL" | awk '{print $1}')"
+  if [ "$ACTUAL_SHA256" != "$STARSHIP_SHA256" ]; then
+    echo "ERROR: starship tarball SHA-256 mismatch — refusing to install." >&2
+    echo "  expected: $STARSHIP_SHA256" >&2
+    echo "  actual:   $ACTUAL_SHA256" >&2
+    rm -f "$STARSHIP_TARBALL"
+    exit 1
+  fi
+  tar -xzf "$STARSHIP_TARBALL" -C /usr/local/bin starship
+  chmod +x /usr/local/bin/starship
+  rm -f "$STARSHIP_TARBALL"
+  starship --version
+fi
+
+# --- eza ---
+EZA_VERSION="v0.23.5"
+EZA_BASE="https://github.com/eza-community/eza/releases/download/${EZA_VERSION}"
+
+case "$DPKG_ARCH" in
+  amd64)
+    EZA_ASSET="eza_x86_64-unknown-linux-gnu.tar.gz"
+    EZA_SHA256="35c70c5c43c29108075e58b893234c67ef585f0b53a7eaf8e9e7d4eec9f339b4"
+    ;;
+  arm64)
+    EZA_ASSET="eza_aarch64-unknown-linux-gnu.tar.gz"
+    EZA_SHA256="40b87ae8628aa2ff0f0d2dc24ab52f689631366385c3da630bae745671fd71ec"
+    ;;
+  *)
+    EZA_ASSET=""
+    ;;
+esac
+
+if [ -z "$EZA_ASSET" ]; then
+  echo "WARNING: no known eza release asset for dpkg architecture '$DPKG_ARCH' — skipping eza install."
+else
+  echo "==> Fetching eza ${EZA_VERSION} ($EZA_ASSET)"
+  EZA_TARBALL="$(mktemp)"
+  if ! curl -fsSL -o "$EZA_TARBALL" "${EZA_BASE}/${EZA_ASSET}"; then
+    rm -f "$EZA_TARBALL"
+    echo "ERROR: could not download the eza release tarball." >&2
+    exit 1
+  fi
+  ACTUAL_SHA256="$(sha256sum "$EZA_TARBALL" | awk '{print $1}')"
+  if [ "$ACTUAL_SHA256" != "$EZA_SHA256" ]; then
+    echo "ERROR: eza tarball SHA-256 mismatch — refusing to install." >&2
+    echo "  expected: $EZA_SHA256" >&2
+    echo "  actual:   $ACTUAL_SHA256" >&2
+    rm -f "$EZA_TARBALL"
+    exit 1
+  fi
   # [Certain] the release tarball's sole member is "./eza" (verified by
   # downloading and listing a real one), not a bare "eza" — asking tar to
   # extract a specific member named "eza" therefore never matches and always
   # fails with "Not found in archive". Extracting without a member filter
   # instead lands "./eza" at exactly /usr/local/bin/eza, which is what we want.
-  curl -fsSL "$EZA_URL" | tar -xz -C /usr/local/bin
+  tar -xzf "$EZA_TARBALL" -C /usr/local/bin
   chmod +x /usr/local/bin/eza
+  rm -f "$EZA_TARBALL"
   eza --version
 fi
 
