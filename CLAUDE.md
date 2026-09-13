@@ -8,17 +8,17 @@
 
 ## 🔖 PROJECT STATE (READ THIS FIRST)
 
-**Last Updated:** `2026-09-11`
-**Last Session Summary:** `Phase 0 completed. Confirmed repo access, branch/remote state, and local toolchain. No blockers found other than two missing optional tools (see Open Questions / Blockers). Repository already contains substantial, tested implementation (CLI, tests, docs) predating this CLAUDE.md — Phase 1 inspection has NOT been done yet and must not be assumed from this summary.`
+**Last Updated:** `2026-09-13`
+**Last Session Summary:** `Phase 1 completed. Inventoried the actual repository (directory map, languages, build systems, CI, docs, components, tests, external deps, TODOs/stubs, per-platform status, scope check) and verified it against real code rather than trusting docs/ARCHITECTURE_AUDIT.md's 2026-08-08 snapshot at face value. That audit is now confirmed partially stale: docs/IMPLEMENTATION_PLAN.md's own "P0.5 (landed)" section and the actual tree show the rootforge CLI, rootforge-core Python package, and hermetic test suite it said didn't exist now do exist and pass. Full findings in the new INSPECTION REPORT section below.`
 
 ### Current Phase
 
-`[x] PHASE 0 COMPLETE — READY FOR PHASE 1`
+`[x] PHASE 1 COMPLETE — READY FOR PHASE 2`
 
 | Phase | Status | Completed Date | Notes |
 |-------|--------|-----------------|-------|
 | Phase 0 — Setup & Access | ✅ Complete | 2026-09-11 | See "Phase 0 Findings" below |
-| Phase 1 — Repository Inspection | ⬜ Not Started | — | — |
+| Phase 1 — Repository Inspection | ✅ Complete | 2026-09-13 | See "INSPECTION REPORT" below |
 | Phase 2 — Core Architecture Documentation | ⬜ Not Started | — | — |
 | Phase 3 — Build System, Testing & Tooling | ⬜ Not Started | — | — |
 | Phase 4 — Workflow & Architecture Rules | ⬜ Not Started | — | — |
@@ -30,14 +30,16 @@
 
 ### What To Do Next
 
-`Begin Phase 1 — Repository Inspection & Assessment. The repository is not empty or scaffolded: it already contains a working Python CLI (rootforge), a live-build-based Debian ISO pipeline, Termux/PRoot integration scripts, and a 129-test Python unit suite plus a 421-check hermetic shell test suite, all passing as of this session. Phase 1 must inventory this real, existing implementation (not greenfield-plan it) and produce the IMPLEMENTED / PARTIALLY IMPLEMENTED / SCAFFOLDED / PLANNED / MISSING breakdown called for in the Phase 1 deliverable. Start by reading docs/ARCHITECTURE_AUDIT.md and docs/IMPLEMENTATION_PLAN.md, which appear to already contain prior architecture/planning notes — verify their claims against actual code rather than taking them at face value.`
+`Begin Phase 2 — Core Architecture & Implementation Documentation, using the INSPECTION REPORT below as its factual base. Document: rootforge-core's actual module boundaries (cli/doctor/devices/flashing/module/ota/boot/avd/runner), how the CLI wraps vs. does not yet wrap the 27 standalone shell scripts, the live-build ISO architecture (auto/config + auto/build + config/hooks + config/includes.chroot), the Termux/PRoot second build target, and the second-brain (brain.py) subsystem. Also worth fixing opportunistically during Phase 2 (documentation-only, low-risk): README.md references `scripts/<name>.sh` in ~15 places (module skeleton, bootloader unlock, backup/restore, OTA, linting, AI tooling, hardening, VPN/proxy sections) but no top-level `scripts/` directory exists anywhere in the repo — the real path is `config/includes.chroot/usr/local/bin/<name>.sh`. Per this file's own Source of Truth rule, the doc is wrong and should be corrected, not the code.`
 
 ### Open Questions / Blockers
 
-- `shellcheck` is not installed in this environment, so `tests/lint.sh` / `make lint` cannot be run locally here (CI installs it via apt in `.github/workflows/lint.yml`). Not a blocker for inspection/documentation work, but blocks locally verifying lint-clean status before a push — note this in Phase 3 tooling docs.
-- `pytest` is not installed, but is not required: `tests/test_*.py` use Python's stdlib `unittest` and are run via `python3 -m unittest discover` / through `tests/run-tests.sh`, not pytest. Confirmed working.
+- `shellcheck` is not installed in this environment, so `tests/lint.sh` / `make lint` cannot be run locally here (CI installs it via apt in `.github/workflows/lint.yml`). Confirmed still true this session. Not a blocker for inspection/documentation work, but blocks locally verifying lint-clean status before a push — carry into Phase 3 tooling docs.
+- `pytest` is not installed, but is not required: `tests/test_*.py` use Python's stdlib `unittest` and are run via `python3 -m unittest discover` / through `tests/run-tests.sh`, not pytest. Confirmed working this session (129/129 pass).
 - Android-specific tooling (`adb`, `fastboot`, `aapt`, `repo`) and image-build tooling (`mksquashfs`, `mkbootimg`, `cpio`) are not installed in this container. The test suite stubs these (see `tests/stubs/`, `tests/README.md`) so the hermetic suite does not need them; they would be required for real on-device flashing/building work, which is out of scope unless a session is explicitly asked to do it.
-- `docker` is present (29.3.1) but its role in this project, if any, has not yet been assessed — defer to Phase 1.
+- **Resolved this session:** `docker`'s role — it is an in-ISO runtime package (`docker.io`, installed via `config/package-lists/*.list.chroot` and the bootstrap hook that adds the login user to the `docker` group) used exclusively by `build_matrix.sh` for isolated NDK/API version-matrix builds *on a running RootForge OS install*. It is not used by this repo's own build, lint, or test tooling — the `docker` binary present in this dev container is incidental (base image tooling) and irrelevant to RootForge-OS's own pipeline.
+- **New:** `tests/run-tests.sh` reported **420 passed, 0 failed** this session, not the "421-check" figure recorded in the prior session's summary (2026-09-11). The 129-test Python unittest count matches exactly. The 1-check delta in the shell suite is unexplained — `[Guessing]` it reflects either a since-removed/merged check or an environment-conditional check (a tool-presence branch) that counts differently here than in the prior session's container. Not investigated further this session (documentation-inventory scope, not a suite audit) — worth a `git log -p` on `tests/run-tests.sh`/`tests/check-tests.sh` between the two session dates if the exact count matters for Phase 3.
+- **New:** `docs/ARCHITECTURE_AUDIT.md` is dated 2026-08-08 and states as fact that no `rootforge` CLI, no `tests/` directory, and no Python package exist in this repository. All three claims are now false — confirmed by direct inspection this session (see INSPECTION REPORT). This is not a contradiction to resolve by editing that file (it's a dated audit, valid as of its own commit), but Phase 2 documentation must not cite it uncritically — cite the current tree instead. `docs/IMPLEMENTATION_PLAN.md`'s own "P0.5 (landed)" section already documents that this gap was closed after the audit was written, which is consistent with what direct inspection shows.
 
 ---
 
@@ -534,7 +536,157 @@ Development proceeds through 8 phases (0–7). Phases 1–5 build the documentat
 
 ## INSPECTION REPORT
 
-`[Populated during Phase 1. Not yet run.]`
+**Run:** 2026-09-13, on branch `claude/build-per-claude-md-661ey0` (identical to `origin/main` at `efacac8` at session start; no code changes were made during this inspection, only this file). All claims below marked `[Certain]` were directly verified this session (file read, command run, or test executed); `[Likely]` are strong inferences not exhaustively verified; `[Guessing]` are explicitly flagged as such.
+
+### 1. Directory map and purpose **[Certain]**
+
+| Path | Purpose |
+|---|---|
+| `auto/config`, `auto/build` | live-build invocation wrapper (`lb config`, `lb build noauto`) — see docs/ARCHITECTURE_AUDIT.md §1 for the recursion bug `auto/build` works around; that fix is present in the current file. |
+| `config/package-lists/*.list.chroot` | 4 apt package lists (`rootforge`, `rootforge-ai`, `rootforge-flagship`, `rootforge-installer`) installed into the squashfs. |
+| `config/hooks/*.hook.chroot` | 15 numbered POSIX-`sh` scripts run inside the chroot at build time (0005–0098). Flat, not nested under `live/`/`normal/` subdirectories — consistent with the fix the audit describes for the historical hook-discovery bug (§3.9 of the audit). |
+| `config/archives/`, `config/bootloaders/isolinux/` | Custom apt source and corrected isolinux theme, each working around a specific live-build bug per the audit. |
+| `config/includes.chroot/` | Files overlaid verbatim onto the built filesystem: Calamares installer config/branding, systemd units, udev rule for Android USB devices, Plymouth boot theme, and `usr/local/bin/`+`usr/local/lib/rootforge/` (see §3 below). |
+| `docs/ARCHITECTURE_AUDIT.md`, `docs/IMPLEMENTATION_PLAN.md` | Prior architecture audit (dated 2026-08-08) and its companion prioritized task list. Partially stale — see Open Questions above and §7 below. |
+| `termux/` | A second, independent build target: a debootstrap-based (not live-build) PRoot/chroot-installable rootfs for Android devices via Termux, reusing `config/hooks/*`. |
+| `tests/` | Hermetic test suite: 8 Python `unittest` files, a shell test/lint driver, fake `adb`/`fastboot`/etc. stubs, and static self-checks on the suite itself. |
+| `assets/logo/` | Two logo image files. No other binary/media assets. |
+| `README.md`, `BUILD.md`, `HACKING.md` | 579 / 76 / 290 lines respectively. User-facing spec/build guide, host prerequisites, contributor-facing internals. |
+| `Makefile` | `test`, `lint`, `build`, `clean`, `distclean`, `checksum`, `list-usb`, `flash` targets. |
+
+No `src/`, `rootforge/` (top-level package), `scripts/`, `docker/` (top-level), or `installer/` directories exist — confirmed by direct listing, matching the audit's own claim on this specific point.
+
+### 2. Language inventory **[Certain]**
+
+| Language | Where | Notes |
+|---|---|---|
+| Python 3 | `config/includes.chroot/usr/local/lib/rootforge/` (core CLI package, 9 files, ~1,309 lines) + `.../second-brain/brain.py` (452 lines) + `tests/test_*.py` (8 files) | stdlib-first; no `requirements.txt`/`pyproject.toml`/`setup.py` anywhere — confirmed no such file exists. No third-party Python packages are imported anywhere in `rootforge.core.*` (grepped; none found). |
+| Bash (`#!/usr/bin/env bash` / `#!/bin/bash`) | 27 scripts in `config/includes.chroot/usr/local/bin/`, `auto/build`, `termux/build-rootfs.sh` and siblings, `tests/*.sh` | The bulk of the device-facing tooling. |
+| POSIX `sh` (`#!/bin/sh` or no shebang, sourced) | `auto/config`, all 15 `config/hooks/*.hook.chroot`, `termux/proot-distro-plugins/rootforge.sh` | Required by live-build's own execution model (dash, `set -e`, no `pipefail`). |
+| QML | `config/includes.chroot/etc/calamares/branding/rootforge/show.qml` | Calamares branding, third-party installer's own config format, not RootForge application code. |
+
+No Go, Rust, TypeScript/JavaScript, Java, Kotlin, C/C++, C#, or Swift exists anywhere in the repository — confirmed by extension search. This directly contradicts nothing in CLAUDE.md's stated long-term vision (Windows/Android native apps), because those platforms are simply **not started** (see §6).
+
+### 3. The `rootforge` CLI and `rootforge-core` package — confirmed real, not a stub **[Certain]**
+
+This is the single biggest correction to `docs/ARCHITECTURE_AUDIT.md`, which states (as of its 2026-08-08 commit) that "`rootforge` as a CLI binary, package, or entry point does not exist anywhere in this repository." As of this session's tree, it does:
+
+- `config/includes.chroot/usr/local/bin/rootforge` — a 4-line POSIX `sh` shim: `exec env PYTHONPATH=... python3 -m rootforge.core.cli "$@"`.
+- `config/includes.chroot/usr/local/lib/rootforge/core/` — 9 Python files:
+
+| Module | Lines | Role |
+|---|---|---|
+| `cli.py` | 145 | `argparse`-based dispatcher, `allow_abbrev=False` throughout (deliberate — see inline comment on abbreviation ambiguity risk for destructive flags). Registers `doctor`, `devices`, and delegates `module`/`flash`/`backup`/`ota`/`boot`/`avd` to their own sub-parsers. |
+| `doctor.py` | 284 | `rootforge doctor` — host tool checks, disk space, Ollama reachability, Claude Code CLI presence, `~/rootforge` writability; `--json`/`--quiet`/`--strict`. |
+| `devices.py` | 159 | `rootforge devices` — merges `adb`+`fastboot` device enumeration into one list; `-l`/`--detailed`, `--json`. |
+| `flashing.py` | 151 | `flash`/`backup` subcommand group — wraps `flash_patched_boot.sh`/`backup_partitions.sh`/`restore_partitions.sh`. |
+| `module.py` | 102 | `module scaffold/lint/build` — wraps `new_module_scaffold.sh`/`lint_module.sh`/`build_magisk_module.sh`. |
+| `ota.py` | 110 | `ota extract/inspect` — wraps OTA/payload-dumper handling. |
+| `boot.py` | 128 | `boot patch/flash-last` (partial — see §7, item still lists `unpack`/`repack`/`verify` as not yet built). |
+| `avd.py` | 122 | `avd create/boot/list` — wraps `setup_rooted_avd.sh`. |
+| `runner.py` | 101 | Shared subprocess-invocation helper used by the wrapper modules above. |
+
+No `rootforge.core.config` or `rootforge.core.device` (the P1 items in `docs/IMPLEMENTATION_PLAN.md` — central config system and device-abstraction dataclass) exist yet — confirmed by direct file listing and grep for `python3-yaml`/`yaml` (zero matches in package lists or core source). **These remain PLANNED, not implemented**, contrary to what a casual read of the plan's P0.5 "(landed)" heading might suggest if not checked carefully — P0.5 landed the CLI skeleton, `doctor`, `devices`, and the P2 wrapper groups; it did not land P1 items 6 (config) or 5 (`Device` dataclass, beyond `devices.py`'s own ad hoc detection).
+
+The 27 pre-existing standalone shell scripts in `usr/local/bin/` are **unchanged in location and remain independently invocable** — the CLI wraps them via subprocess (per `runner.py`), it has not absorbed or replaced their logic. This matches the audit's own recommended architecture (§4: "not a rewrite, a layer added underneath").
+
+### 4. Build systems **[Certain]**
+
+Three independent build/packaging paths, no conflict between them:
+
+1. **live-build** (`auto/config` + `auto/build` + `config/`) → a bootable, installable (via Calamares) Debian 12 Bookworm amd64 ISO. Invoked via `sudo make build` or `sudo auto/build`.
+2. **debootstrap** (`termux/build-rootfs.sh`) → a PRoot- or chroot-installable rootfs tarball for Termux on Android, arm64 or amd64, `proot` or `chroot` flavor (4 combinations), reusing `config/hooks/*` and a pruned package list.
+3. **Python** — no build step; `rootforge.core` and `brain.py` run directly via `python3 -m` or a shim script, no packaging/wheel/compiled step exists.
+
+No CMake, autotools, Gradle/Maven (despite Android Studio/Gradle being *target-environment* dependencies documented in README §2 — those are packages the built ISO installs for its *users*, not this repo's own build system), npm, or Cargo anywhere in this repo's own tooling.
+
+### 5. CI/CD **[Certain]**
+
+- **`.github/workflows/lint.yml`** — 5 jobs on PR + push to `main`: `shellcheck` (via `tests/lint.sh`, shared with `make lint`), `yaml-lint` (custom duplicate-key checker — plain `yaml.safe_load` silently accepts dupes, exactly the class of bug that caused a real prior CI failure per the workflow's own comment), `package-lists` (verifies every listed apt package resolves against a real `debian:bookworm` container), `tests` (`tests/run-tests.sh`), `python` (CLI smoke test: `--version`, `--help`, `doctor --json`, `devices --json` shape validation).
+- **`.github/workflows/release.yml`** — triggered on `v*` tags or manual dispatch: builds the amd64 ISO (`build-iso` job, ~90 min timeout, frees ~20GB disk first) and the 4-combination Termux rootfs matrix (`build-termux-rootfs`), then creates a **draft** GitHub Release with checksummed artifacts attached (`release` job, tag-push only). The workflow's own header comment states `[Likely]` it has never actually been exercised on GitHub's infrastructure from this repo — this session did not run it either (would require ~20GB disk, loop-device/root access, and 60–90 minutes; out of scope for a documentation-inspection session). **Not independently verified this session** — status as "should work, unexercised" carried forward from the workflow's own self-assessment, not newly confirmed.
+
+### 6. Per-platform / per-vision-item status, against CLAUDE.md's own "Long-Term Platform Support" list **[Certain]** unless noted
+
+| Vision item | Status | Evidence |
+|---|---|---|
+| RootForge-OS for Linux PCs | **IMPLEMENTED** (ISO build + install path); **NOT independently re-verified this session** that a built ISO actually boots/installs — that claim rests on the audit's cited CI run (31269821588) and release.yml, not on anything run in this session. | live-build pipeline, Calamares integration, both present and code-complete. |
+| RootForge-OS for Windows PCs | **MISSING** | Zero Windows-specific code, project files, or references found anywhere in the repo. |
+| RootForge-OS Android APK | **MISSING** | No `AndroidManifest.xml`, `.apk`, Gradle Android project, or any Android-app source found. The existing Android-*device* tooling (fastboot/adb scripts) manages external Android hardware from the Linux ISO; it is not an Android application. |
+| Headless CLI Access | **IMPLEMENTED** | `rootforge` CLI runs headless by design (argparse, `--json` output modes, non-interactive except confirmation gates). |
+| GUI Access | **MISSING** (for RootForge's own GUI layer) | No GTK/Qt/Electron/web-UI framework code found anywhere (grepped). Calamares provides the *installer's* GUI, but that is a third-party tool integrated for one specific task (disk installation), not a RootForge management GUI — matches `docs/IMPLEMENTATION_PLAN.md` item 17, explicitly deferred. |
+| Android Terminal Environment (Termux-based) | **IMPLEMENTED** | `termux/` directory: rootfs builder, installer, PRoot/chroot login scripts, optional Termux:X11 desktop instructions in README §17. |
+| Remote/Local Administration | **MISSING** | No node discovery, remote transport, or multi-device management code found beyond `fleet_orchestrate.sh` (single-operator, sequential multi-*device* USB/fastboot orchestration — not a client/server remote-administration protocol as CLAUDE.md's "Remote Architecture" section describes). |
+
+### 7. TODOs, stubs, placeholders, dead code **[Certain]**
+
+A repo-wide grep for `TODO|FIXME|XXX|placeholder|not.?implemented|stub` across `config/` and `termux/` (source only, excluding `tests/stubs/` fixture binaries) found exactly **one** genuine placeholder, and it is honestly self-disclosed rather than presented as complete:
+
+- `termux/proot-distro-plugins/rootforge.sh` lines 30–37: `TARBALL_URL`/`TARBALL_SHA256` for both `aarch64` and `x86_64` are set to real GitHub Releases URLs but a literal `TARBALL_SHA256[...]="REPLACE_WITH_SHA256_FROM_BUILD_ROOTFS_SH_OUTPUT"`. The file's own header comment explains this is filled in by a maintainer after a real release exists — "there is no rootfs hosted by this repo automatically." This is the correct, honest way to represent unfinished wiring, not a violation of CLAUDE.md's "no fabricated completeness" rule.
+
+No other stub/placeholder/dead-code pattern was found in source. (`docs/IMPLEMENTATION_PLAN.md` itself lists many genuinely unimplemented *future* items — P3 kernel tooling, dynamic-partition support, GUI, CI VM-boot testing — but those are tracked as a plan, not disguised as shipped code.)
+
+One real, byte-identical file duplication the audit flagged (`Dockerfile.ndk-matrix` under both `opt/rootforge/docker/` and `usr/local/share/rootforge/docker/`) was checked this session and **both copies still exist** — `docs/IMPLEMENTATION_PLAN.md` item 4 ("Deduplicate Dockerfile.ndk-matrix") is listed under P0 but is **not** in the "P0.5 (landed)" section, so this is confirmed still-open work, not yet done despite being P0-priority.
+
+### 8. Test infrastructure — run and verified this session **[Certain]**
+
+- `python3 -m unittest discover -s tests -p 'test_*.py'` → **129 tests, all pass.** Matches the prior session's figure exactly.
+- `bash tests/run-tests.sh` → **420 passed, 0 failed.** The prior session (2026-09-11) recorded **421** checks. This 1-check delta is real and unexplained by this session — see Open Questions above. Both runs agree the suite is fully green; only the total count differs.
+- `tests/lint.sh` / `make lint` — **could not run**: `shellcheck` is not installed in this container (confirmed again this session, same as 2026-09-11). CI installs it via apt in `lint.yml`.
+- Suite design (per `tests/README.md`, read this session): genuinely hermetic — stubbed `adb`/`fastboot`/etc. via `tests/stubs/` on `PATH`, scratch `$HOME` per test, explicit environment-variable seams (`ROOTFORGE_SYSCTL_FILE`, `ROOTFORGE_GRUB_DEFAULTS`, etc.) so scripts that write to real system paths (e.g. `harden_kernel.sh`'s `sysctl`/`grub` writes) can be redirected in tests. The README documents a real prior incident where the suite modified the host running it before these seams existed — worth noting as evidence the hermeticity claim has been tested against failure, not just asserted.
+- `tests/check-hooks.sh` and `tests/check-tests.sh` are static self-checks (they read files, don't execute them) guarding against two specific classes of previously-real bug: a swallowed `curl | sh` download failure in a hook, and a test block that never actually invokes the code it claims to cover. Both exist because both bug classes were found for real in this project's history, per the file's own comments.
+
+### 9. External dependencies **[Certain]** (as documented in README §2 and confirmed against actual hook/script references)
+
+| Dependency | Used by | Required/Optional | Notes |
+|---|---|---|---|
+| `live-build`, `debootstrap`, `squashfs-tools`, `xorriso`, `isolinux`, `syslinux-utils` | ISO build (host-side, via CI or a dev box) | Required for building | Not installed in this session's container; not needed for inspection/CLI work. |
+| Calamares + `calamares-settings-debian` | Installer | Required (baked into ISO) | Third-party installer, branded/configured, not forked — confirmed no Calamares source vendored, only config/QML under `etc/calamares/`. |
+| `docker.io` | `build_matrix.sh` only, on a *running RootForge OS install* | Optional (only for NDK/API matrix builds) | **Resolved this session** — see Open Questions. Not used by this repo's own CI/build/test tooling. |
+| Ollama | `setup_ai_tools.sh`, `brain.py`, `doctor.py`'s optional AI-tooling check | Optional | `doctor` degrades gracefully (warns, doesn't fail hard) when unreachable, per `doctor.py`. |
+| Claude Code CLI | `setup_ai_tools.sh`, checked by `doctor.py` | Optional | Same graceful-degradation pattern. |
+| `magiskboot`, `avbtool`, `mkbootimg`/`unpack_bootimg`/`repack_bootimg` | Boot-image tooling, baked into ISO at build time from AOSP/Magisk upstream sources | Required (baked in) | Fetched from real upstream sources per hooks `0060`/`0085`; **no SHA-256 verification of these downloads exists** — confirmed still true this session (grepped the 6 hooks the audit named; none pipe through a checksum check). This is `docs/IMPLEMENTATION_PLAN.md` item 9, P1, and remains open. |
+| `jq`, `e2fsprogs` | `extract_ota.sh`/`install_lsposed.sh` (GitHub API parsing), `inspect_partition_image.sh` (loopback ext4 mount) | Required for those scripts | |
+| `adb`, `fastboot`, `repo`, `aapt` (host/device tooling) | Nearly every device-facing script | Required for real device work | Not installed in this container; stubbed in tests. |
+
+No dependency found that duplicates or vendors an unrelated OS/distro's source — Debian and its packages are consumed via `apt`/live-build's normal mechanism, not copied in.
+
+### 10. Documentation-accuracy finding **[Certain]**
+
+`README.md` references a top-level `scripts/` directory (`scripts/new_module_scaffold.sh`, `scripts/unlock_bootloader.sh`, `scripts/backup_partitions.sh`, etc.) in at least 15 places across sections 3, 4, 5, 8–13, and 16. **No `scripts/` directory exists anywhere in this repository** — grep and `find` both confirm zero matches. The actual, correct path for every one of these is `config/includes.chroot/usr/local/bin/<name>.sh`. This is real, repo-wide documentation drift (README describing an earlier or intended layout that the code doesn't match), independent of and in addition to the audit's own §3.9 finding about historically overclaimed completeness. Per this file's "Source of Truth" rule, README.md is wrong here and should be corrected — flagged for Phase 2, not fixed in this Phase 1 session (Phase 1's deliverable is inventory, not remediation).
+
+### 11. Scope check against CLAUDE.md's REPOSITORY SCOPE & BOUNDARIES **[Certain]** for the factual parts, `[Likely]`/judgment call noted where the boundary itself is ambiguous
+
+No hard scope violation found — no unrelated OS/distro embedded, no unrelated third-party project's source vendored, no secrets/credentials/user data found in tracked files (not exhaustively secret-scanned this session; a dedicated secret scan was out of scope for a documentation inspection and should not be assumed done). One **standing judgment call**, carried over from the audit (§1.3) and not yet resolved by anyone: `esp32_toolkit.sh` (ESP32 flashing), `rpi_fleet_tools.sh` (Raspberry Pi fleet management), and `brain` (general-purpose PARA notes app) sit outside the audit's original narrower charter ("Android system/kernel/boot-image/root-module/emulator/device-development workflows") but arguably *inside* CLAUDE.md's own broader project identity ("a complete operating-system/platform ecosystem"). This file takes precedence over the older audit's charter per its own Source of Truth rule, so **these three are not flagged as violations under CLAUDE.md's actual current scope** — noted here only so a future session doesn't need to re-derive this reasoning.
+
+### 12. Summary status table
+
+| Area | Status |
+|---|---|
+| ISO build pipeline (live-build) | IMPLEMENTED (code-complete; boot/install claim rests on prior CI, not re-verified this session) |
+| Calamares installer integration | IMPLEMENTED |
+| Termux/PRoot rootfs build | IMPLEMENTED |
+| `proot-distro` plugin | PARTIALLY IMPLEMENTED (real script, placeholder SHA-256 pending a real release) |
+| `rootforge` CLI + core package | IMPLEMENTED (doctor, devices, module, flash, backup, ota, boot(partial), avd) |
+| `rootforge.core.config` (central config) | PLANNED (not started) |
+| `rootforge.core.device` (Device abstraction) | PLANNED (not started; `devices.py` does ad hoc detection only) |
+| 27 standalone shell scripts | IMPLEMENTED, several now wrapped (not replaced) by the CLI |
+| second-brain (`brain`/`brain.py`) | IMPLEMENTED |
+| Test suite (Python + shell, hermetic) | IMPLEMENTED, green (129 + 420 checks, this session) |
+| Lint pipeline | IMPLEMENTED (verified via CI design; not locally runnable in this container) |
+| CI (lint.yml) | IMPLEMENTED, presumed green (not re-run this session; last-known status from repo history) |
+| CI (release.yml) | IMPLEMENTED but unexercised on real GitHub infra per its own comment |
+| Artifact SHA-256 verification (fetched build-time tools) | MISSING |
+| Reproducibility manifest (`system-manifest.json`) | MISSING |
+| Dockerfile.ndk-matrix dedup | MISSING (P0 item, not yet done) |
+| Windows platform | MISSING |
+| Android APK application | MISSING |
+| RootForge GUI | MISSING |
+| Remote/multi-node administration | MISSING |
+| `rootforge-kernel` subsystem | MISSING |
+| Dynamic-partition (`lpunpack`/`lpmake`) tooling | MISSING |
+| README `scripts/` path references | INCORRECT (documentation bug, not a code bug) |
+
+**Exit criteria met:** actual code and structure inventoried directly (not from memory or prior docs' claims alone); IMPLEMENTED / PARTIALLY IMPLEMENTED / PLANNED / MISSING breakdown produced above for every major area; no fabricated claims — items not run this session (ISO boot, release.yml, CI green-status, secret scan) are explicitly marked as not independently verified rather than assumed. Phase 2 can proceed.
 
 ---
 
