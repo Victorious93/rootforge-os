@@ -23,6 +23,15 @@
 #                  The old inline `adb devices | grep -qv 'List of devices'`
 #                  matched the trailing blank line and reported a device
 #                  even when none was attached.
+#   rf_rootforge / rf_device_profile_json  a bridge into
+#                  rootforge.core.device's vendor/slot/lock-state
+#                  profiling, so flash_patched_boot.sh, backup_partitions.sh
+#                  and unlock_bootloader.sh can share one tested detection
+#                  path instead of each re-deriving it via ad hoc getvar/
+#                  grep. Every caller falls back to its own original direct
+#                  query when this comes back empty, so a missing/broken
+#                  Python install degrades detection accuracy, not script
+#                  availability. See docs/IMPLEMENTATION_PLAN.md P1 item 5.
 #
 # Guard against double-sourcing: scripts may source this directly and also
 # via another helper.
@@ -111,6 +120,44 @@ rf_have_adb_device() {
 
 rf_have_fastboot_device() {
   [ -n "$(rf_fastboot_serials | head -n 1)" ]
+}
+
+# --- rootforge CLI bridge -------------------------------------------------
+
+# rf_rootforge <args...> — run the `rootforge` CLI from a shell script.
+#
+# Prefers the installed `rootforge` shim on PATH (the real, on-device
+# layout). Falls back to invoking the Python package directly with
+# PYTHONPATH pointed at this file's own location — the same checkout-
+# relative trick runner.py's find_script() uses in the other direction —
+# so this also works from a git checkout and from tests/run-tests.sh,
+# where nothing is actually installed to /usr/local.
+rf_rootforge() {
+  if command -v rootforge >/dev/null 2>&1; then
+    rootforge "$@"
+    return $?
+  fi
+  local lib_dir
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  PYTHONPATH="$lib_dir:${PYTHONPATH:-}" python3 -m rootforge.core.cli "$@"
+}
+
+# rf_device_profile_json [serial] — print the `rootforge device info --json`
+# profile for one device on stdout, or nothing (and a non-zero exit) on any
+# failure: jq missing, python3/the rootforge package unavailable, or
+# `rootforge device info` itself refusing to pick a device (none attached,
+# or more than one with no serial to disambiguate).
+#
+# `rootforge device info` also exits non-zero — while still printing JSON —
+# for a device it *did* resolve but whose vendor is unsupported. Callers
+# that need to tell "couldn't resolve a device" from "resolved one, but it's
+# refused" apart must check whether stdout is non-empty, not the exit
+# status alone; a bare `command || fallback` on this function conflates the
+# two, so use it only where both outcomes should fall back the same way
+# (e.g. re-deriving from a direct adb/fastboot query).
+rf_device_profile_json() {
+  rf_require_cmd jq "install jq (apt install jq)"
+  rf_rootforge device info "$@" --json 2>/dev/null
 }
 
 # --- secrets -------------------------------------------------------------
