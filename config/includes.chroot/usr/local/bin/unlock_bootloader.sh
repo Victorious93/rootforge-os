@@ -27,31 +27,54 @@ log "Waiting for device in fastboot mode..."
 $FASTBOOT wait-for-device
 
 log "Reading device variables"
-VARS="$($FASTBOOT getvar all 2>&1 || true)"
-echo "$VARS" >> "$LOG_FILE"
 
-# Several bootloaders terminate getvar lines with CRLF, so an untrimmed
-# value never compares equal to "yes" below and an already-unlocked device
-# gets walked through the unlock prompt again. Strip CRs and surrounding
-# whitespace. `grep -m1` rather than `| head -1` also avoids handing grep a
-# SIGPIPE, which `pipefail` would turn into a spurious failure.
-PRODUCT="$(echo "$VARS" | grep -m1 -oP '(?<=product: ).*' | tr -d '\r' | xargs || true)"
-UNLOCK_ABILITY="$(echo "$VARS" | grep -m1 -oP '(?<=unlocked: ).*' | tr -d '\r' | xargs || true)"
+# Prefer rootforge.core.device's profiling (one `getvar all` round trip,
+# shared/tested elsewhere, including its own vendor-refusal list) over this
+# script's own separate getvar + grep heuristics. Falls back to the direct
+# query below whenever the shared path comes back empty, for any reason —
+# rootforge/python3/jq unavailable, or the shared path not resolving a
+# device. Fastboot has no adb-style "unauthorized" state, so this is safe
+# even with an explicit serial (unlike backup_partitions.sh's adb branch).
+PROFILE_ARGS=()
+[[ -n "$SERIAL" ]] && PROFILE_ARGS+=("$SERIAL")
+# `|| true` must sit *outside* the substitution: rf_device_profile_json can
+# hit rf_require_cmd's `exit 1` (e.g. jq missing), and `exit` inside a
+# function called *within* $(...) terminates that subshell immediately — a
+# `|| true` written inside the same parentheses never gets control back to
+# run. Only a `||` after the closing "$(...)" catches it.
+PROFILE_JSON="$(rf_device_profile_json "${PROFILE_ARGS[@]}" 2>>"$LOG_FILE")" || true
+
+if [[ -n "$PROFILE_JSON" ]] && jq -e . >/dev/null 2>&1 <<<"$PROFILE_JSON"; then
+  PRODUCT="$(jq -r '.codename // empty' <<<"$PROFILE_JSON")"
+  VENDOR="$(jq -r '.vendor // empty' <<<"$PROFILE_JSON")"
+  UNLOCK_ABILITY="$(jq -r 'if .bootloader_unlocked == true then "yes" elif .bootloader_unlocked == false then "no" else "" end' <<<"$PROFILE_JSON")"
+  log "Device profile via rootforge device info: $(jq -c . <<<"$PROFILE_JSON")"
+else
+  log "rootforge device info unavailable — querying fastboot directly."
+  VARS="$($FASTBOOT getvar all 2>&1 || true)"
+  echo "$VARS" >> "$LOG_FILE"
+
+  # Several bootloaders terminate getvar lines with CRLF, so an untrimmed
+  # value never compares equal to "yes" below and an already-unlocked device
+  # gets walked through the unlock prompt again. Strip CRs and surrounding
+  # whitespace. `grep -m1` rather than `| head -1` also avoids handing grep a
+  # SIGPIPE, which `pipefail` would turn into a spurious failure.
+  PRODUCT="$(echo "$VARS" | grep -m1 -oP '(?<=product: ).*' | tr -d '\r' | xargs || true)"
+  UNLOCK_ABILITY="$(echo "$VARS" | grep -m1 -oP '(?<=unlocked: ).*' | tr -d '\r' | xargs || true)"
+
+  VENDOR=""
+  echo "$VARS" | grep -qi "samsung" && VENDOR="samsung"
+  [[ -z "$VENDOR" ]] && echo "$VARS" | grep -qiE "xiaomi|redmi" && VENDOR="xiaomi"
+fi
 
 log "Detected product: ${PRODUCT:-unknown}"
 
-# Vendor heuristics — fastboot getvar output and known bootloader strings
-IS_SAMSUNG=0
-IS_XIAOMI=0
-echo "$VARS" | grep -qi "samsung" && IS_SAMSUNG=1
-echo "$VARS" | grep -qiE "xiaomi|redmi" && IS_XIAOMI=1
-
-if [[ $IS_SAMSUNG -eq 1 ]]; then
+if [[ "$VENDOR" == "samsung" ]]; then
   log "REFUSING to proceed automatically: Samsung devices unlock OEM bootloader in Settings > Developer Options > OEM Unlocking, then flash via Download Mode with Odin/Heimdall — not fastboot. Automating this risks tripping Knox permanently with no rollback. See devices/<codename>/hardware-notes.md."
   exit 2
 fi
 
-if [[ $IS_XIAOMI -eq 1 ]]; then
+if [[ "$VENDOR" == "xiaomi" ]]; then
   log "REFUSING to proceed automatically: Xiaomi/Redmi devices require a Mi Unlock permit tied to your Mi account, with a vendor-enforced waiting period (often 7+ days for new accounts). Complete that via the official Mi Unlock tool first; this script can flash afterward once fastboot reports unlocked: yes."
   exit 2
 fi

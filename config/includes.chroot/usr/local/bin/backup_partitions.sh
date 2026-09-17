@@ -87,13 +87,32 @@ try_adb_dd() {
 # rf_adb_serials/rf_fastboot_serials parse the state column instead.
 MODE=""
 if [[ -n "$SERIAL" ]]; then
+  # Deliberately NOT routed through rootforge.core.device here:
+  # cli._select_device() matches an explicit serial regardless of adb
+  # usability (see tests/test_device.py
+  # TestSelectDevice.test_explicit_serial_matches_regardless_of_usability),
+  # so it would report MODE=adb for a serial stuck at e.g. "unauthorized" —
+  # this script's own rf_adb_serials check correctly excludes that case and
+  # falls through to the clearer "not usable" message below instead.
   if rf_fastboot_serials | grep -qxF "$SERIAL"; then
     MODE="fastboot"
   elif rf_adb_serials | grep -qxF "$SERIAL"; then
     MODE="adb"
   fi
 else
-  if rf_have_fastboot_device; then
+  # No serial: rootforge.core.device's own resolution requires exactly one
+  # *usable* device, same as rf_have_fastboot_device/rf_have_adb_device
+  # below — safe to prefer here, unlike the explicit-serial branch above.
+  # `|| true` must sit *outside* the substitution: rf_device_profile_json
+  # can hit rf_require_cmd's `exit 1` (e.g. jq missing) if jq is somehow
+  # absent, and `exit` inside a function called *within* $(...) terminates
+  # that subshell immediately — a `|| true` written inside the same
+  # parentheses never gets control back to run. Only a `||` after the
+  # closing "$(...)" catches it.
+  PROFILE_JSON="$(rf_device_profile_json 2>>"$LOG_FILE")" || true
+  if [[ -n "$PROFILE_JSON" ]] && MODE="$(jq -e -r '.mode' <<<"$PROFILE_JSON" 2>/dev/null)"; then
+    log "Device resolved via rootforge device info: mode=$MODE"
+  elif rf_have_fastboot_device; then
     MODE="fastboot"
   elif rf_have_adb_device; then
     MODE="adb"

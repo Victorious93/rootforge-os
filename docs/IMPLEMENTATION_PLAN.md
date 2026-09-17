@@ -154,16 +154,43 @@ and wrapping code with a silent argument-parsing bug just moves the bug.
    governing-directive text surfaces later, `refusal_message()` is the one
    place to correct it.
 
-   **Still open — not done this session, by explicit scope decision:**
-   `flash_patched_boot.sh`, `backup_partitions.sh`, and
-   `unlock_bootloader.sh` still each independently re-derive device state
-   via their own `fastboot getvar`/`grep` calls; none of them consume
-   `device.py` yet. Retrofitting them was deliberately deferred to a
-   separate session/changeset — they are destructive/irreversible scripts
-   (boot-partition writes, bootloader unlock), and this plan's own
-   sequencing note says P2-style wrapping work "should land as separate
-   changesets per subsystem." See CLAUDE.md's "What To Do Next" for this as
-   the immediate next priority.
+   **Shell-script retrofit — Landed (2026-09-14 Phase 6 session).**
+   `flash_patched_boot.sh` and `unlock_bootloader.sh` now call `rootforge
+   device info [SERIAL] --json` (via two new `common.sh` helpers,
+   `rf_rootforge` and `rf_device_profile_json`) for slot/product/vendor/
+   unlock-state detection, in place of their own separate `getvar`/`grep`
+   calls; `backup_partitions.sh` does the same for its no-serial
+   auto-detect mode resolution. Every one of these calls falls back to the
+   script's original direct-query logic whenever the shared path comes back
+   empty, for any reason — `rootforge`/python3/jq unavailable, or the
+   shared path not resolving a device — so a broken or missing Python
+   install degrades detection accuracy, never script availability, on
+   scripts that write boot partitions and unlock bootloaders.
+
+   `backup_partitions.sh`'s explicit-serial branch is deliberately **not**
+   retrofitted: `cli._select_device()` matches a given serial regardless of
+   adb usability (this is existing, intentional, tested behavior — see
+   `tests/test_device.py`
+   `TestSelectDevice.test_explicit_serial_matches_regardless_of_usability`),
+   so routing that branch through `rootforge device info` would report
+   `MODE=adb` for a serial stuck at e.g. `unauthorized`, silently losing the
+   script's own clearer "not usable" message. The two fastboot-only
+   scripts don't have this problem — fastboot has no adb-style
+   "unauthorized" state — so both retrofit the explicit-serial case too.
+
+   One real bug was caught and fixed before landing, not just during
+   review: `rf_require_cmd` (called by `rf_device_profile_json` when jq is
+   missing) uses the `exit` builtin, not a normal command failure — and
+   `exit` inside a function called *within* a `$(...)` command substitution
+   terminates that subshell immediately, before control ever reaches an
+   `|| true` written *inside* the same parentheses. Only a `||` placed
+   *after* the closing `"$(...)"` can catch it. All three call sites, and a
+   dedicated regression test pinning both the correct and the broken
+   pattern, are in `tests/run-tests.sh` under "common.sh — rootforge CLI
+   bridge". Full suite re-verified green: 161 Python tests, 438/0 shell+
+   python via `tests/run-tests.sh` (up from 420 — 18 new checks: 2 pinning
+   the exit/subshell fix, 16 exercising the three scripts' new
+   `rootforge device info` success and fallback paths).
 
 6. **Central config system (`rootforge.core.config`).**
    `~/.config/rootforge/config.yaml` for user-level settings,

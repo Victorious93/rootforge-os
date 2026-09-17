@@ -87,8 +87,31 @@ log "Image: $IMG"
 
 $FASTBOOT wait-for-device
 
-CURRENT_SLOT="$($FASTBOOT getvar current-slot 2>&1 | grep -oP '(?<=current-slot: ).*' || true)"
-PRODUCT="$($FASTBOOT getvar product 2>&1 | grep -oP '(?<=product: ).*' || echo unknown)"
+# Prefer rootforge.core.device's profiling (one `getvar all` round trip,
+# shared/tested elsewhere) over this script's own separate getvar calls.
+# Falls back to the direct query below whenever the shared path comes back
+# empty, for any reason (rootforge/python3/jq unavailable, or fastboot
+# enumeration not agreeing with this specific `-s $SERIAL` target) — fastboot
+# has no adb-style "unauthorized" state to worry about here, so unlike
+# backup_partitions.sh's adb branch this is safe even with an explicit serial.
+PROFILE_ARGS=()
+[[ -n "$SERIAL" ]] && PROFILE_ARGS+=("$SERIAL")
+# `|| true` must sit *outside* the substitution: rf_device_profile_json can
+# hit rf_require_cmd's `exit 1` (e.g. jq missing), and `exit` inside a
+# function called *within* $(...) terminates that subshell immediately — a
+# `|| true` written inside the same parentheses never gets control back to
+# run. Only a `||` after the closing "$(...)" catches it.
+PROFILE_JSON="$(rf_device_profile_json "${PROFILE_ARGS[@]}" 2>>"$LOG_FILE")" || true
+
+if [[ -n "$PROFILE_JSON" ]] && jq -e . >/dev/null 2>&1 <<<"$PROFILE_JSON"; then
+  CURRENT_SLOT="$(jq -r '.current_slot // empty' <<<"$PROFILE_JSON")"
+  PRODUCT="$(jq -r '.codename // "unknown"' <<<"$PROFILE_JSON")"
+  log "Device profile via rootforge device info: $(jq -c . <<<"$PROFILE_JSON")"
+else
+  log "rootforge device info unavailable — querying fastboot directly."
+  CURRENT_SLOT="$($FASTBOOT getvar current-slot 2>&1 | grep -oP '(?<=current-slot: ).*' || true)"
+  PRODUCT="$($FASTBOOT getvar product 2>&1 | grep -oP '(?<=product: ).*' || echo unknown)"
+fi
 
 log "About to flash:"
 log "  Device:     ${SERIAL:-$PRODUCT}"

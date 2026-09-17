@@ -147,6 +147,36 @@ else
 fi
 drop_sandbox
 
+section "common.sh — rootforge CLI bridge"
+
+new_sandbox
+# rf_device_profile_json calls rf_require_cmd, which calls the `exit`
+# builtin (not a normal command failure) when jq is missing. `exit` inside
+# a function called *within* a $(...) command substitution terminates that
+# subshell immediately, before control ever returns to any `|| true`
+# written *inside* the same parentheses — only a `|| true` placed *after*
+# the closing "$(...)" can catch it. Every one of the three retrofitted
+# scripts depends on getting this right, so it's covered directly here
+# rather than only implicitly through them.
+mkdir -p "$SANDBOX/shadow-bin"
+ln -sf "$(command -v bash)" "$SANDBOX/shadow-bin/bash"
+CORRECT="$(PATH="$SANDBOX/shadow-bin" bash -c '
+  set -euo pipefail
+  . "'"$LIB_DIR"'/rootforge/sh/common.sh"
+  OUT="$(rf_device_profile_json 2>/dev/null)" || true
+  printf "reached-end:[%s]\n" "$OUT"
+' 2>&1)"
+assert_eq "|| true outside the substitution survives jq being missing" "$CORRECT" "reached-end:[]"
+
+BROKEN="$(PATH="$SANDBOX/shadow-bin" bash -c '
+  set -euo pipefail
+  . "'"$LIB_DIR"'/rootforge/sh/common.sh"
+  OUT="$(rf_device_profile_json 2>/dev/null || true)"
+  printf "reached-end:[%s]\n" "$OUT"
+' 2>&1)"
+assert_eq "(regression pin) || true inside the substitution does NOT survive" "$BROKEN" ""
+drop_sandbox
+
 section "flash_patched_boot.sh — argument parsing"
 
 new_sandbox
@@ -209,6 +239,31 @@ run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" --both-slot
 # the slot that was only half-written.
 assert_contains "failed mirror still restores the active slot" "$(cat "$RF_STUB_LOG")" "--set-active=a"
 assert_eq "failed flash reports failure" "$RC" "1"
+drop_sandbox
+
+section "flash_patched_boot.sh — rootforge device info integration"
+
+new_sandbox
+head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+export ROOTFORGE_ASSUME_YES=1
+export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: cheetah\n(bootloader) current-slot: a\n(bootloader) unlocked: yes\n'
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" --both-slots
+assert_contains "device info path is used when it resolves a device" "$OUT" "Device profile via rootforge device info"
+assert_contains "slot from device info drives the mirror" "$(cat "$RF_STUB_LOG")" "--set-active=b"
+assert_contains "slot from device info restores the original" "$(cat "$RF_STUB_LOG")" "--set-active=a"
+drop_sandbox
+
+new_sandbox
+head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_SLOT=a
+# No RF_STUB_FASTBOOT_DEVICES/RF_STUB_GETVAR_ALL: rootforge device info
+# can't enumerate a device (list_devices() sees nothing), so the script must
+# fall back to its own direct fastboot getvar query rather than silently
+# treating slot detection as unknown and skipping the mirror.
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" --both-slots
+assert_contains "falls back to a direct query when device info can't resolve one" "$OUT" "querying fastboot directly"
+assert_contains "fallback slot still mirrors correctly" "$(cat "$RF_STUB_LOG")" "--set-active=b"
 drop_sandbox
 
 section "extract_ota.sh — argument parsing"
@@ -352,6 +407,60 @@ export ROOTFORGE_ASSUME_YES=1
 run_script bash "$BIN_DIR/restore_partitions.sh" oriole_5g-2 20240101_000000
 assert_eq "an ordinary codename still restores" "$RC" "0"
 assert_contains "an ordinary codename still flashes" "$(cat "$RF_STUB_LOG")" "flash boot"
+drop_sandbox
+
+section "backup_partitions.sh — rootforge device info integration"
+
+new_sandbox
+# No serial given: MODE resolution is safe to route through rootforge
+# device info here (both agree on "exactly one usable device"). This is
+# also the first backup_partitions.sh test with a live, resolvable device —
+# every other test above exercises either the no-device or the path-
+# traversal rejection path.
+export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: cheetah\n(bootloader) current-slot: a\n(bootloader) unlocked: yes\n'
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev
+assert_contains "mode resolved via rootforge device info" "$OUT" "Device resolved via rootforge device info: mode=fastboot"
+assert_contains "fetch still runs against the resolved device" "$(cat "$RF_STUB_LOG")" "fastboot fetch boot"
+drop_sandbox
+
+section "unlock_bootloader.sh"
+
+new_sandbox
+# Vendor refusal, resolved via rootforge device info's own vendor list
+# rather than this script's own grep heuristics.
+export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: gts4lvwifi\n(bootloader) unlocked: no\n(bootloader) samsung device\n'
+run_script bash "$BIN_DIR/unlock_bootloader.sh"
+assert_eq "Samsung refusal exits 2" "$RC" "2"
+assert_contains "Samsung refusal cites Knox" "$OUT" "Knox"
+assert_contains "device info path is used when it resolves a device" "$OUT" "Device profile via rootforge device info"
+drop_sandbox
+
+new_sandbox
+export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: whatever\n(bootloader) unlocked: no\nxiaomi bootloader\n'
+run_script bash "$BIN_DIR/unlock_bootloader.sh"
+assert_eq "Xiaomi refusal exits 2" "$RC" "2"
+assert_contains "Xiaomi refusal cites Mi Unlock" "$OUT" "Mi Unlock"
+drop_sandbox
+
+new_sandbox
+export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: cheetah\n(bootloader) unlocked: yes\n'
+run_script bash "$BIN_DIR/unlock_bootloader.sh"
+assert_eq "an already-unlocked device is a no-op" "$RC" "0"
+assert_contains "already-unlocked says so" "$OUT" "already reports unlocked"
+drop_sandbox
+
+new_sandbox
+# No RF_STUB_FASTBOOT_DEVICES/RF_STUB_GETVAR_ALL: rootforge device info
+# can't resolve a device (list_devices() sees nothing), so the script must
+# fall back to its own direct fastboot getvar + grep — unchanged from
+# before this retrofit.
+run_script bash "$BIN_DIR/unlock_bootloader.sh"
+assert_contains "falls back to a direct query when device info can't resolve one" "$OUT" "querying fastboot directly"
+assert_eq "unconfirmed unlock aborts" "$RC" "1"
 drop_sandbox
 
 section "kernelsu_patch_boot.sh --flash"
