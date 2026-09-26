@@ -14,6 +14,23 @@ ConditionPathExists=/etc/rootforge-installed
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# [Likely] A service with no User= gets no $HOME: systemd.exec documents
+# $USER/$LOGNAME/$HOME/$SHELL as set "for the units that have User= set".
+# Not verified against a running systemd in the environment this was written
+# in. It mattered because 00_bootstrap_distro.sh used to open with
+# `${ROOTFORGE_HOME:-$HOME/rootforge}` under `set -u` — verified: with an
+# empty environment that script exited 1 at line 18 with
+# "HOME: unbound variable", before doing anything. With Type=oneshot an
+# ExecStart failure also skips ExecStartPost, so the sentinel was never
+# written and first-boot provisioning would have retried and failed on
+# every subsequent boot.
+#
+# The script no longer reads $HOME at all — it resolves the target user's
+# home through getent — so this is belt and braces. It is here because the
+# cost is one line and the failure mode is a provisioning step that never
+# runs on an installed system, which nobody would notice until the SDK was
+# missing.
+Environment=HOME=/root
 ExecStart=/usr/local/bin/00_bootstrap_distro.sh
 ExecStartPost=/bin/sh -c 'mkdir -p /var/lib/rootforge && touch /var/lib/rootforge/firstboot.done'
 StandardOutput=journal+console

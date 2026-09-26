@@ -1,0 +1,263 @@
+#!/usr/bin/env bash
+# RootForge OS — shared shell helpers
+# Victorious Framework | Origin Source Labs
+#
+# Sourced by the usr/local/bin/*.sh scripts. Deliberately small: it holds
+# only the pieces that were being reimplemented (inconsistently) in more
+# than one script, where the inconsistency was itself a bug —
+#
+#   rf_confirm     the typed-confirmation gate. Previously copy-pasted as a
+#                  bare `read -r -p` in flash_patched_boot.sh,
+#                  unlock_bootloader.sh and restore_partitions.sh. That
+#                  form breaks under fleet_orchestrate.sh, which redirects
+#                  each child script's stdout to a per-device log: the
+#                  prompt goes into the log file where nobody sees it and
+#                  the run looks hung forever. rf_confirm talks to /dev/tty
+#                  so the prompt is always visible, and fails closed with a
+#                  clear message when there is no terminal at all.
+#   rf_sha256_*    backup/restore integrity. backup_partitions.sh wrote a
+#                  manifest with `du -h` sizes only, so restore_partitions.sh
+#                  had no way to notice a truncated or corrupted .img before
+#                  flashing it to a device.
+#   rf_device_serials  one implementation of "which devices are connected".
+#                  The old inline `adb devices | grep -qv 'List of devices'`
+#                  matched the trailing blank line and reported a device
+#                  even when none was attached.
+#   rf_rootforge / rf_device_profile_json  a bridge into
+#                  rootforge.core.device's vendor/slot/lock-state
+#                  profiling, so flash_patched_boot.sh, backup_partitions.sh
+#                  and unlock_bootloader.sh can share one tested detection
+#                  path instead of each re-deriving it via ad hoc getvar/
+#                  grep. Every caller falls back to its own original direct
+#                  query when this comes back empty, so a missing/broken
+#                  Python install degrades detection accuracy, not script
+#                  availability. See docs/IMPLEMENTATION_PLAN.md P1 item 5.
+#
+# Guard against double-sourcing: scripts may source this directly and also
+# via another helper.
+[ -n "${ROOTFORGE_COMMON_SH_LOADED:-}" ] && return 0
+ROOTFORGE_COMMON_SH_LOADED=1
+
+# --- confirmation --------------------------------------------------------
+
+# rf_confirm <word> <line>...
+#
+# Prints the given lines, then requires the operator to type <word> exactly.
+# Returns 0 on match, 1 otherwise — callers decide how to abort so their own
+# logging stays intact.
+#
+# ROOTFORGE_ASSUME_YES=1 skips the prompt. That exists for one specific
+# caller (fleet_orchestrate.sh, which collects a single fleet-wide typed
+# confirmation up front and then drives N devices non-interactively) and is
+# logged loudly wherever it takes effect. It is not a general "make the
+# safety gate go away" switch.
+rf_confirm() {
+  local word="$1"; shift
+  local line
+
+  for line in "$@"; do
+    printf '%s\n' "$line" >&2
+  done
+
+  if [ "${ROOTFORGE_ASSUME_YES:-0}" = "1" ]; then
+    printf 'ROOTFORGE_ASSUME_YES=1 — proceeding without the typed "%s" gate.\n' "$word" >&2
+    return 0
+  fi
+
+  # stdout may be redirected to a log file (fleet_orchestrate.sh does
+  # exactly this), so prompt on the controlling terminal instead. No
+  # terminal means no operator, and a destructive step must not proceed
+  # unattended by default.
+  if [ ! -r /dev/tty ]; then
+    printf 'No terminal available to confirm on — refusing to continue.\n' >&2
+    printf 'Run this interactively, or set ROOTFORGE_ASSUME_YES=1 if you really mean to automate it.\n' >&2
+    return 1
+  fi
+
+  local reply=""
+  printf 'Type %s to proceed: ' "$word" > /dev/tty
+  IFS= read -r reply < /dev/tty || reply=""
+
+  [ "$reply" = "$word" ]
+}
+
+# --- integrity -----------------------------------------------------------
+
+# rf_sha256_file <path> — print the bare hex digest (no filename column).
+rf_sha256_file() {
+  sha256sum -- "$1" | awk '{print $1}'
+}
+
+# rf_sha256_verify <path> <expected-hex> — 0 if it matches, 1 if not.
+rf_sha256_verify() {
+  local actual
+  actual="$(rf_sha256_file "$1")" || return 1
+  [ "$actual" = "$2" ]
+}
+
+# --- device enumeration --------------------------------------------------
+
+# rf_adb_serials [--] — print one serial per line for devices in the `device`
+# state. Devices reporting `unauthorized`, `offline` or `recovery` are
+# deliberately excluded: every caller here wants a device it can actually
+# shell into.
+#
+# `adb devices` prints a "List of devices attached" header and a trailing
+# blank line. Filtering with `grep -v` on the header alone matches that
+# blank line and reports a phantom device, which is the bug this replaces.
+rf_adb_serials() {
+  adb devices 2>/dev/null | awk '$2 == "device" { print $1 }'
+}
+
+# rf_fastboot_serials — one serial per line for devices in fastboot mode.
+rf_fastboot_serials() {
+  fastboot devices 2>/dev/null | awk 'NF >= 1 && $1 != "" { print $1 }'
+}
+
+rf_have_adb_device() {
+  [ -n "$(rf_adb_serials | head -n 1)" ]
+}
+
+rf_have_fastboot_device() {
+  [ -n "$(rf_fastboot_serials | head -n 1)" ]
+}
+
+# --- rootforge CLI bridge -------------------------------------------------
+
+# rf_rootforge <args...> — run the `rootforge` CLI from a shell script.
+#
+# Prefers the installed `rootforge` shim on PATH (the real, on-device
+# layout). Falls back to invoking the Python package directly with
+# PYTHONPATH pointed at this file's own location — the same checkout-
+# relative trick runner.py's find_script() uses in the other direction —
+# so this also works from a git checkout and from tests/run-tests.sh,
+# where nothing is actually installed to /usr/local.
+rf_rootforge() {
+  if command -v rootforge >/dev/null 2>&1; then
+    rootforge "$@"
+    return $?
+  fi
+  local lib_dir
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  PYTHONPATH="$lib_dir:${PYTHONPATH:-}" python3 -m rootforge.core.cli "$@"
+}
+
+# rf_device_profile_json [serial] — print the `rootforge device info --json`
+# profile for one device on stdout, or nothing (and a non-zero exit) on any
+# failure: jq missing, python3/the rootforge package unavailable, or
+# `rootforge device info` itself refusing to pick a device (none attached,
+# or more than one with no serial to disambiguate).
+#
+# `rootforge device info` also exits non-zero — while still printing JSON —
+# for a device it *did* resolve but whose vendor is unsupported. Callers
+# that need to tell "couldn't resolve a device" from "resolved one, but it's
+# refused" apart must check whether stdout is non-empty, not the exit
+# status alone; a bare `command || fallback` on this function conflates the
+# two, so use it only where both outcomes should fall back the same way
+# (e.g. re-deriving from a direct adb/fastboot query).
+rf_device_profile_json() {
+  rf_require_cmd jq "install jq (apt install jq)"
+  rf_rootforge device info "$@" --json 2>/dev/null
+}
+
+# --- secrets -------------------------------------------------------------
+
+# rf_shell_quote <string> — print the string single-quoted and safe to
+# re-source from a shell script.
+#
+# setup_ai_tools.sh writes API keys into ~/.rootforge/ai-keys.env, which the
+# shell rc files source on every startup. It used to emit them as
+# `export VAR='$key'` with no escaping, so a key containing a single quote
+# terminated the quoting early: at best the whole file became a syntax error
+# and *no* keys loaded, at worst the remainder of the key ran as shell
+# commands in every new shell. Keys get pasted from password managers and
+# passed in by automation, so "the user typed it themselves" is not a
+# safety argument.
+#
+# Emits POSIX-portable '...'\''...' rather than bash's printf %q, whose
+# $'...' form the file's POSIX-sh readers would not understand.
+rf_shell_quote() {
+  local q="'\\''"
+  printf "'%s'" "${1//\'/$q}"
+}
+
+# rf_write_private <path> — read stdin and write it to <path> with mode 0600
+# from the moment it exists.
+#
+# The rewrite-through-a-temp-file pattern used to create that temp at the
+# default umask (0644), fill it with every stored key, then `mv` it over the
+# real file — which inherited 0644 — and only then chmod 0600. On a
+# multi-user box that is a real window in which every key is world-readable.
+rf_write_private() {
+  local path="$1"
+  local old_umask
+  old_umask="$(umask)"
+  umask 077
+  cat > "$path"
+  umask "$old_umask"
+  # Belt and braces: an existing file keeps its own mode through a
+  # redirect, so umask alone is not enough when the file already exists.
+  chmod 600 "$path"
+}
+
+# --- misc ----------------------------------------------------------------
+
+# rf_require_cmd <cmd> <install hint> — exit 1 with a useful message rather
+# than letting `set -e` kill the script on a bare "command not found".
+rf_require_cmd() {
+  command -v "$1" >/dev/null 2>&1 && return 0
+  printf '%s not found — %s\n' "$1" "$2" >&2
+  exit 1
+}
+
+# --- downloads -----------------------------------------------------------
+
+# rf_download_cached <url> <destination> [min_bytes] — fetch <url> to
+# <destination>, reusing an existing file only if it is plausibly complete.
+#
+# The pattern this replaces was:
+#
+#   if [[ -f "$LOCAL" ]]; then log "using cached"; else curl -fsSL -o "$LOCAL" "$URL"; fi
+#
+# curl writes straight to the final path, so a download interrupted by
+# Ctrl-C, a dropped connection or a full disk leaves a partial file *at the
+# cache path*. Every later run then takes the `-f` branch, logs "using
+# cached", and hands the truncated file to the device — verified: a 9-byte
+# stub was pushed to /data/local/tmp and installed as a Magisk module.
+# Nothing downstream notices, because a zip that will not open is a device-
+# side failure, not a script-side one.
+#
+# Two changes fix it. Download to a sibling temp file and rename only after
+# curl succeeds, so the cache path never holds a partial file; and treat a
+# cached file below min_bytes as absent, which recovers a cache already
+# poisoned by the old code.
+rf_download_cached() {
+  local url="$1" dest="$2" min_bytes="${3:-1024}"
+  local size=0
+  if [ -f "$dest" ]; then
+    size="$(wc -c < "$dest" 2>/dev/null || echo 0)"
+    if [ "$size" -ge "$min_bytes" ]; then
+      return 0
+    fi
+    printf 'Cached file %s is only %s bytes — treating it as an incomplete download and refetching.\n' \
+      "$dest" "$size" >&2
+    rm -f "$dest"
+  fi
+
+  local tmp="$dest.part.$$"
+  if ! curl -fsSL -o "$tmp" "$url"; then
+    rm -f "$tmp"
+    printf 'Download failed: %s\n' "$url" >&2
+    return 1
+  fi
+
+  size="$(wc -c < "$tmp" 2>/dev/null || echo 0)"
+  if [ "$size" -lt "$min_bytes" ]; then
+    rm -f "$tmp"
+    printf 'Downloaded %s bytes from %s — below the %s-byte minimum, refusing to cache it.\n' \
+      "$size" "$url" "$min_bytes" >&2
+    return 1
+  fi
+
+  mv -f "$tmp" "$dest"
+}

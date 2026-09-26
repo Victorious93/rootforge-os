@@ -16,8 +16,40 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 CODENAME="${1:?Usage: backup_partitions.sh <device_codename> [serial]}"
 SERIAL="${2:-}"
+
+# CODENAME and TIMESTAMP below are interpolated straight into a path under
+# $ROOTFORGE_HOME/devices/. Nothing validated them, so a value containing
+# ".." or "/" escaped that tree entirely:
+#
+#   backup_partitions.sh '../../escaped'
+#     wrote the backup to $ROOTFORGE_HOME/../../escaped/backups/... — outside
+#     devices/ altogether.
+#   restore_partitions.sh testdev '../../../../evil'
+#     read every .img from an arbitrary directory and FLASHED them to the
+#     device. The SHA256SUMS gate does not catch it: an arbitrary directory
+#     has no SHA256SUMS, so integrity checking degrades to a warning and the
+#     flash proceeds.
+#
+# Both are realistically reached by mistake — a copy-pasted path, a value
+# from a script — rather than by malice, and the consequence is writing
+# unverified images to a device's boot partition.
+rf_reject_path_component() {
+  local label="$1" value="$2"
+  case "$value" in
+    ""|*/*|*..*)
+      echo "Invalid $label '$value' — must not be empty or contain '/' or '..'." >&2
+      echo "It is used as a directory name under \$ROOTFORGE_HOME/devices/." >&2
+      exit 1
+      ;;
+  esac
+}
+
+rf_reject_path_component "device codename" "$CODENAME"
 
 FASTBOOT="fastboot"; ADB="adb"
 [[ -n "$SERIAL" ]] && { FASTBOOT="fastboot -s $SERIAL"; ADB="adb -s $SERIAL"; }
@@ -48,16 +80,56 @@ try_adb_dd() {
   $ADB shell "rm -f /sdcard/${part}.img" 2>>"$LOG_FILE"
 }
 
+# `adb devices` always prints a "List of devices attached" header followed by
+# a blank line, so the previous `grep -qv "List of devices"` matched that
+# blank line and reported MODE=adb with nothing plugged in — every partition
+# then "failed to fetch" for a reason that had nothing to do with the device.
+# rf_adb_serials/rf_fastboot_serials parse the state column instead.
 MODE=""
-if $FASTBOOT devices 2>/dev/null | grep -q .; then
-  MODE="fastboot"
-elif $ADB devices 2>/dev/null | grep -qv "List of devices"; then
-  MODE="adb"
+if [[ -n "$SERIAL" ]]; then
+  # Deliberately NOT routed through rootforge.core.device here:
+  # cli._select_device() matches an explicit serial regardless of adb
+  # usability (see tests/test_device.py
+  # TestSelectDevice.test_explicit_serial_matches_regardless_of_usability),
+  # so it would report MODE=adb for a serial stuck at e.g. "unauthorized" —
+  # this script's own rf_adb_serials check correctly excludes that case and
+  # falls through to the clearer "not usable" message below instead.
+  if rf_fastboot_serials | grep -qxF "$SERIAL"; then
+    MODE="fastboot"
+  elif rf_adb_serials | grep -qxF "$SERIAL"; then
+    MODE="adb"
+  fi
+else
+  # No serial: rootforge.core.device's own resolution requires exactly one
+  # *usable* device, same as rf_have_fastboot_device/rf_have_adb_device
+  # below — safe to prefer here, unlike the explicit-serial branch above.
+  # `|| true` must sit *outside* the substitution: rf_device_profile_json
+  # can hit rf_require_cmd's `exit 1` (e.g. jq missing) if jq is somehow
+  # absent, and `exit` inside a function called *within* $(...) terminates
+  # that subshell immediately — a `|| true` written inside the same
+  # parentheses never gets control back to run. Only a `||` after the
+  # closing "$(...)" catches it.
+  PROFILE_JSON="$(rf_device_profile_json 2>>"$LOG_FILE")" || true
+  if [[ -n "$PROFILE_JSON" ]] && MODE="$(jq -e -r '.mode' <<<"$PROFILE_JSON" 2>/dev/null)"; then
+    log "Device resolved via rootforge device info: mode=$MODE"
+  elif rf_have_fastboot_device; then
+    MODE="fastboot"
+  elif rf_have_adb_device; then
+    MODE="adb"
+  fi
 fi
 
 if [[ -z "$MODE" ]]; then
-  log "No device found in fastboot or adb mode. Connect the device and put it in"
-  log "bootloader mode (adb reboot bootloader) or ensure adb sees it, then retry."
+  if [[ -n "$SERIAL" ]]; then
+    log "Device '$SERIAL' is not in fastboot mode and not reporting 'device' over adb."
+    log "Connected adb devices:      $(rf_adb_serials | tr '\n' ' ')"
+    log "Connected fastboot devices: $(rf_fastboot_serials | tr '\n' ' ')"
+  else
+    log "No device found in fastboot or adb mode. Connect the device and put it in"
+    log "bootloader mode (adb reboot bootloader) or ensure adb sees it, then retry."
+    log "A device shown as 'unauthorized' by 'adb devices' still needs the USB-debugging"
+    log "prompt accepted on-screen — it does not count as connected here."
+  fi
   exit 1
 fi
 
@@ -90,9 +162,26 @@ for part in "${PARTITIONS[@]}"; do
   fi
 done
 
-echo "$CODENAME backup $STAMP" > "$BACKUP_DIR/manifest.txt"
+# The manifest used to carry a human-readable `du -h` size and nothing else,
+# which gave restore_partitions.sh no way to tell a good image from a
+# truncated or corrupted one before flashing it. Record a SHA-256 per image
+# (and a sha256sum-compatible sidecar) so the restore path can verify.
+{
+  echo "$CODENAME backup $STAMP"
+  echo "# columns: partition sha256 bytes"
+} > "$BACKUP_DIR/manifest.txt"
+
+: > "$BACKUP_DIR/SHA256SUMS"
 for part in "${PARTITIONS[@]}"; do
-  [[ -f "$BACKUP_DIR/${part}.img" ]] && echo "$part: OK ($(du -h "$BACKUP_DIR/${part}.img" | cut -f1))" >> "$BACKUP_DIR/manifest.txt"
+  IMG_PATH="$BACKUP_DIR/${part}.img"
+  [[ -f "$IMG_PATH" ]] || continue
+  DIGEST="$(rf_sha256_file "$IMG_PATH")"
+  BYTES="$(stat -c %s "$IMG_PATH")"
+  echo "$part $DIGEST $BYTES" >> "$BACKUP_DIR/manifest.txt"
+  # Relative name so `sha256sum -c SHA256SUMS` works from inside the backup
+  # directory even after it has been moved or copied elsewhere.
+  echo "$DIGEST  ${part}.img" >> "$BACKUP_DIR/SHA256SUMS"
+  log "$part: $(numfmt --to=iec --suffix=B "$BYTES" 2>/dev/null || echo "$BYTES bytes") sha256=${DIGEST:0:16}..."
 done
 
 if [[ ${#FAILED[@]} -gt 0 ]]; then
@@ -102,6 +191,7 @@ if [[ ${#FAILED[@]} -gt 0 ]]; then
 fi
 
 log "Backup complete at $BACKUP_DIR"
+log "Verify at any time with: (cd $BACKUP_DIR && sha256sum -c SHA256SUMS)"
 log "Restore with: restore_partitions.sh $CODENAME $STAMP"
 
 # Victorious Framework

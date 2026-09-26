@@ -1,0 +1,24 @@
+#!/bin/sh
+# Test stub: a device that answers getprop normally and has no su binaries,
+# but whose `pm list packages` and /proc/self/mountinfo queries succeed with
+# NO OUTPUT — a restricted shell, a permission quirk, or a device that drops
+# those particular queries. Exit 0 with empty output is the case that matters:
+# it is indistinguishable from "nothing found" unless the caller checks.
+#
+# The arms below are matched before the sentinel one so this stub behaves the
+# same for code that wraps its probes and code that doesn't — otherwise a
+# comparison against the pre-fix script would differ for the wrong reason.
+[ "$1" = wait-for-device ] && exit 0
+a="$*"
+case "$a" in
+  *"pm list packages"*) case "$a" in *__rootforge_probe__*) echo "__rootforge_probe__" ;; esac; exit 0 ;;
+  *"mountinfo"*)        case "$a" in *__rootforge_probe__*) echo "__rootforge_probe__" ;; esac; exit 0 ;;
+  *"getprop ro.build.tags"*)             echo "release-keys"; exit 0 ;;
+  *"getprop ro.boot.verifiedbootstate"*) echo "green"; exit 0 ;;
+  *"getprop ro.debuggable"*)             echo "0"; exit 0 ;;
+  *"getprop ro.secure"*)                 echo "1"; exit 0 ;;
+  # No su binaries anywhere, and no Magisk: these succeed with no output.
+  *__rootforge_probe__*) echo "__rootforge_probe__"; exit 0 ;;
+  *"-e /"*) exit 0 ;;
+  *) exit 1 ;;
+esac

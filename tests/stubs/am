@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Stands in for the device-side `am` binary, reached through adb-device-shell.
+# Records exactly the argument vector `am` received, which is how a test tells
+# "the whole message arrived" from "the device shell ate half of it".
+printf 'AM-RECEIVED: %s\n' "$*" >> "$RF_STUB_LOG"

@@ -9,7 +9,9 @@
 # Android 7, so a rooted push straight into /system/etc/security/cacerts is
 # what actually makes interception work against real apps).
 #
-# Usage: ./setup_intercept_proxy.sh [install|trust-cert|start] [device-serial]
+# Usage: ./setup_intercept_proxy.sh install
+#        ./setup_intercept_proxy.sh trust-cert [device-serial]
+#        ./setup_intercept_proxy.sh start [listen-port]     (default 8080)
 
 set -euo pipefail
 
@@ -39,20 +41,44 @@ case "$CMD" in
 
     $ADB wait-for-device
     log "Computing Android-style cert hash (subject_hash_old) for the filename"
-    HASH="$(openssl x509 -inform PEM -subject_hash_old -in "$CA_CERT" | head -1)"
+    # -noout matters: without it openssl prints the hash *and* the whole
+    # certificate, and `head -1` then closes the pipe under it. That happens
+    # to work only because the cert fits in the pipe buffer — a larger one
+    # would SIGPIPE openssl and `pipefail` would turn that into a failed
+    # assignment. Ask for just the hash.
+    HASH="$(openssl x509 -inform PEM -subject_hash_old -noout -in "$CA_CERT")"
+    [[ -n "$HASH" ]] || { echo "Could not compute a subject hash for $CA_CERT — is it a valid PEM certificate?" >&2; exit 1; }
     DEVICE_CERT_NAME="${HASH}.0"
     log "Cert will install as $DEVICE_CERT_NAME"
 
-    TMP_PEM="/tmp/${DEVICE_CERT_NAME}"
+    # A fixed /tmp path named after a predictable hash is a collision (and,
+    # on a shared box, a symlink) hazard.
+    TMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TMP_DIR"' EXIT
+    TMP_PEM="$TMP_DIR/$DEVICE_CERT_NAME"
     openssl x509 -inform PEM -in "$CA_CERT" -out "$TMP_PEM" -outform PEM
 
     log "Pushing to device and remounting /system writable"
-    $ADB root
+    # `adb root` exits 0 even when it refuses ("adbd cannot run as root in
+    # production builds"), so the failure only showed up as a confusing
+    # permission error from the push several lines later. Check that root
+    # actually took, and that the remount succeeded, before pushing.
+    $ADB root 2>&1 | tee -a "$LOG_FILE" || true
     sleep 1
-    $ADB remount
+    CURRENT_USER="$($ADB shell id -u 2>/dev/null | tr -d '\r' || true)"
+    if [[ "$CURRENT_USER" != "0" ]]; then
+      echo "adbd is not running as root on this device (id -u reported '${CURRENT_USER:-unknown}')." >&2
+      echo "Installing into the SYSTEM trust store needs root: use a rooted device, or a" >&2
+      echo "rooted AVD from setup_rooted_avd.sh. A production build cannot do this." >&2
+      exit 1
+    fi
+    if ! $ADB remount 2>&1 | tee -a "$LOG_FILE"; then
+      echo "adb remount failed — /system is not writable on this device." >&2
+      echo "On recent Android you may need 'adb disable-verity' and a reboot first." >&2
+      exit 1
+    fi
     $ADB push "$TMP_PEM" "/system/etc/security/cacerts/$DEVICE_CERT_NAME" 2>>"$LOG_FILE"
     $ADB shell chmod 644 "/system/etc/security/cacerts/$DEVICE_CERT_NAME"
-    rm -f "$TMP_PEM"
 
     log "Installed to system trust store. Reboot the device for it to take effect:"
     log "  $ADB reboot"
@@ -63,7 +89,13 @@ case "$CMD" in
     ;;
 
   start)
-    PORT="${3:-8080}"
+    # This read the port from $3, matching the [device-serial] slot in the
+    # old usage line rather than anything a caller would pass — so
+    # `setup_intercept_proxy.sh start 9090` silently listened on 8080.
+    # `start` has no use for a device serial; take the port as $2.
+    PORT="${2:-8080}"
+    [[ "$PORT" =~ ^[0-9]+$ && "$PORT" -ge 1 && "$PORT" -le 65535 ]] \
+      || { echo "Invalid port '$PORT' (expected 1-65535)" >&2; exit 1; }
     log "Starting mitmproxy on port $PORT (interactive UI)"
     log "Point the device's Wi-Fi proxy settings at this machine's IP:$PORT,"
     log "  or route traffic through it with a transparent redirect if the device"
@@ -72,7 +104,7 @@ case "$CMD" in
     ;;
 
   *)
-    echo "Usage: $0 [install|trust-cert|start] [device-serial]" >&2
+    echo "Usage: $0 install | trust-cert [device-serial] | start [listen-port]" >&2
     exit 1
     ;;
 esac

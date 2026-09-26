@@ -21,7 +21,10 @@ LOG_FILE="$LOG_DIR/vpn_$(date +%Y%m%d_%H%M%S).log"
 log() { echo "[vpn] $*" | tee -a "$LOG_FILE"; }
 
 IFACE="wg0"
-CONF="/etc/wireguard/${IFACE}.conf"
+# Seam, same as ROOTFORGE_GRUB_DEFAULTS / ROOTFORGE_SYSCTL_FILE: a destination
+# outside $ROOTFORGE_HOME has to be redirectable, or testing the script means
+# writing to /etc on the machine running the test.
+CONF="${ROOTFORGE_WG_CONF:-/etc/wireguard/${IFACE}.conf}"
 
 case "$CMD" in
   init)
@@ -52,6 +55,14 @@ case "$CMD" in
 
   peer-qr)
     PEER_NAME="${2:?Usage: setup_vpn.sh peer-qr <peer-name>}"
+    # Validate the argument before inspecting any state, so a bad name is
+    # reported as a bad name rather than as whatever unrelated precondition
+    # happens to be checked first.
+    #
+    # The name becomes a directory under $WG_DIR/peers; keep it to something
+    # that cannot climb out of it.
+    [[ "$PEER_NAME" =~ ^[A-Za-z0-9._-]+$ && "$PEER_NAME" != "." && "$PEER_NAME" != ".." ]] \
+      || { echo "Peer name must be [A-Za-z0-9._-] (got '$PEER_NAME')" >&2; exit 1; }
     [[ -f "$WG_DIR/privatekey" ]] || { echo "No local keypair yet — run 'init' first." >&2; exit 1; }
     command -v qrencode >/dev/null 2>&1 || sudo apt-get install -y qrencode | tee -a "$LOG_FILE"
 
@@ -61,13 +72,43 @@ case "$CMD" in
     umask 077
     wg genkey | tee "$PEER_KEY_DIR/privatekey" | wg pubkey > "$PEER_KEY_DIR/publickey"
 
+    # Peer addresses used to be `10.66.66.$((RANDOM % 200 + 10))/32` — 200
+    # slots picked at random with no check against the peers already issued.
+    # That is a birthday-problem collision: ~20% chance of a duplicate by the
+    # 10th peer and ~63% by the 20th. Two peers sharing an AllowedIPs address
+    # doesn't fail loudly; it silently breaks routing for whichever one the
+    # server saw last, which is a miserable thing to debug. Hand out the
+    # lowest address not already taken instead.
+    PEER_OCTET=""
+    for candidate in $(seq 10 250); do
+      if ! grep -rqs "^Address = 10\.66\.66\.${candidate}/32\b" "$WG_DIR/peers"; then
+        PEER_OCTET="$candidate"
+        break
+      fi
+    done
+    [[ -n "$PEER_OCTET" ]] || { echo "No free address left in 10.66.66.10-250 — retire an old peer under $WG_DIR/peers." >&2; exit 1; }
+    log "Assigned 10.66.66.${PEER_OCTET}/32 to '$PEER_NAME'"
+
     THIS_PUBKEY="$(cat "$WG_DIR/publickey" 2>/dev/null || echo "SET-THIS-BOXS-PUBKEY")"
-    read -r -p "This box's WireGuard endpoint (host:port) as the peer should reach it: " ENDPOINT
+    # `read -r -p` reads stdin, so with stdin closed — any unattended run —
+    # it returned non-zero and `set -e` ended the script right here, after
+    # the peer keypair had already been generated and an address assigned.
+    # No message, and a half-created peer left behind. Say what is missing,
+    # and take it from the environment when there is no terminal to ask.
+    if [[ -n "${ROOTFORGE_WG_ENDPOINT:-}" ]]; then
+      ENDPOINT="$ROOTFORGE_WG_ENDPOINT"
+    elif [[ -t 0 ]]; then
+      read -r -p "This box's WireGuard endpoint (host:port) as the peer should reach it: " ENDPOINT
+    else
+      echo "No terminal to prompt on for this box's WireGuard endpoint." >&2
+      echo "Set ROOTFORGE_WG_ENDPOINT=host:port and re-run." >&2
+      exit 1
+    fi
 
     PEER_CONF=$(cat <<EOF
 [Interface]
 PrivateKey = $(cat "$PEER_KEY_DIR/privatekey")
-Address = 10.66.66.$((RANDOM % 200 + 10))/32
+Address = 10.66.66.${PEER_OCTET}/32
 DNS = 1.1.1.1
 
 [Peer]

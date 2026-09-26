@@ -6,15 +6,27 @@
 # used by kernelsu_patch_boot.sh, flash_patched_boot.sh, and others.
 # It lives in Magisk's native tree and isn't in any apt repo.
 #
-# Strategy: fetch the latest Magisk release APK (it's a zip), extract the
+# Strategy: fetch a pinned Magisk release APK (it's a zip), extract the
 # magiskboot binary matching this chroot's own architecture from the assets
 # inside, install to /usr/local/bin. This is the same binary Magisk ships
 # on-device — it runs fine on a matching-arch Linux host (or, for the
 # Termux/PRoot rootfs build, matching-arch Android).
+#
+# Pinned to a specific release + whole-APK SHA-256 rather than "latest":
+# Magisk does not publish a checksum sidecar for its APK, so the hash below
+# was computed directly from that exact APK at pin time. One hash covers
+# the APK regardless of which arch's libmagiskboot.so gets extracted from
+# it, since it's the same file either way.
+#
+# To bump: check https://github.com/topjohnwu/Magisk/releases for the
+# current tag, download its Magisk-<tag>.apk, `sha256sum` it, update
+# MAGISK_VERSION and MAGISK_APK_SHA256 together.
 
 set -e
 
-MAGISK_API="https://api.github.com/repos/topjohnwu/Magisk/releases/latest"
+MAGISK_VERSION="v31.0"
+MAGISK_APK_URL="https://github.com/topjohnwu/Magisk/releases/download/${MAGISK_VERSION}/Magisk-${MAGISK_VERSION}.apk"
+MAGISK_APK_SHA256="2c8a488b9a5293e578e95ae4f07e3c57aba4feec4a52ca4dd852a2692d6dd4e8"
 WORK_DIR="/tmp/magiskboot-extract"
 mkdir -p "$WORK_DIR"
 
@@ -88,8 +100,19 @@ curl -fsSL -o "$WORK_DIR/magisk.apk" "$APK_URL"
 record_checksum "$WORK_DIR/magisk.apk" "magisk.apk" "$APK_URL" "$APK_DIGEST"
 
 echo "==> Extracting magiskboot ($MAGISK_ABI) from APK"
-unzip -p "$WORK_DIR/magisk.apk" "lib/${MAGISK_ABI}/libmagiskboot.so" > /usr/local/bin/magiskboot
-chmod +x /usr/local/bin/magiskboot
+# The redirect creates /usr/local/bin/magiskboot before unzip writes a byte,
+# so a member path that no longer matches (Magisk changing its APK layout,
+# or an unexpected ABI) leaves a zero-length file behind that chmod then
+# marks executable. Extract to a temporary path and only install it once
+# there is actually something there.
+unzip -p "$WORK_DIR/magisk.apk" "lib/${MAGISK_ABI}/libmagiskboot.so" > "$WORK_DIR/magiskboot"
+if [ ! -s "$WORK_DIR/magiskboot" ]; then
+  echo "ERROR: lib/${MAGISK_ABI}/libmagiskboot.so was not found in the Magisk APK" >&2
+  echo "       (or extracted empty) — the APK layout may have changed." >&2
+  rm -rf "$WORK_DIR"
+  exit 1
+fi
+install -m 0755 "$WORK_DIR/magiskboot" /usr/local/bin/magiskboot
 rm -rf "$WORK_DIR"
 
 echo "==> magiskboot installed: $(magiskboot 2>&1 | head -1 || true)"

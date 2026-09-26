@@ -1,0 +1,38 @@
+# RootForge OS — optional desktop layer for the Termux/Android variants
+# Victorious Framework | Origin Source Labs
+#
+# Installed only when build-rootfs.sh is passed --with-x11. Kept separate
+# from the base list because it roughly triples the tarball: the base rootfs
+# is a headless toolchain, and most users of it never want a desktop.
+#
+# The X server itself is NOT here. It lives on the Termux side as the
+# Termux:X11 companion app plus its `termux-x11` launcher — this list is only
+# the client-side desktop that connects to it.
+#
+# XFCE rather than GNOME: GNOME needs systemd/logind and a compositor stack
+# that neither PRoot nor a chroot on Android's kernel provides. XFCE runs
+# fine as a plain X client with no session manager underneath it.
+
+xfce4
+xfce4-terminal
+xfce4-panel
+xfce4-session
+xfce4-settings
+xfdesktop4
+xfwm4
+thunar
+
+# X client libraries and the utilities a desktop session actually calls out
+# to. dbus-x11 provides dbus-launch, which xfce4-session needs.
+dbus-x11
+x11-xserver-utils
+x11-utils
+xterm
+
+# Fonts — without these the desktop renders as boxes.
+fonts-dejavu-core
+fonts-liberation2
+
+# A file manager and text editor are the two things people immediately reach
+# for in a desktop session; the rest they install themselves.
+mousepad

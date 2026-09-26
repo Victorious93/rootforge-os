@@ -17,21 +17,35 @@
 #
 # Both are plain standalone Python scripts living in AOSP's own git trees
 # (android.googlesource.com), fetched here from LineageOS's GitHub mirrors
-# instead, which serve the identical AOSP source over plain HTTPS. Pinned
-# to the lineage-22.2 branch; there's no "latest" branch on these mirrors,
-# so bump this periodically. mkbootimg.py imports a local gki/ submodule
-# (no external pip dependency — Python's implicit namespace packages find
-# it via the script's own directory) — that companion file has to ship
-# alongside it or mkbootimg fails with ModuleNotFoundError on the very
-# first invocation, not at install time.
+# instead, which serve the identical AOSP source over plain HTTPS.
+#
+# Pinned to specific commit SHAs (not a branch name) with a SHA-256 for each
+# fetched file, verified at pin time directly from a fresh clone of each
+# mirror at that same commit. A branch name is a moving target — anything
+# landing on lineage-22.2 between builds would get fetched and trusted
+# silently. Pinning the commit makes the fetch itself reproducible; pinning
+# the file hash on top of that means even a rewritten/force-pushed branch
+# can't change what gets installed without the hash update being visible in
+# a diff to this hook.
+#
+# mkbootimg.py imports a local gki/ submodule (no external pip dependency —
+# Python's implicit namespace packages find it via the script's own
+# directory) — that companion file has to ship alongside it or mkbootimg
+# fails with ModuleNotFoundError on the very first invocation, not at
+# install time.
+#
+# To bump: pick a newer commit on each mirror's branch, fetch each file at
+# that commit, sha256sum it, and update the *_COMMIT and *_SHA256 values
+# together.
 
 set -e
 
-TOOLS_DIR="/usr/local/lib/rootforge/avb-tools"
-BRANCH="lineage-22.2"
-AVB_BASE="https://raw.githubusercontent.com/LineageOS/android_external_avb/${BRANCH}"
-MKBOOTIMG_BASE="https://raw.githubusercontent.com/LineageOS/android_system_tools_mkbootimg/${BRANCH}"
+AVB_COMMIT="6ee41dc37ea996a250f5c70d0ea16abb9f169975"
+MKBOOTIMG_COMMIT="68697756a3ad6a2f123534b21ad55b9d4a97f0b5"
+AVB_BASE="https://raw.githubusercontent.com/LineageOS/android_external_avb/${AVB_COMMIT}"
+MKBOOTIMG_BASE="https://raw.githubusercontent.com/LineageOS/android_system_tools_mkbootimg/${MKBOOTIMG_COMMIT}"
 
+TOOLS_DIR="/usr/local/lib/rootforge/avb-tools"
 mkdir -p "$TOOLS_DIR/gki"
 
 # raw.githubusercontent.com file fetches carry no digest metadata the way

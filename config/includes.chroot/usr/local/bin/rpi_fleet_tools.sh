@@ -23,7 +23,9 @@ log() { echo "[pi-fleet] $*" | tee -a "$LOG_FILE"; }
 
 case "$CMD" in
   scan)
-    command -v nmap >/dev/null 2>&1 || sudo apt-get install -y nmap | tee -a "$LOG_FILE"
+    if [[ -z "${ROOTFORGE_NMAP_OUTPUT:-}" ]]; then
+      command -v nmap >/dev/null 2>&1 || sudo apt-get install -y nmap | tee -a "$LOG_FILE"
+    fi
     log "Scanning local subnet for Raspberry Pi Foundation MAC prefixes"
     log "(this only finds Pis on the same L2 segment — a mesh-connected Pi"
     log " elsewhere, e.g. over Headscale, needs its mesh IP addressed directly)"
@@ -31,14 +33,31 @@ case "$CMD" in
     SUBNET="$(ip route | grep -oP '(?<=src )\S+' | head -1 | sed 's/\.[0-9]*$/.0\/24/' || echo "192.168.1.0/24")"
     log "Scanning $SUBNET"
 
-    RESULTS="$(sudo nmap -sn "$SUBNET" 2>>"$LOG_FILE" | grep -B2 -iE 'Raspberry Pi|dc:a6:32|b8:27:eb|d8:3a:dd|e4:5f:01' || true)"
+    # ROOTFORGE_NMAP_OUTPUT lets the test suite feed this recorded nmap
+    # output instead of scanning a network, so the parsing below is exercised
+    # as shipped rather than re-implemented in the test — a test that copies
+    # the expression it is checking passes whether or not the real one works.
+    if [[ -n "${ROOTFORGE_NMAP_OUTPUT:-}" ]]; then
+      log "ROOTFORGE_NMAP_OUTPUT is set — reading scan output from $ROOTFORGE_NMAP_OUTPUT instead of running nmap"
+      SCAN_RAW="$(cat "$ROOTFORGE_NMAP_OUTPUT")"
+    else
+      SCAN_RAW="$(sudo nmap -sn "$SUBNET" 2>>"$LOG_FILE")"
+    fi
+    RESULTS="$(echo "$SCAN_RAW" | grep -B2 -iE 'Raspberry Pi|dc:a6:32|b8:27:eb|d8:3a:dd|e4:5f:01' || true)"
     if [[ -z "$RESULTS" ]]; then
       log "No Raspberry Pi devices found on $SUBNET. If a Pi is on a different"
       log "  segment or joined via Headscale, address it directly instead."
     else
       echo "$RESULTS" | tee -a "$LOG_FILE"
-      echo "$RESULTS" | grep -oP '(?<=\()[\d.]+(?=\))' > "$FLEET_FILE" || true
-      log "IPs saved to $FLEET_FILE for use with 'run'"
+      # nmap writes "Nmap scan report for <name> (<ip>)" when the host has a
+      # PTR record and "Nmap scan report for <ip>" when it doesn't. Matching
+      # only the parenthesised form silently dropped every Pi without reverse
+      # DNS — common on a home LAN — so `run` skipped those hosts forever
+      # with nothing to say it had. Take the address from either shape.
+      echo "$RESULTS" \
+        | sed -n 's/^Nmap scan report for .*(\([0-9.]\{7,\}\))$/\1/p; s/^Nmap scan report for \([0-9.]\{7,\}\)$/\1/p' \
+        | sort -u > "$FLEET_FILE"
+      log "$(wc -l < "$FLEET_FILE" | tr -d ' ') IP(s) saved to $FLEET_FILE for use with 'run'"
     fi
     ;;
 
@@ -59,19 +78,40 @@ case "$CMD" in
       mapfile -t HOSTS < "$FLEET_FILE"
     fi
 
-    log "Running on ${#HOSTS[@]} host(s): $COMMAND"
-    echo "" > "$LOG_DIR/pi_fleet_run_$(date +%Y%m%d_%H%M%S)_results.txt"
-    RESULTS_FILE="$LOG_DIR/pi_fleet_run_$(date +%Y%m%d_%H%M%S)_results.txt"
+    # A scan file can carry blank lines; an empty host becomes `ssh pi@`,
+    # which fails with a confusing error rather than being skipped.
+    FILTERED=()
+    for host in "${HOSTS[@]}"; do
+      [[ -n "${host// /}" ]] && FILTERED+=("$host")
+    done
+    HOSTS=("${FILTERED[@]+"${FILTERED[@]}"}")
+    [[ ${#HOSTS[@]} -gt 0 ]] || { echo "No usable hosts (the list was empty or all blank)." >&2; exit 1; }
 
+    log "Running on ${#HOSTS[@]} host(s): $COMMAND"
+    # This called `date` twice, so a run straddling a second boundary
+    # truncated one filename and then wrote to a differently-named one,
+    # leaving an empty stray file behind. Compute the name once.
+    RESULTS_FILE="$LOG_DIR/pi_fleet_run_$(date +%Y%m%d_%H%M%S)_results.txt"
+    : > "$RESULTS_FILE"
+
+    FAILED_HOSTS=()
     for host in "${HOSTS[@]}"; do
       echo "=== $host ===" | tee -a "$RESULTS_FILE"
       if ssh -o ConnectTimeout=5 -o BatchMode=yes "pi@$host" "$COMMAND" 2>&1 | tee -a "$RESULTS_FILE"; then
         log "$host: OK"
       else
         log "$host: FAILED (see $RESULTS_FILE)"
+        FAILED_HOSTS+=("$host")
       fi
     done
     log "Full output: $RESULTS_FILE"
+
+    # Every host failing used to still exit 0, so nothing wrapping this could
+    # tell a clean fleet run from a total one.
+    if [[ ${#FAILED_HOSTS[@]} -gt 0 ]]; then
+      log "${#FAILED_HOSTS[@]} of ${#HOSTS[@]} host(s) failed: ${FAILED_HOSTS[*]}"
+      exit 1
+    fi
     ;;
 
   *)

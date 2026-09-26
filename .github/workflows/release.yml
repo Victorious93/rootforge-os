@@ -88,6 +88,11 @@ jobs:
       fail-fast: false
       matrix:
         arch: [arm64, amd64]
+        # proot = unrooted device (ptrace emulation), chroot = rooted device
+        # (real chroot via su). Their rootfs contents differ — see
+        # termux/build-rootfs.sh's --flavor — so they are separate artifacts,
+        # not one tarball used two ways.
+        flavor: [proot, chroot]
     steps:
       - uses: actions/checkout@v4
 
@@ -96,8 +101,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends debootstrap qemu-user-static binfmt-support
 
-      - name: Build rootfs (${{ matrix.arch }})
-        run: sudo termux/build-rootfs.sh ${{ matrix.arch }} dist
+      - name: Build rootfs (${{ matrix.arch }}, ${{ matrix.flavor }})
+        run: sudo termux/build-rootfs.sh ${{ matrix.arch }} dist --flavor ${{ matrix.flavor }}
 
       - name: Rename to a stable asset name
         # termux/build-rootfs.sh timestamps its output for safe repeated
@@ -106,17 +111,17 @@ jobs:
         # asset needs that fixed name instead of the timestamped one.
         run: |
           cd dist
-          src="$(ls rootforge-proot-${{ matrix.arch }}-*.tar.xz)"
-          mv "$src" "rootforge-proot-${{ matrix.arch }}.tar.xz"
-          mv "$src.sha256" "rootforge-proot-${{ matrix.arch }}.tar.xz.sha256"
+          src="$(ls rootforge-${{ matrix.flavor }}-${{ matrix.arch }}-*.tar.xz)"
+          mv "$src" "rootforge-${{ matrix.flavor }}-${{ matrix.arch }}.tar.xz"
+          mv "$src.sha256" "rootforge-${{ matrix.flavor }}-${{ matrix.arch }}.tar.xz.sha256"
 
       - name: Upload rootfs artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rootforge-proot-${{ matrix.arch }}
+          name: rootforge-${{ matrix.flavor }}-${{ matrix.arch }}
           path: |
-            dist/rootforge-proot-${{ matrix.arch }}.tar.xz
-            dist/rootforge-proot-${{ matrix.arch }}.tar.xz.sha256
+            dist/rootforge-${{ matrix.flavor }}-${{ matrix.arch }}.tar.xz
+            dist/rootforge-${{ matrix.flavor }}-${{ matrix.arch }}.tar.xz.sha256
           retention-days: 14
           if-no-files-found: error
 

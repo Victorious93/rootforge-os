@@ -14,6 +14,14 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
+usage() {
+  echo "Usage: flash_pi_image.sh <image.img.xz> <device> [--role homelab-node|dispatcher|bare] [--hostname NAME] [--ssh-key path]" >&2
+  exit "${1:-1}"
+}
+
 IMAGE="${1:?Usage: flash_pi_image.sh <image.img.xz> <device> [--role homelab-node|dispatcher|bare] [--hostname NAME] [--ssh-key path]}"
 DEVICE="${2:?Missing target device, e.g. /dev/sdX}"
 shift 2
@@ -23,12 +31,31 @@ HOSTNAME_OVERRIDE="rootforge-pi"
 SSH_KEY="$HOME/.ssh/id_ed25519.pub"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --role) ROLE="$2"; shift ;;
-    --hostname) HOSTNAME_OVERRIDE="$2"; shift ;;
-    --ssh-key) SSH_KEY="$2"; shift ;;
+    # Each of these needs its value checked before it is read: a trailing
+    # bare `--role` used to abort with a raw "unbound variable" under
+    # `set -u`. And an unrecognized flag was skipped in silence, so
+    # `--rol homelab-node` flashed with the default role and said nothing.
+    --role)     [[ $# -ge 2 ]] || { echo "--role needs a value" >&2; usage; };     ROLE="$2"; shift ;;
+    --hostname) [[ $# -ge 2 ]] || { echo "--hostname needs a value" >&2; usage; }; HOSTNAME_OVERRIDE="$2"; shift ;;
+    --ssh-key)  [[ $# -ge 2 ]] || { echo "--ssh-key needs a value" >&2; usage; };  SSH_KEY="$2"; shift ;;
+    -h|--help)  usage 0 ;;
+    *) echo "Unknown argument: $1" >&2; usage ;;
   esac
   shift
 done
+
+# ROLE reaches a case statement near the end that has no catch-all arm, so a
+# typo used to select no branch at all: the image was written and the role
+# step silently did nothing, with a "Node role: <typo>" line as the only
+# hint. Reject it here, before anything is written to the device.
+case "$ROLE" in
+  homelab-node|dispatcher|bare) ;;
+  *) echo "Unknown role '$ROLE' (expected homelab-node, dispatcher or bare)" >&2; usage ;;
+esac
+
+# The hostname ends up in the image's configuration and in an mDNS name.
+[[ "$HOSTNAME_OVERRIDE" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]] \
+  || { echo "Invalid hostname '$HOSTNAME_OVERRIDE' — letters, digits and hyphens only, no leading/trailing hyphen." >&2; exit 1; }
 
 [[ -f "$IMAGE" ]] || { echo "Image not found: $IMAGE" >&2; exit 1; }
 [[ -b "$DEVICE" ]] || { echo "Not a block device: $DEVICE — double-check before this overwrites it." >&2; exit 1; }
@@ -42,11 +69,16 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/flash_pi_$(date +%Y%m%d_%H%M%S).log"
 log() { echo "[flash-pi] $*" | tee -a "$LOG_FILE"; }
 
-echo ""
-echo "About to write '$IMAGE' to '$DEVICE'. This ERASES everything currently on"
-echo "that device. Confirm it's the Pi's SD/USB media, not something else."
-read -r -p "Type FLASH to proceed: " CONFIRM
-[[ "$CONFIRM" == "FLASH" ]] || { log "Confirmation not given — aborting."; exit 1; }
+# rf_confirm prompts on /dev/tty and refuses when there is no terminal, so
+# this can't be driven blind by a wrapper that redirects stdout.
+if ! rf_confirm FLASH \
+    "" \
+    "About to write '$IMAGE' to '$DEVICE'. This ERASES everything currently on" \
+    "that device. Confirm it's the Pi's SD/USB media, not something else:" \
+    "$(lsblk -d -o NAME,SIZE,RM,TYPE,MODEL "$DEVICE" 2>/dev/null || echo "  (lsblk could not describe $DEVICE)")"; then
+  log "Confirmation not given — aborting. Nothing was written."
+  exit 1
+fi
 
 log "Writing image via rpi-imager CLI"
 rpi-imager --cli \
@@ -76,6 +108,12 @@ case "$ROLE" in
     ;;
   bare)
     log "No role provisioning — plain Pi OS with SSH and hostname set."
+    ;;
+  *)
+    # Unreachable: ROLE is validated at parse time. Kept so that adding a
+    # role to the list above without adding a branch here is loud.
+    log "INTERNAL: no branch for role '$ROLE' — this is a bug in flash_pi_image.sh."
+    exit 1
     ;;
 esac
 

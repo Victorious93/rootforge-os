@@ -6,10 +6,24 @@
 # .deb from raspberrypi.com. scripts/flash_pi_image.sh wraps its CLI.
 # If the download fails at build time, the hook exits cleanly and
 # flash_pi_image.sh will error with a helpful message at runtime.
+#
+# Pinned to a specific version + SHA-256 rather than "latest": raspberrypi.com
+# does not publish a checksum sidecar for this asset, so the hash below was
+# computed directly from this exact .deb at pin time. A hash mismatch means
+# the artifact changed since — either a new upstream release (bump the
+# version below and recompute the hash from the new file) or something more
+# concerning; either way, this hook must not silently install an unverified
+# binary into the ISO.
+#
+# To bump: check https://downloads.raspberrypi.com/imager/ for the current
+# version, download it, `sha256sum` it, update IMAGER_VERSION and
+# IMAGER_SHA256 together.
 
 set -e
 
-IMAGER_URL="https://downloads.raspberrypi.com/imager/imager_latest_amd64.deb"
+IMAGER_VERSION="2.0.4"
+IMAGER_URL="https://downloads.raspberrypi.com/imager/rpi-imager_${IMAGER_VERSION}_amd64.deb"
+IMAGER_SHA256="09b24e869edbb4fa95aaadfdcc76ef5f1e3bbb4c37c0cae0458d4934870caaf1"
 IMAGER_DEB="/tmp/rpi-imager.deb"
 
 # raspberrypi.com's "latest" .deb has no accompanying checksum/digest

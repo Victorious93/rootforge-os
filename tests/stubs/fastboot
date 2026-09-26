@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Test stub for fastboot. See tests/stubs/adb.
+[ -n "${RF_STUB_LOG:-}" ] && printf 'fastboot %s\n' "$*" >> "$RF_STUB_LOG"
+
+# Skip a leading "-s <serial>" so subcommand matching works either way.
+if [ "${1:-}" = "-s" ]; then shift 2; fi
+
+case "${1:-}" in
+  devices) printf '%b' "${RF_STUB_FASTBOOT_DEVICES:-}" ;;
+  getvar)
+    case "${2:-}" in
+      current-slot) printf 'current-slot: %s\n' "${RF_STUB_SLOT:-a}" ;;
+      product)      printf 'product: %s\n' "${RF_STUB_PRODUCT:-testdevice}" ;;
+      all)          printf '%b' "${RF_STUB_GETVAR_ALL:-}" ;;
+    esac
+    ;;
+  wait-for-device) exit "${RF_STUB_FASTBOOT_WAIT_RC:-0}" ;;
+  flash)
+    # RF_STUB_FLASH_FAIL_ON_CALL lets a test fail the Nth flash only — the
+    # mirrored-slot path needs the first write to succeed and the second to
+    # fail.
+    if [ -n "${RF_STUB_FLASH_FAIL_ON_CALL:-}" ]; then
+      COUNT_FILE="${RF_STUB_LOG:-/dev/null}.flashcount"
+      N=$(( $(cat "$COUNT_FILE" 2>/dev/null || echo 0) + 1 ))
+      echo "$N" > "$COUNT_FILE"
+      [ "$N" = "$RF_STUB_FLASH_FAIL_ON_CALL" ] && exit 1
+      exit 0
+    fi
+    exit "${RF_STUB_FLASH_RC:-0}"
+    ;;
+  *) exit "${RF_STUB_FASTBOOT_RC:-0}" ;;
+esac

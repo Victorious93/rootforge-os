@@ -37,6 +37,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 PROFILE_DIR="$ROOTFORGE_HOME/avd-profiles"
@@ -48,9 +51,40 @@ STAMP="$(date +%Y%m%d_%H%M%S)"
 log() { echo "[avd] $*"; }
 die() { echo "[avd] ERROR: $*" >&2; exit 1; }
 
+# A value-taking option whose value is missing reads an unset $2 and aborts
+# with a raw "unbound variable" under `set -u`. Say what's wrong instead.
+need_value() {
+  [[ $2 -ge 2 ]] || die "$1 requires a value"
+}
+
 usage() {
   sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
+}
+
+# The AVD name becomes a profile filename, an AVD directory name and a work
+# directory name. `create` validated it; `boot` did not, so
+#
+#   setup_rooted_avd.sh boot --name '../../escaped'
+#
+# read its mode from a .conf outside the profile directory and handed the
+# name straight to `emulator`. One helper, both commands, so the two cannot
+# drift apart again.
+require_valid_avd_name() {
+  [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]] \
+    || die "--name must be [A-Za-z0-9._-] (got '$1') — it becomes a profile filename and an AVD directory name"
+}
+
+# `x="$(grep -m1 KEY= file | cut ...)"` aborts the whole script under
+# `set -o pipefail` when the key isn't present — so a profile that was
+# hand-edited, truncated, or written by an older version of this script made
+# `list` and `boot` exit silently with no output at all. Read the key
+# without letting a miss become a fatal pipeline status.
+profile_get() {
+  local file="$1" key="$2" default="${3:-}"
+  local value
+  value="$(grep -m1 "^${key}=" "$file" 2>/dev/null | cut -d= -f2- || true)"
+  printf '%s' "${value:-$default}"
 }
 
 cmd_list() {
@@ -65,32 +99,42 @@ cmd_list() {
     found=1
     local name mode api device abi tag
     name="$(basename "$f" .conf)"
-    mode="$(grep -m1 '^MODE=' "$f" | cut -d= -f2-)"
-    api="$(grep -m1 '^API=' "$f" | cut -d= -f2-)"
-    device="$(grep -m1 '^DEVICE=' "$f" | cut -d= -f2-)"
-    abi="$(grep -m1 '^ABI=' "$f" | cut -d= -f2-)"
-    tag="$(grep -m1 '^TAG=' "$f" | cut -d= -f2-)"
+    mode="$(profile_get "$f" MODE '?')"
+    api="$(profile_get "$f" API '?')"
+    device="$(profile_get "$f" DEVICE '?')"
+    abi="$(profile_get "$f" ABI '?')"
+    tag="$(profile_get "$f" TAG '?')"
     echo "  $name  mode=$mode api=$api device=$device abi=$abi tag=$tag"
   done
   shopt -u nullglob
-  [[ $found -eq 0 ]] && echo "  (none)"
+
+  # `[[ $found -eq 0 ]] && echo ...` as the final command made this function
+  # — and therefore the whole script, since `list` is the last thing it runs
+  # — return the *condition's* status. So `list` exited 1 whenever it
+  # successfully found profiles, and 0 only when there were none: exactly
+  # backwards, and invisible unless something checked the code.
+  if [[ $found -eq 0 ]]; then
+    echo "  (none)"
+  fi
+  return 0
 }
 
 cmd_boot() {
   local name="" snapshot=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --name) name="$2"; shift 2 ;;
-      --snapshot) snapshot="$2"; shift 2 ;;
+      --name)     need_value "$1" $#; name="$2";     shift 2 ;;
+      --snapshot) need_value "$1" $#; snapshot="$2"; shift 2 ;;
       *) die "Unknown option: $1" ;;
     esac
   done
   [[ -z "$name" ]] && die "--name required"
+  require_valid_avd_name "$name"
 
   local profile="$PROFILE_DIR/${name}.conf"
   local mode="unrooted"
   if [[ -f "$profile" ]]; then
-    mode="$(grep -m1 '^MODE=' "$profile" | cut -d= -f2-)"
+    mode="$(profile_get "$profile" MODE unrooted)"
   else
     log "No saved profile for '$name' — booting with defaults."
   fi
@@ -108,6 +152,9 @@ cmd_boot() {
 
 root_avd() {
   local name="$1" abi="$2" LOG_FILE="$3"
+  # The emulator this function starts. Overridable for an unusual port
+  # assignment; the default is what `emulator` uses for the first instance.
+  local EMU_SERIAL="${ROOTFORGE_AVD_SERIAL:-emulator-5554}"
 
   local MAGISKBOOT
   MAGISKBOOT="$(command -v magiskboot 2>/dev/null || true)"
@@ -125,14 +172,32 @@ root_avd() {
 
   mkdir -p "$ROOTFORGE_HOME/bin"
   local MAGISK_APK="$ROOTFORGE_HOME/bin/magisk.apk"
-  if [[ ! -f "$MAGISK_APK" ]]; then
+  # `[[ ! -f ]]` treated any file at this path as a usable cache, and curl
+  # wrote straight to it — so a download cut short left a partial APK that
+  # every later run reused. `unzip -p` then extracted nothing and the script
+  # died with
+  #
+  #   magiskinit not present in this Magisk APK for abi=x86_64 — pick an ABI
+  #   Magisk actually ships lib/<abi>/ for
+  #
+  # which sends the user to change an ABI that was never wrong. Verified with
+  # a 13-byte cached APK. A confidently wrong error is worse than none.
+  #
+  # rf_download_cached treats an implausibly small file as absent, so it also
+  # recovers a cache the old code already poisoned. A Magisk APK is ~10 MB.
+  if [[ ! -f "$MAGISK_APK" ]] || [[ "$(wc -c < "$MAGISK_APK")" -lt 1048576 ]]; then
     log "Fetching latest Magisk release APK (cached at $MAGISK_APK for future runs)"
     local url
     url=$(curl -fsSL "https://api.github.com/repos/topjohnwu/Magisk/releases/latest" \
       | python3 -c "import sys,json; a=[x['browser_download_url'] for x in json.load(sys.stdin)['assets'] if x['name'].endswith('.apk') and 'stub' not in x['name']]; print(a[0] if a else '')")
     [[ -z "$url" ]] && die "Could not resolve latest Magisk APK download URL"
-    curl -fsSL -o "$MAGISK_APK" "$url"
+    rf_download_cached "$url" "$MAGISK_APK" 1048576 \
+      || die "Could not download a usable Magisk APK — nothing was patched."
   fi
+
+  # Distinguish "this APK is not readable" from "this ABI is not shipped".
+  unzip -l "$MAGISK_APK" >/dev/null 2>&1 \
+    || die "$MAGISK_APK is not a readable zip — delete it and re-run to refetch."
 
   local rwork="$WORK_DIR/${name}-root-${STAMP}"
   mkdir -p "$rwork"
@@ -152,6 +217,8 @@ root_avd() {
   done
   chmod 755 "$rwork"/magisk* 2>/dev/null || true
 
+  # Reached only when the APK itself is readable, so this really is about the
+  # ABI now rather than standing in for a broken download.
   [[ -f "$rwork/magiskinit" ]] || die "magiskinit not present in this Magisk APK for abi=$abi — pick an ABI Magisk actually ships lib/<abi>/ for (x86, x86_64, armeabi-v7a, arm64-v8a)"
 
   log "Patching ramdisk.img with magiskboot (init -> magiskinit, overlay.d payload)"
@@ -181,20 +248,46 @@ root_avd() {
   emulator -avd "$name" -writable-system -no-snapshot-load -snapshot rootforge-rooted -no-window &
   local EMU_PID=$!
 
-  adb wait-for-device
-  adb shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done' || true
+  # Both waits below were unbounded: `adb wait-for-device` blocks forever if
+  # the emulator dies on startup (a bad AVD, no KVM, an image that won't
+  # boot), and the on-device `while [ -z $(getprop sys.boot_completed) ]`
+  # loop blocks forever if the system never finishes booting. Neither
+  # printed anything while it hung, so the script looked wedged with no clue
+  # why. Bound both, and notice when the emulator process is already gone.
+  local boot_timeout="${ROOTFORGE_AVD_BOOT_TIMEOUT:-300}"
+  local waited=0
+  log "Waiting up to ${boot_timeout}s for the emulator to boot"
+  while true; do
+    if ! kill -0 "$EMU_PID" 2>/dev/null; then
+      die "The emulator exited during boot — see $LOG_FILE and try 'emulator -avd $name' by hand to see its error."
+    fi
+    # `-s emulator-5554` is deliberate: adb without a serial fails outright
+    # ("more than one device") the moment anything else is plugged in, and
+    # the emulator is the only thing this step should be talking to.
+    if [[ "$(adb -s "$EMU_SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then
+      log "Emulator finished booting after ${waited}s"
+      break
+    fi
+    if [[ $waited -ge $boot_timeout ]]; then
+      adb emu kill 2>/dev/null || true
+      kill "$EMU_PID" 2>/dev/null || true
+      die "Emulator did not report sys.boot_completed within ${boot_timeout}s. Raise ROOTFORGE_AVD_BOOT_TIMEOUT, or boot it with a window ('emulator -avd $name') to see where it stalls."
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
   sleep 2
 
   log "Verifying root"
-  if adb shell su -c id 2>/dev/null | grep -q "uid=0"; then
+  if adb -s "$EMU_SERIAL" shell su -c id 2>/dev/null | grep -q "uid=0"; then
     log "Root verified: 'su -c id' reports uid=0"
   else
     log "WARNING: could not verify root via 'su -c id'. Install the Magisk manager APK"
-    log "(adb install \"$MAGISK_APK\") and inspect on-device state with check_root_detection.sh."
+    log "(adb -s $EMU_SERIAL install \"$MAGISK_APK\") and inspect on-device state with check_root_detection.sh."
   fi
 
   log "Shutting down to save the 'rootforge-rooted' snapshot"
-  adb emu kill 2>/dev/null || true
+  adb -s "$EMU_SERIAL" emu kill 2>/dev/null || true
   wait "$EMU_PID" 2>/dev/null || true
 
   log "Rooted AVD ready. Boot pre-rooted with:"
@@ -206,12 +299,12 @@ cmd_create() {
   local name="" mode="" api="34" device="pixel_6" abi="x86_64" tag="google_apis" force=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --name)   name="$2";   shift 2 ;;
-      --mode)   mode="$2";   shift 2 ;;
-      --api)    api="$2";    shift 2 ;;
-      --device) device="$2"; shift 2 ;;
-      --abi)    abi="$2";    shift 2 ;;
-      --tag)    tag="$2";    shift 2 ;;
+      --name)   need_value "$1" $#; name="$2";   shift 2 ;;
+      --mode)   need_value "$1" $#; mode="$2";   shift 2 ;;
+      --api)    need_value "$1" $#; api="$2";    shift 2 ;;
+      --device) need_value "$1" $#; device="$2"; shift 2 ;;
+      --abi)    need_value "$1" $#; abi="$2";    shift 2 ;;
+      --tag)    need_value "$1" $#; tag="$2";    shift 2 ;;
       --force)  force=1;     shift ;;
       *) die "Unknown option: $1" ;;
     esac
@@ -219,6 +312,19 @@ cmd_create() {
 
   [[ -z "$name" ]] && die "--name required"
   [[ "$mode" == "rooted" || "$mode" == "unrooted" ]] || die "--mode must be 'rooted' or 'unrooted'"
+  # $api and $abi are interpolated into the sdkmanager package spec below,
+  # and $name into a profile filename — keep them to what those accept so a
+  # typo fails here with a clear message rather than deep inside sdkmanager.
+  [[ "$api" =~ ^[0-9]{1,3}$ ]] || die "--api must be a number like 33 or 34 (got '$api')"
+  require_valid_avd_name "$name"
+  case "$abi" in
+    x86_64|x86|arm64-v8a|armeabi-v7a) ;;
+    *) die "--abi must be x86_64, x86, arm64-v8a or armeabi-v7a (got '$abi')" ;;
+  esac
+  case "$tag" in
+    google_apis|google_apis_playstore|default|google_tv|android-wear|android-tv) ;;
+    *) die "--tag '$tag' is not one this script knows; expected google_apis, google_apis_playstore, default or google_tv" ;;
+  esac
   if [[ "$mode" == "rooted" && "$tag" == "google_apis_playstore" ]]; then
     die "Rooted mode requires a non-Play system image (--tag google_apis, default, or google_tv) — Play images are signed and locked in ways that resist both the writable-system trick and a ramdisk swap."
   fi

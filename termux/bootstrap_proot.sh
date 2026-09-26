@@ -33,7 +33,9 @@ log() { echo "[rootforge-proot] $*" | tee -a "$LOG_FILE"; }
 log "Fetching Android cmdline-tools"
 mkdir -p "$SDK_ROOT/cmdline-tools"
 CMDTOOLS_ZIP="$(mktemp)"
-curl -sSL -o "$CMDTOOLS_ZIP" \
+# -f: an HTTP error otherwise lands in the zip and surfaces as a
+# confusing "not a zipfile" from unzip instead of a download failure.
+curl -fsSL -o "$CMDTOOLS_ZIP" \
   "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
 unzip -q "$CMDTOOLS_ZIP" -d "$SDK_ROOT/cmdline-tools"
 mv "$SDK_ROOT/cmdline-tools/cmdline-tools" "$SDK_ROOT/cmdline-tools/latest"

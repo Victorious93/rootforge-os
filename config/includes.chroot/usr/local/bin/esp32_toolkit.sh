@@ -37,6 +37,15 @@ case "$CMD" in
 
   new-project)
     NAME="${2:?Usage: esp32_toolkit.sh new-project <name>}"
+    # NAME is used as one directory name under esp32-projects/. Unvalidated,
+    # `new-project ../../evil` scaffolds outside the tree entirely — the same
+    # traversal the device backup/restore paths had.
+    case "$NAME" in
+      ""|*/*|*..*)
+        echo "Invalid project name '$NAME' — must not be empty or contain '/' or '..'." >&2
+        echo "It is used as a directory name under \$ROOTFORGE_HOME/esp32-projects/." >&2
+        exit 1 ;;
+    esac
     PROJ_DIR="$ROOTFORGE_HOME/esp32-projects/$NAME"
     [[ -d "$PROJ_DIR" ]] && { echo "Project already exists: $PROJ_DIR" >&2; exit 1; }
     mkdir -p "$PROJ_DIR/src"
@@ -86,16 +95,39 @@ EOF
     ;;
 
   flash)
-    FW="${2:?Usage: esp32_toolkit.sh flash <firmware.bin> [port]}"
+    FW="${2:?Usage: esp32_toolkit.sh flash <firmware.bin> [port] [offset]}"
     PORT="${3:-}"
+    # 0x0 was wrong for the thing this script tells you to build.
+    #
+    # `pio run` produces firmware.bin, an APPLICATION image, and the app
+    # partition starts at 0x10000 in the default partition table. 0x0 on an
+    # ESP32-S3 — the target in this script's own scaffold — is where the
+    # second-stage bootloader lives. Writing the app there overwrites the
+    # bootloader, and the board stops booting until it is fully erased and
+    # reflashed. 0x0 is correct only for a combined image from
+    # `esptool merge_bin`, which is not what `pio run` emits.
+    OFFSET="${4:-0x10000}"
     [[ -f "$FW" ]] || { echo "Firmware not found: $FW" >&2; exit 1; }
+    case "$OFFSET" in
+      0x[0-9a-fA-F]*|[0-9]*) ;;
+      *) echo "Offset must be numeric (e.g. 0x10000): $OFFSET" >&2; exit 1 ;;
+    esac
     if [[ -z "$PORT" ]]; then
-      PORT="$(ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | head -1 || true)"
+      # `ls | head -1` hands ls a SIGPIPE, which pipefail turns into a failed
+      # assignment; the glob does the same job without a pipe.
+      PORTS=(/dev/ttyUSB* /dev/ttyACM*)
+      for candidate in "${PORTS[@]}"; do
+        [[ -e "$candidate" ]] && { PORT="$candidate"; break; }
+      done
       [[ -z "$PORT" ]] && { echo "No serial port found — specify one explicitly." >&2; exit 1; }
       log "Auto-detected port: $PORT"
     fi
-    log "Flashing $FW to $PORT"
-    esptool.py --port "$PORT" write_flash 0x0 "$FW" 2>&1 | tee -a "$LOG_FILE"
+    if [[ "$OFFSET" == "0x0" || "$OFFSET" == "0" ]]; then
+      log "NOTE: flashing at $OFFSET overwrites the bootloader. That is correct only"
+      log "      for a combined image (esptool merge_bin), not for pio's firmware.bin."
+    fi
+    log "Flashing $FW to $PORT at $OFFSET"
+    esptool.py --port "$PORT" write_flash "$OFFSET" "$FW" 2>&1 | tee -a "$LOG_FILE"
     ;;
 
   *)

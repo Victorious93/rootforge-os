@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Test stub for adb that models the one behaviour the other adb stub hides:
+# `adb shell a b c` does NOT pass an argument vector to the device. It joins
+# the arguments with spaces and hands the resulting string to the device's
+# /system/bin/sh, which parses it. Anything interpolated into that string is
+# shell source on the phone.
+#
+# So this stub joins with "$*" and runs the result through sh, logging both
+# what the device shell received and what `am` was actually handed. A shell
+# metacharacter in the text being typed shows up here as a second command
+# running — which is exactly what it does on a real device.
+[ -n "${RF_STUB_LOG:-}" ] || { echo "RF_STUB_LOG unset" >&2; exit 1; }
+
+[ "${1:-}" = "-s" ] && shift 2
+
+if [ "${1:-}" = "shell" ]; then
+  shift
+  printf 'device-sh <<< %s\n' "$*" >> "$RF_STUB_LOG"
+  case "$*" in
+    "settings get secure default_input_method")
+      printf '%s\n' "${RF_STUB_CURRENT_IME:-com.android.adbkeyboard/.AdbIME}"
+      exit 0 ;;
+  esac
+  sh -c "$*" >> "$RF_STUB_LOG" 2>&1
+  exit 0
+fi
+
+printf 'adb %s\n' "$*" >> "$RF_STUB_LOG"
+exit 0

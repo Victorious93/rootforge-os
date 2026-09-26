@@ -37,7 +37,10 @@ fi
 if [[ "$TARGET" == "xposed" ]]; then
   # LSPosed/Xposed modules are Android app projects (a hook class + manifest
   # metadata), not a Magisk-style zip — scaffold a minimal Gradle project instead.
-  mkdir -p "$MODULE_DIR"/app/src/main/{java/com/victorious/"$(echo "$MODULE_ID" | tr -cd 'a-zA-Z0-9')",assets,res/values}
+  # The java/ path here was built from a separate sanitisation of the id and
+  # then created again, correctly, from $PKG_PATH below — leaving one of the
+  # two as a stray directory whenever they disagreed.
+  mkdir -p "$MODULE_DIR"/app/src/main/{assets,res/values}
 
   PKG="com.victorious.$(echo "$MODULE_ID" | tr -cd 'a-zA-Z0-9')"
   PKG_PATH="${PKG//./\/}"

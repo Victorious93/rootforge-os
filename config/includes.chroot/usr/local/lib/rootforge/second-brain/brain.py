@@ -83,11 +83,30 @@ def ollama_post(path, payload, timeout=120):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        # An HTTP error carries a body that usually names the real problem
+        # ("model not found", ...) — far more useful than the status alone.
+        detail = ""
+        try:
+            detail = e.read().decode("utf-8", "replace").strip()
+        except Exception:
+            pass
+        die(f"Ollama returned HTTP {e.code} for {path}" + (f": {detail}" if detail else ""))
     except urllib.error.URLError as e:
         die(
-            f"couldn't reach Ollama at {OLLAMA_HOST} ({e})\n"
+            f"couldn't reach Ollama at {OLLAMA_HOST} ({e.reason})\n"
             f"       Is it running? Try: sudo systemctl start ollama"
         )
+    except TimeoutError:
+        # A read timeout surfaces as socket.timeout (TimeoutError), which is
+        # NOT a URLError — so it used to escape as a raw traceback.
+        die(
+            f"Ollama at {OLLAMA_HOST} did not respond within {timeout}s.\n"
+            f"       A first request after `ollama pull` can be slow while the model loads;\n"
+            f"       retry, or raise the timeout."
+        )
+    except json.JSONDecodeError as e:
+        die(f"Ollama returned a response that isn't JSON ({e}) — is {OLLAMA_HOST} really Ollama?")
 
 
 def ollama_embed(text, model=EMBED_MODEL):
@@ -153,23 +172,64 @@ def open_db():
     return conn
 
 
+def _split_oversized(para):
+    """Break a single paragraph longer than CHUNK_CHARS into pieces.
+
+    Paragraph-level packing alone never split a paragraph that was itself
+    over the limit — a long table, a minified line or a pasted log became
+    one enormous chunk, which the embedding model silently truncates (so
+    the tail of the note is unsearchable) or rejects outright. Prefer a
+    line boundary, then a sentence boundary, and only fall back to a hard
+    character cut when neither exists.
+    """
+    if len(para) <= CHUNK_CHARS:
+        return [para]
+
+    pieces, current = [], ""
+    for unit in re.split(r"(?<=\n)|(?<=[.!?]\s)", para):
+        if not unit:
+            continue
+        while len(unit) > CHUNK_CHARS:
+            if current:
+                pieces.append(current)
+                current = ""
+            pieces.append(unit[:CHUNK_CHARS])
+            unit = unit[CHUNK_CHARS:]
+        if current and len(current) + len(unit) > CHUNK_CHARS:
+            pieces.append(current)
+            current = unit
+        else:
+            current += unit
+    if current:
+        pieces.append(current)
+    return [p.strip() for p in pieces if p.strip()]
+
+
 def chunk_text(text):
     if not text.strip():
         return []
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     chunks, current = [], ""
     for para in paragraphs:
-        if current and len(current) + len(para) + 2 > CHUNK_CHARS:
-            chunks.append(current)
-            current = para
-        else:
-            current = f"{current}\n\n{para}" if current else para
+        for piece in _split_oversized(para):
+            if current and len(current) + len(piece) + 2 > CHUNK_CHARS:
+                chunks.append(current)
+                current = piece
+            else:
+                current = f"{current}\n\n{piece}" if current else piece
     if current:
         chunks.append(current)
     return chunks or [text.strip()]
 
 
 def cosine(a, b):
+    # zip() stops at the shorter sequence, so vectors of different lengths
+    # used to produce a plausible-looking score computed over a prefix.
+    # That happens for real whenever BRAIN_EMBED_MODEL changes without a
+    # `brain index --force`, and the resulting rankings are meaningless.
+    # Let the caller detect it instead of silently ranking on nonsense.
+    if len(a) != len(b):
+        raise ValueError(f"embedding dimension mismatch: {len(a)} vs {len(b)}")
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(x * x for x in b))
@@ -258,9 +318,26 @@ def search_chunks(query, n):
         die("index is empty — run: brain index")
     query_embedding = ollama_embed(query)
     scored = []
+    mismatched = 0
     for path, chunk_index, text, embedding_json in rows:
-        score = cosine(query_embedding, json.loads(embedding_json))
+        try:
+            score = cosine(query_embedding, json.loads(embedding_json))
+        except ValueError:
+            mismatched += 1
+            continue
         scored.append((score, path, chunk_index, text))
+
+    if mismatched:
+        if not scored:
+            die(
+                f"every indexed chunk was embedded with a different model than "
+                f"'{EMBED_MODEL}' ({mismatched} chunk(s)).\n"
+                f"       Re-embed the vault with: brain index --force"
+            )
+        warn(
+            f"skipped {mismatched} chunk(s) embedded with a different model — "
+            f"run 'brain index --force' to re-embed the whole vault"
+        )
     scored.sort(key=lambda r: r[0], reverse=True)
     return scored[:n]
 
