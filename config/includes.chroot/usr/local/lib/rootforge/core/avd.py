@@ -1,122 +1,154 @@
-"""`rootforge avd` — create, boot and list emulator images.
+"""rootforge.core.avd — AVD lifecycle CLI: create/list/start/stop/snapshot.
 
-P2 item 13 of docs/IMPLEMENTATION_PLAN.md. Wraps setup_rooted_avd.sh.
-
-The choice validation here is not decoration. `--mode`, `--abi` and `--tag`
-are each a small closed set the script checks by hand, and `--name` is a
-path component the script checked in `create` but not in `boot` — so
-`boot --name '../../escaped'` read its mode from a .conf outside the profile
-directory. That is exactly the drift argparse removes: one declaration,
-enforced identically wherever the argument appears.
+create/list/start wrap setup_rooted_avd.sh's own create/list/boot
+subcommands as subprocesses — the real AVD-creation and Magisk-ramdisk-
+patch logic stays there. stop/snapshot are genuinely new (the underlying
+script has no equivalent): implemented via the emulator's standard
+`adb emu` console commands (`avd name`, `kill`, `avd snapshot ...`),
+which every running AVD instance answers regardless of how it was
+created. [Likely] the exact snapshot console command shape (`avd
+snapshot save|load|list|delete <name>`) matches AOSP's documented
+emulator console reference — not independently re-verified against a
+running emulator from this environment, so if a snapshot action ever
+errors unexpectedly, check that reference first.
 """
 from __future__ import annotations
 
-import argparse
-import re
-from typing import List
-
-from rootforge.core.runner import exec_script
-
-MODES = ("rooted", "unrooted")
-ABIS = ("x86_64", "x86", "arm64-v8a", "armeabi-v7a")
-TAGS = ("google_apis", "google_apis_playstore", "default", "google_tv",
-        "android-wear", "android-tv")
-
-# Becomes a profile filename, an AVD directory name and a work directory name.
-NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+import shutil
+import subprocess
+from pathlib import Path
+from typing import List, Optional
 
 
-def avd_name(value: str) -> str:
-    if value in (".", "..") or not NAME_RE.match(value):
-        raise argparse.ArgumentTypeError(
-            f"'{value}' is not usable as an AVD name — [A-Za-z0-9._-] only, and "
-            f"not '.' or '..'. It becomes a profile filename under "
-            f"$ROOTFORGE_HOME/avd-profiles/ and an AVD directory name."
+def _script_path(name: str) -> Path:
+    # Same lookup as rootforge.core.backup/module/ota — usr/local in
+    # either a real install or a repo checkout is parents[3] from here.
+    candidate = Path(__file__).resolve().parents[3] / "bin" / name
+    if candidate.is_file():
+        return candidate
+    found = shutil.which(name)
+    if found:
+        return Path(found)
+    raise FileNotFoundError(
+        f"{name} not found next to this module ({candidate}) or on PATH — "
+        "check your RootForge install."
+    )
+
+
+def cmd_create(
+    name: str,
+    mode: str,
+    api: str = "34",
+    device: str = "pixel_6",
+    abi: str = "x86_64",
+    tag: str = "google_apis",
+    force: bool = False,
+) -> int:
+    try:
+        script = _script_path("setup_rooted_avd.sh")
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+    cmd = [
+        str(script),
+        "create",
+        "--name", name,
+        "--mode", mode,
+        "--api", api,
+        "--device", device,
+        "--abi", abi,
+        "--tag", tag,
+    ]
+    if force:
+        cmd.append("--force")
+    return subprocess.run(cmd).returncode
+
+
+def cmd_list() -> int:
+    try:
+        script = _script_path("setup_rooted_avd.sh")
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+    return subprocess.run([str(script), "list"]).returncode
+
+
+def cmd_start(name: str, snapshot: Optional[str] = None) -> int:
+    try:
+        script = _script_path("setup_rooted_avd.sh")
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+    cmd = [str(script), "boot", "--name", name]
+    if snapshot:
+        cmd += ["--snapshot", snapshot]
+    return subprocess.run(cmd).returncode
+
+
+def _adb(args: List[str]) -> "subprocess.CompletedProcess[str]":
+    return subprocess.run(["adb", *args], capture_output=True, text=True, timeout=15)
+
+
+def _find_running_serial(name: str) -> Optional[str]:
+    """Find the emulator-NNNN serial currently running the given AVD.
+
+    Uses adb's standard `emu avd name` console command, which every AVD
+    instance answers regardless of how it was created/rooted.
+    """
+    devices = _adb(["devices"])
+    for line in devices.stdout.splitlines()[1:]:
+        line = line.strip()
+        if not line.startswith("emulator-"):
+            continue
+        serial = line.split()[0]
+        reply = _adb(["-s", serial, "emu", "avd", "name"])
+        for out_line in reply.stdout.splitlines():
+            out_line = out_line.strip()
+            if not out_line or out_line == "OK":
+                continue
+            if out_line == name:
+                return serial
+            break
+    return None
+
+
+def cmd_stop(name: str) -> int:
+    if shutil.which("adb") is None:
+        print("adb not found on PATH.")
+        return 1
+    serial = _find_running_serial(name)
+    if not serial:
+        print(f"No running emulator instance found for AVD '{name}' (checked `adb devices` + `emu avd name`).")
+        return 1
+    print(f"Stopping '{name}' ({serial})")
+    result = _adb(["-s", serial, "emu", "kill"])
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    return 0
+
+
+def cmd_snapshot(name: str, action: str, snapshot_name: Optional[str] = None) -> int:
+    if action in ("save", "load", "delete") and not snapshot_name:
+        print(f"--snapshot-name is required for '{action}'")
+        return 1
+    if shutil.which("adb") is None:
+        print("adb not found on PATH.")
+        return 1
+
+    serial = _find_running_serial(name)
+    if not serial:
+        print(
+            f"No running emulator instance found for AVD '{name}' — "
+            f"start it first with `rootforge avd start {name}`."
         )
-    return value
+        return 1
 
-
-def api_level(value: str) -> str:
-    if not re.match(r"^[0-9]{1,3}$", value):
-        raise argparse.ArgumentTypeError(
-            f"'{value}' is not an API level. Expected a number like 33 or 34 — "
-            f"it is interpolated into an sdkmanager package spec."
-        )
-    return value
-
-
-def add_parser(subparsers) -> None:
-    avd = subparsers.add_parser(
-        "avd",
-        help="Create, boot and list emulator images (rooted or unrooted).",
-        allow_abbrev=False,
-    )
-    actions = avd.add_subparsers(dest="avd_command", required=True)
-
-    create = actions.add_parser(
-        "create", help="Create an AVD, optionally with a Magisk-patched ramdisk.",
-        allow_abbrev=False,
-    )
-    create.add_argument("--name", required=True, type=avd_name)
-    create.add_argument("--mode", required=True, choices=MODES,
-                        help="rooted patches the ramdisk with Magisk; unrooted does not")
-    create.add_argument("--api", type=api_level, default="34")
-    create.add_argument("--device", default="pixel_6",
-                        help="avdmanager device profile (default: pixel_6)")
-    create.add_argument("--abi", choices=ABIS, default="x86_64")
-    create.add_argument("--tag", choices=TAGS, default="google_apis")
-    create.add_argument("--force", action="store_true",
-                        help="Recreate the AVD even if it already exists")
-
-    boot = actions.add_parser(
-        "boot", help="Boot an AVD, using its saved profile if there is one.",
-        allow_abbrev=False,
-    )
-    boot.add_argument("--name", required=True, type=avd_name)
-    boot.add_argument("--snapshot",
-                      help="Snapshot to load (rooted AVDs default to rootforge-rooted)")
-
-    actions.add_parser("list", help="List known AVDs and RootForge profiles.",
-                       allow_abbrev=False)
-
-
-def dispatch(args: argparse.Namespace) -> int:
-    if args.avd_command == "create":
-        # A rooted AVD cannot be built from a Play system image: Play images
-        # are signed and locked in ways that resist both the writable-system
-        # trick and a ramdisk swap. The script refuses it too; refusing here
-        # means the error arrives before sdkmanager downloads a system image
-        # that was never going to work.
-        if args.mode == "rooted" and args.tag == "google_apis_playstore":
-            print(
-                "rooted mode cannot use --tag google_apis_playstore: Play system "
-                "images are signed and locked in ways that resist both the "
-                "writable-system trick and a ramdisk swap. Use google_apis, "
-                "default, or google_tv.",
-                flush=True,
-            )
-            return 1
-
-        script_args: List[str] = [
-            "create",
-            "--name", args.name,
-            "--mode", args.mode,
-            "--api", args.api,
-            "--device", args.device,
-            "--abi", args.abi,
-            "--tag", args.tag,
-        ]
-        if args.force:
-            script_args.append("--force")
-        return exec_script("setup_rooted_avd.sh", script_args)
-
-    if args.avd_command == "boot":
-        script_args = ["boot", "--name", args.name]
-        if args.snapshot:
-            script_args += ["--snapshot", args.snapshot]
-        return exec_script("setup_rooted_avd.sh", script_args)
-
-    if args.avd_command == "list":
-        return exec_script("setup_rooted_avd.sh", ["list"])
-
-    raise AssertionError(f"no branch for avd command {args.avd_command!r}")
+    cmd = ["-s", serial, "emu", "avd", "snapshot", action]
+    if snapshot_name:
+        cmd.append(snapshot_name)
+    result = _adb(cmd)
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.stderr.strip():
+        print(result.stderr.strip())
+    return result.returncode

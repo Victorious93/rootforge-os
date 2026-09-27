@@ -1,102 +1,72 @@
-"""`rootforge module` — scaffold, lint and build Magisk/KernelSU/Xposed modules.
+"""rootforge.core.module — module scaffold/lint/build wrapper.
 
-P2 item 10 of docs/IMPLEMENTATION_PLAN.md. Wraps new_module_scaffold.sh,
-lint_module.sh and build_magisk_module.sh rather than reimplementing them:
-their behavior is proven and tested. What moves into Python is the argument
-handling — see runner.py for why that is the part worth moving.
-
-The module id rule is defined once, here, and is the rule lint_module.sh
-enforces. Having the generator and the linter disagree about it is a real bug
-this repository already hit: the scaffold produced ids the linter rejected,
-and you only found out after building one.
+Wraps `new_module_scaffold.sh`, `lint_module.sh`, and
+`build_magisk_module.sh` as subprocesses rather than reimplementing
+them — the actual file generation, zipping, and adb push/install logic
+stays in those scripts.
 """
 from __future__ import annotations
 
-import argparse
-import re
-from typing import List
+import shutil
+import subprocess
+from pathlib import Path
 
-from rootforge.core.runner import exec_script
-
-# Magisk requires a restricted id format. lint_module.sh checks this exact
-# pattern; keep the two in step.
-MODULE_ID_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]*$")
-
-TARGETS = ("magisk", "kernelsu", "xposed")
-FRAMEWORKS = ("magisk", "kernelsu")
+VALID_TARGETS = ("magisk", "kernelsu", "apatch", "zygisk", "xposed")
 
 
-def valid_module_id(value: str) -> str:
-    """argparse type for a module id.
-
-    Rejecting here rather than in the shell means the error names the
-    argument and the rule, and it happens before anything is created.
-    """
-    if not MODULE_ID_RE.match(value):
-        raise argparse.ArgumentTypeError(
-            f"'{value}' is not a valid module id — must start with a letter and "
-            f"contain only [a-zA-Z0-9_.-]. Magisk requires a restricted id format, "
-            f"and lint_module.sh enforces the same rule."
-        )
-    return value
-
-
-def add_parser(subparsers) -> None:
-    module = subparsers.add_parser(
-        "module",
-        help="Scaffold, lint and build Magisk/KernelSU/Xposed modules.",
-        allow_abbrev=False,
-    )
-    # required=True so `rootforge module` with no verb is an error naming the
-    # verbs, rather than silently doing nothing.
-    actions = module.add_subparsers(dest="module_command", required=True)
-
-    scaffold = actions.add_parser("scaffold", help="Generate a new module skeleton.", allow_abbrev=False)
-    scaffold.add_argument("module_id", type=valid_module_id)
-    scaffold.add_argument("display_name", help="Human-readable name for module.prop")
-    scaffold.add_argument(
-        "--target", choices=TARGETS, default="magisk",
-        help="Module type to scaffold (default: magisk)",
-    )
-
-    lint = actions.add_parser("lint", help="Check a module directory or zip.", allow_abbrev=False)
-    lint.add_argument("target", help="Module source directory, or a built .zip")
-
-    build = actions.add_parser("build", help="Package a module, and optionally install it.", allow_abbrev=False)
-    build.add_argument("module_id", type=valid_module_id)
-    build.add_argument(
-        "--install", action="store_true", help="Push and install on a connected device"
-    )
-    build.add_argument(
-        "--framework", choices=FRAMEWORKS, default="magisk",
-        help="Root framework whose CLI installs the module (default: magisk)",
-    )
-    build.add_argument(
-        "--serial",
-        help="Target this device serial. Needed once more than one device is "
-             "attached, where adb otherwise refuses outright.",
+def _script_path(name: str) -> Path:
+    # This file lives at .../usr/local/lib/rootforge/core/module.py in both
+    # a real install and a repo checkout — parents[3] is usr/local in
+    # either case, so the same relative lookup finds the sibling script
+    # both ways (see rootforge.core.backup for the same pattern).
+    candidate = Path(__file__).resolve().parents[3] / "bin" / name
+    if candidate.is_file():
+        return candidate
+    found = shutil.which(name)
+    if found:
+        return Path(found)
+    raise FileNotFoundError(
+        f"{name} not found next to this module ({candidate}) or on PATH — "
+        "check your RootForge install."
     )
 
 
-def dispatch(args: argparse.Namespace) -> int:
-    if args.module_command == "scaffold":
-        return exec_script(
-            "new_module_scaffold.sh",
-            [args.module_id, args.display_name, args.target],
-        )
+def cmd_create(module_id: str, display_name: str, target: str = "magisk") -> int:
+    if target not in VALID_TARGETS:
+        print(f"Unknown target '{target}' — expected one of: {', '.join(VALID_TARGETS)}")
+        return 1
+    try:
+        script = _script_path("new_module_scaffold.sh")
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+    result = subprocess.run([str(script), module_id, display_name, target])
+    return result.returncode
 
-    if args.module_command == "lint":
-        return exec_script("lint_module.sh", [args.target])
 
-    if args.module_command == "build":
-        script_args: List[str] = [args.module_id]
-        if args.install:
-            script_args.append("--install")
-        script_args += ["--framework", args.framework]
-        if args.serial:
-            script_args += ["--serial", args.serial]
-        return exec_script("build_magisk_module.sh", script_args)
+def cmd_lint(path: str, json_output: bool = False) -> int:
+    try:
+        script = _script_path("lint_module.sh")
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+    cmd = [str(script)]
+    if json_output:
+        cmd.append("--json")
+    cmd.append(path)
+    result = subprocess.run(cmd)
+    return result.returncode
 
-    # Unreachable: argparse rejects anything else. Kept so that adding a verb
-    # above without adding a branch here is loud rather than silent.
-    raise AssertionError(f"no dispatch branch for module command {args.module_command!r}")
+
+def cmd_build(module_id: str, install: bool = False, framework: str = "magisk") -> int:
+    try:
+        script = _script_path("build_magisk_module.sh")
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+    cmd = [str(script), module_id]
+    if install:
+        cmd.append("--install")
+    cmd += ["--framework", framework]
+    result = subprocess.run(cmd)
+    return result.returncode

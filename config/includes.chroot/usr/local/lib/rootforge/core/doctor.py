@@ -16,6 +16,8 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Callable, List
 
+from rootforge.core.log import Logger
+
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 SECOND_BRAIN_VAULT = Path(
     os.environ.get("ROOTFORGE_BRAIN_VAULT", str(Path.home() / "second-brain"))
@@ -224,24 +226,30 @@ CHECKS: List[Callable[[], CheckResult]] = [
 ]
 
 
-def run_checks() -> List[CheckResult]:
-    results = []
+def run_doctor() -> int:
+    # echo=False: doctor already prints its own formatted report below, so
+    # the logger only needs to write the JSON-lines audit trail to disk.
+    logger = Logger("doctor", echo=False)
+    logger.info("doctor started")
+
+    print("RootForge doctor")
+    print("=================")
+
+    required_failures = 0
     for check in CHECKS:
-        try:
-            results.append(check())
-        except Exception as exc:  # noqa: BLE001 - a broken check must not hide the rest
-            # A check that raises would otherwise take down the whole
-            # diagnostic run, which is precisely when you need the other
-            # checks' output most.
-            results.append(
-                CheckResult(
-                    getattr(check, "__name__", "unknown").removeprefix("check_"),
-                    False,
-                    f"check raised {exc.__class__.__name__}: {exc}",
-                    required=False,
-                )
-            )
-    return results
+        result = check()
+        status = "OK  " if result.ok else ("FAIL" if result.required else "WARN")
+        print(f"[{status}] {result.name:<20} {result.detail}")
+        log_event = logger.info if result.ok else (logger.error if result.required else logger.warn)
+        log_event(
+            "check",
+            check=result.name,
+            ok=result.ok,
+            required=result.required,
+            detail=result.detail,
+        )
+        if not result.ok and result.required:
+            required_failures += 1
 
 
 def run_doctor(as_json: bool = False, quiet: bool = False, strict: bool = False) -> int:
@@ -261,24 +269,7 @@ def run_doctor(as_json: bool = False, quiet: bool = False, strict: bool = False)
             )
         )
     else:
-        print("RootForge doctor")
-        print("=================")
-        labels = {"ok": "OK  ", "fail": "FAIL", "warn": "WARN"}
-        for result in results:
-            if quiet and result.ok:
-                continue
-            print(f"[{labels[result.status]}] {result.name:<20} {result.detail}")
+        print("All required checks passed.")
 
-        print()
-        if required_failures:
-            print(f"{required_failures} required check(s) failed, {warnings} warning(s).")
-        elif warnings:
-            print(f"All required checks passed, with {warnings} warning(s).")
-        else:
-            print("All checks passed.")
-
-    if required_failures:
-        return 1
-    if strict and warnings:
-        return 1
-    return 0
+    logger.info("doctor finished", required_failures=required_failures, log_path=str(logger.path))
+    return 1 if required_failures else 0

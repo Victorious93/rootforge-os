@@ -1,128 +1,238 @@
-"""`rootforge boot` — patch a stock boot image with a KernelSU GKI kernel.
+"""rootforge.core.boot — unified entrypoint for the boot-image toolchain.
 
-Part of P2 item 11 of docs/IMPLEMENTATION_PLAN.md. Wraps
-kernelsu_patch_boot.sh.
+Wraps magiskboot/avbtool as subprocesses using the exact invocation
+patterns already proven elsewhere in this repo (kernelsu_patch_boot.sh's
+`magiskboot unpack`/`repack`, setup_rooted_avd.sh's `magiskboot cpio`,
+0085-avbtool.hook.chroot's `avbtool version`) — the actual unpack/repack/
+cpio-patch/verify logic stays in those tools; this module's job is one CLI
+entrypoint plus structured logging (tool version, what ran, output hash)
+via rootforge.core.log.
 
-Deliberately *part* of item 11. That item also lists unpack, repack and
-verify as a unified front end over magiskboot, avbtool and mkbootimg. Those
-do not exist as scripts yet, so building them here would be new
-functionality rather than a port — and new boot-image handling cannot be
-verified without real boot images and a device to flash them to. Neither is
-available here. `patch` and `flash-last` are the parts that wrap proven code.
-
-The validation below is the rule the script now enforces, in the same place
-argparse can report it. Both matter: the tag rule in particular exists
-because an unvalidated tag redirected a GitHub API query to an arbitrary
-repository, whose asset then became the kernel of a flashed boot image.
+Deliberately does NOT wrap mkbootimg/unpack_bootimg/repack_bootimg's own
+flag surface here — those AOSP tools' arguments vary by boot image header
+version in ways this module can't respell without guessing, so `inspect`/
+`unpack`/`repack` go through magiskboot instead, whose two-command
+unpack-then-repack shape is already proven in this codebase.
 """
 from __future__ import annotations
 
-import argparse
-import re
+import hashlib
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import List
 
-from rootforge.core.runner import exec_script
-
-# A GitHub release tag. curl resolves ../ segments in a URL path before
-# sending the request, so a tag containing a slash moves the API query to
-# another repository entirely — verified against api.github.com.
-TAG_RE = re.compile(r"^[A-Za-z0-9._-]+$")
-
-# Becomes part of the output filename.
-CODENAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
-
-# The Android versions KernelSU publishes GKI kernels for. Not a closed set —
-# a new one appears each year — so this is a shape check, not a whitelist.
-ANDROID_VERSION_RE = re.compile(r"^[0-9]{1,2}$")
+from rootforge.core.log import Logger
 
 
-def release_tag(value: str) -> str:
-    if not TAG_RE.match(value):
-        raise argparse.ArgumentTypeError(
-            f"'{value}' is not a release tag. Expected something like v0.9.5 or "
-            f"'latest' — [A-Za-z0-9._-] only. A tag containing '/' or '..' is "
-            f"resolved by curl before the request is sent, which moves the "
-            f"release query to a different repository."
+def _require_tool(name: str) -> str:
+    path = shutil.which(name)
+    if not path:
+        raise FileNotFoundError(
+            f"{name} not found on PATH — it ships prebuilt on RootForge OS "
+            "(0060-magiskboot.hook.chroot / 0085-avbtool.hook.chroot); "
+            "install it manually if missing."
         )
-    return value
+    return path
 
 
-def device_codename(value: str) -> str:
-    if not CODENAME_RE.match(value):
-        raise argparse.ArgumentTypeError(
-            f"'{value}' is not usable as a device codename — [A-Za-z0-9._-] only. "
-            f"It becomes part of the patched image's filename."
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _tool_version(cmd: List[str]) -> str:
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        lines = (result.stdout + result.stderr).strip().splitlines()
+        return lines[0] if lines else "unknown"
+    except Exception:  # noqa: BLE001 - version capture is best-effort, never fatal
+        return "unknown"
+
+
+def cmd_inspect(img: str) -> int:
+    img_path = Path(img)
+    if not img_path.is_file():
+        print(f"Not a file: {img}")
+        return 1
+    try:
+        magiskboot = _require_tool("magiskboot")
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+
+    logger = Logger("boot-inspect", echo=False)
+    logger.info(
+        "inspect started",
+        image=str(img_path),
+        image_sha256=_sha256_file(img_path),
+        tool_version=_tool_version([magiskboot]),
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        shutil.copy(img_path, Path(tmp) / "boot.img")
+        result = subprocess.run(
+            [magiskboot, "unpack", "boot.img"], cwd=tmp, capture_output=True, text=True
         )
-    return value
+        print(result.stdout, end="")
+        print(result.stderr, end="")
+        if result.returncode != 0:
+            logger.error("inspect failed", returncode=result.returncode)
+            return result.returncode
+
+        print()
+        print(f"Components extracted from {img_path.name}:")
+        for component in sorted(Path(tmp).iterdir()):
+            if component.name == "boot.img":
+                continue
+            print(f"  {component.name}  ({component.stat().st_size} bytes)")
+
+    logger.info("inspect finished", log_path=str(logger.path))
+    return 0
 
 
-def android_version(value: str) -> str:
-    if not ANDROID_VERSION_RE.match(value):
-        raise argparse.ArgumentTypeError(
-            f"'{value}' is not an Android version. Expected a number like 12, 13 "
-            f"or 14 — it is matched against KernelSU's release asset names."
+def cmd_unpack(img: str, out_dir: str) -> int:
+    img_path = Path(img)
+    out_path = Path(out_dir)
+    if not img_path.is_file():
+        print(f"Not a file: {img}")
+        return 1
+    try:
+        magiskboot = _require_tool("magiskboot")
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+
+    out_path.mkdir(parents=True, exist_ok=True)
+    shutil.copy(img_path, out_path / "boot.img")
+
+    logger = Logger("boot-unpack", echo=False)
+    logger.info(
+        "unpack started",
+        image=str(img_path),
+        image_sha256=_sha256_file(img_path),
+        out_dir=str(out_path),
+        tool_version=_tool_version([magiskboot]),
+    )
+
+    result = subprocess.run([magiskboot, "unpack", "boot.img"], cwd=str(out_path))
+    if result.returncode != 0:
+        logger.error("unpack failed", returncode=result.returncode)
+        return result.returncode
+
+    print(f"Unpacked into {out_path}")
+    for component in sorted(out_path.iterdir()):
+        print(f"  {component.name}")
+    logger.info("unpack finished", log_path=str(logger.path))
+    return 0
+
+
+def cmd_repack(work_dir: str) -> int:
+    work_path = Path(work_dir)
+    if not (work_path / "boot.img").is_file():
+        print(
+            f"{work_path} has no boot.img — run `rootforge boot unpack` first "
+            "(magiskboot repack needs the original as a template)."
         )
-    return value
+        return 1
+    try:
+        magiskboot = _require_tool("magiskboot")
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
 
-
-def existing_image(value: str) -> str:
-    path = Path(value)
-    if not path.is_file():
-        raise argparse.ArgumentTypeError(f"boot image not found: {value}")
-    if path.stat().st_size == 0:
-        raise argparse.ArgumentTypeError(f"boot image is empty: {value}")
-    return str(path)
-
-
-def add_parser(subparsers) -> None:
-    boot = subparsers.add_parser(
-        "boot",
-        help="Patch a stock boot image with a KernelSU GKI kernel.",
-        allow_abbrev=False,
+    logger = Logger("boot-repack", echo=False)
+    logger.info(
+        "repack started", work_dir=str(work_path), tool_version=_tool_version([magiskboot])
     )
-    actions = boot.add_subparsers(dest="boot_command", required=True)
 
-    patch = actions.add_parser(
-        "patch", help="Build a KernelSU-patched boot image from a stock one.",
-        allow_abbrev=False,
+    result = subprocess.run([magiskboot, "repack", "boot.img"], cwd=str(work_path))
+    if result.returncode != 0:
+        logger.error("repack failed", returncode=result.returncode)
+        return result.returncode
+
+    output = work_path / "new-boot.img"
+    if output.is_file():
+        output_hash = _sha256_file(output)
+        print(f"Repacked: {output} (SHA-256: {output_hash})")
+        logger.info(
+            "repack finished",
+            output=str(output),
+            output_sha256=output_hash,
+            log_path=str(logger.path),
+        )
+    else:
+        print("magiskboot repack exited 0 but new-boot.img wasn't produced — check its output above.")
+        logger.warn("repack produced no new-boot.img")
+    return 0
+
+
+def cmd_patch(work_dir: str, ramdisk: str, cpio_commands: List[str]) -> int:
+    work_path = Path(work_dir)
+    ramdisk_path = work_path / ramdisk
+    if not ramdisk_path.is_file():
+        print(f"{ramdisk_path} not found — run `rootforge boot unpack` first.")
+        return 1
+    if not cpio_commands:
+        print(
+            "No cpio commands given — e.g. rootforge boot patch <dir> ramdisk.cpio "
+            "-- 'add 0750 init magiskinit'"
+        )
+        return 1
+    try:
+        magiskboot = _require_tool("magiskboot")
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+
+    logger = Logger("boot-patch", echo=False)
+    logger.info(
+        "patch started",
+        work_dir=str(work_path),
+        ramdisk=ramdisk,
+        commands=cpio_commands,
+        tool_version=_tool_version([magiskboot]),
     )
-    patch.add_argument("--stock-boot", required=True, type=existing_image,
-                       help="Stock boot.img pulled from the device or an OTA")
-    patch.add_argument("--android-version", required=True, type=android_version,
-                       help="Android version of the stock image (12, 13, 14, ...)")
-    patch.add_argument("--ksu-version", type=release_tag, default="latest",
-                       help="KernelSU release tag (default: latest)")
-    patch.add_argument("--device", type=device_codename, default="unknown",
-                       help="Device codename, used in the output filename")
 
-    flash = actions.add_parser(
-        "flash-last",
-        help="Flash the most recently patched image (prompts for confirmation).",
-        allow_abbrev=False,
+    result = subprocess.run([magiskboot, "cpio", ramdisk, *cpio_commands], cwd=str(work_path))
+    if result.returncode != 0:
+        logger.error("patch failed", returncode=result.returncode)
+        return result.returncode
+
+    output_hash = _sha256_file(ramdisk_path)
+    print(f"Patched {ramdisk_path} (SHA-256: {output_hash})")
+    logger.info("patch finished", output_sha256=output_hash, log_path=str(logger.path))
+    return 0
+
+
+def cmd_verify(img: str) -> int:
+    img_path = Path(img)
+    if not img_path.is_file():
+        print(f"Not a file: {img}")
+        return 1
+    try:
+        avbtool = _require_tool("avbtool")
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+
+    logger = Logger("boot-verify", echo=False)
+    logger.info(
+        "verify started",
+        image=str(img_path),
+        image_sha256=_sha256_file(img_path),
+        tool_version=_tool_version([avbtool, "version"]),
     )
-    flash.add_argument("--device", type=device_codename, default="unknown",
-                       help="Device codename, shown in the confirmation prompt")
 
-
-def dispatch(args: argparse.Namespace) -> int:
-    if args.boot_command == "patch":
-        script_args: List[str] = [
-            "--stock-boot", args.stock_boot,
-            "--android-version", args.android_version,
-            "--ksu-version", args.ksu_version,
-        ]
-        if args.device != "unknown":
-            script_args += ["--device", args.device]
-        return exec_script("kernelsu_patch_boot.sh", script_args)
-
-    if args.boot_command == "flash-last":
-        # Output is not captured anywhere in this CLI, which matters most
-        # here: the script's typed-confirmation gate reads /dev/tty, and this
-        # subcommand writes the boot partition.
-        script_args = ["--flash"]
-        if args.device != "unknown":
-            script_args += ["--device", args.device]
-        return exec_script("kernelsu_patch_boot.sh", script_args)
-
-    raise AssertionError(f"no branch for boot command {args.boot_command!r}")
+    result = subprocess.run([avbtool, "verify_image", "--image", str(img_path)])
+    ok = result.returncode == 0
+    logger.info("verify finished", ok=ok, returncode=result.returncode, log_path=str(logger.path))
+    if ok:
+        print("AVB verification passed.")
+    else:
+        print(f"AVB verification failed or image is unsigned (avbtool exit {result.returncode}).")
+    return result.returncode

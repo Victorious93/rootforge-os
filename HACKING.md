@@ -41,7 +41,22 @@ rootforge-os/
     │   ├── 007x-*       workspace skel
     │   ├── 008x-*       GNOME defaults, avbtool
     │   ├── 009x-*       Plymouth, Zygisk headers, ccache
+    │   ├── 0099-*       system-manifest.json — numbered last on purpose,
+    │   │                runs after every other hook and after package
+    │   │                install, so dpkg's package list and every earlier
+    │   │                hook's checksums.txt entries are both final by the
+    │   │                time it reads them; folds those together with the
+    │   │                git-commit/build-timestamp provenance auto/build
+    │   │                stages (chroot hooks have no .git access)
     │   └── (numbered ascending — gaps left for future insertion)
+    │
+    │   The six hooks that fetch external content at build time (0040,
+    │   0050, 0060, 0062, 0085, 0095) record each downloaded artifact's
+    │   SHA-256 to /usr/local/share/rootforge/build-manifest/checksums.txt,
+    │   verifying against GitHub's published release-asset digest where
+    │   one exists (failing the build hard on a mismatch) and simply
+    │   recording the hash for the audit trail where no upstream digest is
+    │   available (raw file fetches, plain .deb/installer downloads).
     │
     │   IMPORTANT: this must be a FLAT directory. live-build's hook discovery
     │   (Find_files config/hooks/*.chroot, in lb_chroot_hooks) is a
@@ -66,7 +81,9 @@ rootforge-os/
     │   │                    the thin wrapper for usr/local/lib/rootforge/core/,
     │   │                    and `brain`, the second-brain CLI wrapper)
     │   ├── usr/local/lib/rootforge/core/  rootforge CLI's Python package —
-    │   │   `doctor` and `devices` today; see
+    │   │   doctor/device/config/backup/module subcommands so far, each
+    │   │   wrapping the relevant usr/local/bin/*.sh script(s) as
+    │   │   subprocesses rather than reimplementing them; see
     │   │   docs/IMPLEMENTATION_PLAN.md for what lands here next
     │   ├── usr/local/lib/rootforge/sh/common.sh  shared shell helpers
     │   │   (confirmation gate, checksums, device enumeration) sourced by
