@@ -15,3 +15,8 @@ rootforge-proot-*.tar.*
 # Python bytecode (usr/local/lib/rootforge/)
 __pycache__/
 *.pyc
+
+# auto/build-generated build provenance, baked into the squashfs by
+# 0099-system-manifest.hook.chroot — regenerated fresh every build, never
+# committed (see auto/build's header for why it lives under includes.chroot/).
+config/includes.chroot/usr/local/share/rootforge/build-manifest/
