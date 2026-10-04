@@ -12,6 +12,7 @@ import sys
 from typing import Optional, Sequence
 
 from rootforge.core import __version__
+from rootforge.core import avd as avd_mod
 from rootforge.core import backup as backup_mod
 from rootforge.core.config import cmd_show as config_cmd_show
 from rootforge.core.device import cmd_show as device_cmd_show
@@ -81,6 +82,42 @@ def build_parser() -> argparse.ArgumentParser:
     restore_parser.add_argument("timestamp")
     restore_parser.add_argument("--serial", default=None, help="Target a specific device.")
 
+    avd_parser = subparsers.add_parser(
+        "avd", help="Create, list, start, stop, and snapshot Android emulator AVDs."
+    )
+    avd_sub = avd_parser.add_subparsers(dest="avd_command", required=True)
+
+    avd_create_parser = avd_sub.add_parser("create", help="Create a rooted or unrooted AVD.")
+    avd_create_parser.add_argument("name")
+    avd_create_parser.add_argument("--mode", required=True, choices=["rooted", "unrooted"])
+    avd_create_parser.add_argument("--api", default="34")
+    avd_create_parser.add_argument("--device", default="pixel_6")
+    avd_create_parser.add_argument("--abi", default="x86_64")
+    avd_create_parser.add_argument("--tag", default="google_apis")
+    avd_create_parser.add_argument("--force", action="store_true")
+
+    avd_sub.add_parser("list", help="List known AVDs and RootForge's saved profiles.")
+
+    avd_start_parser = avd_sub.add_parser("start", help="Boot an AVD.")
+    avd_start_parser.add_argument("name")
+    avd_start_parser.add_argument(
+        "--snapshot", default=None, help="Boot from a specific snapshot."
+    )
+
+    avd_stop_parser = avd_sub.add_parser(
+        "stop", help="Stop a running AVD (adb emu kill)."
+    )
+    avd_stop_parser.add_argument("name")
+
+    avd_snapshot_parser = avd_sub.add_parser(
+        "snapshot", help="Save/load/list/delete a running AVD's snapshots."
+    )
+    avd_snapshot_parser.add_argument("name")
+    avd_snapshot_parser.add_argument("action", choices=["save", "load", "list", "delete"])
+    avd_snapshot_parser.add_argument(
+        "snapshot_name", nargs="?", default=None, help="Required for save/load/delete."
+    )
+
     return parser
 
 
@@ -106,6 +143,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return backup_mod.cmd_verify(args.codename, args.timestamp)
         if args.backup_command == "restore":
             return backup_mod.cmd_restore(args.codename, args.timestamp, args.serial)
+
+    if args.command == "avd":
+        if args.avd_command == "create":
+            return avd_mod.cmd_create(
+                args.name, args.mode, args.api, args.device, args.abi, args.tag, args.force
+            )
+        if args.avd_command == "list":
+            return avd_mod.cmd_list()
+        if args.avd_command == "start":
+            return avd_mod.cmd_start(args.name, args.snapshot)
+        if args.avd_command == "stop":
+            return avd_mod.cmd_stop(args.name)
+        if args.avd_command == "snapshot":
+            return avd_mod.cmd_snapshot(args.name, args.action, args.snapshot_name)
 
     parser.print_help()
     return 0
