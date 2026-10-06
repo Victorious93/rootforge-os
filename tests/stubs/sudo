@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# The tests provide explicit temporary-file seams for privileged paths.
+# Execute the requested command as the current test user; never acquire root.
+exec "$@"

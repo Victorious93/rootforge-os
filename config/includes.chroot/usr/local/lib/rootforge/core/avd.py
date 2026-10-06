@@ -16,8 +16,72 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import argparse
+import re
 from pathlib import Path
 from typing import List, Optional
+
+from rootforge.core.runner import exec_script
+
+AVD_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+def avd_name(value: str) -> str:
+    if value in (".", "..") or not AVD_NAME_RE.fullmatch(value):
+        raise argparse.ArgumentTypeError(
+            f"'{value}' is not a safe AVD name; names under the avd-profiles directory cannot contain path separators."
+        )
+    return value
+
+
+def api_level(value: str) -> str:
+    if not re.fullmatch(r"[1-9][0-9]?", value):
+        raise argparse.ArgumentTypeError("API level must be a positive one- or two-digit number")
+    return value
+
+
+def add_parser(subparsers) -> None:
+    parser = subparsers.add_parser("avd", help="Create and manage Android emulators.", allow_abbrev=False)
+    actions = parser.add_subparsers(dest="avd_command", required=True)
+    create = actions.add_parser("create", help="Create a rooted or unrooted AVD.", allow_abbrev=False)
+    create.add_argument("--name", required=True, type=avd_name)
+    create.add_argument("--mode", required=True, choices=("rooted", "unrooted"))
+    create.add_argument("--api", default="34", type=api_level)
+    create.add_argument("--device", default="pixel_6")
+    create.add_argument("--abi", choices=("x86", "x86_64", "arm64-v8a", "armeabi-v7a"), default="x86_64")
+    create.add_argument("--tag", default="google_apis")
+    create.add_argument("--force", action="store_true")
+    actions.add_parser("list", help="List saved AVD profiles.", allow_abbrev=False)
+    boot = actions.add_parser("boot", help="Start an AVD.", allow_abbrev=False)
+    boot.add_argument("--name", required=True, type=avd_name)
+    boot.add_argument("--snapshot", default=None)
+    stop = actions.add_parser("stop", help="Stop an AVD.", allow_abbrev=False)
+    stop.add_argument("--name", required=True, type=avd_name)
+    return
+
+
+def dispatch(args) -> int:
+    command = args.avd_command
+    if command == "create":
+        if args.mode == "rooted" and "play" in args.tag.lower():
+            print("Rooted AVDs require an unsigned Google APIs image; Play images are signed and locked.")
+            return 1
+        argv = ["create", "--name", args.name, "--mode", args.mode,
+                "--api", args.api, "--device", args.device,
+                "--abi", args.abi, "--tag", args.tag]
+        if args.force:
+            argv.append("--force")
+        return exec_script("setup_rooted_avd.sh", argv)
+    if command == "list":
+        return exec_script("setup_rooted_avd.sh", ["list"])
+    if command == "boot":
+        argv = ["boot", "--name", args.name]
+        if args.snapshot:
+            argv += ["--snapshot", args.snapshot]
+        return exec_script("setup_rooted_avd.sh", argv)
+    if command == "stop":
+        return exec_script("setup_rooted_avd.sh", ["stop", "--name", args.name])
+    raise AssertionError(f"unknown AVD command: {command!r}")
 
 
 def _script_path(name: str) -> Path:

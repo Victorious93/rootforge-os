@@ -28,7 +28,7 @@ The build must run as root. A minimum of **20 GB free disk space** and **4 GB RA
 ## Build
 
 ```bash
-git clone https://github.com/origin-source-labs/rootforge-os.git
+git clone https://github.com/Victorious93/rootforge-os.git
 cd rootforge-os
 sudo auto/build
 ```

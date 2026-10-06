@@ -1,72 +1,54 @@
-"""rootforge.core.module — module scaffold/lint/build wrapper.
-
-Wraps `new_module_scaffold.sh`, `lint_module.sh`, and
-`build_magisk_module.sh` as subprocesses rather than reimplementing
-them — the actual file generation, zipping, and adb push/install logic
-stays in those scripts.
-"""
+"""Validated CLI wrapper for module scaffolding, linting, and packaging."""
 from __future__ import annotations
 
-import shutil
-import subprocess
-from pathlib import Path
+import argparse
+import re
+from typing import List
+
+from rootforge.core.runner import exec_script
 
 VALID_TARGETS = ("magisk", "kernelsu", "apatch", "zygisk", "xposed")
+MODULE_ID_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]*$")
 
 
-def _script_path(name: str) -> Path:
-    # This file lives at .../usr/local/lib/rootforge/core/module.py in both
-    # a real install and a repo checkout — parents[3] is usr/local in
-    # either case, so the same relative lookup finds the sibling script
-    # both ways (see rootforge.core.backup for the same pattern).
-    candidate = Path(__file__).resolve().parents[3] / "bin" / name
-    if candidate.is_file():
-        return candidate
-    found = shutil.which(name)
-    if found:
-        return Path(found)
-    raise FileNotFoundError(
-        f"{name} not found next to this module ({candidate}) or on PATH — "
-        "check your RootForge install."
-    )
+def valid_module_id(value: str) -> str:
+    if not MODULE_ID_RE.fullmatch(value):
+        raise argparse.ArgumentTypeError(
+            f"'{value}' is not a valid module id; lint_module.sh enforces "
+            "^[a-zA-Z][a-zA-Z0-9_.-]*$ (starts with a letter; letters, digits, dot, underscore, hyphen only)."
+        )
+    return value
 
 
-def cmd_create(module_id: str, display_name: str, target: str = "magisk") -> int:
-    if target not in VALID_TARGETS:
-        print(f"Unknown target '{target}' — expected one of: {', '.join(VALID_TARGETS)}")
-        return 1
-    try:
-        script = _script_path("new_module_scaffold.sh")
-    except FileNotFoundError as exc:
-        print(exc)
-        return 1
-    result = subprocess.run([str(script), module_id, display_name, target])
-    return result.returncode
+def add_parser(subparsers) -> None:
+    parser = subparsers.add_parser("module", help="Scaffold, lint, and build Android modules.", allow_abbrev=False)
+    actions = parser.add_subparsers(dest="module_command", required=True)
+    scaffold = actions.add_parser("scaffold", help="Create a module skeleton.", allow_abbrev=False)
+    scaffold.add_argument("module_id", type=valid_module_id)
+    scaffold.add_argument("display_name")
+    scaffold.add_argument("--target", choices=VALID_TARGETS, default="magisk")
+    lint = actions.add_parser("lint", help="Lint a module directory or ZIP.", allow_abbrev=False)
+    lint.add_argument("path")
+    lint.add_argument("--json", action="store_true")
+    build = actions.add_parser("build", help="Package a module and optionally install it.", allow_abbrev=False)
+    build.add_argument("module_id", type=valid_module_id)
+    build.add_argument("--install", action="store_true")
+    build.add_argument("--framework", choices=("magisk", "kernelsu"), default="magisk")
+    build.add_argument("--serial", default=None)
 
 
-def cmd_lint(path: str, json_output: bool = False) -> int:
-    try:
-        script = _script_path("lint_module.sh")
-    except FileNotFoundError as exc:
-        print(exc)
-        return 1
-    cmd = [str(script)]
-    if json_output:
-        cmd.append("--json")
-    cmd.append(path)
-    result = subprocess.run(cmd)
-    return result.returncode
-
-
-def cmd_build(module_id: str, install: bool = False, framework: str = "magisk") -> int:
-    try:
-        script = _script_path("build_magisk_module.sh")
-    except FileNotFoundError as exc:
-        print(exc)
-        return 1
-    cmd = [str(script), module_id]
-    if install:
-        cmd.append("--install")
-    cmd += ["--framework", framework]
-    result = subprocess.run(cmd)
-    return result.returncode
+def dispatch(args: argparse.Namespace) -> int:
+    if args.module_command == "scaffold":
+        return exec_script("new_module_scaffold.sh", [args.module_id, args.display_name, args.target])
+    if args.module_command == "lint":
+        argv = (["--json"] if args.json else []) + [args.path]
+        return exec_script("lint_module.sh", argv)
+    if args.module_command == "build":
+        argv: List[str] = [args.module_id]
+        if args.install:
+            argv.append("--install")
+        argv += ["--framework", args.framework]
+        if args.serial:
+            argv += ["--serial", args.serial]
+        return exec_script("build_magisk_module.sh", argv)
+    raise AssertionError(f"unknown module command: {args.module_command!r}")

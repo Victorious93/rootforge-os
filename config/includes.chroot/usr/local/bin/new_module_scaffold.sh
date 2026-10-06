@@ -23,8 +23,16 @@ TARGET="${3:-magisk}"
 
 case "$TARGET" in
   magisk|kernelsu|apatch|zygisk|xposed) ;;
-  *) echo "Unknown target '$TARGET' — expected magisk, kernelsu, apatch, zygisk, or xposed" >&2; exit 1 ;;
+  *) echo "Unknown target '$TARGET' — expected magisk, kernelsu, apatch, zygisk or xposed" >&2; exit 1 ;;
 esac
+
+# module.prop's id is also the directory name under modules/. Keep the
+# scaffold and linter on the same rule so an invalid id cannot escape that
+# directory before the linter gets a chance to reject it.
+if [[ ! "$MODULE_ID" =~ ^[a-zA-Z][a-zA-Z0-9_.-]*$ ]]; then
+  echo "Invalid module id '$MODULE_ID'; lint_module.sh enforces ^[a-zA-Z][a-zA-Z0-9_.-]*$." >&2
+  exit 1
+fi
 
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 MODULE_DIR="$ROOTFORGE_HOME/modules/$MODULE_ID"
@@ -215,8 +223,9 @@ EOF
 fi
 
 if [[ "$TARGET" == "zygisk" ]]; then
-  ZYGISK_HEADER="/usr/local/share/rootforge/zygisk-api/zygisk.hpp"
-  ZYGISK_CMAKE_STUB="/usr/local/share/rootforge/zygisk-api/CMakeLists.zygisk.txt"
+  ROOTFORGE_ZYGISK_API_DIR="${ROOTFORGE_ZYGISK_API_DIR:-/usr/local/share/rootforge/zygisk-api}"
+  ZYGISK_HEADER="$ROOTFORGE_ZYGISK_API_DIR/zygisk.hpp"
+  ZYGISK_CMAKE_STUB="$ROOTFORGE_ZYGISK_API_DIR/CMakeLists.zygisk.txt"
   mkdir -p "$MODULE_DIR/zygisk/jni"
 
   cat > "$MODULE_DIR/zygisk/jni/module.cpp" <<EOF
