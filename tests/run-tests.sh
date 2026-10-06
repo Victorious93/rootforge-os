@@ -1186,7 +1186,7 @@ new_sandbox
 # announced "Scaffolded magsik module", as if it had done something else.
 run_script bash "$BIN_DIR/new_module_scaffold.sh" okid "Ok" magsik
 assert_eq "an unknown target is refused" "$RC" "1"
-assert_contains "an unknown target lists the real ones" "$OUT" "expected magisk, kernelsu or xposed"
+assert_contains "an unknown target lists the real ones" "$OUT" "expected magisk, kernelsu, apatch, zygisk or xposed"
 drop_sandbox
 
 section "Termux variants — build flavours"

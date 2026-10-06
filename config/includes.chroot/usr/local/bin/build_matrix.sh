@@ -39,8 +39,6 @@ done
 [[ -n "$PROJECT_DIR" && -d "$PROJECT_DIR" ]] || { echo "Usage: build_matrix.sh --project-dir <path> --build-cmd \"<cmd>\" [--matrix-file matrix.tsv]" >&2; exit 1; }
 [[ -n "$BUILD_CMD" ]] || { echo "--build-cmd is required, e.g. --build-cmd './gradlew assembleRelease' or --build-cmd './build.sh'" >&2; exit 1; }
 
-command -v docker >/dev/null 2>&1 || { echo "docker not found — apt install docker.io, or re-run bootstrap." >&2; exit 1; }
-
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 STAMP="$(date +%Y%m%d_%H%M%S)"
@@ -76,6 +74,10 @@ else
     "26.1.10909125	34"
   )
 fi
+
+# Validate local inputs before checking runtime tooling so a typo is reported
+# accurately even on a host that has not installed Docker.
+command -v docker >/dev/null 2>&1 || { echo "docker not found — apt install docker.io, or re-run bootstrap." >&2; exit 1; }
 
 echo "# RootForge build matrix — $STAMP" > "$REPORT"
 echo "" >> "$REPORT"

@@ -226,30 +226,15 @@ CHECKS: List[Callable[[], CheckResult]] = [
 ]
 
 
-def run_doctor() -> int:
-    # echo=False: doctor already prints its own formatted report below, so
-    # the logger only needs to write the JSON-lines audit trail to disk.
-    logger = Logger("doctor", echo=False)
-    logger.info("doctor started")
-
-    print("RootForge doctor")
-    print("=================")
-
-    required_failures = 0
+def run_checks() -> List[CheckResult]:
+    results: List[CheckResult] = []
     for check in CHECKS:
-        result = check()
-        status = "OK  " if result.ok else ("FAIL" if result.required else "WARN")
-        print(f"[{status}] {result.name:<20} {result.detail}")
-        log_event = logger.info if result.ok else (logger.error if result.required else logger.warn)
-        log_event(
-            "check",
-            check=result.name,
-            ok=result.ok,
-            required=result.required,
-            detail=result.detail,
-        )
-        if not result.ok and result.required:
-            required_failures += 1
+        try:
+            results.append(check())
+        except Exception as exc:  # a broken diagnostic must not hide the rest
+            name = check.__name__.removeprefix("check_")
+            results.append(CheckResult(name, False, f"check raised {type(exc).__name__}: {exc}", required=False))
+    return results
 
 
 def run_doctor(as_json: bool = False, quiet: bool = False, strict: bool = False) -> int:
@@ -268,8 +253,10 @@ def run_doctor(as_json: bool = False, quiet: bool = False, strict: bool = False)
                 indent=2,
             )
         )
-    else:
-        print("All required checks passed.")
-
-    logger.info("doctor finished", required_failures=required_failures, log_path=str(logger.path))
-    return 1 if required_failures else 0
+    elif not quiet:
+        print("RootForge doctor")
+        print("=================")
+        for result in results:
+            status = "OK  " if result.ok else ("FAIL" if result.required else "WARN")
+            print(f"[{status}] {result.name:<20} {result.detail}")
+    return 1 if required_failures or (strict and warnings) else 0

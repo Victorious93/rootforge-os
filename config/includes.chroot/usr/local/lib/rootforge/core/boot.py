@@ -17,13 +17,86 @@ unpack-then-repack shape is already proven in this codebase.
 from __future__ import annotations
 
 import hashlib
+import argparse
 import shutil
 import subprocess
 import tempfile
+import re
 from pathlib import Path
 from typing import List
 
 from rootforge.core.log import Logger
+from rootforge.core.runner import exec_script
+
+def release_tag(value: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]*", value):
+        raise argparse.ArgumentTypeError("release tag cannot contain a path or a different repository reference")
+    return value
+
+
+def device_codename(value: str) -> str:
+    if value in (".", "..") or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", value):
+        raise argparse.ArgumentTypeError("device codename must be a filename-safe component")
+    return value
+
+
+def android_version(value: str) -> str:
+    if not re.fullmatch(r"[1-9][0-9]?", value):
+        raise argparse.ArgumentTypeError("Android version must be a one- or two-digit API release number")
+    return value
+
+
+def existing_image(value: str) -> str:
+    path = Path(value)
+    if not path.is_file():
+        raise argparse.ArgumentTypeError(f"stock boot image not found: {value}")
+    if path.stat().st_size == 0:
+        raise argparse.ArgumentTypeError(f"stock boot image is empty: {value}")
+    return str(path)
+
+
+def add_parser(subparsers) -> None:
+    parser = subparsers.add_parser("boot", help="Patch a boot image with KernelSU or inspect boot images.", allow_abbrev=False)
+    actions = parser.add_subparsers(dest="boot_command", required=True)
+    patch = actions.add_parser("patch", help="Patch a stock boot image with KernelSU.", allow_abbrev=False)
+    patch.add_argument("--stock-boot", required=True, type=existing_image)
+    patch.add_argument("--android-version", required=True, type=android_version)
+    patch.add_argument("--ksu-version", type=release_tag, default="latest")
+    patch.add_argument("--device", type=device_codename, default=None)
+    patch.add_argument("--serial", default=None)
+    last = actions.add_parser("flash-last", help="Flash the most recently patched image.", allow_abbrev=False)
+    last.add_argument("--device", type=device_codename, default=None)
+    last.add_argument("--serial", default=None)
+    actions.add_parser("inspect", help="Inspect a boot image.", allow_abbrev=False).add_argument("image")
+    unpack = actions.add_parser("unpack", help="Unpack a boot image.", allow_abbrev=False)
+    unpack.add_argument("image"); unpack.add_argument("out_dir")
+    repack = actions.add_parser("repack", help="Repack a working directory.", allow_abbrev=False)
+    repack.add_argument("work_dir")
+    verify = actions.add_parser("verify", help="Verify an AVB image.", allow_abbrev=False)
+    verify.add_argument("image")
+
+
+def dispatch(args) -> int:
+    if args.boot_command == "patch":
+        argv = ["--stock-boot", args.stock_boot, "--android-version", args.android_version,
+                "--ksu-version", args.ksu_version]
+        if args.device:
+            argv += ["--device", args.device]
+        if args.serial:
+            argv += ["--serial", args.serial]
+        return exec_script("kernelsu_patch_boot.sh", argv)
+    if args.boot_command == "flash-last":
+        argv = ["--flash"]
+        if args.device:
+            argv += ["--device", args.device]
+        if args.serial:
+            argv += ["--serial", args.serial]
+        return exec_script("kernelsu_patch_boot.sh", argv)
+    if args.boot_command == "inspect": return cmd_inspect(args.image)
+    if args.boot_command == "unpack": return cmd_unpack(args.image, args.out_dir)
+    if args.boot_command == "repack": return cmd_repack(args.work_dir)
+    if args.boot_command == "verify": return cmd_verify(args.image)
+    raise AssertionError(f"unknown boot command: {args.boot_command!r}")
 
 
 def _require_tool(name: str) -> str:

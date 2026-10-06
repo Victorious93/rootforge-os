@@ -1,172 +1,170 @@
-"""rootforge.core.device — device detection and vendor-safety gating.
-
-Queries a connected device once (via fastboot or adb) and returns a
-`Device` describing what was found. Vendors whose unlock/flash workflow
-this repo refuses to automate (Samsung, Xiaomi) raise
-`UnsupportedVendorError` instead of guessing — the same refusal reasoning
-and wording `unlock_bootloader.sh` already uses, kept in one place so the
-CLI and that script never disagree about which vendors are unsupported or
-why.
-"""
+"""Device capability profiling shared by the RootForge CLI and shell tools."""
 from __future__ import annotations
 
+import json
 import re
 import subprocess
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import asdict, dataclass, field
+from typing import Dict, List, Optional
 
-
-class UnsupportedVendorError(Exception):
-    """A detected device's vendor requires an out-of-band workflow this repo does not automate."""
-
-    def __init__(self, vendor: str, instructions: str):
-        self.vendor = vendor
-        self.instructions = instructions
-        super().__init__(f"{vendor}: {instructions}")
-
-
-# Mirrors unlock_bootloader.sh's IS_SAMSUNG/IS_XIAOMI refusal messages.
-VENDOR_REFUSALS = {
-    "samsung": (
-        "Samsung devices unlock OEM bootloader in Settings > Developer "
-        "Options > OEM Unlocking, then flash via Download Mode with "
-        "Odin/Heimdall — not fastboot. Automating this risks tripping Knox "
-        "permanently with no rollback. See devices/<codename>/hardware-notes.md."
-    ),
-    "xiaomi": (
-        "Xiaomi/Redmi devices require a Mi Unlock permit tied to your Mi "
-        "account, with a vendor-enforced waiting period (often 7+ days for "
-        "new accounts). Complete that via the official Mi Unlock tool "
-        "first; RootForge can proceed once fastboot reports unlocked: yes."
-    ),
+VENDOR_PATTERNS = {
+    "samsung": re.compile(r"\bsamsung\b|\bsm-[a-z0-9]+", re.I),
+    "xiaomi": re.compile(r"\bxiaomi\b|\bredmi\b|\bpoco\b", re.I),
 }
 
 
 @dataclass
-class Device:
-    serial: Optional[str]
-    mode: str  # "fastboot", "adb", or "none"
-    product: Optional[str] = None
+class DeviceProfile:
+    serial: str
+    mode: str
     codename: Optional[str] = None
-    current_slot: Optional[str] = None
-    unlocked: Optional[bool] = None
+    model: Optional[str] = None
     vendor: Optional[str] = None
-    root_method: Optional[str] = None  # "magisk", "kernelsu", or None
+    slot_mode: str = "unknown"
+    current_slot: Optional[str] = None
+    bootloader_unlocked: Optional[bool] = None
+    root_method: Optional[str] = None
+    raw: Dict[str, str] = field(default_factory=dict)
+
+    @property
+    def supported(self) -> bool:
+        return self.vendor not in ("samsung", "xiaomi")
+
+    def refusal_message(self) -> Optional[str]:
+        if self.vendor == "samsung":
+            return ("DETECTED DEVICE\nVendor: Samsung\n"
+                    "RootForge cannot safely continue with the automatic fastboot workflow.\n"
+                    "Samsung devices use Download Mode and unlocking trips Knox. Use the appropriate Samsung workflow.")
+        if self.vendor == "xiaomi":
+            return ("DETECTED DEVICE\nVendor: Xiaomi\n"
+                    "RootForge cannot safely continue with the automatic fastboot workflow.\n"
+                    "Xiaomi devices require the official Mi Unlock process and an approved wait period.")
+        return None
+
+    def as_dict(self) -> Dict[str, object]:
+        return asdict(self) | {"supported": self.supported, "refusal_message": self.refusal_message()}
 
 
-def _run(cmd: List[str]) -> str:
+def _run(argv: List[str], timeout: int = 10) -> Optional[str]:
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return ""
-    return result.stdout + result.stderr
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout if result.returncode == 0 else None
 
 
-def _fastboot(serial: Optional[str]) -> List[str]:
-    cmd = ["fastboot"]
-    if serial:
-        cmd += ["-s", serial]
-    return cmd
+def _clean(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip().strip('"')
+    return value or None
 
 
-def _adb(serial: Optional[str]) -> List[str]:
-    cmd = ["adb"]
-    if serial:
-        cmd += ["-s", serial]
-    return cmd
-
-
-def _parse_getvar(output: str, key: str) -> Optional[str]:
-    # `fastboot getvar all` prefixes every line with "(bootloader) ", so the
-    # key is never at column 0 — match "key:" preceded by line-start or
-    # whitespace instead of anchoring to it (same substance as
-    # unlock_bootloader.sh's `grep -oP '(?<=key: ).*'`).
-    match = re.search(rf"(?m)(?:^|\s){re.escape(key)}:\s*(.+)$", output)
-    return match.group(1).strip() if match else None
-
-
-def _detect_root_method(serial: Optional[str]) -> Optional[str]:
-    if "magisk" in _run(_adb(serial) + ["shell", "which", "magisk"]):
-        return "magisk"
-    if "ksud" in _run(_adb(serial) + ["shell", "which", "ksud"]):
-        return "kernelsu"
+def _vendor(*values: Optional[str]) -> Optional[str]:
+    text = " ".join(v for v in values if v)
+    for name, pattern in VENDOR_PATTERNS.items():
+        if pattern.search(text):
+            return name
     return None
 
 
-def detect_device(serial: Optional[str] = None) -> Device:
-    """Detect the currently connected device's fastboot/adb state.
+def _detect_root_method(serial: str) -> Optional[str]:
+    magisk = _run(["adb", "-s", serial, "shell", "su", "-c", "magisk -v"])
+    if magisk and magisk.strip():
+        return "magisk"
+    kernelsu = _run(["adb", "-s", serial, "shell", "su", "-c", "ksud -V"])
+    if kernelsu and kernelsu.strip():
+        return "kernelsu"
+    which_su = _run(["adb", "-s", serial, "shell", "which", "su"])
+    if which_su is None:
+        return None
+    return "none" if not which_su.strip() else None
 
-    Raises UnsupportedVendorError for vendors this repo refuses to
-    automate — callers should catch this and stop rather than proceed.
-    """
-    fb_out = _run(_fastboot(serial) + ["devices"])
-    if fb_out.strip():
-        getvar_out = _run(_fastboot(serial) + ["getvar", "all"])
-        vendor = None
-        lowered = getvar_out.lower()
-        if "samsung" in lowered:
-            vendor = "samsung"
-        elif "xiaomi" in lowered or "redmi" in lowered:
-            vendor = "xiaomi"
 
-        product = _parse_getvar(getvar_out, "product")
-        unlocked_raw = _parse_getvar(getvar_out, "unlocked")
-        device = Device(
-            serial=serial,
-            mode="fastboot",
-            product=product,
-            codename=product,
-            current_slot=_parse_getvar(getvar_out, "current-slot"),
-            unlocked=(unlocked_raw == "yes") if unlocked_raw is not None else None,
-            vendor=vendor,
-        )
-        if vendor in VENDOR_REFUSALS:
-            raise UnsupportedVendorError(vendor, VENDOR_REFUSALS[vendor])
-        return device
+def _parse_fastboot(output: str) -> Dict[str, str]:
+    data: Dict[str, str] = {}
+    for line in output.splitlines():
+        line = re.sub(r"^\s*\(bootloader\)\s*", "", line.strip(), flags=re.I)
+        if ":" in line:
+            key, value = line.split(":", 1)
+            data[key.strip().lower().replace("_", "-")] = value.strip()
+    return data
 
-    adb_out = _run(_adb(serial) + ["devices"])
-    connected = [
-        line for line in adb_out.splitlines()[1:] if line.strip() and "device" in line
-    ]
-    if connected:
-        codename = _run(_adb(serial) + ["shell", "getprop", "ro.product.device"]).strip()
-        return Device(
-            serial=serial,
-            mode="adb",
-            codename=codename or None,
-            root_method=_detect_root_method(serial),
-        )
 
-    return Device(serial=serial, mode="none")
+def profile_fastboot(serial: str) -> DeviceProfile:
+    output = _run(["fastboot", "-s", serial, "getvar", "all"])
+    if output is None:
+        return DeviceProfile(serial=serial, mode="fastboot")
+    raw = _parse_fastboot(output)
+    product = _clean(raw.get("product")) or _clean(raw.get("sku"))
+    slot = _clean(raw.get("current-slot"))
+    unlocked_raw = _clean(raw.get("unlocked")) or _clean(raw.get("secure"))
+    unlocked = None
+    if unlocked_raw:
+        if unlocked_raw.lower() in ("yes", "true", "1", "unlocked"):
+            unlocked = True
+        elif unlocked_raw.lower() in ("no", "false", "0", "locked"):
+            unlocked = False
+    return DeviceProfile(serial=serial, mode="fastboot", codename=product,
+                         vendor=_vendor(output), slot_mode="ab" if slot else "single",
+                         current_slot=slot.lower().lstrip("_") if slot else None,
+                         bootloader_unlocked=unlocked, raw=raw)
+
+
+def profile_adb(serial: str) -> DeviceProfile:
+    props = {
+        "codename": "ro.product.device",
+        "model": "ro.product.model",
+        "manufacturer": "ro.product.manufacturer",
+        "brand": "ro.product.brand",
+        "slot_suffix": "ro.boot.slot_suffix",
+        "flash_locked": "ro.boot.flash.locked",
+    }
+    raw: Dict[str, str] = {}
+    answers: Dict[str, Optional[str]] = {}
+    for key, prop in props.items():
+        value = _run(["adb", "-s", serial, "shell", "getprop", prop])
+        if value is None:
+            return DeviceProfile(serial=serial, mode="adb")
+        answers[key] = value
+        clean = _clean(value)
+        if clean is not None:
+            raw[prop] = clean
+    slot_answer = answers["slot_suffix"]
+    suffix = _clean(slot_answer)
+    lock_value = _clean(answers["flash_locked"])
+    unlocked = None if lock_value not in ("0", "1") else lock_value == "0"
+    manufacturer = _clean(answers["manufacturer"])
+    brand = _clean(answers["brand"])
+    model = _clean(answers["model"])
+    return DeviceProfile(
+        serial=serial, mode="adb", codename=_clean(answers["codename"]), model=model,
+        vendor=_vendor(manufacturer, brand, model),
+        slot_mode="ab" if suffix else "single",
+        current_slot=suffix.lstrip("_") if suffix else None,
+        bootloader_unlocked=unlocked, root_method=_detect_root_method(serial), raw=raw,
+    )
+
+
+def profile_device(serial: str, mode: str) -> DeviceProfile:
+    if mode == "adb":
+        return profile_adb(serial)
+    if mode == "fastboot":
+        return profile_fastboot(serial)
+    raise ValueError(f"unsupported device mode: {mode}")
 
 
 def cmd_show(serial: Optional[str] = None) -> int:
+    from rootforge.core.cli import _select_device
     try:
-        device = detect_device(serial)
-    except UnsupportedVendorError as exc:
-        print("DETECTED DEVICE")
-        print(f"  Vendor: {exc.vendor.capitalize()}")
-        print("  Automatic fastboot workflow unavailable. RootForge cannot safely continue.")
-        print(f"  Required external workflow: {exc.instructions}")
-        print("  Do not guess.")
-        return 2
-
-    if device.mode == "none":
-        print("No device detected in fastboot or adb mode.")
-        print("Connect a device and either put it in bootloader mode")
-        print("(adb reboot bootloader) or ensure `adb devices` sees it.")
+        resolved, mode = _select_device(serial)
+    except LookupError as exc:
+        print(f"rootforge: error: {exc}")
         return 1
-
-    print("DETECTED DEVICE")
-    print(f"  Mode:         {device.mode}")
-    if device.codename:
-        print(f"  Codename:     {device.codename}")
-    if device.current_slot:
-        print(f"  Active slot:  {device.current_slot}")
-    if device.unlocked is not None:
-        print(f"  Unlocked:     {'yes' if device.unlocked else 'no'}")
-    if device.root_method:
-        print(f"  Root method:  {device.root_method}")
-    if device.serial:
-        print(f"  Serial:       {device.serial}")
+    profile = profile_device(resolved, mode)
+    print(json.dumps(profile.as_dict(), indent=2))
+    message = profile.refusal_message()
+    if message:
+        print(message)
+        return 1
     return 0

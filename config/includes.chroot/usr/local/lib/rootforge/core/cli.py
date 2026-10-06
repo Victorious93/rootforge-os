@@ -1,8 +1,7 @@
-"""rootforge — unified CLI entrypoint for RootForge OS.
+"""RootForge's unified command line interface.
 
-A thin dispatcher. Later phases (see docs/IMPLEMENTATION_PLAN.md) add
-module/boot/backup/ota/avd subcommands here, wrapping the existing
-usr/local/bin/*.sh scripts rather than reimplementing them.
+Each command group owns its argument validation and dispatch. This module
+only joins those groups and handles the device/configuration entry points.
 """
 from __future__ import annotations
 
@@ -11,401 +10,131 @@ import json
 import sys
 from typing import Optional, Sequence
 
-from rootforge.core import __version__
-from rootforge.core import avd as avd_mod
-from rootforge.core import backup as backup_mod
-from rootforge.core import boot as boot_mod
-from rootforge.core import module as module_mod
-from rootforge.core import ota as ota_mod
-from rootforge.core.config import cmd_show as config_cmd_show
-from rootforge.core.device import cmd_show as device_cmd_show
+from rootforge.core import __version__, avd, boot, device, devices, flashing, module, ota
+from rootforge.core.device import profile_device
+from rootforge.core.devices import list_devices
 from rootforge.core.doctor import run_doctor
 
 
 def build_parser() -> argparse.ArgumentParser:
-    # allow_abbrev=False: argparse otherwise accepts any unambiguous prefix,
-    # so `--both-slot` silently means `--both-slots`. Worse, adding a flag
-    # later can change what an existing abbreviation resolves to, or make it
-    # ambiguous — a silent behaviour change in scripts that already work.
-    # These commands write boot partitions; four saved keystrokes is not
-    # worth that. Subparsers do not inherit this, so each sets it too.
     parser = argparse.ArgumentParser(
-        prog="rootforge",
-        description="RootForge OS unified CLI.",
-        allow_abbrev=False,
+        prog="rootforge", description="RootForge OS unified CLI.", allow_abbrev=False
     )
-    parser.add_argument(
-        "--version", action="version", version=f"rootforge {__version__}"
-    )
-    subparsers = parser.add_subparsers(dest="command")
-    subparsers.add_parser("doctor", help="Check the environment for common problems.")
+    parser.add_argument("--version", action="version", version=f"rootforge {__version__}")
+    sub = parser.add_subparsers(dest="command", required=True)
 
-    device_parser = subparsers.add_parser(
-        "device", help="Inspect the currently connected device."
-    )
+    doctor_parser = sub.add_parser("doctor", help="Check the environment for common problems.", allow_abbrev=False)
+    doctor_parser.add_argument("--json", action="store_true")
+    doctor_parser.add_argument("--quiet", action="store_true")
+    doctor_parser.add_argument("--strict", action="store_true")
+
+    devices_parser = sub.add_parser("devices", help="List connected adb and fastboot devices.", allow_abbrev=False)
+    devices_parser.add_argument("--json", action="store_true")
+    devices_parser.add_argument("-l", "--detailed", action="store_true")
+
+    device_parser = sub.add_parser("device", help="Inspect a connected device.", allow_abbrev=False)
     device_sub = device_parser.add_subparsers(dest="device_command", required=True)
-    show_parser = device_sub.add_parser(
-        "show", help="Detect and print the connected device's state."
-    )
-    show_parser.add_argument(
-        "--serial", default=None, help="Target a specific device (adb -s / fastboot -s)."
-    )
+    info = device_sub.add_parser("info", help="Profile a device and its capabilities.", allow_abbrev=False)
+    info.add_argument("serial", nargs="?", default=None)
+    info.add_argument("--json", action="store_true")
+    show = device_sub.add_parser("show", help="Alias for device info.", allow_abbrev=False)
+    show.add_argument("serial", nargs="?", default=None)
+    show.add_argument("--serial", dest="serial_option", default=None)
+    show.add_argument("--json", action="store_true")
 
-    config_parser = subparsers.add_parser(
-        "config", help="Inspect the layered RootForge configuration."
-    )
+    config_parser = sub.add_parser("config", help="Inspect layered RootForge configuration.", allow_abbrev=False)
     config_sub = config_parser.add_subparsers(dest="config_command", required=True)
-    show_config_parser = config_sub.add_parser(
-        "show", help="Print the effective merged config and which files set it."
-    )
-    show_config_parser.add_argument(
-        "--codename",
-        default=None,
-        help="Also apply devices/<codename>/rootforge.yaml's overrides.",
-    )
+    show_config = config_sub.add_parser("show", help="Print merged configuration.", allow_abbrev=False)
+    show_config.add_argument("--codename", default=None)
 
-    backup_parser = subparsers.add_parser(
-        "backup", help="SHA-256-verified partition backup/restore."
-    )
-    backup_sub = backup_parser.add_subparsers(dest="backup_command", required=True)
-
-    create_parser = backup_sub.add_parser(
-        "create", help="Back up a device's partitions and write a SHA-256 manifest."
-    )
-    create_parser.add_argument("codename", help="Device codename (used for the backup path).")
-    create_parser.add_argument("--serial", default=None, help="Target a specific device.")
-
-    list_parser = backup_sub.add_parser("list", help="List existing backups.")
-    list_parser.add_argument(
-        "codename", nargs="?", default=None, help="Limit to one device (default: all)."
-    )
-
-    verify_parser = backup_sub.add_parser(
-        "verify", help="Re-hash a backup's images and compare against its manifest."
-    )
-    verify_parser.add_argument("codename")
-    verify_parser.add_argument("timestamp")
-
-    restore_parser = backup_sub.add_parser(
-        "restore", help="Verify (if possible) and restore a backup via fastboot flash."
-    )
-    restore_parser.add_argument("codename")
-    restore_parser.add_argument("timestamp")
-    restore_parser.add_argument("--serial", default=None, help="Target a specific device.")
-
-    module_parser = subparsers.add_parser(
-        "module", help="Scaffold, lint, and build Magisk/KernelSU/APatch/Zygisk/Xposed modules."
-    )
-    module_sub = module_parser.add_subparsers(dest="module_command", required=True)
-
-    module_create_parser = module_sub.add_parser(
-        "create", help="Scaffold a new module."
-    )
-    module_create_parser.add_argument("module_id")
-    module_create_parser.add_argument("display_name")
-    module_create_parser.add_argument(
-        "--target",
-        default="magisk",
-        choices=list(module_mod.VALID_TARGETS),
-        help="Module framework/type (default: magisk).",
-    )
-
-    module_lint_parser = module_sub.add_parser(
-        "lint", help="Lint a module directory or built zip."
-    )
-    module_lint_parser.add_argument("path")
-    module_lint_parser.add_argument(
-        "--json", action="store_true", help="Emit machine-readable findings for CI."
-    )
-
-    module_build_parser = module_sub.add_parser(
-        "build", help="Zip a module, optionally push + install it on a connected device."
-    )
-    module_build_parser.add_argument("module_id")
-    module_build_parser.add_argument(
-        "--install", action="store_true", help="Push and install after building."
-    )
-    module_build_parser.add_argument(
-        "--framework",
-        default="magisk",
-        choices=["magisk", "kernelsu"],
-        help="Install-time framework CLI to use with --install (default: magisk).",
-    )
-
-    boot_parser = subparsers.add_parser(
-        "boot", help="Unpack/patch/repack/verify boot images via magiskboot/avbtool."
-    )
-    boot_sub = boot_parser.add_subparsers(dest="boot_command", required=True)
-
-    boot_inspect_parser = boot_sub.add_parser(
-        "inspect", help="Unpack a boot image into a temp dir and list its components."
-    )
-    boot_inspect_parser.add_argument("image")
-
-    boot_unpack_parser = boot_sub.add_parser(
-        "unpack", help="Unpack a boot image into a working directory."
-    )
-    boot_unpack_parser.add_argument("image")
-    boot_unpack_parser.add_argument("out_dir")
-
-    boot_repack_parser = boot_sub.add_parser(
-        "repack", help="Repack a previously-unpacked working directory into new-boot.img."
-    )
-    boot_repack_parser.add_argument("work_dir")
-
-    boot_patch_parser = boot_sub.add_parser(
-        "patch", help="Run magiskboot cpio commands against a ramdisk in a working directory."
-    )
-    boot_patch_parser.add_argument("work_dir")
-    boot_patch_parser.add_argument("ramdisk")
-    boot_patch_parser.add_argument(
-        "cpio_commands",
-        nargs=argparse.REMAINDER,
-        help="magiskboot cpio commands, e.g. -- 'add 0750 init magiskinit'",
-    )
-
-    boot_verify_parser = boot_sub.add_parser(
-        "verify", help="Verify a boot/vbmeta image's AVB signature via avbtool."
-    )
-    boot_verify_parser.add_argument("image")
-
-    ota_parser = subparsers.add_parser(
-        "ota", help="Inspect/extract Android OTA zips and raw payload.bin files."
-    )
-    ota_sub = ota_parser.add_subparsers(dest="ota_command", required=True)
-
-    ota_inspect_parser = ota_sub.add_parser(
-        "inspect", help="Identify an OTA input without extracting partitions."
-    )
-    ota_inspect_parser.add_argument("input")
-
-    ota_extract_parser = ota_sub.add_parser(
-        "extract", help="Extract partition images from an OTA zip or payload.bin."
-    )
-    ota_extract_parser.add_argument("input")
-    ota_extract_parser.add_argument("output_dir")
-    ota_extract_parser.add_argument(
-        "--partitions",
-        default=None,
-        help="Comma-separated partition names (default: boot,init_boot,vendor_boot,dtbo,vbmeta).",
-    )
-
-    avd_parser = subparsers.add_parser(
-        "avd", help="Create, list, start, stop, and snapshot Android emulator AVDs."
-    )
-    avd_sub = avd_parser.add_subparsers(dest="avd_command", required=True)
-
-    avd_create_parser = avd_sub.add_parser("create", help="Create a rooted or unrooted AVD.")
-    avd_create_parser.add_argument("name")
-    avd_create_parser.add_argument("--mode", required=True, choices=["rooted", "unrooted"])
-    avd_create_parser.add_argument("--api", default="34")
-    avd_create_parser.add_argument("--device", default="pixel_6")
-    avd_create_parser.add_argument("--abi", default="x86_64")
-    avd_create_parser.add_argument("--tag", default="google_apis")
-    avd_create_parser.add_argument("--force", action="store_true")
-
-    avd_sub.add_parser("list", help="List known AVDs and RootForge's saved profiles.")
-
-    avd_start_parser = avd_sub.add_parser("start", help="Boot an AVD.")
-    avd_start_parser.add_argument("name")
-    avd_start_parser.add_argument(
-        "--snapshot", default=None, help="Boot from a specific snapshot."
-    )
-
-    avd_stop_parser = avd_sub.add_parser(
-        "stop", help="Stop a running AVD (adb emu kill)."
-    )
-    avd_stop_parser.add_argument("name")
-
-    avd_snapshot_parser = avd_sub.add_parser(
-        "snapshot", help="Save/load/list/delete a running AVD's snapshots."
-    )
-    avd_snapshot_parser.add_argument("name")
-    avd_snapshot_parser.add_argument("action", choices=["save", "load", "list", "delete"])
-    avd_snapshot_parser.add_argument(
-        "snapshot_name", nargs="?", default=None, help="Required for save/load/delete."
-    )
-
+    flashing.add_parser(sub)
+    module.add_parser(sub)
+    boot.add_parser(sub)
+    ota.add_parser(sub)
+    avd.add_parser(sub)
     return parser
 
 
-def _print_devices(devices, detailed: bool) -> None:
-    if not devices:
-        print("No devices connected.")
-        print("")
-        print("If a device is plugged in but not listed:")
-        print("  - accept the USB-debugging prompt on the device")
-        print("  - check the cable supports data, not just charging")
-        print("  - run: adb kill-server && adb start-server")
-        return
-
-    width = max(len(d.serial) for d in devices)
-    for device in devices:
-        flag = "  " if device.usable else "! "
-        line = f"{flag}{device.serial:<{width}}  {device.mode:<8} {device.state}"
-        if device.note:
-            line += f"  — {device.note}"
-        print(line)
-        if detailed and device.properties:
-            for key, value in device.properties.items():
-                print(f"      {key:<12} {value}")
-
-    unusable = [d for d in devices if not d.usable]
-    if unusable:
-        print("")
-        print(f"{len(unusable)} device(s) attached but not usable (marked !).")
-
-
-def cmd_devices(args: argparse.Namespace) -> int:
-    devices = list_devices(detailed=args.detailed)
-    if args.json:
-        print(json.dumps([d.as_dict() for d in devices], indent=2))
-    else:
-        _print_devices(devices, args.detailed)
-    # No device connected is a legitimate state to report, not a failure of
-    # this command — but it is worth an exit code a script can branch on.
-    return 0 if any(d.usable for d in devices) else 1
-
-
 def _select_device(serial: Optional[str]):
-    """Resolve an optional serial to (serial, mode).
-
-    Raises LookupError with a user-facing explanation for every case that
-    isn't "exactly one clear answer" — no device, no match for an explicit
-    serial, or more than one usable device with no serial given to
-    disambiguate. This deliberately never guesses which device to profile.
-    """
-    devices = list_devices()
+    found = list_devices()
     if serial:
-        for d in devices:
-            if d.serial == serial:
-                return d.serial, d.mode
-        attached = ", ".join(d.serial for d in devices) or "(none)"
+        for item in found:
+            if item.serial == serial:
+                return item.serial, item.mode
+        attached = ", ".join(item.serial for item in found) or "(none)"
         raise LookupError(f"no attached device with serial '{serial}'. Attached: {attached}")
-
-    usable = [d for d in devices if d.usable]
+    usable = [item for item in found if item.usable]
     if not usable:
         raise LookupError("no usable device attached. Run `rootforge devices` to see what's connected.")
     if len(usable) > 1:
-        serials = ", ".join(d.serial for d in usable)
-        raise LookupError(f"multiple usable devices attached — pass a serial: {serials}")
+        raise LookupError("multiple usable devices attached — pass a serial: " + ", ".join(d.serial for d in usable))
     return usable[0].serial, usable[0].mode
 
 
 def cmd_device_info(args: argparse.Namespace) -> int:
+    serial = getattr(args, "serial_option", None) or args.serial
     try:
-        serial, mode = _select_device(args.serial)
+        resolved, mode = _select_device(serial)
     except LookupError as exc:
         print(f"rootforge: error: {exc}", file=sys.stderr)
         return 1
-
-    profile = profile_device(serial, mode)
+    profile = profile_device(resolved, mode)
     if args.json:
         print(json.dumps(profile.as_dict(), indent=2))
-        return 0 if profile.supported else 1
+    else:
+        for key, value in profile.as_dict().items():
+            if key not in ("raw", "refusal_message"):
+                print(f"{key}: {value if value is not None else 'unknown'}")
+        if profile.refusal_message():
+            print(profile.refusal_message())
+    return 0 if profile.supported else 1
 
-    print(f"serial:              {profile.serial}")
-    print(f"mode:                {profile.mode}")
-    print(f"codename:            {profile.codename or 'unknown'}")
-    print(f"model:               {profile.model or 'unknown'}")
-    print(f"vendor:              {profile.vendor or 'unknown'}")
-    print(f"slot mode:           {profile.slot_mode}")
-    if profile.slot_mode == "ab":
-        print(f"current slot:        {profile.current_slot or 'unknown'}")
-    unlocked = profile.bootloader_unlocked
-    unlocked_str = "unknown" if unlocked is None else ("yes" if unlocked else "no")
-    print(f"bootloader unlocked: {unlocked_str}")
-    print(f"root method:         {profile.root_method or 'unknown/undetermined'}")
 
-    message = profile.refusal_message()
-    if message:
-        print("")
-        print(message)
-        return 1
-    return 0
+_device_info = cmd_device_info
+
+
+def _devices(args: argparse.Namespace) -> int:
+    found = devices.list_devices(detailed=args.detailed)
+    if args.json:
+        print(json.dumps([item.as_dict() for item in found], indent=2))
+    elif not found:
+        print("No devices connected.")
+    else:
+        for item in found:
+            print(f"{'  ' if item.usable else '! '}{item.serial}  {item.mode}  {item.state}")
+            if args.detailed:
+                for key, value in item.properties.items():
+                    print(f"    {key}: {value}")
+    return 0 if any(item.usable for item in found) else 1
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-
     if args.command == "doctor":
         return run_doctor(as_json=args.json, quiet=args.quiet, strict=args.strict)
     if args.command == "devices":
-        return cmd_devices(args)
+        return _devices(args)
     if args.command == "device":
-        if args.device_command == "info":
-            return cmd_device_info(args)
-        raise AssertionError(f"no dispatch branch for device command {args.device_command!r}")
-    if args.command == "module":
-        return module_cmd.dispatch(args)
+        return _device_info(args)
+    if args.command == "config":
+        try:
+            from rootforge.core.config import cmd_show
+        except ImportError as exc:
+            print("rootforge config requires python3-yaml; install the package and retry.", file=sys.stderr)
+            return 1
+        return cmd_show(args.codename)
     if args.command in ("flash", "backup"):
-        return flashing_cmd.dispatch(args)
-    if args.command == "ota":
-        return ota_cmd.dispatch(args)
-    if args.command == "boot":
-        return boot_cmd.dispatch(args)
-    if args.command == "avd":
-        return avd_cmd.dispatch(args)
-
-    if args.command == "device" and args.device_command == "show":
-        return device_cmd_show(args.serial)
-
-    if args.command == "config" and args.config_command == "show":
-        return config_cmd_show(args.codename)
-
-    if args.command == "backup":
-        if args.backup_command == "create":
-            return backup_mod.cmd_create(args.codename, args.serial)
-        if args.backup_command == "list":
-            return backup_mod.cmd_list(args.codename)
-        if args.backup_command == "verify":
-            return backup_mod.cmd_verify(args.codename, args.timestamp)
-        if args.backup_command == "restore":
-            return backup_mod.cmd_restore(args.codename, args.timestamp, args.serial)
-
+        return flashing.dispatch(args)
     if args.command == "module":
-        if args.module_command == "create":
-            return module_mod.cmd_create(args.module_id, args.display_name, args.target)
-        if args.module_command == "lint":
-            return module_mod.cmd_lint(args.path, args.json)
-        if args.module_command == "build":
-            return module_mod.cmd_build(args.module_id, args.install, args.framework)
-
+        return module.dispatch(args)
     if args.command == "boot":
-        if args.boot_command == "inspect":
-            return boot_mod.cmd_inspect(args.image)
-        if args.boot_command == "unpack":
-            return boot_mod.cmd_unpack(args.image, args.out_dir)
-        if args.boot_command == "repack":
-            return boot_mod.cmd_repack(args.work_dir)
-        if args.boot_command == "patch":
-            return boot_mod.cmd_patch(args.work_dir, args.ramdisk, args.cpio_commands)
-        if args.boot_command == "verify":
-            return boot_mod.cmd_verify(args.image)
-
+        return boot.dispatch(args)
     if args.command == "ota":
-        if args.ota_command == "inspect":
-            return ota_mod.cmd_inspect(args.input)
-        if args.ota_command == "extract":
-            return ota_mod.cmd_extract(args.input, args.output_dir, args.partitions)
-
+        return ota.dispatch(args)
     if args.command == "avd":
-        if args.avd_command == "create":
-            return avd_mod.cmd_create(
-                args.name, args.mode, args.api, args.device, args.abi, args.tag, args.force
-            )
-        if args.avd_command == "list":
-            return avd_mod.cmd_list()
-        if args.avd_command == "start":
-            return avd_mod.cmd_start(args.name, args.snapshot)
-        if args.avd_command == "stop":
-            return avd_mod.cmd_stop(args.name)
-        if args.avd_command == "snapshot":
-            return avd_mod.cmd_snapshot(args.name, args.action, args.snapshot_name)
-
-    parser.print_help()
-    return 0
+        return avd.dispatch(args)
+    parser.error(f"unknown command: {args.command}")
 
 
 if __name__ == "__main__":

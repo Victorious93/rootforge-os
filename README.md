@@ -5,7 +5,7 @@
 </p>
 
 **Victorious Framework — Origin Source Labs**
-Status: Specification / Build Guide (v1.0) — living document, update in place as the toolchain evolves.
+Status: Active project and build guide — the repository includes a Debian live-build implementation; ISO production requires the documented build host and has not been independently verified here.
 
 ---
 
@@ -55,7 +55,7 @@ Build it. Control it. Make Android yours.
 - **Install path:** boots to a live session, then offers an on-disk installer (Calamares) with the same "erase disk / install alongside existing OS / manual partitioning" choice Ubuntu's own installer gives you — see section 14
 - **Signed artifacts:** every module, script, and image this distro produces carries a `Victorious Framework` footer in its metadata
 - **Build provenance:** every ISO carries `/usr/local/share/rootforge/system-manifest.json` — the git commit/branch it was built from, every installed package's version, and a SHA-256 per build-time-fetched artifact (from the six hooks that fetch external content) — so a given image's actual contents can be checked against what it claims to be, after the fact.
-- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) is a thin wrapper around a Python package at `/usr/local/lib/rootforge/core/`. Subcommands so far: `doctor` (environment checks), `device show` (fastboot/adb detection, with the same vendor-refusal messaging `unlock_bootloader.sh` uses), `config show` (layered YAML config), `backup create/list/verify/restore` (SHA-256-manifested partition backups), `module create/lint/build` (module scaffolding/linting/packaging — see section 12), `boot inspect/unpack/repack/patch/verify` (boot-image toolchain — section 4), `ota inspect/extract` (section 11), and `avd create/list/start/stop/snapshot` (section 5). Existing scripts under `/usr/local/bin/` are unaffected and keep working standalone; each `rootforge` subcommand wraps them as subprocesses rather than reimplementing their logic.
+- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) wraps the project command scripts. Its current command groups are `doctor`, `devices`, `device`, `config`, `flash`, `backup`, `module`, `boot`, `ota`, and `avd`. See `rootforge --help` and each group's `--help` for the implemented commands; module scaffolding is `rootforge module scaffold` (section 12). Existing scripts under `/usr/local/bin/` remain usable on their own.
 
 ## 2. Core package stack
 
@@ -250,7 +250,7 @@ anything — it refuses to mount anything other than `-o ro`.
 
 `rootforge ota inspect <file>` identifies an OTA input (zip vs. raw `payload.bin`,
 whether `payload.bin` sits at the zip root) without extracting anything — useful
-before committing to a full extraction. `rootforge ota extract <file> <out_dir>
+before committing to a full extraction. `rootforge ota extract <file> [--output <out_dir>]
 [--partitions a,b,c]` wraps `extract_ota.sh` and records a SHA-256 per extracted
 partition image.
 
@@ -267,8 +267,8 @@ at least one `zygisk/<abi>.so` actually exists, and runs against either a raw mo
 directory or an already-built zip. `--json` emits machine-readable findings instead
 of the human report, for CI consumption.
 
-`rootforge module create/lint/build` wraps `new_module_scaffold.sh`/`lint_module.sh`/
-`build_magisk_module.sh` behind the unified CLI (`rootforge module create <id> <name>
+`rootforge module scaffold/lint/build` wraps `new_module_scaffold.sh`/`lint_module.sh`/
+`build_magisk_module.sh` behind the unified CLI (`rootforge module scaffold <id> <name>
 --target magisk|kernelsu|apatch|zygisk|xposed`, `rootforge module lint [--json] <path>`,
 `rootforge module build <id> [--install]`) — same underlying scripts, one entrypoint.
 
@@ -276,7 +276,7 @@ of the human report, for CI consumption.
 
 Magisk and KernelSU native builds are sensitive to exact NDK versions in ways that
 are easy to miss testing against a single pinned toolchain on the host.
-`docker/Dockerfile.ndk-matrix` is a parameterized image — NDK version and API level
+`config/includes.chroot/opt/rootforge/docker/Dockerfile.ndk-matrix` is a parameterized image — NDK version and API level
 as build args, nothing else baked in — and `config/includes.chroot/usr/local/bin/build_matrix.sh` builds your
 project against a small default matrix of NDK/API combinations (or a custom
 `matrix.tsv`), bind-mounting the project directory into each container so nothing
