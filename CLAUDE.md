@@ -8,8 +8,8 @@
 
 ## 🔖 PROJECT STATE (READ THIS FIRST)
 
-**Last Updated:** `2026-10-04`
-**Last Session Summary:** `Reviewed main at a3052ba. Repaired the CLI/module integration and device/OTA/AVD/boot interfaces, hardened module scaffolding and build-matrix validation, corrected stale README/BUILD references, and added missing PyYAML setup to Python CI jobs. Verified tests/run-tests.sh (439/0), tests/lint.sh (clean), and git diff --check. Attempted auto/build; it stops because this environment has no loop devices, so no ISO was built. See docs/PROJECT_REVIEW_2026-10-04.md for findings, verification, and release gates.`
+**Last Updated:** `2026-10-06`
+**Last Session Summary:** `Branch claude/new-session-78u9fc, restarted from main at abb5b7f (the 2026-10-04 review patch, PR #41, already merged). Re-verified the tree instead of trusting this file: rootforge.core.config (P1 item 6), rootforge.core.log (item 7) and rootforge.core.backup (item 8) already exist in core/ (landed earlier via integration branches) although the sections below still call them PLANNED; none had tests, and `rootforge backup verify` was not reachable from the CLI (the review patch routed `backup` only to flashing.py, which had create/list/restore). Changes: (1) rewrote core/backup.py as a small verifier of the SHA256SUMS sidecar that backup_partitions.sh already writes and restore_partitions.sh already checks (dropped the unreachable duplicate manifest.json/create/restore code); added `rootforge backup verify <codename> <timestamp>` in flashing.py; rejects malformed lines and path-separator names so a sums file cannot vouch for files outside the backup dir; missing/empty SHA256SUMS fails rather than passing. (2) Added tests/test_backup_verify.py (13), tests/test_config.py (13), tests/test_log.py (13). (3) The new log tests found a real bug, fixed in core/log.py: Logger echoed the raw event string to the terminal while only the on-disk record was redacted, so a secret embedded in an event message leaked to stdout/stderr. Verified: python3 -m unittest discover (200/200, was 161), bash tests/run-tests.sh (438/0), plus an end-to-end `rootforge backup verify` run against a backup whose SHA256SUMS came from sha256sum (OK, then MISMATCH after appending a byte). shellcheck is still not installed here, so tests/lint.sh was not run. Not done: no hardware, ISO or VM verification.`
 
 ### Current Phase
 
@@ -30,7 +30,7 @@
 
 ### What To Do Next
 
-`The 2026-10-04 review repaired the CLI interfaces and CI dependency setup; re-check those against the current tree before repeating work. Next, run make build on a supported Debian/Ubuntu host with loop devices, then boot the ISO in a VM and verify installation, first-boot provisioning, and the system manifest. Hardware flashing and real OTA/emulator flows still need smoke tests. See docs/PROJECT_REVIEW_2026-10-04.md. Keep this file's historical audit sections clearly dated; some priority statements below predate the current code.`
+`Re-verify against the tree before repeating work. P1 items 5-9 are all implemented (device, config, log, backup verify, build-time hash pinning); ignore the PLANNED/MISSING rows for rootforge.core.config, .log and backup in the historical sections below. Remaining code work, in order: (1) rootforge.core.config is only consumed by `rootforge config show` - no script or command reads backup.partitions from it yet, and its only schema is the DEFAULTS dict; decide whether to wire it into backup_partitions.sh or leave it display-only. (2) core/log.py Logger is used by doctor/boot/ota only; flash/backup/module/avd run through runner.exec_script with no execution ID or audit record. (3) boot.py inspect/unpack/repack/verify are wired in the parser but have no CLI-level tests. (4) Log files are created with the default umask; consider 0600 given they may hold operator-supplied detail. Release gates unchanged: run make build on a Debian/Ubuntu host with loop devices, boot the ISO in a VM, verify install/first-boot/manifest, and smoke-test real hardware flows. P3 items (kernel, dynamic partitions, GUI) stay deferred.`
 
 ### Open Questions / Blockers
 
@@ -1130,7 +1130,7 @@ Every status claim in this Phase 5 audit traces to either: a file read directly 
 
 ### Run the test suite
 ```
-python3 -m unittest discover -s tests -p 'test_*.py'   # Python only, ~0.14s, 161 tests
+python3 -m unittest discover -s tests -p 'test_*.py'   # Python only, ~0.4s, 200 tests
 bash tests/run-tests.sh                                  # full suite, 438 checks (437 shell-level checks, one of which is a single pass/fail wrapper around the full 161-test python suite — not 161 individually counted)
 make test                                                 # same as above
 ```
@@ -1148,7 +1148,7 @@ rootforge doctor [--json] [--quiet] [--strict]
 rootforge devices [--json] [-l|--detailed]
 rootforge device info [SERIAL] [--json]
 rootforge module <scaffold|lint|build> ...
-rootforge flash ... / rootforge backup ...
+rootforge flash ... / rootforge backup <create|list|verify|restore> ...
 rootforge ota <extract|inspect> ...
 rootforge boot <patch|flash-last> ...
 rootforge avd <create|boot|list> ...

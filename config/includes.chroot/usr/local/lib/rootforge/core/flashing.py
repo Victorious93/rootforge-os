@@ -21,6 +21,7 @@ import re
 from pathlib import Path
 from typing import List
 
+from rootforge.core import backup
 from rootforge.core.runner import exec_script
 
 PARTITIONS = ("boot", "init_boot")
@@ -104,6 +105,16 @@ def add_parser(subparsers) -> None:
     listing = backup_actions.add_parser("list", help="List backups held for a device.")
     listing.add_argument("codename", type=path_component)
 
+    verify = backup_actions.add_parser(
+        "verify", help="Check a stored backup's images against its SHA256SUMS.",
+        allow_abbrev=False,
+    )
+    verify.add_argument("codename", type=path_component)
+    verify.add_argument(
+        "timestamp", type=path_component,
+        help="Which backup to check, as shown by 'backup list'",
+    )
+
     restore = backup_actions.add_parser(
         "restore", help="Flash a stored backup back to a device.",
         allow_abbrev=False,
@@ -139,6 +150,9 @@ def dispatch(args: argparse.Namespace) -> int:
         if args.backup_command == "list":
             # restore_partitions.sh lists when given no timestamp.
             return exec_script("restore_partitions.sh", [args.codename])
+
+        if args.backup_command == "verify":
+            return backup.cmd_verify(args.codename, args.timestamp)
 
         if args.backup_command == "restore":
             script_args = [args.codename, args.timestamp]

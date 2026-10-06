@@ -1,58 +1,29 @@
-"""rootforge.core.backup — SHA-256-verified partition backups.
+"""rootforge.core.backup — verify a partition backup against its SHA256SUMS.
 
-Wraps `backup_partitions.sh` / `restore_partitions.sh` rather than
-reimplementing them: the actual `fastboot fetch` / `adb root + dd` /
-`fastboot flash` logic stays in those scripts, invoked as subprocesses
-with stdio inherited (so `restore_partitions.sh`'s own typed `RESTORE`
-confirmation prompt still works normally). This module's own job is the
-part the audit found missing: a JSON manifest recording a SHA-256
-checksum per backed-up partition image, and a `verify` command that
-re-hashes and compares.
+backup_partitions.sh writes `SHA256SUMS` (sha256sum format, bare file names)
+next to the images, and restore_partitions.sh checks it before flashing.
+This module lets an operator run the same check on demand, without a device
+attached, and reports per-image results instead of sha256sum's single exit
+code. Creating and restoring backups stays in the scripts.
 """
 from __future__ import annotations
 
 import hashlib
-import json
 import os
-import shutil
-import subprocess
-from datetime import datetime, timezone
+import re
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Tuple
 
-MANIFEST_NAME = "manifest.json"
-
-
-def _rootforge_home() -> Path:
-    return Path(os.environ.get("ROOTFORGE_HOME", str(Path.home() / "rootforge")))
+SUMS_NAME = "SHA256SUMS"
+_LINE_RE = re.compile(r"^([0-9a-fA-F]{64}) [ *](.+)$")
 
 
-def _backups_root(codename: str) -> Path:
-    return _rootforge_home() / "devices" / codename / "backups"
+def backup_dir(codename: str, timestamp: str) -> Path:
+    home = Path(os.environ.get("ROOTFORGE_HOME", str(Path.home() / "rootforge")))
+    return home / "devices" / codename / "backups" / timestamp
 
 
-def _backup_dir(codename: str, timestamp: str) -> Path:
-    return _backups_root(codename) / timestamp
-
-
-def _script_path(name: str) -> Path:
-    # This file lives at .../usr/local/lib/rootforge/core/backup.py in both
-    # a real install and a repo checkout (config/includes.chroot/usr/local/
-    # lib/rootforge/core/backup.py) — parents[3] is usr/local in either
-    # case, so the same relative lookup finds the sibling script both ways.
-    candidate = Path(__file__).resolve().parents[3] / "bin" / name
-    if candidate.is_file():
-        return candidate
-    found = shutil.which(name)
-    if found:
-        return Path(found)
-    raise FileNotFoundError(
-        f"{name} not found next to this module ({candidate}) or on PATH — "
-        "check your RootForge install."
-    )
-
-
-def _sha256_file(path: Path) -> str:
+def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(1024 * 1024), b""):
@@ -60,135 +31,63 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _write_manifest(backup_dir: Path, codename: str, timestamp: str) -> dict:
-    partitions = {}
-    for img in sorted(backup_dir.glob("*.img")):
-        partitions[img.stem] = {
-            "sha256": _sha256_file(img),
-            "size_bytes": img.stat().st_size,
-        }
-    manifest = {
-        "codename": codename,
-        "timestamp": timestamp,
-        "manifest_written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "partitions": partitions,
-    }
-    (backup_dir / MANIFEST_NAME).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    return manifest
+def parse_sums(text: str) -> Tuple[Dict[str, str], List[str]]:
+    """Return ({name: digest}, [malformed lines]).
 
-
-def _newest_backup_dir(codename: str) -> Optional[Path]:
-    root = _backups_root(codename)
-    if not root.is_dir():
-        return None
-    candidates = [d for d in root.iterdir() if d.is_dir()]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda d: d.stat().st_mtime)
-
-
-def cmd_create(codename: str, serial: Optional[str] = None) -> int:
-    try:
-        script = _script_path("backup_partitions.sh")
-    except FileNotFoundError as exc:
-        print(exc)
-        return 1
-
-    cmd = [str(script), codename]
-    if serial:
-        cmd.append(serial)
-    result = subprocess.run(cmd)  # stdio inherited — script prints its own progress/log path
-    if result.returncode != 0:
-        return result.returncode
-
-    backup_dir = _newest_backup_dir(codename)
-    if backup_dir is None:
-        print(f"backup_partitions.sh exited 0 but no backup directory was found under {_backups_root(codename)}")
-        return 1
-
-    manifest = _write_manifest(backup_dir, codename, backup_dir.name)
-    count = len(manifest["partitions"])
-    print(f"Wrote SHA-256 manifest for {count} partition(s): {backup_dir / MANIFEST_NAME}")
-    return 0
-
-
-def cmd_list(codename: Optional[str] = None) -> int:
-    codenames: List[str] = (
-        [codename] if codename else sorted(d.name for d in (_rootforge_home() / "devices").glob("*") if d.is_dir())
-    )
-    if not codenames:
-        print(f"No devices with backups found under {_rootforge_home() / 'devices'}")
-        return 0
-
-    for cn in codenames:
-        root = _backups_root(cn)
-        if not root.is_dir():
+    A name containing a path separator is treated as malformed: the sums file
+    sits inside the backup directory, and a name like ../x would make verify
+    hash (and vouch for) a file outside it.
+    """
+    entries: Dict[str, str] = {}
+    bad: List[str] = []
+    for line in text.splitlines():
+        if not line.strip():
             continue
-        print(f"{cn}:")
-        for backup_dir in sorted(root.iterdir()):
-            if not backup_dir.is_dir():
-                continue
-            images = sorted(backup_dir.glob("*.img"))
-            has_manifest = (backup_dir / MANIFEST_NAME).is_file()
-            tag = "manifest" if has_manifest else "no manifest"
-            print(f"  {backup_dir.name}  ({len(images)} image(s), {tag})")
-    return 0
+        match = _LINE_RE.match(line)
+        if not match or "/" in match.group(2) or match.group(2) in (".", ".."):
+            bad.append(line)
+            continue
+        entries[match.group(2)] = match.group(1).lower()
+    return entries, bad
 
 
-def cmd_verify(codename: str, timestamp: str) -> int:
-    backup_dir = _backup_dir(codename, timestamp)
-    manifest_path = backup_dir / MANIFEST_NAME
-    if not manifest_path.is_file():
-        print(f"No {MANIFEST_NAME} at {backup_dir}")
-        print("This backup predates SHA-256 manifests, or wasn't created with `rootforge backup create`.")
+def verify_backup(directory: Path) -> int:
+    """Print one status line per image; return 0 only if every image matches."""
+    sums_path = directory / SUMS_NAME
+    if not directory.is_dir():
+        print(f"No such backup: {directory}")
+        return 1
+    if not sums_path.is_file():
+        print(f"No {SUMS_NAME} in {directory} — integrity cannot be verified.")
+        print("The backup predates checksums, or was not made by backup_partitions.sh.")
         return 1
 
-    manifest = json.loads(manifest_path.read_text())
-    failures = 0
-    for name, entry in sorted(manifest.get("partitions", {}).items()):
-        img_path = backup_dir / f"{name}.img"
-        if not img_path.is_file():
-            print(f"[MISSING]  {name}.img")
+    entries, bad = parse_sums(sums_path.read_text())
+    failures = len(bad)
+    for line in bad:
+        print(f"[MALFORMED] {line}")
+    if not entries and not bad:
+        print(f"{SUMS_NAME} is empty — nothing was verified.")
+        return 1
+
+    for name, expected in sorted(entries.items()):
+        image = directory / name
+        if not image.is_file():
+            print(f"[MISSING]   {name}")
             failures += 1
-            continue
-        actual = _sha256_file(img_path)
-        if actual == entry["sha256"]:
-            print(f"[OK]       {name}.img")
+        elif sha256_file(image) == expected:
+            print(f"[OK]        {name}")
         else:
-            print(f"[MISMATCH] {name}.img (expected {entry['sha256'][:12]}…, got {actual[:12]}…)")
+            print(f"[MISMATCH]  {name}")
             failures += 1
 
     print()
     if failures:
-        print(f"{failures} partition(s) failed verification.")
-    else:
-        print("All partitions verified OK.")
-    return 1 if failures else 0
-
-
-def cmd_restore(codename: str, timestamp: str, serial: Optional[str] = None) -> int:
-    backup_dir = _backup_dir(codename, timestamp)
-    manifest_path = backup_dir / MANIFEST_NAME
-    if manifest_path.is_file():
-        print("Verifying backup integrity before restore...")
-        if cmd_verify(codename, timestamp) != 0:
-            print()
-            print("WARNING: integrity verification failed above. Proceeding will let")
-            print("restore_partitions.sh's own confirmation prompt decide whether to flash")
-            print("a backup that no longer matches its recorded checksums.")
-        print()
-    else:
-        print(f"No {MANIFEST_NAME} for this backup — integrity cannot be verified before restore.")
-        print()
-
-    try:
-        script = _script_path("restore_partitions.sh")
-    except FileNotFoundError as exc:
-        print(exc)
+        print(f"{failures} problem(s) found; do not restore this backup.")
         return 1
+    print(f"All {len(entries)} image(s) verified OK.")
+    return 0
 
-    cmd = [str(script), codename, timestamp]
-    if serial:
-        cmd.append(serial)
-    result = subprocess.run(cmd)  # stdio inherited — this is what shows the RESTORE prompt
-    return result.returncode
+
+def cmd_verify(codename: str, timestamp: str) -> int:
+    return verify_backup(backup_dir(codename, timestamp))

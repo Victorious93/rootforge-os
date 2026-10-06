@@ -93,7 +93,7 @@ class Logger:
             fh.write(json.dumps(record, sort_keys=True) + "\n")
         if self.echo:
             stream = sys.stderr if level in ("warn", "error") else sys.stdout
-            print(f"[{self.command}] {event}", file=stream)
+            print(f"[{self.command}] {record['event']}", file=stream)
 
     def info(self, event: str, **fields: Any) -> None:
         self._write("info", event, **fields)
