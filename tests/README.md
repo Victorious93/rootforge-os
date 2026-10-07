@@ -69,3 +69,18 @@ flashes anything), and with `ROOTFORGE_ASSUME_YES=1` it must proceed.
 
 `HOME` is redirected to a scratch directory for every test, so logs and
 backups land there rather than in the real `~/rootforge`.
+
+## Static checks and the release verifier
+
+- `tests/check-hooks.sh` (run by `tests/lint.sh`): reads `config/hooks/*` and the runtime
+  scripts without executing them. Rules: `set -e`, no `curl | sh`, `curl -f`, no fabricated
+  success lines, no unpinned `npm install -g`, every `*SHA256` pin is compared somewhere, and
+  a hook with a pinned digest must not resolve a "latest" release. It exists because a merge
+  once left six hooks with pins that verified nothing.
+- `tests/verify-release-assets.sh <dir> [--tag vX.Y.Z]`: checks an assembled release
+  directory (expected and unexpected files, `SHA256SUMS`/sidecar digests, ISO 9660 signature
+  and size, tarball `build-info` vs. filename, metadata, no placeholders). `release.yml`
+  runs it before creating the draft release; `run-tests.sh` runs it against fixtures built by
+  `termux/make-release-metadata.sh`.
+- The Makefile and `auto/build` are tested with a stubbed `lb`, `id` and `losetup` (and the
+  `ID_U`/`AUTO_BUILD` Makefile variables); no real live-build run happens here.
