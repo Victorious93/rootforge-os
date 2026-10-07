@@ -1,3 +1,14 @@
+> **SUPERSEDED IN PART — 2026-10-07.** A later review found problems this one did not,
+> and some statements below were wrong for the tree it reviewed:
+> the device profiler "aligned with the tested contract" read `fastboot getvar` from stdout
+> only (real fastboot writes to stderr) and treated `secure` as lock state; `ota inspect`
+> was wired to the partition-image mount script; `00_bootstrap_distro.sh` could provision
+> root's home; the six download hooks' SHA-256 pins had been disabled by a merge. The test
+> counts below (439/161) are historical; at the head of the 2026-10-07 branch the harness
+> reports 852 checks including 319 Python tests. See `CHANGELOG.md` and `docs/ARCHITECTURE.md`.
+
+---
+
 # RootForge OS project review — 2026-10-04
 
 ## Assessment

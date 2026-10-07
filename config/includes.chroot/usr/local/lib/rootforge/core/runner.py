@@ -1,6 +1,6 @@
 """Locating and invoking the standalone usr/local/bin scripts.
 
-P2 of docs/IMPLEMENTATION_PLAN.md wraps the existing scripts behind the
+P2 of docs/archive/IMPLEMENTATION_PLAN_P0-P3_2026-10-07.md wraps the existing scripts behind the
 `rootforge` CLI rather than reimplementing them: their behavior is proven and
 the shell is where the device work actually happens. What the wrapper adds is
 the argument handling, and that is not cosmetic. Every sweep in this

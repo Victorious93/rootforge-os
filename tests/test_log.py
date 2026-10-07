@@ -98,6 +98,13 @@ class TestRedaction(LogTestCase):
                 self.assertIn("***REDACTED***", record["detail"])
                 self.assertIn("calling api with", record["detail"])
 
+    def test_log_file_is_private_even_under_a_permissive_umask(self):
+        old = os.umask(0o000)
+        self.addCleanup(os.umask, old)
+        logger = Logger("doctor", execution_id="priv0001", echo=False)
+        logger.info("started")
+        self.assertEqual(logger.path.stat().st_mode & 0o777, 0o600)
+
     def test_event_message_is_redacted_too(self):
         logger = Logger("t", execution_id="00000000", echo=False)
         logger.info("using ghp_" + "z" * 30)

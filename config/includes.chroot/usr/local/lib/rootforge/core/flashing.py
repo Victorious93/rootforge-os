@@ -1,6 +1,6 @@
 """`rootforge flash` and `rootforge backup` — the destructive command groups.
 
-P2 of docs/IMPLEMENTATION_PLAN.md. Wraps flash_patched_boot.sh,
+P2 of docs/archive/IMPLEMENTATION_PLAN_P0-P3_2026-10-07.md. Wraps flash_patched_boot.sh,
 backup_partitions.sh and restore_partitions.sh.
 
 These are ported before the lower-stakes groups on purpose: they take the most

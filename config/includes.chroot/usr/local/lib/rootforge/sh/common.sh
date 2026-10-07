@@ -31,7 +31,7 @@
 #                  grep. Every caller falls back to its own original direct
 #                  query when this comes back empty, so a missing/broken
 #                  Python install degrades detection accuracy, not script
-#                  availability. See docs/IMPLEMENTATION_PLAN.md P1 item 5.
+#                  availability. See docs/archive/IMPLEMENTATION_PLAN_P0-P3_2026-10-07.md P1 item 5.
 #
 # Guard against double-sourcing: scripts may source this directly and also
 # via another helper.

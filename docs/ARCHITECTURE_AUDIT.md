@@ -1,3 +1,24 @@
+> **SUPERSEDED IN PART — 2026-10-07.** This audit is a dated snapshot (`f930749`,
+> 2026-08-08) and is kept as history. Current architecture: `docs/ARCHITECTURE.md`; support
+> status: `docs/PLATFORM_SUPPORT.md`; plan: `docs/IMPLEMENTATION_PLAN.md`. Claims below that
+> are **no longer true**:
+>
+> - "No `rootforge` CLI, no `tests/` directory, no Python package" — all three exist
+>   (`rootforge.core.*`, `tests/`, 319 Python tests and an 852-check shell/Python harness).
+> - The installer description ("GRUB installs in UEFI mode … UEFI" as a supported path) —
+>   the **live ISO boots BIOS-only** (isolinux); UEFI boot and Secure Boot are unsupported.
+> - Any statement that a destructive flow is gated only by a typed word — flashing and
+>   restoring now also pass a device go/no-go (`rootforge device check`), explicit slots and a
+>   manifest-verified backup.
+> - Hook claims about SHA-256 verification as of this date — verification was added later,
+>   was found disabled by a merge on 2026-10-07 and restored; Ollama (hook 0020) remains
+>   unpinned.
+>
+> Findings here that remain valid are not individually re-verified; treat each as a
+> pointer to inspect, not as a fact.
+
+---
+
 # RootForge OS — Architecture Audit
 
 Victorious Framework | Origin Source Labs

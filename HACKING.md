@@ -91,7 +91,7 @@ rootforge-os/
     │   │   doctor/device/config/backup/module subcommands so far, each
     │   │   wrapping the relevant usr/local/bin/*.sh script(s) as
     │   │   subprocesses rather than reimplementing them; see
-    │   │   docs/IMPLEMENTATION_PLAN.md for what lands here next
+    │   │   docs/IMPLEMENTATION_PLAN.md for what is planned next
     │   ├── usr/local/lib/rootforge/sh/common.sh  shared shell helpers
     │   │   (confirmation gate, checksums, device enumeration) sourced by
     │   │   the destructive scripts in usr/local/bin/ — see "Shared shell

@@ -89,7 +89,12 @@ class Logger:
         }
         record.update(fields)
         record = _redact(record)
-        with self.path.open("a", encoding="utf-8") as fh:
+        # 0600 from creation: events can carry device serials and paths, and
+        # a chmod after the fact would leave a window at the default umask.
+        # The mode only applies when the file is created; an existing log
+        # keeps whatever mode it already has.
+        fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        with os.fdopen(fd, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, sort_keys=True) + "\n")
         if self.echo:
             stream = sys.stderr if level in ("warn", "error") else sys.stdout
