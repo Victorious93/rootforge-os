@@ -127,9 +127,21 @@ own ID.
 Secret-looking field names and known token shapes are redacted in the file **and** in
 anything echoed to the terminal. `doctor` runs independent checks; each declares whether its
 absence is an error or a warning via `@optional_check`, and a check that raises keeps its
-declared severity. **Limits:** only `doctor`, `boot`, `ota` and device operations write CLI
-JSON events today; `flash`/`backup`/`module`/`avd` runs have the script log (with the ID) but
-no CLI-side event. Script log *contents* are not redacted.
+declared severity.
+
+**Audit trail (`audit.py`).** State-changing commands — everything under `flash`, `backup`,
+`module` and `avd`, plus `boot patch` and `boot flash-last` — run inside `audited()`, which
+writes `command started` (command, redacted argument list, euid, `SUDO_USER`, cwd) and
+`command finished` (exit status, duration, the scripts that ran with their exit statuses,
+and the script logs stamped with this execution ID) to `rootforge-<command>-<id>.jsonl`.
+Python-native commands (`backup verify`, `backup import-legacy`) are covered the same way.
+The exit status is returned untouched (non-zero is logged at `warn`, since 3 = blocked and
+4 = partial are outcomes, not crashes); an exception, including Ctrl-C, is recorded as
+`command crashed` and re-raised; if the log cannot be opened the command still runs and a
+warning says it is unrecorded. `doctor`, `ota extract` and `boot inspect/unpack/repack/cpio/
+verify` log themselves; read-only commands (`devices`, `device`, `config`) are not audited.
+**Limits:** script log *contents* are not redacted, and a command rejected by argument
+parsing runs nothing and records nothing.
 
 ### 3.6 Dispatch (`runner.py`)
 

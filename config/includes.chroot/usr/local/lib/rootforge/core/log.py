@@ -100,6 +100,33 @@ def execution_scope():
             os.environ[EXECUTION_ID_ENV] = previous
 
 
+def script_logs_for(execution_id: str, since: float = 0.0) -> list:
+    """Paths of script logs that announce this execution ID.
+
+    Scripts stamp `# rootforge execution <id>: ...` as the first line of every
+    log they create (sh/common.sh: rf_log_init). Only regular files modified
+    at or after `since` are opened, and only their first 200 bytes are read,
+    so this stays cheap in a log directory that has grown over months.
+    """
+    marker = f"# rootforge execution {execution_id}:"
+    found = []
+    try:
+        entries = sorted((_rootforge_home() / "logs").iterdir())
+    except OSError:
+        return found
+    for entry in entries:
+        try:
+            if not entry.is_file() or entry.is_symlink() or entry.stat().st_mtime < since:
+                continue
+            with entry.open("rb") as fh:
+                head = fh.read(200).decode("utf-8", "replace")
+        except OSError:
+            continue
+        if head.startswith(marker):
+            found.append(str(entry))
+    return found
+
+
 def _hand_to_invoking_user(path: Path) -> None:
     """Under `sudo`, give a log the invoking user can still read.
 

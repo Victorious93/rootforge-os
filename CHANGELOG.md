@@ -89,6 +89,18 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 - Migration: existing log files keep their mode; only newly created ones are `0600`. A log
   line `# rootforge execution <id>: ...` now begins each new script log.
 
+### CLI-side audit trail
+- New `core/audit.py`: `flash`, `backup`, `module`, `avd`, `boot patch` and `boot flash-last`
+  now write `command started` / `command finished` events (command, redacted argv, euid,
+  `SUDO_USER`, exit status, duration, scripts run with their exit statuses, script logs for
+  the run) to `rootforge-<command>-<id>.jsonl`. Python-native commands (`backup verify`,
+  `backup import-legacy`) are covered too. Exit statuses are returned untouched; an
+  exception or Ctrl-C is recorded and re-raised; an unwritable log does not stop the command
+  (a warning is printed). `runner` records the scripts it executes; `log.script_logs_for`
+  finds the script logs stamped with an execution ID.
+- Tests: `tests/test_audit.py` (22) and an end-to-end shell section (blocked flash exit 3
+  recorded at `warn` with its script log linked, backup list, backup verify, unwritable log).
+
 ### Documentation
 - `CLAUDE.md` consolidated (history archived under `docs/archive/`); new `AGENTS.md`,
   `docs/ARCHITECTURE.md`, `docs/PLATFORM_SUPPORT.md`, `docs/SECURITY_MODEL.md`; plan rewritten as a staged roadmap;

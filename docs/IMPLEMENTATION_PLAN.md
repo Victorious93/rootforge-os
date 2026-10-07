@@ -18,7 +18,7 @@ named) · **Not started**.
 | Flash semantics (explicit slot, boot verify, exit codes) | Done · awaiting device validation | Stub tests only |
 | Backup manifest, verify, import-legacy, restore contract | Done · awaiting device validation | `tests/test_backup_verify.py`, stub tests |
 | Config layering and validation | Done | `tests/test_config.py`. Only schema key: `backup.partitions` |
-| Structured logging with redaction (CLI); one execution ID shared with wrapped scripts; private script logs | Done | `tests/test_log.py`, `run-tests.sh` "script logs" section. `flash`/`backup`/`module`/`avd` have no CLI-side event yet; script log contents are not redacted |
+| Structured logging with redaction (CLI); one execution ID shared with wrapped scripts; private script logs | Done | `tests/test_log.py`, `run-tests.sh` "script logs" section. Every state-changing command also writes CLI-side start/finish events (`core/audit.py`, `tests/test_audit.py`); script log contents are not redacted |
 | Doctor severity model | Done | `tests/test_doctor.py` |
 | OTA / boot / module / avd dispatch repairs | Done | `tests/test_*_cli.py` |
 | Provisioning (`00_bootstrap_distro.sh`) and Calamares cleanup | Awaiting integration validation | Commands executed in a sandbox; real Calamares/systemd/first boot not run |
@@ -35,7 +35,7 @@ named) · **Not started**.
 
 - Audit result recorded in `docs/ARCHITECTURE.md` and `docs/PLATFORM_SUPPORT.md`; old claims
   are labelled in `docs/ARCHITECTURE_AUDIT.md` and `docs/PROJECT_REVIEW_2026-10-04.md`.
-- Baseline gates: `bash tests/run-tests.sh` (909 checks incl. 329 Python tests) and
+- Baseline gates: `bash tests/run-tests.sh` (929 checks incl. 351 Python tests) and
   `bash tests/lint.sh` (needs `shellcheck`) are green at the head of this branch.
 - Lesson recorded: a status line in a previous session's notes is not evidence. A merge
   silently disabled the SHA-256 pins that notes said were done; the new static rules in
@@ -63,12 +63,14 @@ Done 2026-10-07: the CLI's execution ID reaches wrapped scripts and is stamped i
 logs; script logs and reports are `0600`; subprocess-level tests cover `boot
 inspect/unpack/repack/cpio/verify` with stub `magiskboot`/`avbtool`.
 
+Done 2026-10-07 (later): CLI-side audit events for `flash`, `backup`, `module`, `avd`,
+`boot patch` and `boot flash-last` — start and finish, exit status, scripts run, linked
+script logs — so each of those commands has both halves of its trail.
+
 Next (in order):
-1. Emit CLI-side audit events for `flash`, `backup`, `module` and `avd` (start, exit code,
-   script log path), so every command has both halves of its trail.
-2. Redact secrets in script log contents (route script logging through one helper), or
+1. Redact secrets in script log contents (route script logging through one helper), or
    audit scripts for anything that echoes a secret.
-3. Extend the config schema only where a script actually consumes a key; keep the rule that
+2. Extend the config schema only where a script actually consumes a key; keep the rule that
    no key disables a safety check.
 
 ## Stage 4 — Packaging and verified installation  *(Partly done)*

@@ -23,6 +23,7 @@ access to the operator's account:
 | Unverified rootfs on a rooted phone | `rootforge-chroot.sh install` requires `--sha256`/`--sha256-file`, scans for absolute paths, `..`, device nodes; staged install with completion marker | `termux/rootforge-chroot.sh` | Tests |
 | Placeholder digests shipped | Templates refuse to run; generator refuses surviving placeholders | `termux/templates/`, `make-release-metadata.sh` | Tests |
 | Secrets in logs | Key-name and token-shape redaction in the file and in the terminal echo (CLI logs) | `core/log.py` | `tests/test_log.py` |
+| Unrecorded state-changing commands | `flash`/`backup`/`module`/`avd` and `boot patch`/`flash-last` write start/finish events with exit status and script links | `core/audit.py` | `tests/test_audit.py`, shell audit section |
 | Logs readable by other users | CLI JSON logs and all script logs/reports created `0600` from creation; handed to `$SUDO_USER` under sudo | `core/log.py`, `common.sh:rf_private_file`/`rf_log_init` | Tests, incl. under `umask 000` |
 | Secrets in files | API-key file created 0600 from creation (`rf_write_private`); values shell-quoted (`rf_shell_quote`) | `setup_ai_tools.sh` | Stub tests |
 | Provisioning the wrong account / root | Target user resolved explicitly; refuses rather than defaulting to root; live user removed; live sudo rule deleted; installed name cannot be `root`/`rootforge` | `00_bootstrap_distro.sh`, Calamares configs | Executed in a sandbox; **not** under real Calamares |
@@ -50,10 +51,13 @@ access to the operator's account:
   corruption and single-file tampering; it does not protect against an attacker who
   controls the whole release. Nothing is signed (no GPG/minisign/Sigstore).
 - **No secret scan has been run** over the tree or history by a dedicated tool.
-- **The audit trail is partial.** One execution ID ties the CLI's JSON log to the wrapped
-  script's log, but `flash`/`backup`/`module`/`avd` write no CLI-side event, script log
-  contents are not redacted (never `echo` a secret into a script log), and nothing is
-  tamper-evident or shipped off the machine.
+- **The audit trail is local and editable.** Every state-changing command writes a start and a
+  finish event (exit status, scripts run, script logs) tied by one execution ID, but the
+  files are ordinary `0600` files owned by the operator: anyone with that account can edit or
+  delete them, nothing is signed, chained or shipped off the machine. Script log contents
+  are not redacted (never `echo` a secret into a script log). A command that argument
+  parsing rejects records nothing, and if the log cannot be opened the command still runs
+  (with a warning).
 - **Logs are private only for new files.** An existing log or report keeps the mode it has;
   directories keep the umask default.
 - **Android-side trust is out of scope**: bootloader unlock wipes data by design; nothing

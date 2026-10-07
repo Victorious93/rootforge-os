@@ -3196,6 +3196,59 @@ assert_eq "the script log is 0600 under umask 000" "$(mode_of "$SCRIPT_LOG")" "6
 assert_eq "the CLI log is 0600 under umask 000" "$(mode_of "$JSON_LOG")" "600"
 drop_sandbox
 
+section "audit trail — flash and backup leave a CLI-side record"
+
+# audit_field <jsonl> <event> <jq filter> — one value from a named event.
+audit_field() { jq -r --arg e "$2" "select(.event == \$e) | $3" "$1" | head -n 1; }
+
+# A blocked flash: nothing is written, and the record says so.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+make_boot_img "$SANDBOX/boot.img"
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img"
+assert_eq "a flash with no device is blocked (exit 3)" "$RC" "3"
+AUDIT_LOG="$(ls "$ROOTFORGE_HOME"/logs/rootforge-flash-boot-*.jsonl 2>/dev/null | head -n 1)"
+assert_eq "the CLI wrote an audit log for it" "$([ -n "$AUDIT_LOG" ] && echo yes || echo no)" "yes"
+assert_eq "it records the command" "$(audit_field "$AUDIT_LOG" 'command started' .command)" "flash boot"
+assert_contains "it records the image argument" "$(audit_field "$AUDIT_LOG" 'command started' '.argv | join(" ")')" "$SANDBOX/boot.img"
+assert_eq "it records the exit status the user saw" "$(audit_field "$AUDIT_LOG" 'command finished' .returncode)" "3"
+assert_eq "a blocked run is a warning, not an error" "$(audit_field "$AUDIT_LOG" 'command finished' .level)" "warn"
+assert_eq "it names the script that ran" "$(audit_field "$AUDIT_LOG" 'command finished' '.scripts[0].script')" "flash_patched_boot.sh"
+assert_eq "and that script's exit status" "$(audit_field "$AUDIT_LOG" 'command finished' '.scripts[0].returncode')" "3"
+SCRIPT_LOG_PATH="$(audit_field "$AUDIT_LOG" 'command finished' '.script_logs[0]')"
+assert_eq "it links the script's own log" "$([ -f "$SCRIPT_LOG_PATH" ] && echo yes || echo no)" "yes"
+AUDIT_ID="$(audit_field "$AUDIT_LOG" 'command started' .execution_id)"
+assert_contains "and that log carries the same execution ID" "$(head -n 1 "$SCRIPT_LOG_PATH")" "execution $AUDIT_ID:"
+assert_eq "the fastboot write was never reached" "$(grep -c 'flash' "$RF_STUB_LOG" || true)" "0"
+
+# A script-backed read-only command still leaves a record.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+run_script python3 -m rootforge.core.cli backup list testdev
+assert_eq "backup list succeeds" "$RC" "0"
+AUDIT_LOG="$(ls "$ROOTFORGE_HOME"/logs/rootforge-backup-list-*.jsonl 2>/dev/null | head -n 1)"
+assert_eq "backup list is audited" "$(audit_field "$AUDIT_LOG" 'command finished' .returncode)" "0"
+assert_eq "at info level" "$(audit_field "$AUDIT_LOG" 'command finished' .level)" "info"
+
+# A Python-native command (no script) is audited too.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+run_script python3 -m rootforge.core.cli backup verify nodev 20240101_000000
+assert_eq "verifying a backup that does not exist fails" "$([ "$RC" -ne 0 ] && echo failed || echo passed)" "failed"
+AUDIT_LOG="$(ls "$ROOTFORGE_HOME"/logs/rootforge-backup-verify-*.jsonl 2>/dev/null | head -n 1)"
+assert_eq "backup verify is audited" "$(audit_field "$AUDIT_LOG" 'command finished' .command)" "backup verify"
+assert_eq "no script was involved" "$(audit_field "$AUDIT_LOG" 'command finished' '.scripts | length')" "0"
+assert_eq "its status matches what the user saw" "$(audit_field "$AUDIT_LOG" 'command finished' .returncode)" "$RC"
+
+# An unwritable log location must not stop the command, and says so.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+printf 'x' > "$SANDBOX/blocker"
+run_script env ROOTFORGE_HOME="$SANDBOX/blocker/rf" python3 -m rootforge.core.cli backup verify nodev 20240101_000000
+assert_contains "an unrecordable run is announced" "$OUT" "will not be recorded"
+assert_not_contains "and does not crash" "$OUT" "Traceback"
+drop_sandbox
+
 section "kernelsu_patch_boot.sh — what ends up as the kernel"
 
 # curl and magiskboot shaped like the real ones: the release API answers with

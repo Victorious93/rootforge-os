@@ -16,12 +16,12 @@ after PR #42 merged) · **Phase:** active development; ISO/VM/hardware validatio
 infrastructure.
 
 **What is true now** (each verified by running it this session unless marked):
-- `bash tests/run-tests.sh` → 909 passed, 0 failed (one check wraps the Python suite, 329 tests).
+- `bash tests/run-tests.sh` → 929 passed, 0 failed (one check wraps the Python suite, 351 tests).
   `bash tests/lint.sh` → clean locally (shellcheck 0.11.0 from a venv). **GitHub CI also passed
   on the PR #42 head** (`34936af`: `shellcheck`, `tests`, `package-lists`, `yaml-lint`, `python`),
   so lint under CI's own shellcheck is verified. PR #42 was merged by the owner on 2026-10-07.
 - Implemented and stub-tested: device model + `device check`, flash contract, backup
-  manifest/verify/import-legacy/restore, layered config, redacted private JSON-lines log,
+  manifest/verify/import-legacy/restore, layered config, redacted private JSON-lines log with a CLI-side audit trail for state-changing commands,
   doctor severity model, OTA/boot/module/avd dispatch, provisioning with Calamares cleanup,
   Termux verified install + per-release metadata generation + CPU-honest SDK bootstrap,
   Makefile/`auto/build` failure handling, release-asset verifier, release workflow gating.
@@ -43,7 +43,7 @@ the check.**
 **Next task (in order):**
 1. On a host with loop devices: `sudo make build`; record log + digest. Then a QEMU boot +
    scripted Calamares install test (Stage 5 of the plan).
-2. CLI-side audit events for `flash`/`backup`/`module`/`avd`; redact script log contents (Stage 3). The execution ID and `0600` script logs are done.
+2. Redact secrets in script log contents (Stage 3). Done: shared execution ID, `0600` script logs, and CLI-side audit events for `flash`/`backup`/`module`/`avd`/`boot patch`/`boot flash-last`.
 3. Pin/replace the Ollama installer; add release signing (Stage 4).
 4. Run the flash/backup/restore contract against a test device the owner agrees to flash.
 Do not start Stage 6 (Windows/APK/GUI/remote) before Stages 2 and 5 are validated.

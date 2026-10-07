@@ -29,6 +29,20 @@ from typing import List, Optional, Sequence
 INSTALLED_BIN = Path("/usr/local/bin")
 
 
+# Scripts this process has run, in order, for the audit trail (core/audit.py).
+# Only the script name and exit code are kept: arguments are recorded once, by
+# the command's own audit event, where they are redacted.
+_EXECUTED: List[dict] = []
+
+
+def executed_scripts() -> List[dict]:
+    return [dict(item) for item in _EXECUTED]
+
+
+def reset_executed_scripts() -> None:
+    _EXECUTED.clear()
+
+
 class ScriptNotFound(RuntimeError):
     """Raised when a wrapped script isn't where it should be."""
 
@@ -89,10 +103,13 @@ def run_script(
     # /dev/tty precisely so that gate stays visible. Swallowing their output
     # would reintroduce the hang that fix was for.
     if capture:
-        return subprocess.run(
+        proc = subprocess.run(
             argv, env=run_env, capture_output=True, text=True, check=False
         )
-    return subprocess.run(argv, env=run_env, check=False)
+    else:
+        proc = subprocess.run(argv, env=run_env, check=False)
+    _EXECUTED.append({"script": name, "returncode": proc.returncode})
+    return proc
 
 
 def exec_script(name: str, args: Sequence[str], *, env: Optional[dict] = None) -> int:
