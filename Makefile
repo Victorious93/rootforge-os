@@ -16,7 +16,12 @@
 # don't have to build locally just to flash a USB drive.
 
 ISO     := rootforge-os-amd64.hybrid.iso
-LOGFILE := rootforge-build-$(shell date +%Y%m%d_%H%M%S).log
+
+# Overridable seams, so the target logic can be exercised without root or a
+# real live-build run (tests/run-tests.sh does this): ID_U is the effective
+# uid, AUTO_BUILD the build wrapper.
+ID_U       ?= $(shell id -u)
+AUTO_BUILD ?= auto/build
 
 .PHONY: build clean distclean checksum list-usb flash check-root test lint
 
@@ -30,11 +35,15 @@ lint:
 	tests/lint.sh
 
 check-root:
-	@[ "$$(id -u)" -eq 0 ] || { echo "Run with sudo: sudo make $(MAKECMDGOALS)"; exit 1; }
+	@[ "$(ID_U)" -eq 0 ] || { echo "Run with sudo: sudo make $(MAKECMDGOALS)"; exit 1; }
 
+# auto/build writes its own rootforge-build-<timestamp>.log and removes any ISO
+# left by an earlier build before it starts, so a failure here stops make
+# before `checksum` and can never leave a stale ISO looking freshly built.
+# Do not pipe it through tee: without pipefail that hides its exit status.
 build: check-root
 	@echo "==> Building RootForge OS ISO"
-	auto/build 2>&1 | tee $(LOGFILE)
+	$(AUTO_BUILD)
 	$(MAKE) checksum
 
 clean: check-root

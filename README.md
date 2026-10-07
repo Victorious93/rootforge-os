@@ -299,9 +299,13 @@ gives the same three choices Ubuntu's installer gives: erase the disk, install
 alongside an existing OS (auto-detected via `os-prober` — Debian ships this
 disabled by default in GRUB, RootForge turns it on specifically so an existing
 Ubuntu install shows up in the dual-boot menu instead of silently vanishing), or
-manual partitioning. GRUB installs in UEFI mode with a `grub-efi-amd64` target,
-matching how current Ubuntu installs itself; BIOS/legacy boot is a secondary path,
-not the primary target.
+manual partitioning. The installed system is configured with `grub-efi-amd64` (and
+the signed variants), but **the live ISO this repository builds boots through
+isolinux, i.e. BIOS/legacy only** (`auto/config` explains why: live-build's GRUB
+image in this version is BIOS-only and `isohybrid` accepts only isolinux). Calamares
+chooses its install mode from the firmware the live session was booted under, so
+today's ISO installs in BIOS mode. **UEFI boot of the live ISO and Secure Boot are
+not supported and have never been verified**; see `docs/PLATFORM_SUPPORT.md`.
 
 **[Likely]** worth being explicit about: `os-prober` re-scanning at every GRUB
 update can occasionally misdetect or reorder entries on multi-OS systems — this is

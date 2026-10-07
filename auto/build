@@ -23,6 +23,11 @@ if ! losetup -f >/dev/null 2>&1; then
   exit 1
 fi
 
+# Remove artifacts of any earlier build. If this build fails, or lb skips the
+# binary stage, nothing stale may remain to be checksummed, flashed or
+# uploaded as if it came from this run.
+rm -f "$FINAL_ISO" "$FINAL_ISO.sha256" binary.iso binary.hybrid.iso
+
 echo "==> RootForge OS build starting — $(date)"
 echo "==> Log: $LOGFILE"
 echo "==> Disk space at start:"
@@ -115,7 +120,8 @@ done
 
 if [ -z "$PRODUCED_ISO" ]; then
   echo "==> ERROR: lb build reported success but no binary.iso/binary.hybrid.iso was produced." >&2
-  echo "    Check $LOGFILE — this shouldn't happen if lb build actually exited 0." >&2
+  echo "    Check $LOGFILE. If a previous build left stage markers in .build/, live-build" >&2
+  echo "    skips those stages: run 'sudo make clean' and build again." >&2
   exit 1
 fi
 

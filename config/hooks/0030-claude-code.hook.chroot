@@ -3,13 +3,39 @@
 # Victorious Framework | Origin Source Labs
 #
 # Installs the Claude Code CLI globally via npm. Runs after the NodeSource
-# LTS hook (0010) so a current Node.js is guaranteed present.
+# LTS hook (0010) so a Node.js that satisfies its engines requirement
+# (>=22) is guaranteed present.
 # API key configuration is user-driven via scripts/setup_ai_tools.sh.
+#
+# Pinned: an unpinned `npm install -g` would put whatever the registry
+# serves on build day into the image. The version and the registry's
+# integrity value for it were read from
+# registry.npmjs.org/@anthropic-ai/claude-code/<version> on 2026-10-07. The
+# integrity of the main package is checked against the pin before installing;
+# its per-platform native binary (an optional dependency) is installed with
+# the integrity the registry reports at install time and is NOT separately
+# pinned here. To update: choose a version, read dist.integrity for it, and
+# change both lines together.
 
 set -e
 
-echo "==> Installing Claude Code CLI"
-npm install -g @anthropic-ai/claude-code
+CLAUDE_CODE_VERSION="2.1.292"
+CLAUDE_CODE_INTEGRITY="sha512-ptT9UcOsyR2VLNgfHgF87To8B7tCrZktIpYC4dEGt+9MG42NAWsljEGBZ3spdHcJ2akednszESVNti7hWxZrJg=="
 
-claude --version || true
-echo "==> Claude Code CLI install complete"
+echo "==> Installing Claude Code CLI $CLAUDE_CODE_VERSION"
+ACTUAL_INTEGRITY="$(npm view "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION" dist.integrity)"
+if [ "$ACTUAL_INTEGRITY" != "$CLAUDE_CODE_INTEGRITY" ]; then
+  echo "ERROR: the registry's integrity value for claude-code@$CLAUDE_CODE_VERSION does not match the pin." >&2
+  echo "       expected: $CLAUDE_CODE_INTEGRITY" >&2
+  echo "       actual:   ${ACTUAL_INTEGRITY:-<none>}" >&2
+  exit 1
+fi
+npm install -g "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
+
+# A missing or wrong binary must fail the build: this used to be
+# `claude --version || true`, which reported nothing either way.
+INSTALLED="$(claude --version)"
+case "$INSTALLED" in
+  *"$CLAUDE_CODE_VERSION"*) echo "==> Claude Code CLI install complete: $INSTALLED" ;;
+  *) echo "ERROR: expected claude $CLAUDE_CODE_VERSION, 'claude --version' printed: $INSTALLED" >&2; exit 1 ;;
+esac

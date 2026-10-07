@@ -88,6 +88,17 @@ for hook in config/hooks/*.hook.chroot; do
     problem "$name: an install-report line fabricates success" \
             "${line} — this prints a success string whether or not the tool exists"
   done < <(grep -nE 'installed:.*\|\|[[:space:]]*echo' "$hook" | drop_comments || true)
+
+  # 5. `npm install -g <package>` with no version installs whatever the
+  #    registry serves on build day, so two builds of the same commit can
+  #    differ. Name the version: <package>@<x.y.z> or <package>@$VERSION_VAR.
+  while IFS= read -r line; do
+    case "$line" in
+      *[A-Za-z0-9/_-]@[0-9]*|*[A-Za-z0-9/_-]@\$*) continue ;;
+    esac
+    problem "$name: npm install -g without a pinned version" \
+            "${line} — pin it (package@x.y.z) so the image is reproducible"
+  done < <(grep -nE 'npm[[:space:]]+(install|i)[[:space:]].*(-g|--global)' "$hook" | drop_comments || true)
 done
 
 # The same two download rules apply to the runtime scripts. setup_terminal.sh

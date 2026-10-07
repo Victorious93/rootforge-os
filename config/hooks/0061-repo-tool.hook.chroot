@@ -3,18 +3,47 @@
 # Victorious Framework | Origin Source Labs
 #
 # 'repo' is Google's manifest-based multi-git tool, required for pulling
-# AOSP/kernel/device trees. Not in Debian repos; installed from source.google.com.
+# AOSP/kernel/device trees. Not in Debian repos; installed as the launcher
+# script from a release tag of its git repository.
+#
+# Pinned to tag v2.65 and its SHA-256. The tag URL is immutable, unlike the
+# floating storage.googleapis.com/git-repo-downloads/repo file, which is
+# replaced on every release. On 2026-10-07 both had the digest below. To
+# update: pick a tag, download its launcher, and change both lines together.
 
 set -e
 
-echo "==> Installing Google repo tool"
-REPO_URL="https://storage.googleapis.com/git-repo-downloads/repo"
-curl -fsSL -o /usr/local/bin/repo "$REPO_URL"
-chmod +x /usr/local/bin/repo
+REPO_VERSION="2.65"
+REPO_SHA256="1211b57b57e4122a9c546295a59b37d24068f1164d0e87bef096d5323c413e4f"
+REPO_URL="https://gerrit.googlesource.com/git-repo/+/refs/tags/v${REPO_VERSION}/repo?format=TEXT"
 
-# Verify it's a valid script (repo is a Python script)
-python3 /usr/local/bin/repo --version 2>/dev/null | head -1 || \
-  python3 /usr/local/bin/repo help >/dev/null 2>&1 || \
-  echo "WARNING: repo installed but version check inconclusive — that's normal before git config is set."
+echo "==> Installing Google repo tool $REPO_VERSION"
+TMP_B64="$(mktemp)"
+TMP_REPO="$(mktemp)"
+if ! curl -fsSL -o "$TMP_B64" "$REPO_URL" || [ ! -s "$TMP_B64" ]; then
+  rm -f "$TMP_B64" "$TMP_REPO"
+  echo "ERROR: could not download the repo launcher." >&2
+  exit 1
+fi
+# gitiles serves ?format=TEXT base64-encoded.
+base64 -d "$TMP_B64" > "$TMP_REPO"
+rm -f "$TMP_B64"
+ACTUAL_SHA256="$(sha256sum "$TMP_REPO" | awk '{print $1}')"
+if [ "$ACTUAL_SHA256" != "$REPO_SHA256" ]; then
+  rm -f "$TMP_REPO"
+  echo "ERROR: the repo launcher does not match the pinned SHA-256." >&2
+  echo "       expected: $REPO_SHA256" >&2
+  echo "       actual:   $ACTUAL_SHA256" >&2
+  exit 1
+fi
+install -m 0755 "$TMP_REPO" /usr/local/bin/repo
+rm -f "$TMP_REPO"
 
-echo "==> repo tool installed at /usr/local/bin/repo"
+# `repo --version` prints the launcher version without needing a checkout.
+VERSION_OUT="$(python3 /usr/local/bin/repo --version)"
+case "$VERSION_OUT" in
+  *"launcher version $REPO_VERSION"*) ;;
+  *) echo "ERROR: expected repo launcher $REPO_VERSION, got: $VERSION_OUT" >&2; exit 1 ;;
+esac
+
+echo "==> repo tool $REPO_VERSION installed at /usr/local/bin/repo"

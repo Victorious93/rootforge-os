@@ -1983,14 +1983,14 @@ GEN="$REPO_ROOT/termux/make-release-metadata.sh"
 
 # make_termux_tar <dist> <flavor> <arch> [build-info flavor] [build-info arch]
 # A small rootfs-shaped archive whose /etc/rootforge/build-info says what the
-# real build-rootfs.sh would record, plus the digest-only .sha256 it writes.
+# real build-rootfs.sh would record, plus the sha256sum-format .sha256 it writes.
 make_termux_tar() {
   local dist="$1" flavor="$2" arch="$3" bflavor="${4:-$2}" barch="${5:-$3}"
   local src="$SANDBOX/src-$flavor-$arch"
   mkdir -p "$src/etc/rootforge" "$dist"
   printf 'flavor=%s\narch=%s\nx11=0\nbuilt=20260101_000000\n' "$bflavor" "$barch" > "$src/etc/rootforge/build-info"
   tar -C "$src" -cJf "$dist/rootforge-$flavor-$arch.tar.xz" .
-  sha256sum "$dist/rootforge-$flavor-$arch.tar.xz" | cut -d' ' -f1 > "$dist/rootforge-$flavor-$arch.tar.xz.sha256"
+  ( cd "$dist" && sha256sum "rootforge-$flavor-$arch.tar.xz" > "rootforge-$flavor-$arch.tar.xz.sha256" )
 }
 make_all_termux_tars() {
   local f a
@@ -2022,6 +2022,13 @@ assert_eq "SHA256SUMS verifies every published file" "$(cd "$SANDBOX/assets" && 
 assert_eq "the metadata binds arch, flavor and URL to each digest" \
   "$(jq -r '.artifacts[] | select(.flavor=="chroot" and .arch=="arm64") | "\(.url) \(.sha256)"' "$SANDBOX/out/release-metadata.json")" \
   "https://github.com/Victorious93/rootforge-os/releases/download/v1.2.3/rootforge-chroot-arm64.tar.xz $(cut -d' ' -f1 "$SANDBOX/dist/rootforge-chroot-arm64.tar.xz.sha256")"
+
+# The digest-only sidecar older builds wrote is still accepted.
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+cut -d' ' -f1 "$SANDBOX/dist/rootforge-proot-arm64.tar.xz.sha256" > "$SANDBOX/dist/rootforge-proot-arm64.tar.xz.sha256.tmp"
+mv "$SANDBOX/dist/rootforge-proot-arm64.tar.xz.sha256.tmp" "$SANDBOX/dist/rootforge-proot-arm64.tar.xz.sha256"
+run_script bash "$GEN" --tag v1.2.3 --dist "$SANDBOX/dist" --out "$SANDBOX/out"
+assert_eq "a digest-only .sha256 is accepted" "$RC" "0"
 
 # The checked-in templates must not be usable as they are.
 run_script bash "$REPO_ROOT/termux/templates/install.sh.in"
@@ -2102,6 +2109,166 @@ assert_not_contains "nor a digest check for it" "$(cat "$SANDBOX/out/rootforge-p
 assert_contains "the installer says when no chroot rootfs was published" "$(cat "$SANDBOX/out/install.sh")" 'CHROOT_SHA256_ARM64=""'
 run_script bash "$GEN" --tag local1 --dist "$SANDBOX/dist" --out "$SANDBOX/out2" --base-url 'http://h/x&y'
 assert_eq "a --base-url with shell/sed metacharacters is refused" "$RC" "1"
+drop_sandbox
+
+section "tests/verify-release-assets.sh — what a release must contain"
+
+VERIFY_ASSETS_SCRIPT="$REPO_ROOT/tests/verify-release-assets.sh"
+MIN_ISO=1048576
+
+# make_release_assets <dir> — the files release.yml assembles: generator output,
+# the four tarballs with their digests, and a small ISO-shaped image (ISO 9660
+# signature at byte 32769) whose digest is appended to SHA256SUMS.
+make_release_assets() {
+  local dir="$1"
+  make_all_termux_tars "$SANDBOX/dist"
+  bash "$GEN" --tag v1.2.3 --dist "$SANDBOX/dist" --out "$dir" >/dev/null
+  cp "$SANDBOX"/dist/*.tar.xz "$SANDBOX"/dist/*.tar.xz.sha256 "$dir/"
+  truncate -s 2M "$dir/rootforge-os-amd64.hybrid.iso"
+  printf 'CD001' | dd of="$dir/rootforge-os-amd64.hybrid.iso" bs=1 seek=32769 conv=notrunc 2>/dev/null
+  ( cd "$dir" && sha256sum rootforge-os-amd64.hybrid.iso > rootforge-os-amd64.hybrid.iso.sha256 \
+      && cat rootforge-os-amd64.hybrid.iso.sha256 >> SHA256SUMS )
+}
+verify_assets() { run_script bash "$VERIFY_ASSETS_SCRIPT" "$SANDBOX/assets" --min-iso-bytes "$MIN_ISO" "$@"; }
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+verify_assets --tag v1.2.3
+assert_eq "a complete, consistent release passes" "$RC" "0"
+assert_contains "and says so" "$OUT" "release assets OK"
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+rm "$SANDBOX/assets/rootforge-os-amd64.hybrid.iso"
+verify_assets
+assert_eq "a release without the ISO is refused" "$RC" "1"
+assert_contains "naming the missing file" "$OUT" "missing: rootforge-os-amd64.hybrid.iso"
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+: > "$SANDBOX/assets/rootforge-os-amd64.hybrid.iso"
+verify_assets
+assert_eq "an empty ISO is refused" "$RC" "1"
+assert_contains "naming it empty" "$OUT" "empty: rootforge-os-amd64.hybrid.iso"
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+rm "$SANDBOX/assets/rootforge-chroot-arm64.tar.xz.sha256"
+verify_assets
+assert_eq "a missing rootfs digest file is refused" "$RC" "1"
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+printf 'tampered' >> "$SANDBOX/assets/rootforge-proot-arm64.tar.xz"
+verify_assets
+assert_eq "a tarball changed after its digest was recorded is refused" "$RC" "1"
+assert_contains "the digest check names it" "$OUT" "rootforge-proot-arm64.tar.xz.sha256 does not verify"
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+printf 'tampered' >> "$SANDBOX/assets/rootforge-os-amd64.hybrid.iso"
+verify_assets
+assert_eq "an ISO changed after checksumming is refused" "$RC" "1"
+assert_contains "SHA256SUMS notices too" "$OUT" "SHA256SUMS does not verify"
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+dd if=/dev/zero of="$SANDBOX/assets/rootforge-os-amd64.hybrid.iso" bs=1 seek=32769 count=5 conv=notrunc 2>/dev/null
+( cd "$SANDBOX/assets" && sha256sum rootforge-os-amd64.hybrid.iso > rootforge-os-amd64.hybrid.iso.sha256 \
+    && grep -v 'hybrid.iso$' SHA256SUMS > S && cat rootforge-os-amd64.hybrid.iso.sha256 >> S && mv S SHA256SUMS )
+verify_assets
+assert_eq "a file that is not an ISO 9660 image is refused even when its digest is right" "$RC" "1"
+assert_contains "saying there is no ISO signature" "$OUT" "no ISO 9660 signature"
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+run_script bash "$VERIFY_ASSETS_SCRIPT" "$SANDBOX/assets"
+assert_eq "an ISO below the default minimum size is refused" "$RC" "1"
+assert_contains "naming the minimum" "$OUT" "below the"
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+grep -v 'hybrid.iso$' "$SANDBOX/assets/SHA256SUMS" > "$SANDBOX/S" && mv "$SANDBOX/S" "$SANDBOX/assets/SHA256SUMS"
+verify_assets
+assert_eq "a SHA256SUMS that leaves out the ISO is refused" "$RC" "1"
+assert_contains "naming the gap" "$OUT" "SHA256SUMS has no entry for rootforge-os-amd64.hybrid.iso"
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+verify_assets --tag v9.9.9
+assert_eq "metadata for a different tag is refused" "$RC" "1"
+assert_contains "naming the tag" "$OUT" "release-metadata.json tag is not v9.9.9"
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+printf 'build log' > "$SANDBOX/assets/rootforge-build-20260101_000000.log"
+verify_assets
+assert_eq "a stray file in the asset directory is refused" "$RC" "1"
+assert_contains "naming it" "$OUT" "unexpected file: rootforge-build-20260101_000000.log"
+
+new_sandbox; make_release_assets "$SANDBOX/assets"
+printf '# @PLUGIN_SHA256@\n' >> "$SANDBOX/assets/install.sh"
+verify_assets
+assert_eq "a surviving placeholder is refused" "$RC" "1"
+assert_contains "naming it" "$OUT" "install.sh still contains an unfilled placeholder"
+drop_sandbox
+
+section "Makefile and auto/build — a failed build is a failed build"
+
+# make_build_project — a throwaway copy of the build entry points.
+make_build_project() {
+  mkdir -p "$SANDBOX/proj/auto"
+  cp "$REPO_ROOT/Makefile" "$SANDBOX/proj/Makefile"
+  cp "$REPO_ROOT/auto/build" "$SANDBOX/proj/auto/build"
+}
+
+# make: the build wrapper fails -> make fails, and checksum never runs.
+new_sandbox; make_build_project
+printf 'stale-iso' > "$SANDBOX/proj/rootforge-os-amd64.hybrid.iso"
+printf 'stale-digest  rootforge-os-amd64.hybrid.iso\n' > "$SANDBOX/proj/rootforge-os-amd64.hybrid.iso.sha256"
+printf '#!/bin/sh\necho "lb build blew up" >&2\nexit 7\n' > "$SANDBOX/proj/fakebuild"; chmod +x "$SANDBOX/proj/fakebuild"
+run_script make -C "$SANDBOX/proj" build ID_U=0 AUTO_BUILD=./fakebuild
+assert_eq "make build fails when the build wrapper fails" "$([ "$RC" -ne 0 ] && echo failed || echo masked)" "failed"
+assert_not_contains "no checksum is written after a failed build" "$OUT" "sha256 written"
+assert_eq "the stale digest file is not rewritten" "$(cat "$SANDBOX/proj/rootforge-os-amd64.hybrid.iso.sha256")" "stale-digest  rootforge-os-amd64.hybrid.iso"
+
+# make: a successful build produces a checksum that verifies.
+new_sandbox; make_build_project
+printf '#!/bin/sh\nprintf fresh-iso > rootforge-os-amd64.hybrid.iso\n' > "$SANDBOX/proj/fakebuild"; chmod +x "$SANDBOX/proj/fakebuild"
+run_script make -C "$SANDBOX/proj" build ID_U=0 AUTO_BUILD=./fakebuild
+assert_eq "make build succeeds when the wrapper does" "$RC" "0"
+assert_eq "and the checksum verifies the new ISO" "$(cd "$SANDBOX/proj" && sha256sum -c --quiet rootforge-os-amd64.hybrid.iso.sha256 >/dev/null 2>&1 && echo ok)" "ok"
+
+# make: not root -> refuse before building anything.
+new_sandbox; make_build_project
+printf '#!/bin/sh\ntouch ran\n' > "$SANDBOX/proj/fakebuild"; chmod +x "$SANDBOX/proj/fakebuild"
+run_script make -C "$SANDBOX/proj" build ID_U=1000 AUTO_BUILD=./fakebuild
+assert_eq "make build without root is refused" "$([ "$RC" -ne 0 ] && echo refused || echo ran)" "refused"
+assert_contains "telling the operator to use sudo" "$OUT" "Run with sudo"
+assert_eq "the build wrapper was never started" "$([ -e "$SANDBOX/proj/ran" ] && echo started || echo not-started)" "not-started"
+
+# auto/build with a stubbed live-build: stale outputs must not survive.
+make_fake_lb_env() {  # make_fake_lb_env <lb-body>
+  mkdir -p "$SANDBOX/fakebin"
+  printf '#!/bin/sh\necho 0\n' > "$SANDBOX/fakebin/id"
+  printf '#!/bin/sh\nexit 0\n' > "$SANDBOX/fakebin/losetup"
+  printf '#!/bin/sh\n%s\n' "$1" > "$SANDBOX/fakebin/lb"
+  chmod +x "$SANDBOX/fakebin/"*
+  printf 'stale' > "$SANDBOX/proj/rootforge-os-amd64.hybrid.iso"
+  printf 'stale-digest  x\n' > "$SANDBOX/proj/rootforge-os-amd64.hybrid.iso.sha256"
+  printf 'stale' > "$SANDBOX/proj/binary.iso"
+}
+run_auto_build() { run_script env PATH="$SANDBOX/fakebin:$PATH" bash -c 'cd "$1" && bash auto/build' _ "$SANDBOX/proj"; }
+
+new_sandbox; make_build_project
+make_fake_lb_env 'echo "E: package not found"; exit 100'
+run_auto_build
+assert_eq "auto/build exits with lb build's own status" "$RC" "100"
+assert_eq "a failed build leaves no stale ISO" "$([ -e "$SANDBOX/proj/rootforge-os-amd64.hybrid.iso" ] && echo stale || echo clean)" "clean"
+assert_eq "nor a stale digest file" "$([ -e "$SANDBOX/proj/rootforge-os-amd64.hybrid.iso.sha256" ] && echo stale || echo clean)" "clean"
+assert_eq "nor a stale binary.iso that a later step could pick up" "$([ -e "$SANDBOX/proj/binary.iso" ] && echo stale || echo clean)" "clean"
+
+new_sandbox; make_build_project
+make_fake_lb_env 'echo "lb build: skipped, stages already done"; exit 0'
+run_auto_build
+assert_eq "a build that exits 0 but produces no ISO is an error" "$RC" "1"
+assert_contains "and the message points at 'make clean'" "$OUT" "sudo make clean"
+assert_eq "it cannot succeed on a stale binary.iso from an earlier run" "$([ -e "$SANDBOX/proj/rootforge-os-amd64.hybrid.iso" ] && echo present || echo absent)" "absent"
+
+new_sandbox; make_build_project
+make_fake_lb_env 'printf fresh > binary.hybrid.iso; exit 0'
+run_auto_build
+assert_eq "a build that produces an ISO succeeds" "$RC" "0"
+assert_eq "and the ISO is this build's, not the stale one" "$(cat "$SANDBOX/proj/rootforge-os-amd64.hybrid.iso")" "fresh"
 drop_sandbox
 
 section "termux/bootstrap_proot.sh — only what this CPU can run"
