@@ -15,6 +15,8 @@ from rootforge.core import __version__
 from rootforge.core import avd as avd_mod
 from rootforge.core import backup as backup_mod
 from rootforge.core import ota as ota_mod
+
+from rootforge.core import module as module_mod
 from rootforge.core.config import cmd_show as config_cmd_show
 from rootforge.core.device import cmd_show as device_cmd_show
 from rootforge.core.doctor import run_doctor
@@ -104,6 +106,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="Comma-separated partition names (default: boot,init_boot,vendor_boot,dtbo,vbmeta).",
     )
 
+    module_parser = subparsers.add_parser(
+        "module", help="Scaffold, lint, and build Magisk/KernelSU/APatch/Zygisk/Xposed modules."
+    )
+    module_sub = module_parser.add_subparsers(dest="module_command", required=True)
+
+    module_create_parser = module_sub.add_parser(
+        "create", help="Scaffold a new module."
+    )
+    module_create_parser.add_argument("module_id")
+    module_create_parser.add_argument("display_name")
+    module_create_parser.add_argument(
+        "--target",
+        default="magisk",
+        choices=list(module_mod.VALID_TARGETS),
+        help="Module framework/type (default: magisk).",
+    )
+
+    module_lint_parser = module_sub.add_parser(
+        "lint", help="Lint a module directory or built zip."
+    )
+    module_lint_parser.add_argument("path")
+    module_lint_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable findings for CI."
+    )
+
+    module_build_parser = module_sub.add_parser(
+        "build", help="Zip a module, optionally push + install it on a connected device."
+    )
+    module_build_parser.add_argument("module_id")
+    module_build_parser.add_argument(
+        "--install", action="store_true", help="Push and install after building."
+    )
+    module_build_parser.add_argument(
+        "--framework",
+        default="magisk",
+        choices=["magisk", "kernelsu"],
+        help="Install-time framework CLI to use with --install (default: magisk).",
+    )
+
     avd_parser = subparsers.add_parser(
         "avd", help="Create, list, start, stop, and snapshot Android emulator AVDs."
     )
@@ -171,6 +212,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return ota_mod.cmd_inspect(args.input)
         if args.ota_command == "extract":
             return ota_mod.cmd_extract(args.input, args.output_dir, args.partitions)
+
+    if args.command == "module":
+        if args.module_command == "create":
+            return module_mod.cmd_create(args.module_id, args.display_name, args.target)
+        if args.module_command == "lint":
+            return module_mod.cmd_lint(args.path, args.json)
+        if args.module_command == "build":
+            return module_mod.cmd_build(args.module_id, args.install, args.framework)
 
     if args.command == "avd":
         if args.avd_command == "create":
