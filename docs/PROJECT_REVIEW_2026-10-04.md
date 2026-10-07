@@ -5,7 +5,7 @@
 > was wired to the partition-image mount script; `00_bootstrap_distro.sh` could provision
 > root's home; the six download hooks' SHA-256 pins had been disabled by a merge. The test
 > counts below (439/161) are historical; at the head of the 2026-10-07 branch the harness
-> reports 929 checks including 351 Python tests. See `CHANGELOG.md` and `docs/ARCHITECTURE.md`.
+> reports 983 checks including 358 Python tests. See `CHANGELOG.md` and `docs/ARCHITECTURE.md`.
 
 ---
 

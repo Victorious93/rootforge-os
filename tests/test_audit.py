@@ -87,6 +87,11 @@ class TestAuditedWrapper(AuditTestCase):
         self.assertNotIn(secret, path.read_text())
         self.assertIn("REDACTED", path.read_text())
 
+    def test_a_secret_passed_as_the_next_argument_is_redacted(self):
+        audit.audited("avd create", ["x", "--authkey", "S3CRET-VALUE", "--name", "ok"], lambda: 0)
+        started = self.events("avd-create")[0]
+        self.assertEqual(started["argv"], ["x", "--authkey", "***REDACTED***", "--name", "ok"])
+
     def test_argv_none_falls_back_to_the_process_arguments(self):
         with mock.patch.object(sys, "argv", ["rootforge", "backup", "list", "dev"]):
             audit.audited("backup list", None, lambda: 0)
@@ -146,6 +151,48 @@ class TestThroughTheCli(AuditTestCase):
         self.assertEqual(finished["scripts"], [{"script": "backup_partitions.sh", "returncode": 4}])
         self.assertEqual(finished["returncode"], 4)
         self.assertEqual(finished["script_logs"], [str(self.home / "logs" / "fake_run.log")])
+
+    def test_a_script_log_with_a_secret_is_redacted_after_the_run(self):
+        """The case the scripts' own exit hook cannot cover: a SIGKILLed script."""
+        script = self.fake_script(
+            'mkdir -p "$ROOTFORGE_HOME/logs"\n'
+            'f="$ROOTFORGE_HOME/logs/leaky.log"\n'
+            'printf "# rootforge execution %s: leaky.sh started now\\n" "$ROOTFORGE_EXECUTION_ID" > "$f"\n'
+            'echo "tailscale up --authkey tskey-auth-abcdefghijk123" >> "$f"\n'
+            'echo "kept: serial ABC123" >> "$f"\n'
+            "exit 0"
+        )
+        self.run_main(["backup", "list", "dev"], script)
+        log = self.home / "logs" / "leaky.log"
+        text = log.read_text()
+        self.assertNotIn("tskey-auth-abcdefghijk123", text)
+        self.assertIn("--authkey ***REDACTED***", text)
+        self.assertIn("kept: serial ABC123", text)
+        finished = self.events("backup-list")[-1]
+        self.assertEqual(finished["script_logs_redacted"], [str(log)])
+
+    def test_redaction_keeps_the_log_private_and_in_place(self):
+        script = self.fake_script(
+            'mkdir -p "$ROOTFORGE_HOME/logs"\n'
+            'f="$ROOTFORGE_HOME/logs/priv.log"\n'
+            '( umask 077; printf "# rootforge execution %s: p.sh started\\nPASSWORD=hunter2\\n" '
+            '"$ROOTFORGE_EXECUTION_ID" > "$f" )\n'
+            "exit 0"
+        )
+        self.run_main(["backup", "list", "dev"], script)
+        log = self.home / "logs" / "priv.log"
+        self.assertEqual(stat.S_IMODE(log.stat().st_mode), 0o600)
+        self.assertIn("PASSWORD=***REDACTED***", log.read_text())
+
+    def test_a_clean_script_log_is_left_untouched_and_not_listed(self):
+        script = self.fake_script(
+            'mkdir -p "$ROOTFORGE_HOME/logs"\n'
+            'printf "# rootforge execution %s: c.sh started\\nBacked up 3 partitions\\n" '
+            '"$ROOTFORGE_EXECUTION_ID" > "$ROOTFORGE_HOME/logs/clean.log"\n'
+            "exit 0"
+        )
+        self.run_main(["backup", "list", "dev"], script)
+        self.assertEqual(self.events("backup-list")[-1]["script_logs_redacted"], [])
 
     def test_each_group_is_audited(self):
         script = self.fake_script("exit 0")

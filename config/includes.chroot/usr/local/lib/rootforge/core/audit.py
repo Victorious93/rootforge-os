@@ -10,6 +10,11 @@ command and writes two events to `rootforge-<command>-<execution id>.jsonl`:
   command finished   exit status, duration, the scripts that were run with
                      their exit statuses, and the script logs for this run
 
+Script logs are redacted here once the command ends (`script_logs_redacted`
+lists the ones that needed it). The scripts redact their own logs on exit too
+(sh/common.sh), but a script killed with SIGKILL never runs that hook, so the
+CLI does it for every log stamped with this run's execution ID.
+
 The execution ID is the one the CLI gave the wrapped scripts, so the JSON
 log, the scripts' own logs and any `rootforge` call a script makes share it.
 
@@ -28,7 +33,7 @@ import time
 from typing import Callable, Optional, Sequence
 
 from rootforge.core import runner
-from rootforge.core.log import Logger, script_logs_for
+from rootforge.core.log import Logger, redact_argv, redact_file, script_logs_for
 
 # Commands that change a device or a workspace and previously left no CLI-side
 # record. doctor and ota already log themselves, and so do boot's
@@ -75,7 +80,7 @@ def audited(label: str, argv: Optional[Sequence[str]], run: Callable[[], int]) -
         logger.info(
             "command started",
             command=label,
-            argv=list(argv) if argv is not None else sys.argv[1:],
+            argv=redact_argv(argv if argv is not None else sys.argv[1:]),
             euid=os.geteuid(),
             sudo_user=os.environ.get("SUDO_USER", ""),
             cwd=os.getcwd(),
@@ -85,23 +90,27 @@ def audited(label: str, argv: Optional[Sequence[str]], run: Callable[[], int]) -
         returncode = run()
     except BaseException as exc:  # recorded, then re-raised: SystemExit and Ctrl-C included
         if logger:
+            script_logs = script_logs_for(logger.execution_id, since=started_wall - 2)
             logger.error(
                 "command crashed",
                 command=label,
                 error_type=type(exc).__name__,
                 duration_seconds=round(time.monotonic() - started, 3),
                 scripts=runner.executed_scripts(),
-                script_logs=script_logs_for(logger.execution_id, since=started_wall - 2),
+                script_logs=script_logs,
+                script_logs_redacted=[p for p in script_logs if redact_file(p)],
             )
         raise
 
     if logger:
+        script_logs = script_logs_for(logger.execution_id, since=started_wall - 2)
         fields = dict(
             command=label,
             returncode=returncode,
             duration_seconds=round(time.monotonic() - started, 3),
             scripts=runner.executed_scripts(),
-            script_logs=script_logs_for(logger.execution_id, since=started_wall - 2),
+            script_logs=script_logs,
+            script_logs_redacted=[p for p in script_logs if redact_file(p)],
             log_path=str(logger.path),
         )
         # A non-zero status is not always a failure (device check exits 3 for

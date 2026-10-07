@@ -99,7 +99,8 @@ if [[ $USBGUARD_LEARN -eq 1 ]]; then
   USBGUARD_TMP="$(mktemp)"
   # Same seam as ROOTFORGE_GRUB_DEFAULTS and ROOTFORGE_SYSCTL_FILE.
   USBGUARD_RULES="${ROOTFORGE_USBGUARD_RULES:-/etc/usbguard/rules.conf}"
-  trap 'rm -f "$USBGUARD_TMP"' EXIT
+  # This replaces the exit hook rf_log_init installed, so it redacts too.
+  trap 'rm -f "$USBGUARD_TMP"; rf_redact_registered' EXIT
   # Not run_priv: a dry run still needs the real policy so it can show what
   # would be allowed. generate-policy only reads the USB bus.
   sudo usbguard generate-policy > "$USBGUARD_TMP"

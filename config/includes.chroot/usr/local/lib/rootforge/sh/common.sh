@@ -301,22 +301,29 @@ rf_ensure_execution_id() {
 # Logs and reports carry device serials, partition names and local paths, so
 # they are not for other users of the machine. The mode is set when the file
 # is created (umask in a subshell) rather than chmod'ed afterwards, so there is
-# no window at the default umask; an existing file keeps the mode it has. Under
+# no window at the default umask; an existing file keeps the mode it has. The file
+# is registered for redaction at script exit (rf_redact_registered). Under
 # `sudo` a root-created 0600 file in the invoking user's home would be
 # unreadable by that user, so a new file is handed to $SUDO_USER (best effort).
 rf_private_file() {
   local path="$1"
   [[ -n "$path" ]] || return 1
   mkdir -p "$(dirname "$path")" || return 1
-  [[ -e "$path" ]] && return 0
-  ( umask 077; : > "$path" ) || return 1
-  if [[ "$(id -u)" == "0" && -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]]; then
-    chown "$SUDO_USER" "$path" 2>/dev/null || true
+  if [[ ! -e "$path" ]]; then
+    ( umask 077; : > "$path" ) || return 1
+    if [[ "$(id -u)" == "0" && -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]]; then
+      chown "$SUDO_USER" "$path" 2>/dev/null || true
+    fi
   fi
+  # Everything handed out here — logs, reports, per-device captures of a child's
+  # output — is redacted when the script exits (see rf_redact_registered).
+  RF_REDACT_FILES+=("$path")
+  _rf_hook_exit_redaction
   return 0
 }
 
-# rf_log_init <path> — rf_private_file plus a first line naming this run:
+# rf_log_init <path> — rf_private_file (which also registers the file for
+# redaction at exit) plus a first line naming this run:
 #   # rootforge execution <id>: <script> started <UTC time>
 # so a script log can be matched to the CLI's JSON-lines log for the same run
 # (rootforge-<command>-<id>.jsonl).
@@ -326,6 +333,97 @@ rf_log_init() {
   rf_ensure_execution_id
   printf '# rootforge execution %s: %s started %s\n' \
     "$ROOTFORGE_EXECUTION_ID" "$(basename "${0:-script}")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$path"
+}
+
+# --- redaction -------------------------------------------------------------
+
+# rf_redact — stdin to stdout with credentials replaced by ***REDACTED***.
+#
+# The same rule set as rootforge.core.log.redact_text (Python); the two are kept
+# in step by tests/test_redaction_parity.py, which pushes one sample table through
+# both. Order matters: private-key blocks, token shapes, secret-valued options,
+# secret-named assignments. It errs toward redacting: a pasted log is how
+# credentials usually leak, so an over-redacted "Public key: ..." costs less than a
+# leaked one. GNU sed is required (the I flag, \b); Debian and Termux have it.
+# `read` is a builtin: sourcing this file must not need any external command (the
+# tests source it with an empty PATH). `|| true` because read returns 1 at EOF.
+IFS= read -r -d '' RF_REDACT_SED <<'EOS' || true
+/-----BEGIN [A-Z ]*PRIVATE KEY-----/{
+:pem
+/-----END [A-Z ]*PRIVATE KEY-----/!{
+$!{N;bpem}
+}
+s/-----BEGIN [A-Z ]*PRIVATE KEY-----.*-----END [A-Z ]*PRIVATE KEY-----/***REDACTED PRIVATE KEY***/
+s/-----BEGIN [A-Z ]*PRIVATE KEY-----.*/***REDACTED PRIVATE KEY***/
+}
+s/sk-ant-[A-Za-z0-9_-]{10,}/***REDACTED***/g
+s/sk-[A-Za-z0-9]{20,}/***REDACTED***/g
+s/ghp_[A-Za-z0-9]{20,}/***REDACTED***/g
+s/github_pat_[A-Za-z0-9_]{20,}/***REDACTED***/g
+s/AIza[A-Za-z0-9_-]{30,}/***REDACTED***/g
+s/bearer[[:space:]]+[A-Za-z0-9._-]{10,}/***REDACTED***/Ig
+s/tskey-[A-Za-z0-9-]{10,}/***REDACTED***/g
+s/xox[baprs]-[A-Za-z0-9-]{10,}/***REDACTED***/g
+s/AKIA[0-9A-Z]{16}/***REDACTED***/g
+s/hf_[A-Za-z0-9]{20,}/***REDACTED***/g
+s/(--?(auth-?key|api-?key|password|passwd|token|secret|psk)(=|[[:space:]]+))[^[:space:]]+/\1***REDACTED***/Ig
+s/\b([A-Za-z0-9_.-]*(key|token|secret|password|passwd|credential|psk)([_.-][A-Za-z0-9_.-]*)?["']?[[:space:]]*[=:][[:space:]]*)("[^"]*"|'[^']*'|[^[:space:]"']+)/\1***REDACTED***/Ig
+EOS
+
+rf_redact() {
+  sed -E -e "$RF_REDACT_SED"
+}
+
+# rf_redact_file <path> — redact a log in place; never fails.
+#
+# Rewritten through the existing file (cat > file), so its inode, mode and owner
+# are untouched: a 0600 log stays 0600 and stays the user's. Symlinks and
+# non-files are left alone. The temp copy is created 0600 by mktemp and removed.
+rf_redact_file() {
+  local f="$1" tmp
+  [[ -f "$f" && ! -L "$f" ]] || return 0
+  tmp="$(mktemp "${f}.redact.XXXXXX" 2>/dev/null)" || return 0
+  if rf_redact < "$f" > "$tmp" 2>/dev/null && ! cmp -s "$f" "$tmp"; then
+    cat "$tmp" > "$f" 2>/dev/null || true
+  fi
+  rm -f "$tmp"
+  return 0
+}
+
+# Logs created by rf_log_init in this shell, redacted when the script exits.
+RF_REDACT_FILES=()
+
+# rf_redact_registered — redact every log this script registered. Always returns
+# 0: under `set -e` an EXIT trap that ends non-zero would replace the script's own
+# exit status (see lint_module.sh).
+rf_redact_registered() {
+  local f
+  for f in ${RF_REDACT_FILES[@]+"${RF_REDACT_FILES[@]}"}; do
+    rf_redact_file "$f"
+  done
+  return 0
+}
+
+# Run rf_redact_registered when the shell exits, after any EXIT trap already set.
+# Verified on bash 5.2: it runs on normal exit (status preserved), `exit N`,
+# SIGINT, SIGTERM and SIGHUP; it does NOT run on SIGKILL, so a script killed that
+# way leaves its 0600 log unredacted (the CLI redacts it afterwards if it started
+# the script). A script that sets its own EXIT trap AFTER rf_log_init replaces
+# this one and must call rf_redact_registered itself (harden_system.sh and
+# setup_intercept_proxy.sh do).
+_rf_hook_exit_redaction() {
+  [[ -n "${_RF_EXIT_HOOKED:-}" ]] && return 0
+  _RF_EXIT_HOOKED=1
+  local existing prev=""
+  existing="$(trap -p EXIT)"
+  if [[ -n "$existing" ]]; then
+    # `trap -p` prints: trap -- '<command>' EXIT — shell-quoted, so eval can
+    # split it back into the command and the signal name safely.
+    eval "set -- ${existing#trap -- }"
+    prev="$1"
+  fi
+  # shellcheck disable=SC2064  # expanded now on purpose: $prev is the old handler
+  trap "${prev:+$prev; }rf_redact_registered" EXIT
 }
 
 # --- misc ----------------------------------------------------------------
