@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 # Test stub for adb. Prints whatever RF_STUB_ADB_DEVICES holds for the
 # `devices` subcommand and records every call to RF_STUB_LOG.
+#
+# `-s SERIAL` is accepted and skipped (like the real tool). Boot-completion
+# polling is driven by RF_STUB_ADB_STATE ("device" by default; set it to
+# "offline" or empty to simulate a device that never comes back) and
+# RF_STUB_BOOT_COMPLETED ("1" by default). `pull` creates its destination;
+# RF_STUB_ADB_REMOTE_SUM is what an on-device sha256sum reports.
 [ -n "${RF_STUB_LOG:-}" ] && printf 'adb %s\n' "$*" >> "$RF_STUB_LOG"
+
+if [ "${1:-}" = "-s" ]; then shift 2; fi
 
 case "${1:-}" in
   devices)
@@ -10,7 +18,28 @@ case "${1:-}" in
     printf '\n'
     ;;
   wait-for-device) exit "${RF_STUB_ADB_WAIT_RC:-0}" ;;
+  get-state)
+    state="${RF_STUB_ADB_STATE-device}"
+    [ -n "$state" ] && printf '%s\n' "$state"
+    [ "$state" = "device" ] || exit 1
+    ;;
+  pull)
+    # adb pull REMOTE LOCAL — creates LOCAL unless RF_STUB_ADB_PULL_RC fails it.
+    [ "${RF_STUB_ADB_PULL_RC:-0}" = "0" ] || exit "$RF_STUB_ADB_PULL_RC"
+    printf 'adb-image-of-%s' "$(basename "${2:-x}")" > "${3:?}"
+    ;;
   shell)
+    if [ "${2:-}" = "getprop" ] && [ "${3:-}" = "sys.boot_completed" ]; then
+      printf '%s\r\n' "${RF_STUB_BOOT_COMPLETED-1}"
+      exit 0
+    fi
+    # `sha256sum <file>` on the device reports RF_STUB_ADB_REMOTE_SUM when set.
+    case "$*" in
+      *sha256sum*)
+        [ -n "${RF_STUB_ADB_REMOTE_SUM:-}" ] && printf '%s  file\n' "$RF_STUB_ADB_REMOTE_SUM"
+        exit 0
+        ;;
+    esac
     printf '%b' "${RF_STUB_ADB_SHELL_OUT:-}"
     exit "${RF_STUB_ADB_SHELL_RC:-0}"
     ;;

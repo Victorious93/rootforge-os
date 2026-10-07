@@ -111,6 +111,78 @@ class TestErrors(ConfigTestCase):
             self.load()
 
 
+class TestSchemaValidation(ConfigTestCase):
+    def rejects(self, text, fragment):
+        path = self.project_file(text)
+        with self.assertRaises(config.ConfigError) as ctx:
+            self.load()
+        self.assertIn(fragment, str(ctx.exception))
+        self.assertIn(str(path), str(ctx.exception))
+
+    def test_partitions_must_be_a_list(self):
+        self.rejects("backup:\n  partitions: boot\n", "non-empty list")
+
+    def test_partitions_must_not_be_empty(self):
+        self.rejects("backup:\n  partitions: []\n", "non-empty list")
+
+    def test_partition_names_are_restricted_to_safe_characters(self):
+        for bad in ("../boot", "Boot", "boot;reboot", "a b", "1", "''"):
+            with self.subTest(bad=bad):
+                self.rejects(f"backup:\n  partitions: [{bad}]\n", "not a partition name")
+
+    def test_duplicate_partitions_are_rejected(self):
+        self.rejects("backup:\n  partitions: [boot, boot]\n", "more than once")
+
+    def test_backup_must_be_a_mapping(self):
+        self.rejects("backup: [a]\n", "must be a mapping")
+
+    def test_invalid_value_in_the_user_layer_is_caught_before_merging(self):
+        self.user("backup:\n  partitions: [../x]\n")
+        with self.assertRaises(config.ConfigError):
+            self.load()
+
+    def test_invalid_device_layer_is_caught(self):
+        self.device("pixel", "backup:\n  partitions: bad name\n")
+        with self.assertRaises(config.ConfigError):
+            self.load("pixel")
+
+    def test_unreadable_file_is_a_config_error(self):
+        path = self.project_file("a: 1\n")
+        with mock.patch.object(Path, "open", side_effect=PermissionError(13, "Permission denied")):
+            with self.assertRaises(config.ConfigError) as ctx:
+                self.load()
+        self.assertIn("cannot be read", str(ctx.exception))
+
+    def test_valid_override_is_accepted(self):
+        self.project_file("backup:\n  partitions: [boot, vbmeta]\n")
+        self.assertEqual(self.load()["backup"]["partitions"], ["boot", "vbmeta"])
+
+
+class TestJsonOutput(ConfigTestCase):
+    def show(self, **kwargs):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), mock.patch.object(
+            config, "_find_project_config", return_value=None
+        ):
+            rc = config.cmd_show(**kwargs)
+        return rc, out.getvalue(), err.getvalue()
+
+    def test_json_is_parseable_and_includes_sources(self):
+        user = self.user("backup:\n  partitions: [boot]\n")
+        rc, out, _ = self.show(as_json=True)
+        data = __import__("json").loads(out)
+        self.assertEqual(rc, 0)
+        self.assertEqual(data["backup"]["partitions"], ["boot"])
+        self.assertEqual(data["_sources"], [str(user)])
+
+    def test_json_mode_keeps_errors_off_stdout(self):
+        self.user("backup:\n  partitions: bad\n")
+        rc, out, err = self.show(as_json=True)
+        self.assertEqual(rc, 1)
+        self.assertEqual(out, "")
+        self.assertIn("Config error", err)
+
+
 class TestCmdShow(ConfigTestCase):
     def run_show(self, codename=None):
         out = io.StringIO()

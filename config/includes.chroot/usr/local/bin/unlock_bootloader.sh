@@ -20,11 +20,23 @@ LOG_FILE="$LOG_DIR/unlock_$(date +%Y%m%d_%H%M%S).log"
 log() { echo "[unlock] $*" | tee -a "$LOG_FILE"; }
 
 SERIAL="${1:-}"
-FASTBOOT="fastboot"
-[[ -n "$SERIAL" ]] && FASTBOOT="fastboot -s $SERIAL"
 
+# `fastboot wait-for-device` is not a fastboot command. Poll for exactly one
+# device (or the named serial) with a bound, and keep that serial for every
+# later call so the unlock cannot land on a different phone.
 log "Waiting for device in fastboot mode..."
-$FASTBOOT wait-for-device
+RESOLVE_RC=0
+SERIAL="$(rf_fastboot_wait "$SERIAL" 2>>"$LOG_FILE")" || RESOLVE_RC=$?
+if [[ $RESOLVE_RC -ne 0 || -z "$SERIAL" ]]; then
+  if [[ $RESOLVE_RC -eq 2 ]]; then
+    log "More than one device is in fastboot mode — pass the serial of the one to unlock."
+  else
+    log "No device found in fastboot mode."
+  fi
+  exit 3
+fi
+FASTBOOT=(fastboot -s "$SERIAL")
+log "Target device serial: $SERIAL"
 
 log "Reading device variables"
 
@@ -35,8 +47,7 @@ log "Reading device variables"
 # rootforge/python3/jq unavailable, or the shared path not resolving a
 # device. Fastboot has no adb-style "unauthorized" state, so this is safe
 # even with an explicit serial (unlike backup_partitions.sh's adb branch).
-PROFILE_ARGS=()
-[[ -n "$SERIAL" ]] && PROFILE_ARGS+=("$SERIAL")
+PROFILE_ARGS=("$SERIAL")
 # `|| true` must sit *outside* the substitution: rf_device_profile_json can
 # hit rf_require_cmd's `exit 1` (e.g. jq missing), and `exit` inside a
 # function called *within* $(...) terminates that subshell immediately — a
@@ -44,14 +55,14 @@ PROFILE_ARGS=()
 # run. Only a `||` after the closing "$(...)" catches it.
 PROFILE_JSON="$(rf_device_profile_json "${PROFILE_ARGS[@]}" 2>>"$LOG_FILE")" || true
 
-if [[ -n "$PROFILE_JSON" ]] && jq -e . >/dev/null 2>&1 <<<"$PROFILE_JSON"; then
+if [[ -n "$PROFILE_JSON" ]] && jq -e '.probe_ok == true' >/dev/null 2>&1 <<<"$PROFILE_JSON"; then
   PRODUCT="$(jq -r '.codename // empty' <<<"$PROFILE_JSON")"
   VENDOR="$(jq -r '.vendor // empty' <<<"$PROFILE_JSON")"
   UNLOCK_ABILITY="$(jq -r 'if .bootloader_unlocked == true then "yes" elif .bootloader_unlocked == false then "no" else "" end' <<<"$PROFILE_JSON")"
   log "Device profile via rootforge device info: $(jq -c . <<<"$PROFILE_JSON")"
 else
   log "rootforge device info unavailable — querying fastboot directly."
-  VARS="$($FASTBOOT getvar all 2>&1 || true)"
+  VARS="$("${FASTBOOT[@]}" getvar all 2>&1 || true)"
   echo "$VARS" >> "$LOG_FILE"
 
   # Several bootloaders terminate getvar lines with CRLF, so an untrimmed
@@ -68,6 +79,14 @@ else
 fi
 
 log "Detected product: ${PRODUCT:-unknown}"
+
+# An unlock wipes the device. If neither probe path could even name the
+# product, nothing is known about what is attached — do not go on to the
+# vendor and confirmation checks as if it were an ordinary AOSP device.
+if [[ -z "$PRODUCT" ]]; then
+  log "BLOCKED: the device did not report its product name, so it cannot be identified. Nothing was changed."
+  exit 3
+fi
 
 if [[ "$VENDOR" == "samsung" ]]; then
   log "REFUSING to proceed automatically: Samsung devices unlock OEM bootloader in Settings > Developer Options > OEM Unlocking, then flash via Download Mode with Odin/Heimdall — not fastboot. Automating this risks tripping Knox permanently with no rollback. See devices/<codename>/hardware-notes.md."
@@ -86,8 +105,8 @@ fi
 
 # rf_confirm prompts on /dev/tty, so the gate stays visible when this script
 # is driven by fleet_orchestrate.sh with stdout redirected to a log.
-if ! rf_confirm UNLOCK \
-    "Device: ${PRODUCT:-unknown}${SERIAL:+ (serial $SERIAL)}" \
+if ! rf_confirm "UNLOCK $SERIAL" \
+    "Device: $PRODUCT (serial $SERIAL)" \
     "This device appears to use a standard AOSP-lineage bootloader (Pixel/Nexus/OnePlus-class)." \
     "Unlocking WILL WIPE ALL USER DATA on the device. This is a firmware-enforced behavior, not a script choice."; then
   log "Confirmation not given — aborting."
@@ -95,17 +114,20 @@ if ! rf_confirm UNLOCK \
 fi
 
 log "Attempting standard unlock sequence"
-if $FASTBOOT flashing unlock 2>>"$LOG_FILE"; then
+if "${FASTBOOT[@]}" flashing unlock 2>>"$LOG_FILE"; then
   log "flashing unlock issued — confirm on-device prompt with volume/power keys."
-elif $FASTBOOT oem unlock 2>>"$LOG_FILE"; then
+elif "${FASTBOOT[@]}" oem unlock 2>>"$LOG_FILE"; then
   log "oem unlock issued (legacy bootloader path) — confirm on-device prompt."
 else
   log "Both 'fastboot flashing unlock' and 'fastboot oem unlock' failed. This device may need OEM unlocking enabled in Developer Options first, or use a vendor-specific tool. See log: $LOG_FILE"
   exit 1
 fi
 
-log "Waiting for device to reboot post-unlock..."
-$FASTBOOT wait-for-device || true
-log "Unlock sequence complete. Verify with: fastboot getvar unlocked"
+log "Waiting up to 60s for $SERIAL to be listed again post-unlock..."
+if rf_fastboot_wait "$SERIAL" 60 >/dev/null 2>>"$LOG_FILE"; then
+  log "Unlock sequence issued. Verify with: fastboot -s $SERIAL getvar unlocked"
+else
+  log "$SERIAL is not listed in fastboot mode again; check the device (it may have rebooted to set up after the wipe)."
+fi
 
 # Victorious Framework

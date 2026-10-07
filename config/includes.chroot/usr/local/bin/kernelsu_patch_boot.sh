@@ -12,7 +12,9 @@
 # Usage:
 #   kernelsu_patch_boot.sh --stock-boot <boot.img> --android-version <12|13|14>
 #                          [--ksu-version <tag>] [--device <codename>]
-#   kernelsu_patch_boot.sh --flash    # flash the last patched image
+#   kernelsu_patch_boot.sh --flash [--serial <serial>]
+#                                     # flash the last patched image
+#                                     # (through flash_patched_boot.sh)
 #
 # Requirements: adb, fastboot, curl, python3 (for avbtool), magiskboot
 #               (magiskboot is built by 00_bootstrap_distro.sh)
@@ -37,6 +39,7 @@ ANDROID_VER=""
 KSU_VERSION="latest"
 DEVICE_CODENAME="unknown"
 FLASH_ONLY=0
+SERIAL=""
 
 # Each value-taking option needs its argument checked before it is read:
 # under `set -u` a bare trailing `--stock-boot` aborted with the raw
@@ -51,9 +54,10 @@ while [[ $# -gt 0 ]]; do
     --android-version) need_value "$1" $#; ANDROID_VER="$2";     shift 2 ;;
     --ksu-version)     need_value "$1" $#; KSU_VERSION="$2";     shift 2 ;;
     --device)          need_value "$1" $#; DEVICE_CODENAME="$2"; shift 2 ;;
+    --serial)          need_value "$1" $#; SERIAL="$2";          shift 2 ;;
     --flash)           FLASH_ONLY=1;                             shift   ;;
     -h|--help)
-      sed -n '12,18p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
+      sed -n '12,20p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
       exit 0
       ;;
     *) die "Unknown argument: $1" ;;
@@ -77,23 +81,21 @@ if [[ $FLASH_ONLY -eq 1 ]]; then
     [[ -z "$LATEST" || "$candidate" -nt "$LATEST" ]] && LATEST="$candidate"
   done
 
+  [[ -z "$SERIAL" || "$SERIAL" =~ ^[A-Za-z0-9._:-]+$ ]] \
+    || die "--serial does not look like a device serial (expected [A-Za-z0-9._:-], got '$SERIAL')"
   rf_require_cmd fastboot "install the fastboot package (android-sdk-platform-tools-common / platform-tools)"
 
-  # This path writes the boot partition, exactly like flash_patched_boot.sh,
-  # but shipped without that script's typed-confirmation gate — the same
-  # safety gap. Gate it the same way.
-  if ! rf_confirm FLASH \
-      "About to flash the boot partition of the device connected in fastboot mode:" \
-      "  Image:  $LATEST" \
-      "  Device: ${DEVICE_CODENAME}" \
-      "This overwrites boot. If the image does not match this device, it will not boot."; then
-    die "Confirmation not given — aborting. Nothing was flashed."
-  fi
-
-  log "Flashing most recent patched image: $LATEST"
-  fastboot flash boot "$LATEST"
-  log "Done. Reboot with: fastboot reboot"
-  exit 0
+  # Writing the boot partition goes through flash_patched_boot.sh and nothing
+  # else: it selects exactly one device, checks that the write is allowed
+  # (unlocked, known identity, partition present and large enough), asks for
+  # the typed confirmation of the displayed plan, re-checks, writes, and
+  # verifies boot. A second, thinner copy of that logic here used to issue a
+  # bare `fastboot flash boot` against whatever device fastboot picked.
+  FLASH_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/flash_patched_boot.sh"
+  FLASH_ARGS=("$LATEST" boot)
+  [[ -n "$SERIAL" ]] && FLASH_ARGS+=("$SERIAL")
+  log "Flashing most recent patched image via flash_patched_boot.sh: $LATEST"
+  exec bash "$FLASH_SCRIPT" "${FLASH_ARGS[@]}"
 fi
 
 # --- Validation ---
@@ -205,12 +207,8 @@ log "NOTE: If the device enforces AVB (Verified Boot), you may need to"
 log "disable verification before flashing:"
 log "  fastboot flash vbmeta --disable-verity --disable-verification vbmeta.img"
 log "  fastboot reboot bootloader"
-log "Then flash the patched boot:"
-log "  fastboot flash boot $PATCHED_IMG"
-log "  fastboot reboot"
-log ""
-log "Or flash directly if your device's bootloader is already unlocked and"
-log "AVB enforcement is already off:"
-log "  fastboot flash boot $PATCHED_IMG && fastboot reboot"
+log "Then flash the patched boot with the checked flasher (it identifies the device,"
+log "confirms the plan with you, and verifies the boot afterwards):"
+log "  kernelsu_patch_boot.sh --flash        (or: rootforge boot flash-last)"
 
 # Victorious Framework

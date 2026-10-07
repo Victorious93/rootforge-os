@@ -2,42 +2,62 @@
 # RootForge OS — partition backup
 # Victorious Framework
 #
-# Backs up boot/init_boot/vendor_boot/dtbo/vbmeta before you flash anything.
-# Tries three paths in order of preference, since not every device supports
-# the same read-back method:
-#   1. `fastboot fetch` — works on devices with this support (Pixel-lineage,
-#      Android 11+ on many AOSP-derived bootloaders)
-#   2. adb root + dd from /dev/block/by-name/<partition> — works if the
-#      device is already rooted or running a userdebug build
-#   3. neither — prints manual instructions (dd from a booted TWRP/recovery)
-#      rather than silently skipping the backup
+# Captures partition images from ONE device and records them in a versioned
+# manifest (manifest.json, see rootforge/core/backup.py) that restore and
+# `rootforge backup verify` enforce. Tries, per partition, in order:
+#   1. `fastboot fetch` — devices whose bootloader supports it (fetches the
+#      current slot's partition on A/B devices)
+#   2. adb root + dd from /dev/block/by-name/<partition>[_<slot>] — needs a
+#      rooted or userdebug device; the pulled copy is checked against a
+#      checksum taken on the device when the device can compute one
+#   3. neither — the partition is reported as NOT captured; a backup is never
+#      silently padded or reported complete when it is not
 #
-# Usage: ./backup_partitions.sh <device_codename> [device-serial]
+# Usage: backup_partitions.sh <device_codename> [--partitions a,b,c] [device-serial]
+#
+# The partition list comes from `backup.partitions` in the RootForge config
+# (default: boot init_boot vendor_boot dtbo vbmeta vbmeta_system), overridden
+# by --partitions.
+#
+# Exit codes: 0 every requested partition captured | 1 nothing captured, no
+#   usable device, or bad arguments | 4 PARTIAL — some captured, some not
+#   (the manifest says which; "complete": false).
+# The last line on stdout is BACKUP_DIR=<exact directory> so callers never
+# have to guess which directory was written.
 
 set -euo pipefail
 
 # shellcheck source=../lib/rootforge/sh/common.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
 
-CODENAME="${1:?Usage: backup_partitions.sh <device_codename> [serial]}"
-SERIAL="${2:-}"
+usage() {
+  echo "Usage: backup_partitions.sh <device_codename> [--partitions a,b,c] [serial]" >&2
+  exit "${1:-1}"
+}
 
-# CODENAME and TIMESTAMP below are interpolated straight into a path under
-# $ROOTFORGE_HOME/devices/. Nothing validated them, so a value containing
-# ".." or "/" escaped that tree entirely:
-#
-#   backup_partitions.sh '../../escaped'
-#     wrote the backup to $ROOTFORGE_HOME/../../escaped/backups/... — outside
-#     devices/ altogether.
-#   restore_partitions.sh testdev '../../../../evil'
-#     read every .img from an arbitrary directory and FLASHED them to the
-#     device. The SHA256SUMS gate does not catch it: an arbitrary directory
-#     has no SHA256SUMS, so integrity checking degrades to a warning and the
-#     flash proceeds.
-#
-# Both are realistically reached by mistake — a copy-pasted path, a value
-# from a script — rather than by malice, and the consequence is writing
-# unverified images to a device's boot partition.
+[[ $# -ge 1 ]] || usage
+case "$1" in -h|--help) usage 0 ;; esac
+CODENAME="$1"; shift
+SERIAL=""
+PARTITIONS_ARG=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --partitions)
+      [[ $# -ge 2 ]] || { echo "--partitions needs a value" >&2; usage; }
+      PARTITIONS_ARG="$2"; shift
+      ;;
+    -h|--help) usage 0 ;;
+    -*) echo "Unknown option: $1" >&2; usage ;;
+    *)
+      [[ -z "$SERIAL" ]] || { echo "Serial given twice: '$SERIAL' and '$1'" >&2; usage; }
+      SERIAL="$1"
+      ;;
+  esac
+  shift
+done
+
+# CODENAME becomes a directory name under $ROOTFORGE_HOME/devices/. A value
+# containing ".." or "/" used to write the backup outside that tree.
 rf_reject_path_component() {
   local label="$1" value="$2"
   case "$value" in
@@ -48,82 +68,73 @@ rf_reject_path_component() {
       ;;
   esac
 }
-
 rf_reject_path_component "device codename" "$CODENAME"
 
-FASTBOOT="fastboot"; ADB="adb"
-[[ -n "$SERIAL" ]] && { FASTBOOT="fastboot -s $SERIAL"; ADB="adb -s $SERIAL"; }
+valid_partition() { [[ "$1" =~ ^[a-z0-9_]+$ ]]; }
+
+rf_require_cmd jq "install jq (apt install jq)"
 
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 BACKUP_DIR="$ROOTFORGE_HOME/devices/$CODENAME/backups/$STAMP"
 LOG_DIR="$ROOTFORGE_HOME/logs"
-mkdir -p "$BACKUP_DIR" "$LOG_DIR"
+mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/backup_${CODENAME}_${STAMP}.log"
 log() { echo "[backup] $*" | tee -a "$LOG_FILE"; }
 
-PARTITIONS=(boot init_boot vendor_boot dtbo vbmeta vbmeta_system)
+# --- which partitions ---------------------------------------------------------
+# Precedence: --partitions > device/project/user config > built-in default.
+PARTITIONS=()
+if [[ -n "$PARTITIONS_ARG" ]]; then
+  IFS=',' read -r -a PARTITIONS <<<"$PARTITIONS_ARG"
+else
+  CFG_ERR="$(mktemp)"
+  CFG_RC=0
+  CONFIG_JSON="$(rf_rootforge config show --json --codename "$CODENAME" 2>"$CFG_ERR")" || CFG_RC=$?
+  if [[ $CFG_RC -eq 0 ]] && jq -e '.backup.partitions | type == "array"' >/dev/null 2>&1 <<<"$CONFIG_JSON"; then
+    mapfile -t PARTITIONS < <(jq -r '.backup.partitions[]' <<<"$CONFIG_JSON")
+  elif grep -q '^Config error' "$CFG_ERR" 2>/dev/null; then
+    log "$(cat "$CFG_ERR")"
+    log "Fix the configuration (or pass --partitions); refusing to back up on an invalid config."
+    rm -f "$CFG_ERR"
+    exit 1
+  else
+    log "rootforge config unavailable — using the built-in default partition list."
+    PARTITIONS=(boot init_boot vendor_boot dtbo vbmeta vbmeta_system)
+  fi
+  rm -f "$CFG_ERR"
+fi
+[[ ${#PARTITIONS[@]} -gt 0 ]] || { echo "No partitions selected." >&2; exit 1; }
+for part in "${PARTITIONS[@]}"; do
+  valid_partition "$part" || { echo "Invalid partition name '$part' (lowercase letters, digits, underscores)." >&2; exit 1; }
+done
 
-log "Backup target: $BACKUP_DIR"
-
-try_fastboot_fetch() {
-  local part="$1" out="$2"
-  $FASTBOOT fetch "$part" "$out" 2>>"$LOG_FILE"
-}
-
-try_adb_dd() {
-  local part="$1" out="$2"
-  local block="/dev/block/by-name/$part"
-  $ADB shell "su -c '[ -e $block ] && echo exists'" 2>/dev/null | grep -q exists || return 1
-  $ADB shell "su -c 'dd if=$block of=/sdcard/${part}.img'" 2>>"$LOG_FILE"
-  $ADB pull "/sdcard/${part}.img" "$out" 2>>"$LOG_FILE"
-  $ADB shell "rm -f /sdcard/${part}.img" 2>>"$LOG_FILE"
-}
-
-# `adb devices` always prints a "List of devices attached" header followed by
-# a blank line, so the previous `grep -qv "List of devices"` matched that
-# blank line and reported MODE=adb with nothing plugged in — every partition
-# then "failed to fetch" for a reason that had nothing to do with the device.
-# rf_adb_serials/rf_fastboot_serials parse the state column instead.
+# --- exactly one device -----------------------------------------------------------
+# `adb devices` prints a header and a trailing blank line, which the old
+# `grep -qv "List of devices"` mistook for a device. rf_*_serials parse the
+# state column; only the 'device' (adb) and fastboot states count.
+mapfile -t FB_SERIALS < <(rf_fastboot_serials)
+mapfile -t ADB_SERIALS < <(rf_adb_serials)
 MODE=""
 if [[ -n "$SERIAL" ]]; then
-  # Deliberately NOT routed through rootforge.core.device here:
-  # cli._select_device() matches an explicit serial regardless of adb
-  # usability (see tests/test_device.py
-  # TestSelectDevice.test_explicit_serial_matches_regardless_of_usability),
-  # so it would report MODE=adb for a serial stuck at e.g. "unauthorized" —
-  # this script's own rf_adb_serials check correctly excludes that case and
-  # falls through to the clearer "not usable" message below instead.
-  if rf_fastboot_serials | grep -qxF "$SERIAL"; then
-    MODE="fastboot"
-  elif rf_adb_serials | grep -qxF "$SERIAL"; then
-    MODE="adb"
-  fi
+  for s in "${FB_SERIALS[@]}"; do [[ "$s" == "$SERIAL" ]] && MODE="fastboot"; done
+  for s in "${ADB_SERIALS[@]}"; do [[ "$s" == "$SERIAL" ]] && MODE="adb"; done
 else
-  # No serial: rootforge.core.device's own resolution requires exactly one
-  # *usable* device, same as rf_have_fastboot_device/rf_have_adb_device
-  # below — safe to prefer here, unlike the explicit-serial branch above.
-  # `|| true` must sit *outside* the substitution: rf_device_profile_json
-  # can hit rf_require_cmd's `exit 1` (e.g. jq missing) if jq is somehow
-  # absent, and `exit` inside a function called *within* $(...) terminates
-  # that subshell immediately — a `|| true` written inside the same
-  # parentheses never gets control back to run. Only a `||` after the
-  # closing "$(...)" catches it.
-  PROFILE_JSON="$(rf_device_profile_json 2>>"$LOG_FILE")" || true
-  if [[ -n "$PROFILE_JSON" ]] && MODE="$(jq -e -r '.mode' <<<"$PROFILE_JSON" 2>/dev/null)"; then
-    log "Device resolved via rootforge device info: mode=$MODE"
-  elif rf_have_fastboot_device; then
-    MODE="fastboot"
-  elif rf_have_adb_device; then
-    MODE="adb"
+  ALL=("${FB_SERIALS[@]}" "${ADB_SERIALS[@]}")
+  if [[ ${#ALL[@]} -eq 1 ]]; then
+    SERIAL="${ALL[0]}"
+    [[ ${#FB_SERIALS[@]} -eq 1 ]] && MODE="fastboot" || MODE="adb"
+  elif [[ ${#ALL[@]} -gt 1 ]]; then
+    log "More than one device is connected (${ALL[*]}). Pass the serial of the one to back up."
+    exit 1
   fi
 fi
 
 if [[ -z "$MODE" ]]; then
   if [[ -n "$SERIAL" ]]; then
     log "Device '$SERIAL' is not in fastboot mode and not reporting 'device' over adb."
-    log "Connected adb devices:      $(rf_adb_serials | tr '\n' ' ')"
-    log "Connected fastboot devices: $(rf_fastboot_serials | tr '\n' ' ')"
+    log "Connected adb devices:      ${ADB_SERIALS[*]:-}"
+    log "Connected fastboot devices: ${FB_SERIALS[*]:-}"
   else
     log "No device found in fastboot or adb mode. Connect the device and put it in"
     log "bootloader mode (adb reboot bootloader) or ensure adb sees it, then retry."
@@ -132,66 +143,155 @@ if [[ -z "$MODE" ]]; then
   fi
   exit 1
 fi
+log "Device $SERIAL reachable via: $MODE"
 
-log "Device reachable via: $MODE"
+FASTBOOT=(fastboot -s "$SERIAL")
+ADB=(adb -s "$SERIAL")
+BOUND=()
+command -v timeout >/dev/null 2>&1 && BOUND=(timeout "${ROOTFORGE_TOOL_TIMEOUT:-300}")
 
-FAILED=()
-for part in "${PARTITIONS[@]}"; do
-  OUT="$BACKUP_DIR/${part}.img"
-  SUCCESS=0
+# --- device facts for the manifest (read-only; unknown stays null) ------------
+PROFILE_JSON=""
+PROFILE_JSON="$(rf_rootforge device info "$SERIAL" --json 2>>"$LOG_FILE")" || true
+if ! jq -e '.probe_ok == true' >/dev/null 2>&1 <<<"$PROFILE_JSON"; then
+  log "Device profile unavailable — the manifest will record the device facts as unknown."
+  PROFILE_JSON='{}'
+fi
+DEVICE_JSON="$(jq -c '{
+    product: (.codename // null),
+    slot_mode: (.slot_mode // null),
+    current_slot: (.current_slot // null),
+    bootloader_unlocked: (.bootloader_unlocked // null),
+    version_bootloader: (.raw["version-bootloader"] // null)
+  }' <<<"$PROFILE_JSON")"
+DEVICE_PRODUCT="$(jq -r '.product // empty' <<<"$DEVICE_JSON")"
+CURRENT_SLOT="$(jq -r '.current_slot // empty' <<<"$DEVICE_JSON")"
+if [[ -n "$DEVICE_PRODUCT" && "$DEVICE_PRODUCT" != "$CODENAME" ]]; then
+  log "WARNING: the directory label '$CODENAME' differs from the device-reported product '$DEVICE_PRODUCT'."
+  log "         Restore compares against the device-reported product recorded in the manifest."
+fi
 
-  if [[ "$MODE" == "fastboot" ]]; then
-    if try_fastboot_fetch "$part" "$OUT" && [[ -s "$OUT" ]]; then
-      log "fetched $part via fastboot fetch"
-      SUCCESS=1
+mkdir -p "$BACKUP_DIR"
+log "Backup target: $BACKUP_DIR"
+
+has_slot() {  # does the probe say this partition is slotted? (fastboot has-slot:<p>)
+  [[ "$(jq -r --arg k "has-slot:$1" '.raw[$k] // empty' <<<"$PROFILE_JSON")" == "yes" ]]
+}
+
+capture_fastboot() {  # capture_fastboot <part> <out>
+  local part="$1" out="$2"
+  "${BOUND[@]}" "${FASTBOOT[@]}" fetch "$part" "$out.part" 2>>"$LOG_FILE" || return 1
+  [[ -s "$out.part" ]] || return 1
+  mv -f "$out.part" "$out"
+}
+
+capture_adb() {  # capture_adb <part> <out>   — needs root on the device
+  local part="$1" out="$2" block="" remote="/sdcard/rf_${1}.img" candidate
+  for candidate in "$part${CURRENT_SLOT:+_$CURRENT_SLOT}" "$part"; do
+    if "${BOUND[@]}" "${ADB[@]}" shell "su -c '[ -e /dev/block/by-name/$candidate ] && echo exists'" 2>/dev/null | grep -q exists; then
+      block="/dev/block/by-name/$candidate"
+      break
     fi
+  done
+  [[ -n "$block" ]] || return 1
+  "${BOUND[@]}" "${ADB[@]}" shell "su -c 'dd if=$block of=$remote'" 2>>"$LOG_FILE" || { "${ADB[@]}" shell "rm -f $remote" 2>/dev/null || true; return 1; }
+  local remote_sum=""
+  remote_sum="$("${BOUND[@]}" "${ADB[@]}" shell "sha256sum $remote" 2>/dev/null | awk '{print $1}' | tr -d '\r' || true)"
+  if ! "${BOUND[@]}" "${ADB[@]}" pull "$remote" "$out.part" 2>>"$LOG_FILE"; then
+    "${ADB[@]}" shell "rm -f $remote" 2>/dev/null || true
+    rm -f "$out.part"
+    return 1
   fi
-
-  if [[ $SUCCESS -eq 0 && "$MODE" == "adb" ]]; then
-    if try_adb_dd "$part" "$OUT" && [[ -s "$OUT" ]]; then
-      log "fetched $part via adb root + dd"
-      SUCCESS=1
+  "${ADB[@]}" shell "rm -f $remote" 2>>"$LOG_FILE" || true
+  [[ -s "$out.part" ]] || { rm -f "$out.part"; return 1; }
+  if [[ -n "$remote_sum" && "$remote_sum" =~ ^[0-9a-f]{64}$ ]]; then
+    if [[ "$(rf_sha256_file "$out.part")" != "$remote_sum" ]]; then
+      log "  transfer check FAILED for $part: pulled copy does not match the device's own checksum"
+      rm -f "$out.part"
+      return 1
     fi
+  else
+    log "  note: the device could not checksum $part, so the adb transfer itself is unverified"
   fi
+  mv -f "$out.part" "$out"
+}
 
-  if [[ $SUCCESS -eq 0 ]]; then
-    rm -f "$OUT"
-    log "could not fetch $part automatically (device may not have this partition, or"
-    log "  lacks fastboot fetch support and isn't rooted yet for the adb+dd path)"
-    FAILED+=("$part")
-  fi
-done
-
-# The manifest used to carry a human-readable `du -h` size and nothing else,
-# which gave restore_partitions.sh no way to tell a good image from a
-# truncated or corrupted one before flashing it. Record a SHA-256 per image
-# (and a sha256sum-compatible sidecar) so the restore path can verify.
+# --- capture ----------------------------------------------------------------------
+ENTRIES='[]'
+CAPTURED=()
+MISSING=()
+: > "$BACKUP_DIR/SHA256SUMS"
 {
   echo "$CODENAME backup $STAMP"
   echo "# columns: partition sha256 bytes"
 } > "$BACKUP_DIR/manifest.txt"
 
-: > "$BACKUP_DIR/SHA256SUMS"
 for part in "${PARTITIONS[@]}"; do
-  IMG_PATH="$BACKUP_DIR/${part}.img"
-  [[ -f "$IMG_PATH" ]] || continue
-  DIGEST="$(rf_sha256_file "$IMG_PATH")"
-  BYTES="$(stat -c %s "$IMG_PATH")"
+  OUT="$BACKUP_DIR/${part}.img"
+  METHOD=""
+  if [[ "$MODE" == "fastboot" ]]; then
+    capture_fastboot "$part" "$OUT" && METHOD="fastboot-fetch"
+  else
+    capture_adb "$part" "$OUT" && METHOD="adb-dd"
+  fi
+  if [[ -z "$METHOD" ]]; then
+    rm -f "$OUT" "$OUT.part"
+    log "could not capture $part (the device may not have it, or lacks fastboot fetch /"
+    log "  root access for the adb+dd path)"
+    MISSING+=("$part")
+    continue
+  fi
+  DIGEST="$(rf_sha256_file "$OUT")"
+  BYTES="$(stat -c %s "$OUT")"
+  SLOT_VALUE=""
+  if [[ "$MODE" == "adb" && -n "$CURRENT_SLOT" ]]; then SLOT_VALUE="$CURRENT_SLOT"
+  elif has_slot "$part"; then SLOT_VALUE="$CURRENT_SLOT"; fi
+  ENTRIES="$(jq -c --arg p "$part" --arg f "${part}.img" --arg h "$DIGEST" --argjson s "$BYTES" \
+      --arg m "$METHOD" --arg slot "$SLOT_VALUE" \
+      '. + [{partition:$p, file:$f, sha256:$h, size_bytes:$s, method:$m, slot:(if $slot == "" then null else $slot end)}]' \
+      <<<"$ENTRIES")"
+  CAPTURED+=("$part")
   echo "$part $DIGEST $BYTES" >> "$BACKUP_DIR/manifest.txt"
-  # Relative name so `sha256sum -c SHA256SUMS` works from inside the backup
-  # directory even after it has been moved or copied elsewhere.
   echo "$DIGEST  ${part}.img" >> "$BACKUP_DIR/SHA256SUMS"
-  log "$part: $(numfmt --to=iec --suffix=B "$BYTES" 2>/dev/null || echo "$BYTES bytes") sha256=${DIGEST:0:16}..."
+  log "$part: $(numfmt --to=iec --suffix=B "$BYTES" 2>/dev/null || echo "$BYTES bytes") sha256=${DIGEST:0:16}... via $METHOD"
 done
 
-if [[ ${#FAILED[@]} -gt 0 ]]; then
-  log "Partitions NOT backed up: ${FAILED[*]}"
-  log "If this device is pre-root and lacks fastboot fetch support, back these up"
-  log "manually from a booted TWRP: dd if=/dev/block/by-name/<part> of=/sdcard/<part>.img"
+if [[ ${#CAPTURED[@]} -eq 0 ]]; then
+  rm -f "$BACKUP_DIR/SHA256SUMS" "$BACKUP_DIR/manifest.txt"
+  rmdir "$BACKUP_DIR" 2>/dev/null || true
+  log "NOTHING was captured (${MISSING[*]}). No backup was created."
+  log "If this device lacks fastboot fetch support and is not rooted yet, take the images from a"
+  log "booted recovery: dd if=/dev/block/by-name/<part> of=/sdcard/<part>.img"
+  exit 1
 fi
 
-log "Backup complete at $BACKUP_DIR"
-log "Verify at any time with: (cd $BACKUP_DIR && sha256sum -c SHA256SUMS)"
-log "Restore with: restore_partitions.sh $CODENAME $STAMP"
+COMPLETE=true
+[[ ${#MISSING[@]} -eq 0 ]] || COMPLETE=false
+REQUESTED_JSON="$(printf '%s\n' "${PARTITIONS[@]}" | jq -R . | jq -sc .)"
+MISSING_JSON="$(if [[ ${#MISSING[@]} -gt 0 ]]; then printf '%s\n' "${MISSING[@]}" | jq -R . | jq -sc .; else echo '[]'; fi)"
+SERIAL_JSON="$(jq -n --arg s "$SERIAL" '$s')"
+jq -n --argjson entries "$ENTRIES" --argjson device "$DEVICE_JSON" \
+      --argjson requested "$REQUESTED_JSON" --argjson missing "$MISSING_JSON" \
+      --argjson serial "$SERIAL_JSON" --argjson complete "$COMPLETE" \
+      --arg codename "$CODENAME" --arg stamp "$STAMP" --arg created "$(date -u +%Y-%m-%dT%H:%M:%S+00:00)" \
+      '{manifest_version: 1, trust: "captured", codename: $codename, timestamp: $stamp, serial: $serial,
+        created_at: $created, complete: $complete, requested_partitions: $requested,
+        missing_partitions: $missing, device: $device, entries: $entries}' \
+  > "$BACKUP_DIR/manifest.json.tmp"
+mv -f "$BACKUP_DIR/manifest.json.tmp" "$BACKUP_DIR/manifest.json"
+
+log "Manifest written: $BACKUP_DIR/manifest.json"
+log "Verify with: rootforge backup verify $CODENAME $STAMP"
+log "Restore with: rootforge backup restore $CODENAME $STAMP"
+
+EXIT_CODE=0
+if [[ "$COMPLETE" != "true" ]]; then
+  log "PARTIAL backup: captured ${CAPTURED[*]}; NOT captured ${MISSING[*]}."
+  EXIT_CODE=4
+else
+  log "Backup complete: ${#CAPTURED[@]} partition(s)."
+fi
+echo "BACKUP_DIR=$BACKUP_DIR"
+exit "$EXIT_CODE"
 
 # Victorious Framework

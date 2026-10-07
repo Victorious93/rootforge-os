@@ -122,6 +122,82 @@ rf_have_fastboot_device() {
   [ -n "$(rf_fastboot_serials | head -n 1)" ]
 }
 
+# rf_fastboot_wait [serial] [timeout_seconds] — wait (bounded) for a fastboot
+# device and print its serial.
+#
+# `fastboot wait-for-device` is not a fastboot command (upstream fastboot.cpp
+# has no such verb), so scripts that called it were issuing an invalid
+# command. This polls `fastboot devices` instead.
+#
+# With a serial: succeeds only when that exact serial is listed.
+# Without one: succeeds only when exactly one device is listed; two or more
+# is ambiguous and fails immediately rather than guessing. Exit codes:
+#   0 found (serial on stdout)   1 timed out   2 ambiguous
+# The default timeout is ROOTFORGE_FASTBOOT_WAIT or 30 seconds.
+rf_fastboot_wait() {
+  local want="${1:-}" timeout="${2:-${ROOTFORGE_FASTBOOT_WAIT:-30}}"
+  local waited=0 serials=() s
+  while :; do
+    mapfile -t serials < <(rf_fastboot_serials)
+    if [ -n "$want" ]; then
+      for s in "${serials[@]}"; do
+        if [ "$s" = "$want" ]; then
+          printf '%s\n' "$want"
+          return 0
+        fi
+      done
+    else
+      case "${#serials[@]}" in
+        1) printf '%s\n' "${serials[0]}"; return 0 ;;
+        0) ;;
+        *)
+          printf 'More than one device is in fastboot mode (%s) — pass a serial.\n' \
+            "${serials[*]}" >&2
+          return 2
+          ;;
+      esac
+    fi
+    [ "$waited" -ge "$timeout" ] && break
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if [ -n "$want" ]; then
+    printf 'Device %s did not appear in fastboot mode within %ss.\n' "$want" "$timeout" >&2
+  else
+    printf 'No device appeared in fastboot mode within %ss.\n' "$timeout" >&2
+  fi
+  return 1
+}
+
+# rf_adb_wait_boot <serial> [timeout_seconds] — wait (bounded) for one
+# specific device to reconnect over adb AND report sys.boot_completed=1.
+# An adb connection alone does not prove the system finished booting, and an
+# unqualified `adb wait-for-device` can attach to a different phone and never
+# times out. Exit codes:
+#   0 boot completed   1 never reconnected   2 reconnected but boot not completed
+# The default timeout is ROOTFORGE_BOOT_WAIT or 180 seconds.
+rf_adb_wait_boot() {
+  local serial="$1" timeout="${2:-${ROOTFORGE_BOOT_WAIT:-180}}"
+  local waited=0 reconnected=0 state done_flag
+  local bound=()
+  command -v timeout >/dev/null 2>&1 && bound=(timeout 10)
+  while :; do
+    state="$("${bound[@]}" adb -s "$serial" get-state 2>/dev/null || true)"
+    if [ "$state" = "device" ]; then
+      reconnected=1
+      done_flag="$("${bound[@]}" adb -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r[:space:]' || true)"
+      if [ "$done_flag" = "1" ]; then
+        return 0
+      fi
+    fi
+    [ "$waited" -ge "$timeout" ] && break
+    sleep 1
+    waited=$((waited + 1))
+  done
+  [ "$reconnected" -eq 1 ] && return 2
+  return 1
+}
+
 # --- rootforge CLI bridge -------------------------------------------------
 
 # rf_rootforge <args...> — run the `rootforge` CLI from a shell script.

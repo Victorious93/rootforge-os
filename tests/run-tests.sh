@@ -56,6 +56,8 @@ new_sandbox() {
   export RF_STUB_LOG="$SANDBOX/stub.log"
   : > "$RF_STUB_LOG"
   export PATH="$STUB_DIR:$ORIGINAL_PATH"
+  # Bound every wait to a single check so a "no device" case is instant.
+  export ROOTFORGE_FASTBOOT_WAIT=0 ROOTFORGE_BOOT_WAIT=0
   # harden_kernel.sh writes a sysctl drop-in and runs `sysctl --system`.
   # Without this the suite modifies the machine it runs on — verified: the
   # drop-in was present on the host, timestamped by the last run. Set here
@@ -71,6 +73,9 @@ new_sandbox() {
         RF_STUB_DL_BYTES RF_STUB_DL_RC RF_STUB_RELEASE_JSON \
         RF_STUB_DUMPER_WRITES RF_STUB_PASSWD RF_STUB_USB_POLICY \
         RF_STUB_CURRENT_IME \
+        RF_STUB_ADB_STATE RF_STUB_BOOT_COMPLETED RF_STUB_REBOOT_RC RF_STUB_UNLOCKED \
+        RF_STUB_PRODUCT RF_STUB_FASTBOOT_RC RF_STUB_FLASH_SLEEP RF_STUB_GETVAR_ALL_2 \
+        RF_STUB_TAMPER_FILE RF_STUB_FETCH_FAIL RF_STUB_ADB_PULL_RC RF_STUB_ADB_REMOTE_SUM \
         ROOTFORGE_ASSUME_YES ROOTFORGE_GRUB_DEFAULTS ROOTFORGE_NMAP_OUTPUT \
         ROOTFORGE_USBGUARD_RULES ROOTFORGE_AUDIT_RULES ROOTFORGE_NFT_FILE \
         ROOTFORGE_PROFILE_D ROOTFORGE_WG_CONF ROOTFORGE_WG_ENDPOINT \
@@ -90,6 +95,38 @@ run_script() {
 }
 
 section() { printf '\n== %s ==\n' "$1"; }
+
+# A boot image flash_patched_boot.sh accepts: the ANDROID! magic plus padding.
+make_boot_img() { { printf 'ANDROID!'; head -c 1016 /dev/zero; } > "$1"; }
+
+# An unlocked A/B device in fastboot mode. fb_device [serial] [slot] [product]
+# The stub reports these variables on stderr, as real fastboot does.
+fb_device() {
+  export RF_STUB_FASTBOOT_DEVICES="${1:-FB1}\tfastboot\n"
+  export RF_STUB_GETVAR_ALL="(bootloader) product: ${3:-cheetah}\n(bootloader) current-slot: ${2:-a}\n(bootloader) slot-count: 2\n(bootloader) unlocked: yes\n(bootloader) has-slot:boot: yes\n(bootloader) partition-size:boot_a: 0x4000000\n(bootloader) partition-size:boot_b: 0x4000000\n(bootloader) partition-size:init_boot_a: 0x800000\n(bootloader) partition-size:init_boot_b: 0x800000\n(bootloader) partition-size:vbmeta_a: 0x10000\n(bootloader) partition-size:vbmeta_b: 0x10000\n(bootloader) partition-size:dtbo_a: 0x1000000\n(bootloader) partition-size:dtbo_b: 0x1000000\n"
+}
+
+# make_backup <codename> <timestamp> <product|-> <slot|-> <partition>=<content>...
+# Builds a captured-trust backup (images + manifest.json) without going
+# through backup_partitions.sh, so restore tests do not depend on it.
+make_backup() {
+  local code="$1" ts="$2" product="$3" slot="$4"; shift 4
+  local dir="$ROOTFORGE_HOME/devices/$code/backups/$ts" entries='[]' spec part content sha
+  mkdir -p "$dir"
+  for spec in "$@"; do
+    part="${spec%%=*}"; content="${spec#*=}"
+    printf '%s' "$content" > "$dir/$part.img"
+    sha="$(sha256sum "$dir/$part.img" | cut -d' ' -f1)"
+    entries="$(jq -c --arg p "$part" --arg h "$sha" --argjson s "${#content}" --arg slot "$slot" \
+      '. + [{partition:$p, file:($p + ".img"), sha256:$h, size_bytes:$s, method:"fastboot-fetch",
+             slot:(if $slot == "-" then null else $slot end)}]' <<<"$entries")"
+  done
+  jq -n --argjson e "$entries" --arg c "$code" --arg t "$ts" --arg prod "$product" --arg slot "$slot" \
+    '{manifest_version: 1, trust: "captured", codename: $c, timestamp: $t, serial: "S", complete: true,
+      device: {product: (if $prod == "-" then null else $prod end),
+               current_slot: (if $slot == "-" then null else $slot end)},
+      entries: $e}' > "$dir/manifest.json"
+}
 
 ORIGINAL_PATH="$PATH"
 
@@ -180,36 +217,54 @@ drop_sandbox
 section "flash_patched_boot.sh — argument parsing"
 
 new_sandbox
-mkdir -p "$SANDBOX"
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1
 
 # Regression: `shift 2 || true` left the image path in "$@", so a
 # single-argument run set SERIAL to the image and ran `fastboot -s boot.img`.
-export ROOTFORGE_ASSUME_YES=1
 run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img"
+assert_eq "a single argument flashes successfully" "$RC" "0"
 assert_not_contains "single arg does not become a serial" "$(cat "$RF_STUB_LOG")" "-s $SANDBOX/boot.img"
-assert_contains "single arg flashes boot" "$(cat "$RF_STUB_LOG")" "flash boot"
+assert_contains "the serial is the device's, resolved from fastboot" "$(cat "$RF_STUB_LOG")" "fastboot -s FB1 --slot a flash boot"
 
 # Regression: PARTITION="${2:-boot}" swallowed the flag, so this flashed a
-# partition literally named "--both-slots" and never mirrored.
+# partition literally named "--both-slots".
 new_sandbox
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
 export ROOTFORGE_ASSUME_YES=1
-export RF_STUB_SLOT=a
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" --both-slots --slots-same-build
+assert_not_contains "a flag is not read as a partition" "$(cat "$RF_STUB_LOG")" "flash --both-slots"
+assert_contains "--both-slots writes the active slot explicitly" "$(cat "$RF_STUB_LOG")" "--slot a flash boot"
+assert_contains "--both-slots writes the other slot explicitly" "$(cat "$RF_STUB_LOG")" "--slot b flash boot"
+
+# Writing both slots must never touch which slot is active: the old
+# set-active dance left the device on the wrong slot if anything failed
+# between the two writes.
+assert_not_contains "the active slot is never switched" "$(cat "$RF_STUB_LOG")" "set-active"
+assert_not_contains "no set_active command either" "$(cat "$RF_STUB_LOG")" "set_active"
+
+new_sandbox
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1
 run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" --both-slots
-assert_not_contains "flag is not read as a partition" "$(cat "$RF_STUB_LOG")" "flash --both-slots"
-assert_contains "--both-slots switches to the other slot" "$(cat "$RF_STUB_LOG")" "--set-active=b"
-assert_contains "--both-slots restores the original slot" "$(cat "$RF_STUB_LOG")" "--set-active=a"
+assert_eq "--both-slots alone is refused" "$RC" "1"
+assert_contains "the refusal says the slots' builds cannot be verified" "$OUT" "--slots-same-build"
+assert_eq "the refusal happens before any device access" "$(wc -l < "$RF_STUB_LOG")" "0"
 
 new_sandbox
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB9 a
 export ROOTFORGE_ASSUME_YES=1
-run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" init_boot SERIAL9
-assert_contains "explicit partition honored" "$(cat "$RF_STUB_LOG")" "flash init_boot"
-assert_contains "explicit serial honored" "$(cat "$RF_STUB_LOG")" "-s SERIAL9"
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" init_boot FB9
+assert_eq "an explicit partition and serial succeed" "$RC" "0"
+assert_contains "explicit partition and serial are honored" "$(cat "$RF_STUB_LOG")" "fastboot -s FB9 --slot a flash init_boot"
 
 new_sandbox
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
 export ROOTFORGE_ASSUME_YES=1
 run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" system
 assert_eq "unsupported partition rejected" "$RC" "1"
@@ -219,51 +274,203 @@ new_sandbox
 run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/missing.img"
 assert_eq "missing image rejected" "$RC" "1"
 
-# The safety gate itself: with no terminal and no explicit opt-in, nothing
-# may be written.
 new_sandbox
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1
+head -c 1024 /dev/zero > "$SANDBOX/notboot.img"
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/notboot.img"
+assert_eq "an image without the Android header is rejected" "$RC" "1"
+assert_contains "the header rejection says why" "$OUT" "ANDROID! header"
+assert_not_contains "a non-boot image is never written" "$(cat "$RF_STUB_LOG")" " flash "
+
+# The typed gate: with no terminal and no explicit opt-in nothing is written,
+# even for a device that passed every check.
+new_sandbox
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
 run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img"
 assert_eq "unconfirmed flash aborts" "$RC" "1"
-assert_not_contains "unconfirmed flash writes nothing" "$(cat "$RF_STUB_LOG")" "flash boot"
+assert_not_contains "unconfirmed flash writes nothing" "$(cat "$RF_STUB_LOG")" " flash "
+assert_contains "the plan names the device and image" "$OUT" "SHA-256:"
 drop_sandbox
 
-section "flash_patched_boot.sh — slot restore on mirror failure"
+section "flash_patched_boot.sh — blocked writes make zero write calls"
 
-new_sandbox
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
-export ROOTFORGE_ASSUME_YES=1 RF_STUB_SLOT=a
-export RF_STUB_FLASH_FAIL_ON_CALL=2   # active slot succeeds, mirror fails
-run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" --both-slots
-# Even when the mirrored write fails, the device must not be left booting
-# the slot that was only half-written.
-assert_contains "failed mirror still restores the active slot" "$(cat "$RF_STUB_LOG")" "--set-active=a"
-assert_eq "failed flash reports failure" "$RC" "1"
+# Every case runs with ROOTFORGE_ASSUME_YES=1: an inherited assume-yes flag
+# skips the typed prompt only, never validation.
+blocked_case() {  # blocked_case <label> <expected-text> [script args...]
+  local label="$1" expect="$2"; shift 2
+  run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" "$@"
+  assert_eq "$label: exit 3" "$RC" "3"
+  assert_contains "$label: says why" "$OUT" "$expect"
+  assert_not_contains "$label: zero write calls" "$(cat "$RF_STUB_LOG")" " flash "
+}
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+fb_device FB1 a
+export RF_STUB_GETVAR_ALL="${RF_STUB_GETVAR_ALL//unlocked: yes/unlocked: no}"
+blocked_case "a locked bootloader" "locked"
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+export RF_STUB_FASTBOOT_DEVICES='FB1\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: x\n(bootloader) current-slot: a\n(bootloader) secure: yes\n'
+blocked_case "secure: yes is not an unlocked bootloader" "lock state"
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+export RF_STUB_FASTBOOT_DEVICES='FB1\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: x\n(bootloader) current-slot: a\n'
+blocked_case "an unreported lock state" "lock state"
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+blocked_case "no device attached" "no device found in fastboot mode"
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+export RF_STUB_ADB_DEVICES='AD1\tdevice\n'
+blocked_case "a device only in adb mode" "no device found in fastboot mode"
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+fb_device FB1 a
+export RF_STUB_FASTBOOT_DEVICES='FB1\tfastboot\nFB2\tfastboot\n'
+blocked_case "two devices and no serial" "more than one device is in fastboot mode"
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+fb_device FB1 a
+blocked_case "a serial that is not attached" "no device found in fastboot mode" boot NOSUCH
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+export RF_STUB_FASTBOOT_DEVICES='FB1\tfastboot\n'
+export RF_STUB_GETVAR_ALL=''
+blocked_case "an empty probe" "probe failed"
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+export RF_STUB_FASTBOOT_DEVICES='FB1\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: gts4lvwifi\n(bootloader) current-slot: a\n(bootloader) unlocked: yes\n(bootloader) samsung device\n'
+blocked_case "a Samsung device" "samsung"
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+fb_device FB1 a
+export RF_STUB_GETVAR_ALL="${RF_STUB_GETVAR_ALL//partition-size:init_boot_a/partition-size:other_a}"
+blocked_case "a partition the device does not list" "init_boot_a" init_boot
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+fb_device FB1 a
+export RF_STUB_GETVAR_ALL="${RF_STUB_GETVAR_ALL//partition-size:boot_a: 0x4000000/partition-size:boot_a: 0x10}"
+blocked_case "an image larger than its partition" "only 16 bytes"
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+export RF_STUB_FASTBOOT_DEVICES='FB1\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: oldphone\n(bootloader) slot-count: 1\n(bootloader) unlocked: yes\n'
+blocked_case "--both-slots on a single-slot device" "not a confirmed A/B" --both-slots --slots-same-build
+
+# Fail closed when the validation path itself is broken: a flash must never
+# proceed on the strength of "I could not check".
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+fb_device FB1 a
+mkdir -p "$SANDBOX/fakebin"
+printf '#!/bin/sh\nexit 127\n' > "$SANDBOX/fakebin/rootforge"
+chmod +x "$SANDBOX/fakebin/rootforge"
+export PATH="$SANDBOX/fakebin:$PATH"
+blocked_case "a broken rootforge CLI" "could not be validated"
+
+# The device changing between the first check and the write.
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+fb_device FB1 a
+export RF_STUB_GETVAR_ALL_2="${RF_STUB_GETVAR_ALL//product: cheetah/product: oriole}"
+blocked_case "a different device behind the same serial" "different device"
+
+new_sandbox; make_boot_img "$SANDBOX/boot.img"; export ROOTFORGE_ASSUME_YES=1
+fb_device FB1 a
+export RF_STUB_GETVAR_ALL_2="${RF_STUB_GETVAR_ALL//unlocked: yes/unlocked: no}"
+blocked_case "a bootloader that locked after confirmation" "changed state after confirmation"
 drop_sandbox
 
-section "flash_patched_boot.sh — rootforge device info integration"
+section "flash_patched_boot.sh — the write path"
 
 new_sandbox
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
 export ROOTFORGE_ASSUME_YES=1
-export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
-export RF_STUB_GETVAR_ALL='(bootloader) product: cheetah\n(bootloader) current-slot: a\n(bootloader) unlocked: yes\n'
-run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" --both-slots
-assert_contains "device info path is used when it resolves a device" "$OUT" "Device profile via rootforge device info"
-assert_contains "slot from device info drives the mirror" "$(cat "$RF_STUB_LOG")" "--set-active=b"
-assert_contains "slot from device info restores the original" "$(cat "$RF_STUB_LOG")" "--set-active=a"
-drop_sandbox
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img"
+assert_eq "a healthy flash exits 0" "$RC" "0"
+assert_contains "the reboot targets the same device" "$(cat "$RF_STUB_LOG")" "fastboot -s FB1 reboot"
+assert_contains "boot is checked on the same serial" "$(cat "$RF_STUB_LOG")" "adb -s FB1 get-state"
+assert_not_contains "no unqualified adb wait" "$(cat "$RF_STUB_LOG")" "adb wait-for-device"
+assert_not_contains "no invented fastboot wait command" "$(cat "$RF_STUB_LOG")" "wait-for-device"
+assert_contains "boot completion is reported as verified" "$OUT" "Boot verified"
+assert_contains "unattended use is audited" "$OUT" "UNATTENDED"
+
+# A failed write must not reboot into a half-written partition.
+new_sandbox
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_FLASH_RC=1
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img"
+assert_eq "a failed write exits non-zero" "$RC" "1"
+assert_not_contains "a failed write does not reboot" "$(cat "$RF_STUB_LOG")" "reboot"
+assert_contains "a failed write says the partition may be partly written" "$OUT" "partly written"
+
+# Writing the second slot fails: the first is intact, the active slot was
+# never moved, and nothing is rebooted.
+new_sandbox
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_FLASH_FAIL_ON_CALL=2
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" --both-slots --slots-same-build
+assert_eq "a failed second-slot write exits non-zero" "$RC" "1"
+assert_contains "the failing slot is named" "$OUT" "boot_b"
+assert_not_contains "no active-slot change after a failed mirror" "$(cat "$RF_STUB_LOG")" "active"
+assert_not_contains "no reboot after a failed mirror" "$(cat "$RF_STUB_LOG")" "reboot"
 
 new_sandbox
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
-export ROOTFORGE_ASSUME_YES=1 RF_STUB_SLOT=a
-# No RF_STUB_FASTBOOT_DEVICES/RF_STUB_GETVAR_ALL: rootforge device info
-# can't enumerate a device (list_devices() sees nothing), so the script must
-# fall back to its own direct fastboot getvar query rather than silently
-# treating slot detection as unknown and skipping the mirror.
-run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" --both-slots
-assert_contains "falls back to a direct query when device info can't resolve one" "$OUT" "querying fastboot directly"
-assert_contains "fallback slot still mirrors correctly" "$(cat "$RF_STUB_LOG")" "--set-active=b"
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_REBOOT_RC=1
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img"
+assert_eq "a written image with a failed reboot exits 5" "$RC" "5"
+assert_contains "the failed reboot is explained" "$OUT" "reboot"
+
+# Write success, reboot request and verified boot are different facts.
+new_sandbox
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_BOOT_COMPLETED=0
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img"
+assert_eq "adb up but boot not completed exits 4" "$RC" "4"
+assert_contains "that case is called out" "$OUT" "never reported sys.boot_completed=1"
+
+new_sandbox
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_ADB_STATE=offline
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img"
+assert_eq "a device that never reconnects exits 4" "$RC" "4"
+assert_contains "that case is called out too" "$OUT" "did not reconnect"
+
+new_sandbox
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" --no-boot-check
+assert_eq "--no-boot-check exits 4 (boot not verified)" "$RC" "4"
+assert_not_contains "--no-boot-check does not poll adb" "$(cat "$RF_STUB_LOG")" "get-state"
+
+# Interrupting during a write must say the partition is in an unknown state.
+new_sandbox
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_FLASH_SLEEP=2
+( cd "$SANDBOX" && exec bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img" > "$SANDBOX/out.txt" 2>&1 </dev/null ) &
+FLASH_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  grep -q " flash " "$RF_STUB_LOG" 2>/dev/null && break
+  sleep 0.25
+done
+kill -TERM "$FLASH_PID" 2>/dev/null
+wait "$FLASH_PID"; RC=$?
+OUT="$(cat "$SANDBOX/out.txt")"
+assert_eq "an interrupted flash exits 130" "$RC" "130"
+assert_contains "an interrupted flash reports an unknown partition state" "$OUT" "state is UNKNOWN"
+assert_not_contains "an interrupted flash does not reboot" "$(cat "$RF_STUB_LOG")" "reboot"
 drop_sandbox
 
 section "extract_ota.sh — argument parsing"
@@ -307,65 +514,125 @@ run_script bash "$BIN_DIR/extract_ota.sh" "$SANDBOX/nope.bin"
 assert_eq "missing input rejected" "$RC" "1"
 drop_sandbox
 
-section "backup_partitions.sh + restore_partitions.sh"
+section "backup_partitions.sh"
 
 new_sandbox
 # Regression: with nothing attached this used to select MODE=adb and then
 # report every partition as unfetchable.
-export RF_STUB_ADB_DEVICES=""
-export RF_STUB_FASTBOOT_DEVICES=""
 run_script bash "$BIN_DIR/backup_partitions.sh" testdev
 assert_eq "no device -> backup fails" "$RC" "1"
 assert_contains "no device -> explains why" "$OUT" "No device found"
-drop_sandbox
 
 new_sandbox
-# Restore must verify checksums before it flashes anything.
-BACKUP="$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000"
-mkdir -p "$BACKUP"
-printf 'realboot' > "$BACKUP/boot.img"
-( cd "$BACKUP" && sha256sum boot.img > SHA256SUMS )
-printf 'testdev backup 20240101_000000\n' > "$BACKUP/manifest.txt"
+fb_device FB1 a testdev
+export RF_STUB_FASTBOOT_DEVICES='FB1\tfastboot\nFB2\tfastboot\n'
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev
+assert_eq "two devices and no serial -> backup fails" "$RC" "1"
+assert_contains "two devices -> asks for a serial" "$OUT" "More than one device"
+assert_not_contains "two devices -> nothing fetched" "$(cat "$RF_STUB_LOG")" "fetch"
 
-export ROOTFORGE_ASSUME_YES=1
-run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
-assert_eq "matching checksum restores" "$RC" "0"
-assert_contains "matching checksum flashes" "$(cat "$RF_STUB_LOG")" "flash boot"
-
-# Now corrupt the image and confirm the restore refuses.
 new_sandbox
-BACKUP="$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000"
-mkdir -p "$BACKUP"
-printf 'realboot' > "$BACKUP/boot.img"
-( cd "$BACKUP" && sha256sum boot.img > SHA256SUMS )
-printf 'CORRUPTED' > "$BACKUP/boot.img"
-export ROOTFORGE_ASSUME_YES=1
-run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
-assert_eq "checksum mismatch aborts restore" "$RC" "1"
-assert_contains "checksum mismatch explains itself" "$OUT" "CHECKSUM MISMATCH"
-assert_not_contains "checksum mismatch flashes nothing" "$(cat "$RF_STUB_LOG")" "flash boot"
+fb_device FB1 a testdev
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev NOSUCH
+assert_eq "an unattached serial -> backup fails" "$RC" "1"
 
-# A failed flash must not be reported as a completed restore.
+# A complete backup: manifest.json is the contract, SHA256SUMS is derived.
 new_sandbox
-BACKUP="$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000"
-mkdir -p "$BACKUP"
-printf 'realboot' > "$BACKUP/boot.img"
-( cd "$BACKUP" && sha256sum boot.img > SHA256SUMS )
-export ROOTFORGE_ASSUME_YES=1 RF_STUB_FLASH_RC=1
-run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
-assert_eq "failed flash -> non-zero exit" "$RC" "1"
-assert_contains "failed flash -> says so" "$OUT" "RESTORE INCOMPLETE"
+fb_device FB1 a testdev
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev --partitions boot,vbmeta
+assert_eq "a complete backup exits 0" "$RC" "0"
+BDIR="$(printf '%s\n' "$OUT" | sed -n 's/^BACKUP_DIR=//p' | tail -n 1)"
+assert_eq "the exact output directory is the last line" "$(printf '%s\n' "$OUT" | tail -n 1)" "BACKUP_DIR=$BDIR"
+assert_eq "the manifest exists" "$([ -f "$BDIR/manifest.json" ] && echo yes)" "yes"
+assert_eq "the manifest is valid JSON" "$(jq -e . "$BDIR/manifest.json" >/dev/null 2>&1 && echo yes)" "yes"
+assert_eq "the manifest records the device product" "$(jq -r '.device.product' "$BDIR/manifest.json")" "testdev"
+assert_eq "the manifest marks the backup complete" "$(jq -r '.complete' "$BDIR/manifest.json")" "true"
+assert_eq "the manifest records the capture method" "$(jq -r '.entries[0].method' "$BDIR/manifest.json")" "fastboot-fetch"
+assert_eq "a slotted partition records its slot" "$(jq -r '.entries[] | select(.partition=="boot") | .slot' "$BDIR/manifest.json")" "a"
+assert_eq "a partition not reported as slotted records no slot" "$(jq -r '.entries[] | select(.partition=="vbmeta") | .slot' "$BDIR/manifest.json")" "null"
+assert_eq "the derived SHA256SUMS still checks out" "$(cd "$BDIR" && sha256sum -c --quiet SHA256SUMS >/dev/null 2>&1 && echo yes)" "yes"
+STAMP_DIR="$(basename "$BDIR")"
+OUT="$(cd "$SANDBOX" && PYTHONPATH="$LIB_DIR" python3 -m rootforge.core.cli backup verify testdev "$STAMP_DIR" 2>&1)"; RC=$?
+assert_eq "the CLI verifies what the script captured" "$RC" "0"
+
+# Partial: some captured, some not. Honest exit code, honest manifest.
+new_sandbox
+fb_device FB1 a testdev
+export RF_STUB_FETCH_FAIL="vbmeta"
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev --partitions boot,vbmeta
+assert_eq "a partial backup exits 4" "$RC" "4"
+BDIR="$(printf '%s\n' "$OUT" | sed -n 's/^BACKUP_DIR=//p' | tail -n 1)"
+assert_eq "a partial manifest says incomplete" "$(jq -r '.complete' "$BDIR/manifest.json")" "false"
+assert_eq "a partial manifest names what is missing" "$(jq -r '.missing_partitions | join(",")' "$BDIR/manifest.json")" "vbmeta"
+assert_eq "the failed partition leaves no image behind" "$(ls "$BDIR" | grep -c '^vbmeta' || true)" "0"
+assert_contains "a partial backup is called partial" "$OUT" "PARTIAL"
+
+# Nothing captured: not a success, and no empty "backup" is left behind.
+new_sandbox
+fb_device FB1 a testdev
+export RF_STUB_FETCH_FAIL="boot vbmeta"
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev --partitions boot,vbmeta
+assert_eq "a backup that captured nothing exits 1" "$RC" "1"
+assert_contains "it says nothing was captured" "$OUT" "NOTHING was captured"
+assert_eq "no empty backup directory is left" "$(ls "$ROOTFORGE_HOME/devices/testdev/backups" 2>/dev/null | wc -l | tr -d ' ')" "0"
+
+# Partition selection: --partitions > config > built-in default.
+new_sandbox
+fb_device FB1 a testdev
+mkdir -p "$ROOTFORGE_HOME/devices/testdev"
+printf 'backup:\n  partitions: [boot]\n' > "$ROOTFORGE_HOME/devices/testdev/rootforge.yaml"
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev
+assert_eq "config-selected partitions give a complete backup" "$RC" "0"
+assert_contains "the configured partition is fetched" "$(cat "$RF_STUB_LOG")" "fetch boot"
+assert_not_contains "partitions outside the config are not fetched" "$(cat "$RF_STUB_LOG")" "fetch init_boot"
+
+new_sandbox
+fb_device FB1 a testdev
+mkdir -p "$ROOTFORGE_HOME/devices/testdev"
+printf 'backup:\n  partitions: [boot]\n' > "$ROOTFORGE_HOME/devices/testdev/rootforge.yaml"
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev --partitions dtbo
+assert_contains "--partitions overrides the config" "$(cat "$RF_STUB_LOG")" "fetch dtbo"
+assert_not_contains "the overridden config partition is not fetched" "$(cat "$RF_STUB_LOG")" "fetch boot"
+
+new_sandbox
+fb_device FB1 a testdev
+mkdir -p "$ROOTFORGE_HOME/devices/testdev"
+printf 'backup:\n  partitions: [../evil]\n' > "$ROOTFORGE_HOME/devices/testdev/rootforge.yaml"
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev
+assert_eq "an invalid config refuses to back up" "$RC" "1"
+assert_contains "the config error is shown" "$OUT" "Config error"
+assert_not_contains "an invalid config fetches nothing" "$(cat "$RF_STUB_LOG")" "fetch"
+
+new_sandbox
+fb_device FB1 a testdev
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev --partitions '../x'
+assert_eq "an invalid --partitions name is rejected" "$RC" "1"
+assert_not_contains "an invalid --partitions name fetches nothing" "$(cat "$RF_STUB_LOG")" "fetch"
+
+# The adb + dd path, including its transfer check.
+new_sandbox
+export RF_STUB_ADB_DEVICES='AD1\tdevice\n'
+export RF_STUB_ADB_SHELL_OUT=exists
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev --partitions boot
+assert_eq "an adb capture succeeds" "$RC" "0"
+BDIR="$(printf '%s\n' "$OUT" | sed -n 's/^BACKUP_DIR=//p' | tail -n 1)"
+assert_eq "an adb capture records its method" "$(jq -r '.entries[0].method' "$BDIR/manifest.json")" "adb-dd"
+assert_contains "an unverifiable adb transfer is flagged" "$OUT" "transfer itself is unverified"
+
+new_sandbox
+export RF_STUB_ADB_DEVICES='AD1\tdevice\n'
+export RF_STUB_ADB_SHELL_OUT=exists
+export RF_STUB_ADB_REMOTE_SUM="$(printf '0%.0s' $(seq 1 64))"
+run_script bash "$BIN_DIR/backup_partitions.sh" testdev --partitions boot
+assert_eq "a pulled copy that disagrees with the device's checksum is not kept" "$RC" "1"
+assert_contains "the transfer mismatch is reported" "$OUT" "transfer check FAILED"
 drop_sandbox
 
 # Regression: the codename and timestamp are interpolated straight into a
 # path under $ROOTFORGE_HOME/devices/, and nothing validated them. Before the
-# guard, `backup_partitions.sh '../../escaped'` wrote to $HOME/escaped, and
-# `restore_partitions.sh testdev '../../../../evil'` read every .img from an
-# arbitrary directory and flashed it — the SHA256SUMS gate degrades to a
-# warning when the directory has no SHA256SUMS, so the write went ahead.
+# guard, `backup_partitions.sh '../../escaped'` wrote to $HOME/escaped.
 new_sandbox
 export RF_STUB_ADB_DEVICES="X1\tdevice"
-export ROOTFORGE_ASSUME_YES=1
 run_script bash "$BIN_DIR/backup_partitions.sh" '../../escaped'
 assert_eq "a traversing codename aborts the backup" "$RC" "1"
 assert_contains "the codename abort explains itself" "$OUT" "Invalid device codename"
@@ -374,14 +641,238 @@ if [ -e "$SANDBOX/home/escaped" ]; then
 else
   pass "a traversing codename writes nothing outside devices/"
 fi
+drop_sandbox
+
+section "restore_partitions.sh — only verified manifest entries are flashed"
 
 new_sandbox
-# The escape target is a real directory holding a real image, so the only
-# thing standing between it and the device is the guard.
-# ../../../../evil resolves out of devices/ to $HOME/evil, four levels up
-# from $ROOTFORGE_HOME/devices/<codename>/backups. The backups directory has
-# to exist for the traversal to resolve, which it does for any device the
-# user has ever backed up.
+make_backup testdev 20240101_000000 testdev a boot=realboot vbmeta=realvbmeta
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a verified backup restores" "$RC" "0"
+assert_contains "boot is written to the manifest's slot" "$(cat "$RF_STUB_LOG")" "fastboot -s FB1 --slot a flash boot "
+assert_contains "vbmeta is written too" "$(cat "$RF_STUB_LOG")" "flash vbmeta "
+assert_not_contains "a restore never reboots" "$(cat "$RF_STUB_LOG")" "reboot"
+assert_contains "unattended use is audited" "$OUT" "UNATTENDED"
+
+# The reported flaw: an *.img the manifest does not list was flashed unchecked.
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+printf 'EXTRA-UNCHECKED' > "$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000/vendor_boot.img"
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "an unlisted extra image refuses the restore" "$RC" "3"
+assert_contains "the extra image is named" "$OUT" "vendor_boot.img: UNLISTED"
+assert_not_contains "nothing is flashed when there is an extra image" "$(cat "$RF_STUB_LOG")" " flash "
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+printf 'CORRUPTED' > "$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000/boot.img"
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a changed image refuses the restore" "$RC" "3"
+assert_contains "a changed image is reported" "$OUT" "boot.img:"
+assert_not_contains "a changed image flashes nothing" "$(cat "$RF_STUB_LOG")" " flash "
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot vbmeta=realvbmeta
+rm "$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000/vbmeta.img"
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a missing image refuses the whole restore" "$RC" "3"
+assert_not_contains "a missing image flashes nothing at all" "$(cat "$RF_STUB_LOG")" " flash "
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+: > "$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000/boot.img"
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "an emptied image refuses the restore" "$RC" "3"
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+BD="$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000"
+printf 'realboot' > "$SANDBOX/elsewhere.img"
+rm "$BD/boot.img"; ln -s "$SANDBOX/elsewhere.img" "$BD/boot.img"
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a symlinked image refuses the restore, even with matching content" "$RC" "3"
+assert_contains "the symlink is named" "$OUT" "SYMLINK"
+assert_not_contains "a symlinked image flashes nothing" "$(cat "$RF_STUB_LOG")" " flash "
+
+# A manifest that names a path is not trusted to.
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+BD="$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000"
+jq '.entries[0].file = "../escape.img"' "$BD/manifest.json" > "$BD/m.tmp" && mv "$BD/m.tmp" "$BD/manifest.json"
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a manifest naming a path outside the backup is refused" "$RC" "3"
+assert_not_contains "a path-escaping manifest flashes nothing" "$(cat "$RF_STUB_LOG")" " flash "
+
+# Legacy backups: verifiable, never silently restorable.
+new_sandbox
+BD="$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000"
+mkdir -p "$BD"
+printf 'realboot' > "$BD/boot.img"
+( cd "$BD" && sha256sum boot.img > SHA256SUMS )
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a legacy backup is refused" "$RC" "3"
+assert_contains "the refusal points at the import step" "$OUT" "import-legacy"
+assert_not_contains "a legacy backup flashes nothing" "$(cat "$RF_STUB_LOG")" " flash "
+OUT="$(cd "$SANDBOX" && PYTHONPATH="$LIB_DIR" python3 -m rootforge.core.cli backup import-legacy testdev 20240101_000000 2>&1)"; RC=$?
+assert_eq "the legacy import succeeds" "$RC" "0"
+assert_eq "the import is labelled legacy-imported" "$(jq -r '.trust' "$BD/manifest.json")" "legacy-imported"
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a legacy-imported backup still needs an explicit opt-in" "$RC" "3"
+assert_contains "the opt-in flag is named" "$OUT" "--accept-legacy-import"
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000 --accept-legacy-import
+assert_eq "with the opt-in a legacy-imported backup restores" "$RC" "0"
+drop_sandbox
+
+section "restore_partitions.sh — the target device must match the backup"
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+fb_device FB1 a cheetah
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "an image for another device is refused" "$RC" "3"
+assert_contains "the mismatch names both devices" "$OUT" "the backup is for 'testdev' but the connected device is 'cheetah'"
+assert_not_contains "a wrong-device restore flashes nothing" "$(cat "$RF_STUB_LOG")" " flash "
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+fb_device FB1 b testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "an image from the other slot is refused" "$RC" "3"
+assert_contains "the slot mismatch is explained" "$OUT" "wrong slot"
+assert_not_contains "a wrong-slot restore flashes nothing" "$(cat "$RF_STUB_LOG")" " flash "
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+fb_device FB1 a testdev
+export RF_STUB_GETVAR_ALL="${RF_STUB_GETVAR_ALL//unlocked: yes/unlocked: no}"
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a locked bootloader refuses the restore" "$RC" "3"
+assert_not_contains "a locked bootloader flashes nothing" "$(cat "$RF_STUB_LOG")" " flash "
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "no device refuses the restore" "$RC" "3"
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+fb_device FB1 a testdev
+export RF_STUB_FASTBOOT_DEVICES='FB1\tfastboot\nFB2\tfastboot\n'
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "two devices and no serial refuses the restore" "$RC" "3"
+assert_not_contains "an ambiguous restore flashes nothing" "$(cat "$RF_STUB_LOG")" " flash "
+
+# The device changes between the first check and the write.
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+fb_device FB1 a testdev
+export RF_STUB_GETVAR_ALL_2="${RF_STUB_GETVAR_ALL//product: testdev/product: cheetah}"
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a device that changes after confirmation is refused" "$RC" "3"
+assert_not_contains "a changed device is never written" "$(cat "$RF_STUB_LOG")" " flash "
+
+# An image altered between verification and the write is caught by the
+# per-image re-hash immediately before each flash.
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+fb_device FB1 a testdev
+export RF_STUB_TAMPER_FILE="$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000/boot.img"
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "an image changed after verification is not written" "$RC" "1"
+assert_contains "the late change is reported" "$OUT" "changed after verification"
+assert_not_contains "a late-changed image is never flashed" "$(cat "$RF_STUB_LOG")" " flash "
+
+# A backup whose device facts were not recorded still restores, with a warning.
+new_sandbox
+make_backup testdev 20240101_000000 - - boot=realboot
+fb_device FB1 a cheetah
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a manifest without device facts still restores" "$RC" "0"
+assert_contains "the missing facts are called out" "$OUT" "records no device product"
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot vbmeta=realvbmeta
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000 --partitions boot
+assert_eq "--partitions restores a subset" "$RC" "0"
+assert_contains "the selected partition is flashed" "$(cat "$RF_STUB_LOG")" "flash boot "
+assert_not_contains "an unselected partition is not flashed" "$(cat "$RF_STUB_LOG")" "flash vbmeta"
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000 --partitions dtbo
+assert_eq "selecting a partition the backup lacks is refused" "$RC" "3"
+
+# The typed gate still stands without an explicit opt-in.
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+fb_device FB1 a testdev
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "an unconfirmed restore aborts" "$RC" "1"
+assert_not_contains "an unconfirmed restore flashes nothing" "$(cat "$RF_STUB_LOG")" " flash "
+
+# A write failure stops the restore: no later partition is attempted.
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=b1 dtbo=d1 vbmeta=v1
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_FLASH_FAIL_ON_CALL=2
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a failed write exits non-zero" "$RC" "1"
+assert_contains "the report lists what was written" "$OUT" "written:       boot"
+assert_contains "the report lists what was not attempted" "$OUT" "not attempted: vbmeta"
+assert_eq "the third partition was never attempted" "$(grep -c ' flash ' "$RF_STUB_LOG")" "2"
+assert_contains "the operator is told not to reboot" "$OUT" "Do NOT reboot"
+
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_FLASH_RC=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "a restore where nothing was written is a failure" "$RC" "1"
+
+# An incomplete backup restores what it holds and says so.
+new_sandbox
+make_backup testdev 20240101_000000 testdev a boot=realboot
+BD="$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000"
+jq '.complete = false' "$BD/manifest.json" > "$BD/m.tmp" && mv "$BD/m.tmp" "$BD/manifest.json"
+fb_device FB1 a testdev
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/restore_partitions.sh" testdev 20240101_000000
+assert_eq "an incomplete backup restores what it holds" "$RC" "0"
+assert_contains "the incompleteness is called out" "$OUT" "INCOMPLETE"
+
+# Regression: the codename and timestamp are interpolated straight into a
+# path under $ROOTFORGE_HOME/devices/. `restore_partitions.sh testdev
+# '../../../../evil'` used to read every .img from an arbitrary directory and
+# flash it.
+new_sandbox
 mkdir -p "$ROOTFORGE_HOME/devices/testdev/backups" "$HOME/evil"
 printf 'attacker' > "$HOME/evil/boot.img"
 export ROOTFORGE_ASSUME_YES=1
@@ -391,37 +882,18 @@ assert_contains "the timestamp abort explains itself" "$OUT" "Invalid backup tim
 assert_not_contains "a traversing timestamp flashes nothing" "$(cat "$RF_STUB_LOG")" "flash"
 
 new_sandbox
-# A codename with a separator but no '..' is just as much an escape.
 export ROOTFORGE_ASSUME_YES=1
 run_script bash "$BIN_DIR/restore_partitions.sh" 'testdev/../../elsewhere'
 assert_eq "a codename containing a separator is rejected" "$RC" "1"
 
+# The guard must not reject the codenames people actually use.
 new_sandbox
-# The guard must not reject the codenames people actually use. Real device
-# codenames carry digits, underscores and hyphens.
-BACKUP="$ROOTFORGE_HOME/devices/oriole_5g-2/backups/20240101_000000"
-mkdir -p "$BACKUP"
-printf 'realboot' > "$BACKUP/boot.img"
-( cd "$BACKUP" && sha256sum boot.img > SHA256SUMS )
+make_backup oriole_5g-2 20240101_000000 oriole_5g-2 a boot=realboot
+fb_device FB1 a oriole_5g-2
 export ROOTFORGE_ASSUME_YES=1
 run_script bash "$BIN_DIR/restore_partitions.sh" oriole_5g-2 20240101_000000
 assert_eq "an ordinary codename still restores" "$RC" "0"
 assert_contains "an ordinary codename still flashes" "$(cat "$RF_STUB_LOG")" "flash boot"
-drop_sandbox
-
-section "backup_partitions.sh — rootforge device info integration"
-
-new_sandbox
-# No serial given: MODE resolution is safe to route through rootforge
-# device info here (both agree on "exactly one usable device"). This is
-# also the first backup_partitions.sh test with a live, resolvable device —
-# every other test above exercises either the no-device or the path-
-# traversal rejection path.
-export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
-export RF_STUB_GETVAR_ALL='(bootloader) product: cheetah\n(bootloader) current-slot: a\n(bootloader) unlocked: yes\n'
-run_script bash "$BIN_DIR/backup_partitions.sh" testdev
-assert_contains "mode resolved via rootforge device info" "$OUT" "Device resolved via rootforge device info: mode=fastboot"
-assert_contains "fetch still runs against the resolved device" "$(cat "$RF_STUB_LOG")" "fastboot fetch boot"
 drop_sandbox
 
 section "unlock_bootloader.sh"
@@ -435,7 +907,7 @@ run_script bash "$BIN_DIR/unlock_bootloader.sh"
 assert_eq "Samsung refusal exits 2" "$RC" "2"
 assert_contains "Samsung refusal cites Knox" "$OUT" "Knox"
 assert_contains "device info path is used when it resolves a device" "$OUT" "Device profile via rootforge device info"
-drop_sandbox
+assert_not_contains "a refused vendor is never unlocked" "$(cat "$RF_STUB_LOG")" "unlock"
 
 new_sandbox
 export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
@@ -443,7 +915,6 @@ export RF_STUB_GETVAR_ALL='(bootloader) product: whatever\n(bootloader) unlocked
 run_script bash "$BIN_DIR/unlock_bootloader.sh"
 assert_eq "Xiaomi refusal exits 2" "$RC" "2"
 assert_contains "Xiaomi refusal cites Mi Unlock" "$OUT" "Mi Unlock"
-drop_sandbox
 
 new_sandbox
 export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
@@ -451,16 +922,64 @@ export RF_STUB_GETVAR_ALL='(bootloader) product: cheetah\n(bootloader) unlocked:
 run_script bash "$BIN_DIR/unlock_bootloader.sh"
 assert_eq "an already-unlocked device is a no-op" "$RC" "0"
 assert_contains "already-unlocked says so" "$OUT" "already reports unlocked"
-drop_sandbox
 
 new_sandbox
-# No RF_STUB_FASTBOOT_DEVICES/RF_STUB_GETVAR_ALL: rootforge device info
-# can't resolve a device (list_devices() sees nothing), so the script must
-# fall back to its own direct fastboot getvar + grep — unchanged from
-# before this retrofit.
+export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: cheetah\n(bootloader) unlocked: no\n'
 run_script bash "$BIN_DIR/unlock_bootloader.sh"
-assert_contains "falls back to a direct query when device info can't resolve one" "$OUT" "querying fastboot directly"
-assert_eq "unconfirmed unlock aborts" "$RC" "1"
+assert_eq "an unconfirmed unlock aborts" "$RC" "1"
+assert_not_contains "an unconfirmed unlock issues no unlock command" "$(cat "$RF_STUB_LOG")" "unlock"
+
+new_sandbox
+export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: cheetah\n(bootloader) unlocked: no\n'
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/unlock_bootloader.sh"
+assert_eq "a confirmed unlock succeeds" "$RC" "0"
+assert_contains "the unlock targets the resolved serial" "$(cat "$RF_STUB_LOG")" "fastboot -s FBSERIAL flashing unlock"
+assert_not_contains "no invented fastboot wait command" "$(cat "$RF_STUB_LOG")" "wait-for-device"
+
+new_sandbox
+export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: cheetah\n(bootloader) unlocked: no\n'
+export ROOTFORGE_ASSUME_YES=1 RF_STUB_FASTBOOT_RC=1
+run_script bash "$BIN_DIR/unlock_bootloader.sh"
+assert_eq "an unlock the device rejects exits non-zero" "$RC" "1"
+
+# The shared profile is optional: with the rootforge CLI broken the script
+# falls back to its own direct query, and still refuses to guess.
+new_sandbox
+export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
+export RF_STUB_GETVAR_ALL='(bootloader) product: cheetah\n(bootloader) unlocked: no\n'
+mkdir -p "$SANDBOX/fakebin"
+printf '#!/bin/sh\nexit 127\n' > "$SANDBOX/fakebin/rootforge"
+chmod +x "$SANDBOX/fakebin/rootforge"
+export PATH="$SANDBOX/fakebin:$PATH"
+run_script bash "$BIN_DIR/unlock_bootloader.sh"
+assert_contains "falls back to a direct query when device info is unavailable" "$OUT" "querying fastboot directly"
+assert_eq "the fallback path still requires confirmation" "$RC" "1"
+
+# Nothing is known about the device: an unlock (which wipes data) must not
+# proceed to the prompt.
+new_sandbox
+export RF_STUB_FASTBOOT_DEVICES='FBSERIAL\tfastboot\n'
+export RF_STUB_GETVAR_ALL=''
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/unlock_bootloader.sh"
+assert_eq "an unidentifiable device is blocked" "$RC" "3"
+assert_not_contains "an unidentifiable device is never unlocked" "$(cat "$RF_STUB_LOG")" "unlock"
+
+new_sandbox
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/unlock_bootloader.sh"
+assert_eq "no device is blocked" "$RC" "3"
+
+new_sandbox
+export RF_STUB_FASTBOOT_DEVICES='FB1\tfastboot\nFB2\tfastboot\n'
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/unlock_bootloader.sh"
+assert_eq "two devices and no serial is blocked" "$RC" "3"
+assert_not_contains "an ambiguous unlock issues no command" "$(cat "$RF_STUB_LOG")" "unlock"
 drop_sandbox
 
 section "kernelsu_patch_boot.sh --flash"
@@ -475,21 +994,55 @@ assert_contains "no patched image -> explains why" "$OUT" "No patched boot image
 
 new_sandbox
 mkdir -p "$ROOTFORGE_HOME/kernelsu-work"
-printf 'img' > "$ROOTFORGE_HOME/kernelsu-work/boot-ksu-patched-old-20240101_000000.img"
+make_boot_img "$ROOTFORGE_HOME/kernelsu-work/boot-ksu-patched-old-20240101_000000.img"
 sleep 0.01
-printf 'img' > "$ROOTFORGE_HOME/kernelsu-work/boot-ksu-patched-new-20240102_000000.img"
+make_boot_img "$ROOTFORGE_HOME/kernelsu-work/boot-ksu-patched-new-20240102_000000.img"
+fb_device FB1 a
 run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --flash
 assert_eq "unconfirmed --flash aborts" "$RC" "1"
-assert_not_contains "unconfirmed --flash writes nothing" "$(cat "$RF_STUB_LOG")" "flash boot"
+assert_not_contains "unconfirmed --flash writes nothing" "$(cat "$RF_STUB_LOG")" " flash "
 
 new_sandbox
 mkdir -p "$ROOTFORGE_HOME/kernelsu-work"
-printf 'img' > "$ROOTFORGE_HOME/kernelsu-work/boot-ksu-patched-old-20240101_000000.img"
+make_boot_img "$ROOTFORGE_HOME/kernelsu-work/boot-ksu-patched-old-20240101_000000.img"
 sleep 0.01
-printf 'img' > "$ROOTFORGE_HOME/kernelsu-work/boot-ksu-patched-new-20240102_000000.img"
+make_boot_img "$ROOTFORGE_HOME/kernelsu-work/boot-ksu-patched-new-20240102_000000.img"
+fb_device FB1 a
 export ROOTFORGE_ASSUME_YES=1
 run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --flash
+assert_eq "confirmed --flash succeeds through the checked flasher" "$RC" "0"
 assert_contains "confirmed --flash picks the newest image" "$(cat "$RF_STUB_LOG")" "boot-ksu-patched-new"
+assert_contains "--flash writes with an explicit serial and slot" "$(cat "$RF_STUB_LOG")" "fastboot -s FB1 --slot a flash boot"
+
+# --flash must not bypass the device checks the flasher enforces.
+new_sandbox
+mkdir -p "$ROOTFORGE_HOME/kernelsu-work"
+make_boot_img "$ROOTFORGE_HOME/kernelsu-work/boot-ksu-patched-x-20240101_000000.img"
+fb_device FB1 a
+export RF_STUB_GETVAR_ALL="${RF_STUB_GETVAR_ALL//unlocked: yes/unlocked: no}"
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --flash
+assert_eq "--flash on a locked bootloader is blocked" "$RC" "3"
+assert_not_contains "--flash on a locked bootloader writes nothing" "$(cat "$RF_STUB_LOG")" " flash "
+
+new_sandbox
+mkdir -p "$ROOTFORGE_HOME/kernelsu-work"
+make_boot_img "$ROOTFORGE_HOME/kernelsu-work/boot-ksu-patched-x-20240101_000000.img"
+fb_device FB1 a
+export RF_STUB_FASTBOOT_DEVICES='FB1\tfastboot\nFB2\tfastboot\n'
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --flash
+assert_eq "--flash with two devices and no serial is blocked" "$RC" "3"
+run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --flash --serial FB1
+assert_eq "--flash --serial picks the named device" "$RC" "0"
+assert_contains "--flash --serial writes to that device" "$(cat "$RF_STUB_LOG")" "fastboot -s FB1 --slot a flash boot"
+
+new_sandbox
+mkdir -p "$ROOTFORGE_HOME/kernelsu-work"
+make_boot_img "$ROOTFORGE_HOME/kernelsu-work/boot-ksu-patched-x-20240101_000000.img"
+run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --flash --serial 'x; rm -rf /'
+assert_eq "a malformed --serial is rejected" "$RC" "1"
+assert_contains "the --serial rejection explains itself" "$OUT" "does not look like a device serial"
 
 new_sandbox
 run_script bash "$BIN_DIR/kernelsu_patch_boot.sh" --stock-boot
@@ -1371,7 +1924,8 @@ section "rootforge flash / backup — the wrapped path end to end"
 
 new_sandbox
 export PYTHONPATH="$LIB_DIR"
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
 export ROOTFORGE_ASSUME_YES=1
 
 # The happy path: the wrapper must reach fastboot with the image as an image,
@@ -1384,7 +1938,8 @@ assert_not_contains "CLI never passes the image as a serial" \
 
 new_sandbox
 export PYTHONPATH="$LIB_DIR"
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+make_boot_img "$SANDBOX/boot.img"
+fb_device SERIAL9 a
 export ROOTFORGE_ASSUME_YES=1
 run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" \
   --partition init_boot --serial SERIAL9
@@ -1393,20 +1948,33 @@ assert_contains "CLI honors --serial" "$(cat "$RF_STUB_LOG")" "-s SERIAL9"
 
 new_sandbox
 export PYTHONPATH="$LIB_DIR"
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
-export ROOTFORGE_ASSUME_YES=1 RF_STUB_SLOT=a
-run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" --both-slots
-assert_contains "CLI --both-slots mirrors to the other slot" "$(cat "$RF_STUB_LOG")" "--set-active=b"
-assert_contains "CLI --both-slots restores the original slot" "$(cat "$RF_STUB_LOG")" "--set-active=a"
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" --both-slots --slots-same-build
+assert_eq "CLI --both-slots with the assertion succeeds" "$RC" "0"
+assert_contains "CLI --both-slots writes the active slot" "$(cat "$RF_STUB_LOG")" "--slot a flash boot"
+assert_contains "CLI --both-slots writes the other slot" "$(cat "$RF_STUB_LOG")" "--slot b flash boot"
+assert_not_contains "CLI --both-slots never changes the active slot" "$(cat "$RF_STUB_LOG")" "set-active"
 assert_not_contains "CLI --both-slots is never read as a partition" \
   "$(cat "$RF_STUB_LOG")" "flash --both-slots"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" --both-slots
+assert_eq "CLI --both-slots alone is refused" "$RC" "2"
+assert_contains "the CLI refusal explains the assertion" "$OUT" "--slots-same-build"
+assert_eq "the refusal touches no device" "$(wc -l < "$RF_STUB_LOG")" "0"
 
 # argparse prefix matching accepted --both-slot for --both-slots until
 # allow_abbrev=False was set on every parser (subparsers do not inherit it).
 # A near-miss flag must be an error, not a silent guess at what was meant.
 new_sandbox
 export PYTHONPATH="$LIB_DIR"
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+make_boot_img "$SANDBOX/boot.img"
 export ROOTFORGE_ASSUME_YES=1
 run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" --both-slot
 assert_eq "an abbreviated flag is rejected, not guessed" "$RC" "2"
@@ -1434,7 +2002,7 @@ assert_eq "a zero-byte image touches no device" "$(wc -l < "$RF_STUB_LOG")" "0"
 
 new_sandbox
 export PYTHONPATH="$LIB_DIR"
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+make_boot_img "$SANDBOX/boot.img"
 export ROOTFORGE_ASSUME_YES=1
 run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" --partition system
 assert_eq "an unsupported partition is rejected" "$RC" "2"
@@ -1443,7 +2011,7 @@ assert_not_contains "an unsupported partition is never written" "$(cat "$RF_STUB
 
 new_sandbox
 export PYTHONPATH="$LIB_DIR"
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+make_boot_img "$SANDBOX/boot.img"
 export ROOTFORGE_ASSUME_YES=1
 run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img" --serial
 assert_eq "a missing option value is rejected" "$RC" "2"
@@ -1452,19 +2020,27 @@ assert_contains "the missing value names its option" "$OUT" "--serial"
 # The wrapper must pass a real failure through rather than reporting success.
 new_sandbox
 export PYTHONPATH="$LIB_DIR"
-head -c 1024 /dev/zero > "$SANDBOX/boot.img"
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
 export ROOTFORGE_ASSUME_YES=1 RF_STUB_FLASH_RC=1
 run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img"
 assert_eq "a failed flash propagates its exit code" "$RC" "1"
+
+# A blocked write propagates its own distinct exit code through the wrapper.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+make_boot_img "$SANDBOX/boot.img"
+export ROOTFORGE_ASSUME_YES=1
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img"
+assert_eq "a blocked flash propagates exit 3" "$RC" "3"
+assert_not_contains "a blocked flash makes no write" "$(cat "$RF_STUB_LOG")" " flash "
 
 # --- backup / restore through the CLI ---
 
 new_sandbox
 export PYTHONPATH="$LIB_DIR"
-BACKUP="$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000"
-mkdir -p "$BACKUP"
-printf 'realboot' > "$BACKUP/boot.img"
-( cd "$BACKUP" && sha256sum boot.img > SHA256SUMS )
+make_backup testdev 20240101_000000 testdev a boot=realboot
+fb_device FB1 a testdev
 export ROOTFORGE_ASSUME_YES=1
 
 run_script python3 -m rootforge.core.cli backup list testdev
@@ -1472,9 +2048,27 @@ assert_eq "backup list succeeds" "$RC" "0"
 assert_contains "backup list shows the stored backup" "$OUT" "20240101_000000"
 assert_eq "backup list touches no device" "$(wc -l < "$RF_STUB_LOG")" "0"
 
+run_script python3 -m rootforge.core.cli backup verify testdev 20240101_000000
+assert_eq "backup verify passes an intact backup" "$RC" "0"
+assert_eq "backup verify touches no device" "$(wc -l < "$RF_STUB_LOG")" "0"
+
 run_script python3 -m rootforge.core.cli backup restore testdev 20240101_000000
 assert_eq "backup restore succeeds" "$RC" "0"
 assert_contains "backup restore flashes the stored image" "$(cat "$RF_STUB_LOG")" "flash boot"
+
+printf 'x' >> "$ROOTFORGE_HOME/devices/testdev/backups/20240101_000000/boot.img"
+run_script python3 -m rootforge.core.cli backup verify testdev 20240101_000000
+assert_eq "backup verify fails a tampered backup" "$RC" "1"
+
+# backup create through the CLI, then verify what it made.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+fb_device FB1 a testdev
+run_script python3 -m rootforge.core.cli backup create testdev --partitions boot
+assert_eq "backup create succeeds through the CLI" "$RC" "0"
+BDIR="$(printf '%s\n' "$OUT" | sed -n 's/^BACKUP_DIR=//p' | tail -n 1)"
+run_script python3 -m rootforge.core.cli backup verify testdev "$(basename "$BDIR")"
+assert_eq "the CLI verifies a CLI-made backup" "$RC" "0"
 
 # Path traversal, now rejected by argparse before the script runs. Passing
 # these through used to write a backup outside devices/, and — on restore —
