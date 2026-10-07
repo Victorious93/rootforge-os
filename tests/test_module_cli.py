@@ -6,6 +6,7 @@ re-found in hand-written shell parsing, now handled structurally by argparse.
 """
 import argparse
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from rootforge.core import module as module_cmd
@@ -142,11 +143,37 @@ class TestRunner(unittest.TestCase):
         with mock.patch.object(runner, "run_script", return_value=completed):
             self.assertEqual(runner.exec_script("whatever.sh", []), 1)
 
-    def test_find_script_prefers_the_installed_location(self):
-        with mock.patch.object(runner.Path, "is_file", return_value=True):
-            self.assertEqual(
-                runner.find_script("x.sh"), runner.INSTALLED_BIN / "x.sh"
-            )
+    def test_find_script_prefers_the_script_shipped_with_this_package(self):
+        """A checkout must not pick up a different system-installed revision."""
+        sibling = Path(runner.__file__).resolve().parents[3] / "bin" / "x.sh"
+        installed = runner.INSTALLED_BIN / "x.sh"
+        with mock.patch.object(
+            runner.Path, "is_file", lambda self: self in (sibling, installed)
+        ):
+            self.assertEqual(runner.find_script("x.sh"), sibling)
+
+    def test_find_script_falls_back_to_the_installed_location(self):
+        installed = runner.INSTALLED_BIN / "x.sh"
+        with mock.patch.object(runner.Path, "is_file", lambda self: self == installed):
+            self.assertEqual(runner.find_script("x.sh"), installed)
+
+    def test_find_script_falls_back_to_path_last(self):
+        with mock.patch.object(runner.Path, "is_file", return_value=False), \
+                mock.patch.object(runner.shutil, "which", return_value="/opt/rf/x.sh"):
+            self.assertEqual(runner.find_script("x.sh"), Path("/opt/rf/x.sh"))
+
+    def test_find_script_reports_every_place_it_looked(self):
+        with mock.patch.object(runner.Path, "is_file", return_value=False), \
+                mock.patch.object(runner.shutil, "which", return_value=None):
+            with self.assertRaises(runner.ScriptNotFound) as ctx:
+                runner.find_script("x.sh")
+        self.assertIn("alongside this package", str(ctx.exception))
+        self.assertIn(str(runner.INSTALLED_BIN), str(ctx.exception))
+
+    def test_the_real_checkout_resolves_to_its_own_scripts(self):
+        """Running from a working tree uses the tree's scripts, installed or not."""
+        found = runner.find_script("flash_patched_boot.sh")
+        self.assertEqual(found.parent, Path(runner.__file__).resolve().parents[3] / "bin")
 
 
 if __name__ == "__main__":

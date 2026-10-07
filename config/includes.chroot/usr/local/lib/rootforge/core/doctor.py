@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 from rootforge.core.log import Logger
 
@@ -44,6 +44,21 @@ class CheckResult:
         return data
 
 
+def optional_check(func: Callable[[], "CheckResult"]) -> Callable[[], "CheckResult"]:
+    """Declare a check as informational: its failure is a warning, not an error.
+
+    Severity is a property of the check, declared here, rather than something
+    only a *successful* run can report. A check that raises while probing must
+    keep its declared severity: a crashed required check is a failure.
+    """
+    func.optional = True  # type: ignore[attr-defined]
+    return func
+
+
+def _is_optional(check: Callable[[], "CheckResult"]) -> bool:
+    return bool(getattr(check, "optional", False))
+
+
 def _check_tool(name: str, hint: str, required: bool = True) -> CheckResult:
     path = shutil.which(name)
     if path:
@@ -67,18 +82,21 @@ def check_fastboot() -> CheckResult:
     return _check_tool("fastboot", "not found — reinstall the fastboot package")
 
 
+@optional_check
 def check_claude_code() -> CheckResult:
     return _check_tool(
         "claude", "not installed — run setup_ai_tools.sh to install Claude Code", required=False
     )
 
 
+@optional_check
 def check_ollama_binary() -> CheckResult:
     return _check_tool(
         "ollama", "not installed — run setup_ai_tools.sh to install Ollama", required=False
     )
 
 
+@optional_check
 def check_ollama_reachable() -> CheckResult:
     if shutil.which("ollama") is None:
         return CheckResult("ollama-server", False, "skipped — ollama not installed", required=False)
@@ -92,6 +110,7 @@ def check_ollama_reachable() -> CheckResult:
     return CheckResult("ollama-server", False, detail, required=False)
 
 
+@optional_check
 def check_second_brain_vault() -> CheckResult:
     if SECOND_BRAIN_VAULT.is_dir():
         return CheckResult("second-brain-vault", True, str(SECOND_BRAIN_VAULT), required=False)
@@ -127,12 +146,33 @@ def check_curl() -> CheckResult:
     return _check_tool("curl", "not found — apt install curl")
 
 
+def check_jq() -> CheckResult:
+    # flash_patched_boot.sh, backup_partitions.sh and restore_partitions.sh read
+    # the device/backup checks as JSON and refuse to write without jq.
+    return _check_tool("jq", "not found — apt install jq (the flash/backup/restore scripts need it)")
+
+
+@optional_check
+def check_pyyaml() -> CheckResult:
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        return CheckResult(
+            "pyyaml",
+            False,
+            "not importable — apt install python3-yaml (`rootforge config` and configured backup partitions need it)",
+            required=False,
+        )
+    return CheckResult("pyyaml", True, "importable", required=False)
+
+
 def check_sha256sum() -> CheckResult:
     # backup_partitions.sh writes and restore_partitions.sh verifies
     # SHA256SUMS; without this the restore integrity gate cannot run.
     return _check_tool("sha256sum", "not found — apt install coreutils")
 
 
+@optional_check
 def check_magiskboot() -> CheckResult:
     if shutil.which("magiskboot"):
         return CheckResult("magiskboot", True, str(shutil.which("magiskboot")), required=False)
@@ -147,12 +187,14 @@ def check_magiskboot() -> CheckResult:
     )
 
 
+@optional_check
 def check_docker() -> CheckResult:
     return _check_tool(
         "docker", "not installed — needed only by build_matrix.sh", required=False
     )
 
 
+@optional_check
 def check_adb_devices() -> CheckResult:
     """Report attached devices, and say why an attached one isn't usable.
 
@@ -214,6 +256,8 @@ CHECKS: List[Callable[[], CheckResult]] = [
     check_unzip,
     check_zip,
     check_sha256sum,
+    check_jq,
+    check_pyyaml,
     check_disk_space,
     check_rootforge_home,
     check_adb_devices,
@@ -232,15 +276,40 @@ def run_checks() -> List[CheckResult]:
         try:
             results.append(check())
         except Exception as exc:  # a broken diagnostic must not hide the rest
-            name = check.__name__.removeprefix("check_")
-            results.append(CheckResult(name, False, f"check raised {type(exc).__name__}: {exc}", required=False))
+            name = check.__name__.removeprefix("check_").replace("_", "-")
+            results.append(
+                CheckResult(
+                    name, False, f"check raised {type(exc).__name__}: {exc}",
+                    required=not _is_optional(check),
+                )
+            )
     return results
 
 
+def _open_logger() -> Optional[Logger]:
+    # doctor is what tells you the logs directory is unusable, so failing to
+    # open the audit log must not stop it reporting that.
+    try:
+        return Logger("doctor", echo=False)
+    except OSError:
+        return None
+
+
 def run_doctor(as_json: bool = False, quiet: bool = False, strict: bool = False) -> int:
+    logger = _open_logger()
+    if logger:
+        logger.info("doctor started")
     results = run_checks()
     required_failures = sum(1 for r in results if r.status == "fail")
     warnings = sum(1 for r in results if r.status == "warn")
+    if logger:
+        for result in results:
+            log_event = logger.info if result.ok else (logger.error if result.required else logger.warn)
+            log_event("check", check=result.name, ok=result.ok, required=result.required, detail=result.detail)
+        logger.info(
+            "doctor finished", required_failures=required_failures, warnings=warnings,
+            log_path=str(logger.path),
+        )
 
     if as_json:
         print(

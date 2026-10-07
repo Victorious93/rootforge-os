@@ -19,7 +19,6 @@ Both stdout and stderr are therefore captured and parsed.
 """
 from __future__ import annotations
 
-import json
 import re
 import subprocess
 from dataclasses import asdict, dataclass, field
@@ -376,19 +375,3 @@ def profile_device(serial: str, mode: str) -> DeviceProfile:
     if mode == "fastboot":
         return profile_fastboot(serial)
     raise ValueError(f"unsupported device mode: {mode}")
-
-
-def cmd_show(serial: Optional[str] = None) -> int:
-    from rootforge.core.cli import _select_device
-    try:
-        resolved, mode = _select_device(serial)
-    except LookupError as exc:
-        print(f"rootforge: error: {exc}")
-        return 1
-    profile = profile_device(resolved, mode)
-    print(json.dumps(profile.as_dict(), indent=2))
-    message = profile.refusal_message()
-    if message:
-        print(message)
-        return 1
-    return 0
