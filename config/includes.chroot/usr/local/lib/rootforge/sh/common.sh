@@ -286,6 +286,65 @@ rf_require_cmd() {
   exit 1
 }
 
+# --- Android SDK provisioning -----------------------------------------------
+
+# The one pinned Android cmdline-tools archive. The SHA-256 was computed from a
+# download whose size and SHA-1 matched Google's own repository2-3.xml entry
+# for this exact file (cmdline-tools;12.0, SHA-1 d313adb7...f8f8, 153607504
+# bytes), because the manifest publishes only a SHA-1.
+RF_CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+RF_CMDLINE_TOOLS_SHA256="2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258"
+
+# rf_host_arch — arm64 | amd64 | unsupported:<machine>, from the running kernel.
+rf_host_arch() {
+  case "$(uname -m)" in
+    aarch64|arm64) echo arm64 ;;
+    x86_64|amd64)  echo amd64 ;;
+    *)             echo "unsupported:$(uname -m)" ;;
+  esac
+}
+
+# rf_fetch_verified <url> <dest> <sha256> — download to a temp file beside
+# <dest>, rename into place only if the SHA-256 matches. A mismatch removes the
+# download and fails: nothing unverified is ever left at <dest>.
+rf_fetch_verified() {
+  local url="$1" dest="$2" want="$3" tmp actual
+  tmp="$(mktemp "$dest.part.XXXXXX")" || return 1
+  if ! curl -fsSL -o "$tmp" "$url"; then
+    rm -f "$tmp"
+    printf 'Download failed: %s\n' "$url" >&2
+    return 1
+  fi
+  actual="$(sha256sum "$tmp" | awk '{print $1}')"
+  if [ "$actual" != "$want" ]; then
+    rm -f "$tmp"
+    printf 'SHA-256 mismatch for %s\n  expected: %s\n  actual:   %s\n' "$url" "$want" "$actual" >&2
+    return 1
+  fi
+  mv -f "$tmp" "$dest"
+}
+
+# rf_runtime_capabilities_json — what this runtime can actually do, probed
+# rather than assumed. Root does not imply any of these: a rooted Android
+# chroot still runs on the host's Android kernel, PRoot is ptrace emulation,
+# and a binary for another CPU does not run just because a tool exists.
+# ROOTFORGE_DEV_ROOT (default /dev) is the seam tests use.
+rf_runtime_capabilities_json() {
+  local dev="${ROOTFORGE_DEV_ROOT:-/dev}" arch flavor="unknown" kvm=false loop=false tun=false usb=false native=false
+  arch="$(rf_host_arch)"
+  if [ -r /etc/rootforge/build-info ]; then
+    flavor="$(sed -n 's/^flavor=//p' /etc/rootforge/build-info | head -n 1)"
+    [ -n "$flavor" ] || flavor="unknown"
+  fi
+  [ -c "$dev/kvm" ] && [ -r "$dev/kvm" ] && [ -w "$dev/kvm" ] && kvm=true
+  [ -e "$dev/loop-control" ] && loop=true
+  [ -c "$dev/net/tun" ] && tun=true
+  [ -d "$dev/bus/usb" ] && usb=true
+  [ "$arch" = "amd64" ] && native=true
+  printf '{"host_arch":"%s","container":"%s","kvm":%s,"loop_devices":%s,"tun":%s,"usb_bus":%s,"google_sdk_binaries_native":%s,"android_emulator_available":%s}\n' \
+    "$arch" "$flavor" "$kvm" "$loop" "$tun" "$usb" "$native" "$native"
+}
+
 # --- downloads -----------------------------------------------------------
 
 # rf_download_cached <url> <destination> [min_bytes] — fetch <url> to

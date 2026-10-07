@@ -2104,6 +2104,114 @@ run_script bash "$GEN" --tag local1 --dist "$SANDBOX/dist" --out "$SANDBOX/out2"
 assert_eq "a --base-url with shell/sed metacharacters is refused" "$RC" "1"
 drop_sandbox
 
+section "termux/bootstrap_proot.sh — only what this CPU can run"
+
+# The script finds common.sh at ../lib/rootforge/sh relative to itself, as it
+# does once installed in the rootfs, so build that layout.
+install_bootstrap_layout() {
+  INST="$SANDBOX/inst"
+  mkdir -p "$INST/usr/local/bin" "$INST/usr/local/lib/rootforge/sh" "$SANDBOX/fakebin"
+  cp "$REPO_ROOT/termux/bootstrap_proot.sh" "$INST/usr/local/bin/"
+  cp "$LIB_DIR/rootforge/sh/common.sh" "$INST/usr/local/lib/rootforge/sh/"
+  BOOT="$INST/usr/local/bin/bootstrap_proot.sh"
+}
+# fake_uname <machine> — a uname that reports a chosen CPU.
+fake_uname() {
+  printf '#!/bin/sh\n[ "$1" = "-m" ] && echo %s || echo Linux\n' "$1" > "$SANDBOX/fakebin/uname"
+  chmod +x "$SANDBOX/fakebin/uname"
+  export PATH="$SANDBOX/fakebin:$PATH"
+}
+# A curl that records the call and never touches a network.
+fake_curl() {
+  mkdir -p "$SANDBOX/fakebin"
+  export PATH="$SANDBOX/fakebin:$PATH"
+  printf '#!/bin/sh\necho "curl $*" >> "%s"\nout=""; while [ $# -gt 0 ]; do [ "$1" = "-o" ] && out="$2"; shift; done\n[ -n "$out" ] && printf "%s" "${RF_FAKE_CURL_BODY:-wrong-content}" > "$out"\nexit 0\n' "$RF_STUB_LOG" '%s' > "$SANDBOX/fakebin/curl"
+  chmod +x "$SANDBOX/fakebin/curl"
+}
+
+new_sandbox; install_bootstrap_layout; fake_curl; fake_uname x86_64
+run_script bash "$BOOT" --plan
+assert_eq "--plan succeeds on an x86-64 host" "$RC" "0"
+assert_contains "x86-64 gets the platform-tools" "$OUT" "install: platform-tools"
+assert_contains "x86-64 gets build-tools" "$OUT" "install: build-tools;34.0.0"
+assert_contains "x86-64 gets the NDK" "$OUT" "install: ndk;26.1.10909125"
+assert_not_contains "x86-64 skips nothing by default" "$OUT" "skip:"
+assert_not_contains "no emulator unless asked" "$OUT" "emulator"
+assert_eq "--plan makes no network call" "$(grep -c '^curl' "$RF_STUB_LOG" || true)" "0"
+run_script bash "$BOOT" --plan --with-system-image
+assert_contains "an x86-64 host's image matches the host ABI" "$OUT" "system-images;android-34;google_apis;x86_64"
+assert_not_contains "no arm64 image on an x86-64 host" "$OUT" "arm64-v8a"
+
+new_sandbox; install_bootstrap_layout; fake_curl; fake_uname aarch64
+run_script bash "$BOOT" --plan
+assert_contains "arm64 still gets the CPU-independent platform jar" "$OUT" "install: platforms;android-34"
+assert_not_contains "arm64 does not install x86-64 platform-tools" "$OUT" "install: platform-tools"
+assert_contains "arm64 explains the platform-tools skip" "$OUT" "native Debian adb and fastboot"
+assert_not_contains "arm64 does not install x86-64 build-tools" "$OUT" "install: build-tools"
+assert_not_contains "arm64 does not install the x86-64 NDK" "$OUT" "install: ndk"
+assert_contains "arm64 says why the NDK is skipped" "$OUT" "x86-64 only"
+run_script bash "$BOOT" --plan --with-system-image
+assert_not_contains "arm64 never installs an emulator" "$OUT" "install: emulator"
+assert_contains "arm64 explains that no Linux arm64 emulator exists" "$OUT" "no Linux arm64 build"
+run_script bash "$BOOT" --plan --allow-nonnative-sdk
+assert_contains "--allow-nonnative-sdk installs build-tools on request" "$OUT" "install: build-tools;34.0.0"
+assert_contains "--allow-nonnative-sdk installs the NDK on request" "$OUT" "install: ndk;26.1.10909125"
+assert_contains "--allow-nonnative-sdk warns that it is unverified" "$OUT" "not verified to run"
+
+new_sandbox; install_bootstrap_layout; fake_curl; fake_uname riscv64
+run_script bash "$BOOT" --plan
+assert_contains "an unsupported CPU gets only the Java parts" "$OUT" "install: platforms;android-34"
+assert_contains "an unsupported CPU is named" "$OUT" "riscv64"
+assert_not_contains "an unsupported CPU installs no native tool" "$OUT" "install: platform-tools"
+
+new_sandbox; install_bootstrap_layout; fake_curl; fake_uname aarch64
+run_script bash "$BOOT" --bogus
+assert_eq "an unknown option is rejected" "$RC" "1"
+
+# Capabilities are probed, not assumed.
+new_sandbox; install_bootstrap_layout; fake_uname aarch64
+mkdir -p "$SANDBOX/dev/net" "$SANDBOX/dev/bus/usb"
+: > "$SANDBOX/dev/loop-control"
+export ROOTFORGE_DEV_ROOT="$SANDBOX/dev"
+run_script bash "$BOOT" --capabilities
+assert_eq "--capabilities succeeds" "$RC" "0"
+assert_eq "the capability record is valid JSON" "$(printf '%s' "$OUT" | jq -e . >/dev/null 2>&1 && echo ok)" "ok"
+assert_eq "arm64 is reported as arm64" "$(printf '%s' "$OUT" | jq -r .host_arch)" "arm64"
+assert_eq "an absent /dev/kvm is reported false, not assumed" "$(printf '%s' "$OUT" | jq -r .kvm)" "false"
+assert_eq "a present loop-control is reported true" "$(printf '%s' "$OUT" | jq -r .loop_devices)" "true"
+assert_eq "an absent /dev/net/tun is reported false" "$(printf '%s' "$OUT" | jq -r .tun)" "false"
+assert_eq "a present USB bus is reported true" "$(printf '%s' "$OUT" | jq -r .usb_bus)" "true"
+assert_eq "Google's x86-64 binaries are not native on arm64" "$(printf '%s' "$OUT" | jq -r .google_sdk_binaries_native)" "false"
+assert_eq "no emulator is available on arm64" "$(printf '%s' "$OUT" | jq -r .android_emulator_available)" "false"
+fake_uname x86_64
+run_script bash "$BOOT" --capabilities
+assert_eq "x86-64 has native Google binaries and an emulator" "$(printf '%s' "$OUT" | jq -r '[.google_sdk_binaries_native, .android_emulator_available] | all')" "true"
+unset ROOTFORGE_DEV_ROOT
+
+# The pinned archive digest: a download that does not match is refused and
+# nothing is installed.
+new_sandbox; install_bootstrap_layout; fake_curl; fake_uname x86_64
+printf '#!/bin/sh\nexit 0\n' > "$SANDBOX/fakebin/javac"; chmod +x "$SANDBOX/fakebin/javac"
+run_script bash "$BOOT"
+assert_eq "an archive that does not match the pinned digest is refused" "$RC" "1"
+assert_contains "the digest mismatch is reported" "$OUT" "SHA-256 mismatch"
+assert_eq "nothing is installed after a mismatch" "$([ -e "$ROOTFORGE_HOME/android-sdk/cmdline-tools/latest" ] && echo present || echo absent)" "absent"
+assert_eq "no staging directory is left behind" "$(ls -A "$ROOTFORGE_HOME" | grep -c '^\.cmdline-tools' || true)" "0"
+
+# rf_fetch_verified on its own.
+new_sandbox; fake_curl
+. "$LIB_DIR/rootforge/sh/common.sh"
+GOODSUM="$(printf 'payload' | sha256sum | cut -d' ' -f1)"
+RF_FAKE_CURL_BODY=payload rf_fetch_verified "http://x/y" "$SANDBOX/got" "$GOODSUM"
+assert_eq "a matching download is kept" "$(cat "$SANDBOX/got" 2>/dev/null)" "payload"
+rf_fetch_verified "http://x/y" "$SANDBOX/bad" "$GOODSUM" 2>/dev/null; RC=$?
+assert_eq "a mismatching download fails" "$RC" "1"
+assert_eq "a mismatching download leaves nothing at the destination" "$([ -e "$SANDBOX/bad" ] && echo present || echo absent)" "absent"
+assert_eq "a mismatching download leaves no partial file" "$(ls "$SANDBOX" | grep -c 'bad.part' || true)" "0"
+assert_contains "the pinned cmdline-tools digest is a 64-hex SHA-256" "$RF_CMDLINE_TOOLS_SHA256" "2d2d5085"
+assert_eq "both bootstrap scripts use the same pinned digest" "$(grep -c 'RF_CMDLINE_TOOLS_SHA256' "$BIN_DIR/00_bootstrap_distro.sh" || true)" "1"
+drop_sandbox
+
 section "rootforge module — the wrapped path end to end"
 
 new_sandbox
@@ -2482,86 +2590,228 @@ run_script bash "$BIN_DIR/install_adb_ime.sh" install --foo
 assert_eq "install rejects a flag in the serial position too" "$RC" "1"
 drop_sandbox
 
-section "00_bootstrap_distro.sh — where the workspace lands"
+section "00_bootstrap_distro.sh — who it provisions for"
+
+BOOTSTRAP_SCRIPT="$BIN_DIR/00_bootstrap_distro.sh"
 
 new_sandbox
-# Regression, and the worst one found so far: ROOTFORGE_HOME was
-# "${ROOTFORGE_HOME:-$HOME/rootforge}", and sudo sets HOME to /root. So the
-# workspace resolved to /root/rootforge, and the next use of it was
-#
-#   sudo -u "$TARGET_USER" mkdir -p "$ROOTFORGE_HOME"/{devices,modules,...}
-#
-# — the unprivileged user creating directories inside /root, which is mode
-# 0700. It fails, set -e ends the run, and by then apt upgrade, the whole
-# cross-toolchain, GNOME and the udev rules are already installed. The
-# bootstrap could not finish on an ordinary machine.
-#
-# --check resolves the paths and exits without touching anything, which is
-# what makes this testable at all.
-OUT="$(cd "$SANDBOX" && HOME=/root SUDO_USER=root ROOTFORGE_HOME= \
-  bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
-assert_eq "--check succeeds without root" "$RC" "0"
-assert_contains "the workspace follows the sudo user, not \$HOME" "$OUT" "target user:     root"
-
-# The real shape of the bug: HOME says /root while the invoking user is
-# someone else. The workspace must follow the user, not HOME. The getent stub
-# supplies that user, so the assertion does not depend on who runs the suite —
-# as root, the ambient user's home *is* /root and the test would prove nothing.
 mkdir -p "$SANDBOX/devhome"
 export RF_STUB_PASSWD="dev:x:1000:1000::$SANDBOX/devhome:/bin/bash"
-OUT="$(cd "$SANDBOX" && HOME=/root SUDO_USER=dev ROOTFORGE_HOME= \
-  bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
-assert_eq "--check resolves for a non-root sudo user" "$RC" "0"
-assert_contains "the workspace is under the invoking user's home" "$OUT" "ROOTFORGE_HOME:  $SANDBOX/devhome/rootforge"
-assert_not_contains "the workspace is never placed under /root by accident" "$OUT" "ROOTFORGE_HOME:  /root/rootforge"
+
+# The service case: rootforge-firstboot.service runs as root with no login
+# user. The old script fell back to root and provisioned /root/rootforge.
+OUT="$(cd "$SANDBOX" && env -i PATH="$PATH" HOME=/root ROOTFORGE_TEST_EUID=0 \
+  ROOTFORGE_INSTALL_USER_FILE="$SANDBOX/missing" RF_STUB_PASSWD="$RF_STUB_PASSWD" \
+  bash "$BOOTSTRAP_SCRIPT" --check 2>&1)"; RC=$?
+assert_eq "root with no identity at all is refused, not defaulted to root" "$RC" "1"
+assert_contains "the refusal says how to name the user" "$OUT" "--user <login name>"
+assert_not_contains "root's home is never chosen by default" "$OUT" "/root/rootforge"
+
+OUT="$(cd "$SANDBOX" && HOME=/root SUDO_USER=root ROOTFORGE_TEST_EUID=0 ROOTFORGE_HOME= \
+  ROOTFORGE_INSTALL_USER_FILE="$SANDBOX/missing" bash "$BOOTSTRAP_SCRIPT" --check 2>&1)"; RC=$?
+assert_eq "SUDO_USER=root does not count as an identity" "$RC" "1"
+
+# The recorded installer identity is the supported contract.
+printf 'dev\n' > "$SANDBOX/install-user"
+OUT="$(cd "$SANDBOX" && env -i PATH="$PATH" HOME=/root ROOTFORGE_TEST_EUID=0 \
+  ROOTFORGE_INSTALL_USER_FILE="$SANDBOX/install-user" RF_STUB_PASSWD="$RF_STUB_PASSWD" \
+  bash "$BOOTSTRAP_SCRIPT" --check 2>&1)"; RC=$?
+assert_eq "the installer-recorded user resolves" "$RC" "0"
+assert_contains "the recorded user is the target" "$OUT" "target user:     dev  (from $SANDBOX/install-user)"
+assert_contains "the workspace is under that user's home" "$OUT" "ROOTFORGE_HOME:  $SANDBOX/devhome/rootforge"
+assert_not_contains "the workspace is never under /root" "$OUT" "ROOTFORGE_HOME:  /root"
+
+printf 'dev; touch %s/pwned\n' "$SANDBOX" > "$SANDBOX/install-user"
+OUT="$(cd "$SANDBOX" && env -i PATH="$PATH" HOME=/root ROOTFORGE_TEST_EUID=0 \
+  ROOTFORGE_INSTALL_USER_FILE="$SANDBOX/install-user" RF_STUB_PASSWD="$RF_STUB_PASSWD" \
+  bash "$BOOTSTRAP_SCRIPT" --check 2>&1)"; RC=$?
+assert_eq "hostile recorded content is refused" "$RC" "1"
+assert_contains "the refusal says it is not a valid login name" "$OUT" "not a valid login name"
+assert_eq "hostile recorded content executes nothing" "$([ -e "$SANDBOX/pwned" ] && echo ran || echo clean)" "clean"
+
+# Precedence: --user beats SUDO_USER beats the recorded file.
+printf 'someoneelse\n' > "$SANDBOX/install-user"
+export RF_STUB_PASSWD="dev:x:1000:1000::$SANDBOX/devhome:/bin/bash
+other:x:1001:1001::$SANDBOX/devhome:/bin/bash"
+OUT="$(cd "$SANDBOX" && HOME=/root SUDO_USER=other ROOTFORGE_TEST_EUID=0 ROOTFORGE_HOME= \
+  ROOTFORGE_INSTALL_USER_FILE="$SANDBOX/install-user" bash "$BOOTSTRAP_SCRIPT" --check 2>&1)"; RC=$?
+assert_contains "SUDO_USER beats the recorded file" "$OUT" "target user:     other  (from \$SUDO_USER)"
+OUT="$(cd "$SANDBOX" && HOME=/root SUDO_USER=other ROOTFORGE_TEST_EUID=0 ROOTFORGE_HOME= \
+  ROOTFORGE_INSTALL_USER_FILE="$SANDBOX/install-user" bash "$BOOTSTRAP_SCRIPT" --user dev --check 2>&1)"; RC=$?
+assert_contains "--user beats SUDO_USER" "$OUT" "target user:     dev  (from --user)"
+assert_contains "the workspace follows the named user, not HOME" "$OUT" "ROOTFORGE_HOME:  $SANDBOX/devhome/rootforge"
 assert_contains "the SDK follows the workspace" "$OUT" "SDK_ROOT:        $SANDBOX/devhome/rootforge/android-sdk"
 
-# A user getent does not know at all is a hard stop, not a guess.
-OUT="$(cd "$SANDBOX" && HOME=/root SUDO_USER=ghost ROOTFORGE_HOME= \
-  bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
-assert_eq "an unknown user is refused" "$RC" "1"
-assert_contains "the refusal names getent" "$OUT" "getent"
+# The remaining cases use the real account database (root, nobody, the invoker).
 unset RF_STUB_PASSWD
 
-# `${SUDO_USER:-$USER}` was itself an unbound-variable crash under set -u
-# wherever USER is not exported — cron, `sh -c`, some CI runners.
-OUT="$(cd "$SANDBOX" && env -u USER -u SUDO_USER -u ROOTFORGE_HOME HOME=/root \
-  bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
-assert_eq "an unexported USER is not a crash" "$RC" "0"
-assert_not_contains "an unexported USER is not a crash (message)" "$OUT" "unbound variable"
+# A non-root invoker with no other identity provisions for themselves.
+OUT="$(cd "$SANDBOX" && env -u SUDO_USER ROOTFORGE_TEST_EUID=1000 ROOTFORGE_HOME= \
+  ROOTFORGE_INSTALL_USER_FILE="$SANDBOX/missing" bash "$BOOTSTRAP_SCRIPT" --check 2>&1)"; RC=$?
+assert_contains "a non-root invoker provisions for themselves" "$OUT" "(from the invoking user)"
 
-# rootforge-firstboot.service runs this script, and a systemd unit with no
-# User= is documented to get no $HOME. The old first line was
-# `${ROOTFORGE_HOME:-$HOME/rootforge}` under set -u, so an empty environment
-# ended the script at line 18 with "HOME: unbound variable" — and with
-# Type=oneshot a failed ExecStart skips ExecStartPost, so the completion
-# sentinel was never written and first boot failed the same way every time.
-OUT="$(cd "$SANDBOX" && env -i /bin/bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
-assert_eq "an empty environment is survivable" "$RC" "0"
-assert_not_contains "an empty environment is not an unbound-variable crash" "$OUT" "unbound variable"
-assert_contains "an empty environment still resolves a workspace" "$OUT" "ROOTFORGE_HOME:"
+# An explicit --user root is the operator's decision and is honored.
+OUT="$(cd "$SANDBOX" && ROOTFORGE_TEST_EUID=0 ROOTFORGE_HOME= bash "$BOOTSTRAP_SCRIPT" --user root --check 2>&1)"; RC=$?
+assert_eq "an explicit --user root is honored" "$RC" "0"
+assert_contains "an explicit --user root is the target" "$OUT" "target user:     root  (from --user)"
+
+# A user getent does not know at all is a hard stop, not a guess.
+OUT="$(cd "$SANDBOX" && ROOTFORGE_TEST_EUID=0 ROOTFORGE_HOME= bash "$BOOTSTRAP_SCRIPT" --user ghost --check 2>&1)"; RC=$?
+assert_eq "an unknown user is refused" "$RC" "1"
+assert_contains "the refusal names getent" "$OUT" "getent"
 
 # A system account's home is /nonexistent; a 15 GB SDK must not be aimed there.
-# ROOTFORGE_HOME is cleared because the sandbox exports it, and an explicit
-# value is exactly what suppresses this guard.
-OUT="$(cd "$SANDBOX" && SUDO_USER=nobody ROOTFORGE_HOME= bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
+OUT="$(cd "$SANDBOX" && ROOTFORGE_TEST_EUID=0 ROOTFORGE_HOME= bash "$BOOTSTRAP_SCRIPT" --user nobody --check 2>&1)"; RC=$?
 assert_eq "a system account is refused" "$RC" "1"
 assert_contains "the refusal names the missing home" "$OUT" "does not exist"
-
-OUT="$(cd "$SANDBOX" && SUDO_USER=nobody ROOTFORGE_HOME=/srv/rf \
-  bash "$BIN_DIR/00_bootstrap_distro.sh" --check 2>&1)"; RC=$?
+OUT="$(cd "$SANDBOX" && ROOTFORGE_TEST_EUID=0 ROOTFORGE_HOME=/srv/rf bash "$BOOTSTRAP_SCRIPT" --user nobody --check 2>&1)"; RC=$?
 assert_eq "an explicit ROOTFORGE_HOME overrides the refusal" "$RC" "0"
 assert_contains "an explicit ROOTFORGE_HOME is honored" "$OUT" "ROOTFORGE_HOME:  /srv/rf"
 
-# Regression: `[[ "${1:-}" == "--headless" ]] && HEADLESS=1` ignored anything
-# else, so a typo installed the full desktop on a build server with no sign
-# the flag had been dropped.
-OUT="$(cd "$SANDBOX" && SUDO_USER=root bash "$BIN_DIR/00_bootstrap_distro.sh" --headles --check 2>&1)"; RC=$?
+# A unexported USER is not a crash.
+OUT="$(cd "$SANDBOX" && env -u USER -u SUDO_USER -u ROOTFORGE_HOME ROOTFORGE_TEST_EUID=1000 HOME=/root \
+  bash "$BOOTSTRAP_SCRIPT" --check 2>&1)"; RC=$?
+assert_not_contains "an unexported USER is not an unbound-variable crash" "$OUT" "unbound variable"
+
+# Regression: `--headless` typos used to be ignored, installing the full desktop.
+export RF_STUB_PASSWD="dev:x:1000:1000::$SANDBOX/devhome:/bin/bash"
+OUT="$(cd "$SANDBOX" && ROOTFORGE_TEST_EUID=0 bash "$BOOTSTRAP_SCRIPT" --user dev --headles --check 2>&1)"; RC=$?
 assert_eq "a typo'd --headless is rejected" "$RC" "1"
 assert_contains "the typo'd flag is named" "$OUT" "Unknown option: --headles"
-
-OUT="$(cd "$SANDBOX" && SUDO_USER=root bash "$BIN_DIR/00_bootstrap_distro.sh" --headless --check 2>&1)"; RC=$?
+OUT="$(cd "$SANDBOX" && ROOTFORGE_TEST_EUID=0 ROOTFORGE_HOME= bash "$BOOTSTRAP_SCRIPT" --user dev --headless --check 2>&1)"
 assert_contains "--headless is actually reflected" "$OUT" "desktop install: skipped"
+OUT="$(cd "$SANDBOX" && bash "$BOOTSTRAP_SCRIPT" --only both 2>&1)"; RC=$?
+assert_eq "an unknown --only stage is rejected" "$RC" "1"
+OUT="$(cd "$SANDBOX" && ROOTFORGE_TEST_EUID=1000 ROOTFORGE_INSTALL_USER_FILE="$SANDBOX/missing" bash "$BOOTSTRAP_SCRIPT" --user dev --only system 2>&1)"; RC=$?
+assert_eq "the system stages refuse to run without root" "$RC" "1"
+assert_contains "that refusal points at --only user" "$OUT" "--only user"
+unset RF_STUB_PASSWD
+drop_sandbox
+
+section "00_bootstrap_distro.sh — resumable, user-owned stages"
+
+# System stages, with every system command and path redirected.
+sys_env() {
+  mkdir -p "$SANDBOX/fakebin" "$SANDBOX/devhome"
+  export PATH="$SANDBOX/fakebin:$PATH"
+  export RF_STUB_PASSWD="dev:x:1000:1000::$SANDBOX/devhome:/bin/bash"
+  export ROOTFORGE_TEST_EUID=0 ROOTFORGE_STATE_DIR="$SANDBOX/state" ROOTFORGE_UDEV_RULES="$SANDBOX/udev/51-android.rules"
+  printf '#!/bin/sh\necho "apt-get $*" >> "%s"\n[ -n "$RF_STUB_APT_FAIL" ] && [ "$1" = install ] && exit 100\nexit 0\n' "$RF_STUB_LOG" > "$SANDBOX/fakebin/apt-get"
+  printf '#!/bin/sh\necho "usermod $*" >> "%s"\n' "$RF_STUB_LOG" > "$SANDBOX/fakebin/usermod"
+  printf '#!/bin/sh\necho "udevadm $*" >> "%s"\n' "$RF_STUB_LOG" > "$SANDBOX/fakebin/udevadm"
+  printf '#!/bin/sh\nif [ "$1" = group ]; then [ "$2" = "$RF_STUB_NO_GROUP" ] && exit 2; echo "$2:x:1:"; exit 0; fi\nif [ "$1" = passwd ]; then printf "%%s\\n" "$RF_STUB_PASSWD" | grep "^$2:" || exit 2; exit 0; fi\nexec /usr/bin/getent "$@"\n' > "$SANDBOX/fakebin/getent"
+  printf '#!/bin/sh\nexit 0\n' > "$SANDBOX/fakebin/dpkg"
+  chmod +x "$SANDBOX"/fakebin/*
+  export ROOTFORGE_APT_GET="$SANDBOX/fakebin/apt-get"
+}
+unset RF_STUB_APT_FAIL RF_STUB_NO_GROUP
+
+new_sandbox; sys_env
+run_script bash "$BOOTSTRAP_SCRIPT" --user dev --only system --headless
+assert_eq "the system stages complete" "$RC" "0"
+assert_contains "packages are installed" "$(cat "$RF_STUB_LOG")" "apt-get install"
+assert_not_contains "no incidental whole-system upgrade" "$(cat "$RF_STUB_LOG")" "upgrade"
+assert_contains "the udev rules are written" "$(cat "$SANDBOX/udev/51-android.rules")" 'idVendor}=="18d1"'
+assert_contains "the user joins the device groups" "$(cat "$RF_STUB_LOG")" "usermod -aG kvm,plugdev,docker dev"
+assert_eq "every system stage leaves a marker" "$(ls "$SANDBOX/state/provision" | tr '\n' ' ')" "groups.done packages.done udev.done "
+APT_CALLS_BEFORE="$(grep -c '^apt-get' "$RF_STUB_LOG")"
+run_script bash "$BOOTSTRAP_SCRIPT" --user dev --only system --headless
+assert_eq "a completed run does nothing the second time" "$(grep -c '^apt-get' "$RF_STUB_LOG")" "$APT_CALLS_BEFORE"
+assert_contains "completed stages are reported as skipped" "$OUT" "stage packages: already complete"
+
+# A failed stage leaves no marker; the retry resumes there and skips the rest.
+new_sandbox; sys_env
+export RF_STUB_APT_FAIL=1
+run_script bash "$BOOTSTRAP_SCRIPT" --user dev --only system --headless
+assert_eq "a failing package stage fails the run" "$RC" "100"
+assert_eq "the failed stage left no marker" "$([ -e "$SANDBOX/state/provision/packages.done" ] && echo marked || echo unmarked)" "unmarked"
+assert_eq "later stages did not run after the failure" "$([ -e "$SANDBOX/state/provision/udev.done" ] && echo ran || echo not-run)" "not-run"
+unset RF_STUB_APT_FAIL
+run_script bash "$BOOTSTRAP_SCRIPT" --user dev --only system --headless
+assert_eq "the retry completes" "$RC" "0"
+assert_eq "the retry finished every stage" "$(ls "$SANDBOX/state/provision" | wc -l | tr -d ' ')" "3"
+
+# Only groups that exist are joined; a missing one is said, not silently dropped.
+new_sandbox; sys_env
+export RF_STUB_NO_GROUP=docker
+run_script bash "$BOOTSTRAP_SCRIPT" --user dev --only system --headless
+assert_contains "a missing group is skipped by name" "$OUT" "group docker does not exist"
+assert_contains "the groups that exist are still joined" "$(cat "$RF_STUB_LOG")" "usermod -aG kvm,plugdev dev"
+unset RF_STUB_NO_GROUP
+
+# The desktop is not reinstalled when it is already there (dpkg -s succeeds).
+new_sandbox; sys_env
+run_script bash "$BOOTSTRAP_SCRIPT" --user dev --only system
+assert_contains "an existing desktop is not reinstalled" "$OUT" "GNOME already installed"
+assert_not_contains "no desktop packages on an installed desktop" "$(cat "$RF_STUB_LOG")" "gdm3"
+
+# udev rules are rewritten only when they differ.
+new_sandbox; sys_env
+mkdir -p "$SANDBOX/udev"
+run_script bash "$BOOTSTRAP_SCRIPT" --user dev --only system --headless
+touch -d '2001-01-01' "$SANDBOX/udev/51-android.rules"
+rm "$SANDBOX/state/provision/udev.done"
+run_script bash "$BOOTSTRAP_SCRIPT" --user dev --only system --headless
+assert_eq "identical udev rules are not rewritten" "$(date -r "$SANDBOX/udev/51-android.rules" +%Y)" "2001"
+
+# User stages run as the user and resume. The SDK download is pinned, so a
+# wrong archive fails the sdk stage; the workspace stage stays done.
+new_sandbox; sys_env
+fake_uname x86_64; fake_curl
+printf '#!/bin/sh\nexit 0\n' > "$SANDBOX/fakebin/javac"; chmod +x "$SANDBOX/fakebin/javac"
+ME="$(id -un)"
+export RF_STUB_PASSWD="$ME:x:$(id -u):$(id -g)::$SANDBOX/home:/bin/bash"
+unset ROOTFORGE_HOME
+run_script bash "$BOOTSTRAP_SCRIPT" --user "$ME" --only user
+assert_eq "a wrong SDK archive fails the user stages" "$RC" "1"
+assert_contains "the failure is the pinned-digest mismatch" "$OUT" "SHA-256 mismatch"
+assert_eq "the workspace stage still completed" "$([ -f "$SANDBOX/home/rootforge/.provision/workspace.done" ] && echo done || echo missing)" "done"
+assert_eq "the sdk stage left no marker" "$([ -e "$SANDBOX/home/rootforge/.provision/sdk.done" ] && echo marked || echo unmarked)" "unmarked"
+assert_eq "no staging directory is left in the workspace" "$(ls -A "$SANDBOX/home/rootforge" | grep -c '^\.sdk-stage' || true)" "0"
+assert_eq "no half-installed SDK is left" "$([ -e "$SANDBOX/home/rootforge/android-sdk/cmdline-tools/latest" ] && echo present || echo absent)" "absent"
+assert_eq "the keys directory is private" "$(stat -c %a "$SANDBOX/home/rootforge/keys")" "700"
+run_script bash "$BOOTSTRAP_SCRIPT" --user "$ME" --only user
+assert_contains "the retry skips the finished workspace stage" "$OUT" "stage workspace: already complete"
+assert_not_contains "the shared profile is never rewritten by provisioning" "$(cat "$BOOTSTRAP_SCRIPT")" "cat > \"\$PROFILE_D\""
+drop_sandbox
+
+section "installer cleanup — live user, sudo rule, installed identity"
+
+CAL="$REPO_ROOT/config/includes.chroot/etc/calamares/modules"
+LIVEUSER="$(sed -n 's/^LIVE_USERNAME="\(.*\)"/\1/p' "$REPO_ROOT/config/includes.chroot/etc/live/config.conf")"
+assert_eq "removeuser targets exactly the live account" "$(sed -n 's/^username: //p' "$CAL/removeuser.conf")" "$LIVEUSER"
+assert_contains "the live username cannot be chosen for the installed user" "$(cat "$CAL/users.conf")" "forbidden_names: [ root, $LIVEUSER ]"
+SUDOERS="$REPO_ROOT/config/includes.chroot/etc/sudoers.d/rootforge-live"
+assert_contains "the live sudo rule is for the live account" "$(cat "$SUDOERS")" "$LIVEUSER ALL=(ALL) NOPASSWD: ALL"
+assert_contains "the install removes that sudoers file explicitly" "$(cat "$CAL/shellprocess.conf")" "rm -f /etc/sudoers.d/rootforge-live"
+assert_contains "the install records the installed user for first boot" "$(cat "$CAL/shellprocess.conf")" '${USER}'
+assert_contains "the identity is written where the provisioning script reads it" "$(cat "$CAL/shellprocess.conf")" "/var/lib/rootforge/install-user"
+assert_contains "the script reads that same file" "$(cat "$BOOTSTRAP_SCRIPT")" 'install-user'
+# Execute the installer's recorded commands against a sandbox, then let the
+# provisioning script resolve the identity they wrote: the contract between
+# the installer and first boot, end to end. Only paths are redirected; the
+# commands themselves run as shipped.
+mkdir -p "$SANDBOX/etc/sudoers.d" "$SANDBOX/devhome"
+printf 'rootforge ALL=(ALL) NOPASSWD: ALL\n' > "$SANDBOX/etc/sudoers.d/rootforge-live"
+python3 -I - "$CAL/shellprocess.conf" "$SANDBOX" > "$SANDBOX/commands.txt" <<'PY'
+import sys, yaml
+conf = yaml.safe_load(open(sys.argv[1]))
+box = sys.argv[2]
+for cmd in conf["command"]:
+    if cmd.startswith(("touch /etc", "systemctl")):
+        continue
+    cmd = cmd.replace("${USER}", "dev").replace("/etc/sudoers.d", box + "/etc/sudoers.d").replace("/var/lib/rootforge", box + "/state")
+    print(cmd.replace("\n", " "))
+PY
+while IFS= read -r cmd; do sh -c "$cmd" || fail "installer command failed: $cmd"; done < "$SANDBOX/commands.txt"
+assert_eq "the installer removes the live sudo rule" "$([ -e "$SANDBOX/etc/sudoers.d/rootforge-live" ] && echo present || echo removed)" "removed"
+assert_eq "the installer records the chosen user" "$(cat "$SANDBOX/state/install-user")" "dev"
+export RF_STUB_PASSWD="dev:x:1000:1000::$SANDBOX/devhome:/bin/bash"
+OUT="$(cd "$SANDBOX" && env -i PATH="$PATH" ROOTFORGE_TEST_EUID=0 ROOTFORGE_INSTALL_USER_FILE="$SANDBOX/state/install-user" \
+  RF_STUB_PASSWD="$RF_STUB_PASSWD" bash "$BOOTSTRAP_SCRIPT" --check 2>&1)"; RC=$?
+assert_eq "first boot resolves exactly the user the installer recorded" "$RC" "0"
+assert_contains "first boot provisions for the installed user" "$OUT" "target user:     dev"
+unset RF_STUB_PASSWD
 drop_sandbox
 
 section "esp32_toolkit.sh"
