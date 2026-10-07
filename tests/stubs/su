@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Test stub for Android's `su -c "<string>"`. There is no root here and no
+# privilege is acquired: the command string is run as the current test user,
+# which is enough for the launcher's unpack/staging logic (mkdir, tar, mv,
+# printf). `su -c 'id -u'` answers 0 so the launcher's root check passes.
+[ -n "${RF_STUB_LOG:-}" ] && printf 'su %s\n' "$*" >> "$RF_STUB_LOG"
+[ "${1:-}" = "-c" ] || { echo "su stub: only 'su -c <cmd>' is supported" >&2; exit 2; }
+case "${2:-}" in
+  "id -u") echo 0 ;;
+  *) exec bash -c "${2:-}" ;;
+esac

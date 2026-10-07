@@ -67,6 +67,7 @@ LOG_DIR="$ROOTFORGE_HOME/logs"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOG_DIR"
 SUMMARY="$LOG_DIR/fleet_${OP_NAME}_${STAMP}_summary.md"
+rf_private_file "$SUMMARY"
 log() { echo "[fleet] $*"; }
 
 log "Enumerating connected devices (adb + fastboot)"
@@ -112,6 +113,7 @@ echo "|---|---|---|" >> "$SUMMARY"
 FAILED_DEVICES=()
 for serial in "${ALL_SERIALS[@]}"; do
   DEV_LOG="$LOG_DIR/fleet_${OP_NAME}_${STAMP}_${serial}.log"
+  rf_private_file "$DEV_LOG"
   log "=== $serial ==="
   RESULT="FAIL"
 

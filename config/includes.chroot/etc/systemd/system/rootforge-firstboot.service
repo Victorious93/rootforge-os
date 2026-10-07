@@ -10,29 +10,30 @@ Wants=network-online.target
 # Only run on an installed system, not the live session.
 ConditionVirtualization=!container
 ConditionPathExists=/etc/rootforge-installed
+# Keep retrying an offline first boot rather than giving up after a few attempts.
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-# [Likely] A service with no User= gets no $HOME: systemd.exec documents
-# $USER/$LOGNAME/$HOME/$SHELL as set "for the units that have User= set".
-# Not verified against a running systemd in the environment this was written
-# in. It mattered because 00_bootstrap_distro.sh used to open with
-# `${ROOTFORGE_HOME:-$HOME/rootforge}` under `set -u` — verified: with an
-# empty environment that script exited 1 at line 18 with
-# "HOME: unbound variable", before doing anything. With Type=oneshot an
-# ExecStart failure also skips ExecStartPost, so the sentinel was never
-# written and first-boot provisioning would have retried and failed on
-# every subsequent boot.
+# Who this provisions for is NOT decided here and is never guessed: the
+# service runs as root with no login user, so 00_bootstrap_distro.sh reads the
+# account the installer recorded in /var/lib/rootforge/install-user (written by
+# Calamares' shellprocess module from the user page). With no such record it
+# fails with a message naming --user instead of provisioning root's home.
 #
-# The script no longer reads $HOME at all — it resolves the target user's
-# home through getent — so this is belt and braces. It is here because the
-# cost is one line and the failure mode is a provisioning step that never
-# runs on an installed system, which nobody would notice until the SDK was
-# missing.
+# The script is resumable: each stage writes its own completion marker, so a
+# first boot without network gets as far as it can and the retry below
+# continues from the stage that failed. The "done" flag below is written only
+# when the whole script exits 0.
+#
+# [Likely] Restart= is accepted for Type=oneshot by the systemd in bookworm
+# (252; support arrived in 244). Not exercised under a real systemd here.
 Environment=HOME=/root
 ExecStart=/usr/local/bin/00_bootstrap_distro.sh
 ExecStartPost=/bin/sh -c 'mkdir -p /var/lib/rootforge && touch /var/lib/rootforge/firstboot.done'
+Restart=on-failure
+RestartSec=300
 StandardOutput=journal+console
 StandardError=journal+console
 TimeoutStartSec=1800

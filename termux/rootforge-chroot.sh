@@ -28,9 +28,18 @@
 #       try it and see rather than assuming either way.
 #
 # Usage, from Termux (this script runs OUTSIDE the container):
-#   ./rootforge-chroot.sh install <rootfs.tar.xz>   unpack a built rootfs
+#   ./rootforge-chroot.sh install <rootfs.tar.xz> --sha256 <hex>
+#   ./rootforge-chroot.sh install <rootfs.tar.xz> --sha256-file <file.sha256>
+#                                                   verify, then unpack a built rootfs
 #   ./rootforge-chroot.sh login                     enter it
 #   ./rootforge-chroot.sh umount                    tear the mounts down
+#
+# `install` unpacks as root, so it refuses an archive whose SHA-256 it was not
+# given and cannot match. The digest comes from the release's SHA256SUMS (or
+# the .sha256 beside a locally built tarball). The archive is checked for
+# absolute or ".." member names and for members that pass through an earlier
+# symlink, unpacked into a staging directory, and only moved into place — with
+# a completion marker that `login` requires — once it has unpacked in full.
 #
 # Requires: a rooted device with a working `su`, and tar/xz in Termux.
 
@@ -80,27 +89,112 @@ require_root() {
   fi
 }
 
+INSTALL_MARKER="etc/rootforge/install-complete"
+
+# Prints the offending member names, one per line, nothing when the archive is
+# safe to unpack as root. Two failure classes:
+#   - an absolute name or a ".." component, which would land outside the
+#     target directory;
+#   - a member whose path passes *through* a symlink the archive itself
+#     created earlier, which could redirect a later write anywhere.
+# Member types and names are listed separately and paired by line; a name
+# containing a newline would desynchronise them, so a mismatch is refused.
+scan_archive() {
+  local tarball="$1" types names
+  types="$(mktemp)"; names="$(mktemp)"
+  if ! tar -tvJf "$tarball" 2>/dev/null | cut -c1 > "$types" || ! tar -tJf "$tarball" > "$names" 2>/dev/null; then
+    rm -f "$types" "$names"
+    echo "(the archive could not be listed — is it a valid .tar.xz?)"
+    return 0
+  fi
+  if [[ "$(wc -l < "$types")" != "$(wc -l < "$names")" ]]; then
+    rm -f "$types" "$names"
+    echo "(member names contain newlines; refusing to interpret the listing)"
+    return 0
+  fi
+  paste -d '\t' "$types" "$names" | awk -F '\t' '
+    {
+      type = $1; name = $2
+      sub(/\/$/, "", name)
+      if (name ~ /^\// || name ~ /(^|\/)\.\.(\/|$)/) { print name; next }
+      n = split(name, parts, "/"); path = ""
+      for (i = 1; i < n; i++) {
+        path = (i == 1) ? parts[i] : path "/" parts[i]
+        if (path in links) { print name; next }
+      }
+      if (type == "l") links[name] = 1
+    }'
+  rm -f "$types" "$names"
+}
+
 cmd_install() {
-  local tarball="${1:-}"
-  [[ -n "$tarball" ]] || die "Usage: rootforge-chroot.sh install <rootfs.tar.xz>"
+  local tarball="" expected=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --sha256)
+        [[ $# -ge 2 ]] || die "--sha256 needs a value"
+        expected="$2"; shift 2 ;;
+      --sha256-file)
+        [[ $# -ge 2 ]] || die "--sha256-file needs a value"
+        [[ -f "$2" ]] || die "Checksum file not found: $2"
+        expected="$(awk 'NF { print $1; exit }' "$2")"; shift 2 ;;
+      -*) die "Unknown option: $1" ;;
+      *)
+        [[ -z "$tarball" ]] || die "Unexpected argument: $1"
+        tarball="$1"; shift ;;
+    esac
+  done
+  [[ -n "$tarball" ]] || die "Usage: rootforge-chroot.sh install <rootfs.tar.xz> --sha256 <hex> | --sha256-file <file.sha256>"
   [[ -f "$tarball" ]] || die "Tarball not found: $tarball"
+  [[ -n "$expected" ]] || die "No checksum given — refusing to unpack an unverified archive as root.
+       Pass --sha256 <hex> or --sha256-file <file.sha256> (from the release's SHA256SUMS,
+       or the .sha256 file beside a tarball you built yourself)."
+  [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] || die "'$expected' is not a SHA-256 hex digest (64 hex characters)."
+
+  local actual
+  actual="$(sha256sum "$tarball" | awk '{print $1}')"
+  if [[ "${actual,,}" != "${expected,,}" ]]; then
+    die "Checksum mismatch for $tarball
+       expected: ${expected,,}
+       actual:   ${actual,,}
+       Nothing was unpacked. Re-download the archive."
+  fi
+  log "Checksum verified: $actual"
+
+  local unsafe=()
+  mapfile -t unsafe < <(scan_archive "$tarball")
+  if [[ ${#unsafe[@]} -gt 0 ]]; then
+    die "The archive contains members that are not safe to unpack as root:
+$(printf '       %s\n' "${unsafe[@]}")
+       Nothing was unpacked."
+  fi
+
   require_root
 
   # A partly-unpacked rootfs from an interrupted run is worse than none: it
-  # looks installed and fails deep inside. Make the caller be explicit.
-  if as_root "[ -d $(rf_q "$ROOTFS_DIR") ]"; then
+  # looks installed and fails deep inside. Unpack beside the target and move
+  # it into place only when complete.
+  if as_root "[ -e $(rf_q "$ROOTFS_DIR") ]"; then
     die "$ROOTFS_DIR already exists. Remove it first if you mean to reinstall:
        su -c 'rm -rf $ROOTFS_DIR'"
   fi
+  local staging="${ROOTFS_DIR}.partial"
+  # Only this launcher's own leftover staging directory is removed here.
+  as_root "rm -rf $(rf_q "$staging")"
+  as_root "mkdir -p $(rf_q "$staging")"
 
-  log "Unpacking $tarball to $ROOTFS_DIR (this takes a while)"
-  as_root "mkdir -p $(rf_q "$ROOTFS_DIR")"
-  as_root "tar -xJf $(rf_q "$tarball") -C $(rf_q "$ROOTFS_DIR")"
+  log "Unpacking $tarball (this takes a while)"
+  if ! as_root "tar -xJf $(rf_q "$tarball") -C $(rf_q "$staging")"; then
+    as_root "rm -rf $(rf_q "$staging")"
+    die "Unpacking failed. The partial copy was removed; nothing is installed."
+  fi
 
   # Without a resolver the container has no DNS at all; Android's own
   # resolv.conf is not in a place the chroot can see.
-  as_root "printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > $(rf_q "$ROOTFS_DIR/etc/resolv.conf")"
-  as_root "printf 'rootforge-chroot\n' > $(rf_q "$ROOTFS_DIR/etc/hostname")"
+  as_root "printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > $(rf_q "$staging/etc/resolv.conf")"
+  as_root "printf 'rootforge-chroot\n' > $(rf_q "$staging/etc/hostname")"
+  as_root "mkdir -p $(rf_q "$staging/etc/rootforge") && printf '%s\n' $(rf_q "$actual") > $(rf_q "$staging/$INSTALL_MARKER")"
+  as_root "mv $(rf_q "$staging") $(rf_q "$ROOTFS_DIR")" || die "Could not move the unpacked rootfs into place; it remains at $staging"
 
   log "Installed. Enter it with: $0 login"
 }
@@ -146,7 +240,9 @@ cmd_umount() {
 
 cmd_login() {
   require_root
-  as_root "[ -d $(rf_q "$ROOTFS_DIR") ]" || die "No rootfs at $ROOTFS_DIR — run: $0 install <rootfs.tar.xz>"
+  as_root "[ -d $(rf_q "$ROOTFS_DIR") ]" || die "No rootfs at $ROOTFS_DIR — run: $0 install <rootfs.tar.xz> --sha256 <hex>"
+  as_root "[ -f $(rf_q "$ROOTFS_DIR/$INSTALL_MARKER") ]" || die "$ROOTFS_DIR has no completed-install marker, so it may be a partial or unverified unpack.
+       Reinstall it with: $0 install <rootfs.tar.xz> --sha256 <hex>"
 
   mount_all
 

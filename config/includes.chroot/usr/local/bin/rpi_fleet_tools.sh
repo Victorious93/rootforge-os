@@ -11,6 +11,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 CMD="${1:?Usage: rpi_fleet_tools.sh scan | push-key <host> | run \"<command>\" [host...]}"
 shift || true
 
@@ -19,6 +22,7 @@ LOG_DIR="$ROOTFORGE_HOME/logs"
 FLEET_FILE="$ROOTFORGE_HOME/devices/pi-fleet.txt"
 mkdir -p "$LOG_DIR" "$(dirname "$FLEET_FILE")"
 LOG_FILE="$LOG_DIR/pi_fleet_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[pi-fleet] $*" | tee -a "$LOG_FILE"; }
 
 case "$CMD" in

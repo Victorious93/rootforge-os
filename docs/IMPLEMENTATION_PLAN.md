@@ -1,321 +1,110 @@
-# RootForge OS — Implementation Plan
+# RootForge OS — Implementation plan
 
-Companion to `docs/ARCHITECTURE_AUDIT.md`. That document explains *what exists
-today and why it needs to change*; this document is the ordered, prioritized
-task list for actually changing it.
+Status as of 2026-10-07. Supersedes the P0–P3 plan (archived at
+`docs/archive/IMPLEMENTATION_PLAN_P0-P3_2026-10-07.md`, whose item numbers are still cited
+by some code comments). Stages are ordered by dependency: a later stage assumes the earlier
+one's contracts hold.
 
-Priority key:
+Status words: **Done** (implemented and covered by the hermetic test suite) ·
+**Awaiting integration validation** (implemented; needs a real ISO build, VM, phone or
+device to count as verified) · **Deferred** · **Blocked** (cannot proceed without something
+named) · **Not started**.
 
-- **P0 — Blocking.** Safety gaps, or foundational pieces everything else
-  depends on. Nothing else in this plan should proceed past P0 until these
-  are done.
-- **P1 — High priority.** The core of the "unified platform" ask: device
-  abstraction, config, logging, backup integrity, artifact integrity.
-- **P2 — Important.** Wraps existing subsystems (modules, boot images, OTA,
-  AVD) behind the unified CLI without changing their underlying behavior.
-- **P3 — Future.** New subsystems (kernel tooling, dynamic partitions), GUI,
-  installer/CI work, and polish. Explicitly out of scope until P0–P2 land.
+## Completion ledger
 
-Per the governing directive: implement in phases, keep each phase's diff
-reviewable, run `git diff`/`git status` and any relevant tests after each
-phase, and do not begin a later phase while an earlier one is unstable.
-Nothing in this plan authorizes deleting or disabling existing working
-scripts — P2 items wrap them, they don't replace them until the wrapped path
-is proven equivalent.
+| Area | Status | Evidence / what is missing |
+|---|---|---|
+| Device probing, write gate, `device check` | Done · awaiting device validation | `tests/test_device.py`, flash/restore stub tests. No real bootloader exercised |
+| Flash semantics (explicit slot, boot verify, exit codes) | Done · awaiting device validation | Stub tests only |
+| Backup manifest, verify, import-legacy, restore contract | Done · awaiting device validation | `tests/test_backup_verify.py`, stub tests |
+| Config layering and validation | Done | `tests/test_config.py`. Only schema key: `backup.partitions` |
+| Structured logging with redaction (CLI); one execution ID shared with wrapped scripts; private script logs | Done | `tests/test_log.py`, `run-tests.sh` "script logs" section. `flash`/`backup`/`module`/`avd` have no CLI-side event yet; script log contents are not redacted |
+| Doctor severity model | Done | `tests/test_doctor.py` |
+| OTA / boot / module / avd dispatch repairs | Done | `tests/test_*_cli.py` |
+| Provisioning (`00_bootstrap_distro.sh`) and Calamares cleanup | Awaiting integration validation | Commands executed in a sandbox; real Calamares/systemd/first boot not run |
+| Termux install/launcher/generator/bootstrap | Awaiting integration validation | Tests with stubs; no phone, no `proot-distro` run, no published release |
+| Makefile / `auto/build` failure handling | Done (with stubbed `lb`) | Real `lb build` not run: **blocked** — no loop device in the authoring environment |
+| `release.yml` gating, metadata generation, asset verifier | Awaiting integration validation | Verifier and generator tested locally; workflow not run on GitHub |
+| Build-time download pinning | Partly done | Pins restored for 0040/0050/0060/0062/0085/0095, NodeSource key, Claude Code, `repo`; checked statically only. **Ollama installer (0020) unpinned** — deferred: release digests unreachable from the authoring environment (GitHub returned 403 for repos outside the session scope) |
+| UEFI / Secure Boot for the live ISO | **Deferred** (documented unsupported) | `auto/config` uses isolinux; a GRUB image path would need VM testing under OVMF |
+| ISO boots; installer installs; first boot completes | **Blocked** | Needs a host with loop devices and a VM |
+| Real-device flashing/backup/restore | **Blocked** | Needs hardware and an owner's consent to flash it |
+| Windows-hosted, Android APK, GUI, remote administration | **Not started** (Stage 6) | No empty projects are created on purpose |
 
----
+## Stage 1 — Inventory and baseline  *(Done)*
 
-## P0 — Blocking
+- Audit result recorded in `docs/ARCHITECTURE.md` and `docs/PLATFORM_SUPPORT.md`; old claims
+  are labelled in `docs/ARCHITECTURE_AUDIT.md` and `docs/PROJECT_REVIEW_2026-10-04.md`.
+- Baseline gates: `bash tests/run-tests.sh` (909 checks incl. 329 Python tests) and
+  `bash tests/lint.sh` (needs `shellcheck`) are green at the head of this branch.
+- Lesson recorded: a status line in a previous session's notes is not evidence. A merge
+  silently disabled the SHA-256 pins that notes said were done; the new static rules in
+  `tests/check-hooks.sh` exist so that cannot recur unnoticed.
 
-1. **Fix `flash_patched_boot.sh`'s missing confirmation gate.**
-   Add the same class of safeguard already used elsewhere in this repo
-   (`unlock_bootloader.sh`'s typed `UNLOCK` confirmation, the `Makefile`
-   flash target's warning + abort window): display target device/slot,
-   image being flashed, and require explicit typed confirmation before
-   invoking `fastboot flash`. This is a real, exploitable safety gap on a
-   script that already ships — it does not wait on any other P0 item.
+## Stage 2 — Device, backup and installer correctness  *(Done in code; awaiting hardware/VM)*
 
-2. **`rootforge-core` package skeleton + `rootforge` CLI entrypoint.**
-   Create `usr/local/lib/rootforge/core/` as the initial Python package and
-   a single `rootforge` console entrypoint (`usr/local/bin/rootforge`)
-   supporting only `--version`/`--help` and subcommand dispatch to start.
-   No behavior migrates yet — this just gives later phases somewhere to
-   land code instead of each wrapping logic living inside `usr/local/bin/`
-   scripts directly.
+Done: device model and write gate; flash contract; backup manifest and restore; provisioning
+and Calamares cleanup.
 
-3. **`rootforge doctor`.**
-   First real subcommand on the new CLI. Checks: required host tools present
-   (adb, fastboot, python3, git), Ollama reachable, Claude Code CLI present,
-   `~/second-brain` vault initialized, disk space, and (once P1 lands)
-   config file validity. Must be genuinely useful on day one, not a stub —
-   per the directive's explicit ban on "placeholder implementations...
-   called complete."
+Remaining exit criteria (all need real systems):
+1. Flash, back up and restore a boot image on a **test device the operator owns**, on at
+   least one A/B and one non-A/B device, recording `getvar all` output as new fixtures.
+2. Install the ISO in a VM; confirm `removeuser` removed the live user, the live sudoers
+   rule is gone, `/var/lib/rootforge/install-user` holds the installed name, and first boot
+   provisions that user — including an offline first boot that resumes.
+3. Confirm Calamares expands `${USER}` in `shellprocess` (documented upstream; unverified).
 
-4. **Deduplicate `Dockerfile.ndk-matrix`.** — **Landed** (verified 2026-09-13,
-   Phase 6 session). This item had already been done, in commit `6dbd7dd`
-   ("Add rootforge CLI skeleton, rootforge doctor, dedupe
-   Dockerfile.ndk-matrix"), which predates every documentation session that
-   subsequently re-reported it as still open — `docs/ARCHITECTURE_AUDIT.md`
-   (2026-08-08) asserted the duplicate existed, and CLAUDE.md's Phase 1/5
-   sessions repeated that claim without re-checking the actual filesystem
-   (`find . -iname Dockerfile.ndk-matrix` returns exactly one match, at
-   `config/includes.chroot/opt/rootforge/docker/Dockerfile.ndk-matrix`;
-   `git log --all -- config/includes.chroot/usr/local/share/rootforge/docker/Dockerfile.ndk-matrix`
-   shows it was removed in `6dbd7dd` and never re-added). `build_matrix.sh`
-   already only has the one real fallback (installed path, then a
-   checkout-relative path) — there is no second copy or dead fallback branch
-   to remove. No code change was needed for this item; it was a stale-claim
-   correction only.
+## Stage 3 — Shared config, dispatch, diagnostics, logging  *(Mostly done)*
 
----
+Done: layered config consumed by `backup_partitions.sh`; one dispatch path; doctor severity;
+redacted, private JSON-lines logs.
 
-## P0.5 — Bug fixes and test coverage (landed)
+Done 2026-10-07: the CLI's execution ID reaches wrapped scripts and is stamped into their
+logs; script logs and reports are `0600`; subprocess-level tests cover `boot
+inspect/unpack/repack/cpio/verify` with stub `magiskboot`/`avbtool`.
 
-Work that fell out of a bug sweep across the shipped scripts. None of it was
-planned; all of it blocked the phases below, because P2 wraps these scripts
-and wrapping code with a silent argument-parsing bug just moves the bug.
+Next (in order):
+1. Emit CLI-side audit events for `flash`, `backup`, `module` and `avd` (start, exit code,
+   script log path), so every command has both halves of its trail.
+2. Redact secrets in script log contents (route script logging through one helper), or
+   audit scripts for anything that echoes a secret.
+3. Extend the config schema only where a script actually consumes a key; keep the rule that
+   no key disables a safety check.
 
-- **Argument parsing.** `flash_patched_boot.sh` and `extract_ota.sh` both
-  used `shift 2 || true` to skip optional positional arguments. Under a
-  one-argument or flag-second invocation that guard left the wrong value in
-  `$@`: `flash_patched_boot.sh boot.img` ran `fastboot -s boot.img`, and
-  `flash_patched_boot.sh boot.img --both-slots` flashed a partition named
-  `--both-slots` while silently not mirroring slots. Both now parse
-  positionally and validate.
-- **Device detection.** `backup_partitions.sh` decided a device was present
-  with `adb devices | grep -qv "List of devices"`, which matches the trailing
-  blank line and so reported a device with nothing attached. Enumeration now
-  lives in one place (`rf_adb_serials` / `rootforge.core.devices`) and parses
-  the state column, so `unauthorized` and `offline` are surfaced as such.
-- **Confirmation gates.** `kernelsu_patch_boot.sh --flash` wrote the boot
-  partition with no gate at all — the same class of gap item 1 fixed. All the
-  destructive scripts now share `rf_confirm`, which prompts on `/dev/tty` so
-  the gate stays visible when `fleet_orchestrate.sh` redirects a child's
-  stdout to a log (a bare `read -r -p` prompt vanished into that log and the
-  run looked hung).
-- **Backup integrity** (brings item 8's intent forward). Backups now carry a
-  `SHA256SUMS` sidecar, and `restore_partitions.sh` verifies every image
-  before flashing and refuses on a mismatch. A restore in which any flash
-  failed now exits non-zero instead of printing "complete".
-- **Exit codes.** `restore_partitions.sh`, `fleet_orchestrate.sh`,
-  `build_matrix.sh` and `build_magisk_module.sh` all reported success after
-  total failure, so nothing could wrap them programmatically.
-- **`setup_terminal.sh`** wrote `eval "$(starship init bashrc)"` into shell
-  rc files (`${RC##*.}` yields `bashrc`, not `bash`), so every new shell
-  printed an error and got no prompt.
-- **`brain.py`** never split a paragraph longer than `CHUNK_CHARS`, so a
-  pasted log became one oversized chunk the embedding model silently
-  truncates; and `cosine()` used `zip()`, which scored mismatched-dimension
-  embeddings over a prefix rather than reporting the model change.
-- **Tests.** `tests/` is a hermetic suite (stubbed `adb`/`fastboot`, scratch
-  `HOME`, no network or Docker) covering every fix above, wired into CI. The
-  lint pipeline now selects scripts by shebang instead of `*.sh`, which is
-  why the `rootforge` and `brain` entrypoints had never been checked, and
-  byte-compiles the shipped Python, which it never did.
-- **CLI.** `rootforge doctor` gained `--json`/`--quiet`/`--strict` and checks
-  for the tooling the scripts actually shell out to; `rootforge devices` is
-  the first slice of item 5's device abstraction.
+## Stage 4 — Packaging and verified installation  *(Partly done)*
 
----
+Done: Termux install generated per release; chroot install requires a digest; arch-honest
+SDK bootstrap; ISO checksum and `make flash` verification.
 
-## P1 — High priority
+Next:
+1. Pin or replace Ollama's installer (hook 0020) with a versioned release asset plus digest.
+2. Sign releases (`SHA256SUMS` signature) — currently nothing is signed.
+3. Decide how the tools are installed on a non-ISO Debian/Ubuntu host (`.deb`? wheel?);
+   today it is copy-from-checkout.
+4. Replace the Termux plugin's reliance on a single hosting origin only if a second origin
+   is wanted; otherwise leave.
 
-5. **Device abstraction (`rootforge.core.device`).** — **Landed** (module +
-   CLI verb + tests, 2026-09-13 Phase 6 session; shell-script retrofit
-   still open — see below). Added `config/includes.chroot/usr/local/lib/
-   rootforge/core/device.py`: a `DeviceProfile` dataclass (codename,
-   vendor, `slot_mode` "single"/"ab"/"unknown", `current_slot`,
-   `bootloader_unlocked`, `root_method`) plus `profile_fastboot()` (one
-   `fastboot getvar all` call) and `profile_adb()` (one `getprop` call per
-   field), reusing `rootforge.core.devices._run` rather than duplicating
-   its no-raise subprocess handling. Named `DeviceProfile`, not `Device`,
-   because `rootforge.core.devices.Device` (plural module, enumeration-only)
-   already uses that name — a same-named class in a sibling module would
-   be a real hazard, not a cosmetic one. Wired into a new `rootforge device
-   info [SERIAL] [--json]` CLI verb in `cli.py`, with `_select_device()`
-   auto-picking the sole usable device when no serial is given and refusing
-   (not guessing) when zero or multiple are attached. 32 new unit tests in
-   `tests/test_device.py`, mirroring `tests/test_devices.py`'s style
-   (canned `getvar`/`getprop` text fed via monkeypatched `_run`); full
-   suite re-verified green (161 Python tests, 420/0 shell+python via
-   `tests/run-tests.sh`).
+## Stage 5 — Build, VM and runtime validation  *(Blocked on infrastructure)*
 
-   **Unsupported-vendor refusal message:** no "governing directive"
-   document exists anywhere in this repository — grepping for that exact
-   phrase finds only the two sentences citing it in this file and
-   `docs/ARCHITECTURE_AUDIT.md`, no separate checked-in file. The verbatim
-   spec for the "DETECTED DEVICE ... cannot safely continue" message is
-   therefore not independently verifiable from this repo. `DeviceProfile.
-   refusal_message()` reconstructs it from `docs/ARCHITECTURE_AUDIT.md`
-   §3.2's own example (`DETECTED DEVICE / Vendor: Samsung / Automatic
-   fastboot workflow unavailable`) and `unlock_bootloader.sh`'s existing
-   Samsung/Xiaomi refusal text — this is stated plainly in the module's own
-   docstring rather than presented as a verified quote. If the actual
-   governing-directive text surfaces later, `refusal_message()` is the one
-   place to correct it.
+Blocked: this requires loop devices and nested virtualization, neither available in the
+authoring environment (`losetup -f` finds none).
 
-   **Shell-script retrofit — Landed (2026-09-14 Phase 6 session).**
-   `flash_patched_boot.sh` and `unlock_bootloader.sh` now call `rootforge
-   device info [SERIAL] --json` (via two new `common.sh` helpers,
-   `rf_rootforge` and `rf_device_profile_json`) for slot/product/vendor/
-   unlock-state detection, in place of their own separate `getvar`/`grep`
-   calls; `backup_partitions.sh` does the same for its no-serial
-   auto-detect mode resolution. Every one of these calls falls back to the
-   script's original direct-query logic whenever the shared path comes back
-   empty, for any reason — `rootforge`/python3/jq unavailable, or the
-   shared path not resolving a device — so a broken or missing Python
-   install degrades detection accuracy, never script availability, on
-   scripts that write boot partitions and unlock bootloaders.
+1. Run `sudo make build` on a host with loop devices; record the log and the ISO digest.
+2. CI VM boot test: QEMU boot of the ISO to the live desktop and a scripted Calamares
+   install; assert the Stage 2 criteria. Highest-value missing test.
+3. Exercise `release.yml` on a throwaway tag; confirm `verify-release-assets.sh` passes on
+   the real artifacts and the draft release contains exactly the verified set.
+4. Real-phone runs of the PRoot and chroot installs (arm64) and `bootstrap_proot.sh`.
+5. Decide UEFI: either keep "unsupported" or implement a GRUB image path and test under
+   OVMF, with Secure Boot explicitly out unless a signed shim chain is built.
 
-   `backup_partitions.sh`'s explicit-serial branch is deliberately **not**
-   retrofitted: `cli._select_device()` matches a given serial regardless of
-   adb usability (this is existing, intentional, tested behavior — see
-   `tests/test_device.py`
-   `TestSelectDevice.test_explicit_serial_matches_regardless_of_usability`),
-   so routing that branch through `rootforge device info` would report
-   `MODE=adb` for a serial stuck at e.g. `unauthorized`, silently losing the
-   script's own clearer "not usable" message. The two fastboot-only
-   scripts don't have this problem — fastboot has no adb-style
-   "unauthorized" state — so both retrofit the explicit-serial case too.
+## Stage 6 — Future platforms  *(Not started; do not scaffold empty projects)*
 
-   One real bug was caught and fixed before landing, not just during
-   review: `rf_require_cmd` (called by `rf_device_profile_json` when jq is
-   missing) uses the `exit` builtin, not a normal command failure — and
-   `exit` inside a function called *within* a `$(...)` command substitution
-   terminates that subshell immediately, before control ever reaches an
-   `|| true` written *inside* the same parentheses. Only a `||` placed
-   *after* the closing `"$(...)"` can catch it. All three call sites, and a
-   dedicated regression test pinning both the correct and the broken
-   pattern, are in `tests/run-tests.sh` under "common.sh — rootforge CLI
-   bridge". Full suite re-verified green: 161 Python tests, 438/0 shell+
-   python via `tests/run-tests.sh` (up from 420 — 18 new checks: 2 pinning
-   the exit/subshell fix, 16 exercising the three scripts' new
-   `rootforge device info` success and fallback paths).
-
-6. **Central config system (`rootforge.core.config`).**
-   `~/.config/rootforge/config.yaml` for user-level settings,
-   `rootforge.yaml` for project/workspace-level settings, and
-   `devices/<codename>/rootforge.yaml` for per-device overrides. Adds the
-   one new apt dependency identified in the audit (`python3-yaml`). Existing
-   scripts keep working unmodified until P2 wires them to read from this
-   instead of their own env vars/flags.
-
-7. **Structured logging (`rootforge.core.log`).**
-   JSON-lines logging with a unique execution ID per invocation and secret
-   redaction (API keys, tokens) before anything is written to disk. Used by
-   the new CLI from `rootforge doctor` onward; retrofitted into wrapped
-   scripts as they're migrated in P2, not all at once.
-
-8. **Backup integrity (`rootforge backup create/list/verify/restore`).**
-   Wraps `backup_partitions.sh`/`restore_partitions.sh`. Adds a JSON
-   manifest (replacing the current plain-text `manifest.txt`) recording a
-   SHA-256 checksum per backed-up partition image, and a `verify` subcommand
-   that re-hashes and compares. The underlying `dd`/partition-read logic in
-   the existing scripts is reused, not rewritten.
-
-9. **Artifact integrity at build time.** — **Landed** (2026-09-13, Phase 6
-   session). All six hooks now pin a specific upstream version/commit and
-   verify a SHA-256 hash before installing anything: `0040-rpi-imager`
-   (rpi-imager 2.0.4), `0050-starship-eza` (starship v1.26.0, eza v0.23.5),
-   `0060-magiskboot` (Magisk v31.0 APK), `0062-payload-dumper` (2.0.2),
-   `0085-avbtool` (LineageOS mirror commits, not the mutable `lineage-22.2`
-   branch name, for `avbtool.py`/`mkbootimg.py`/`unpack_bootimg.py`/
-   `repack_bootimg.py`/`generate_gki_certificate.py`), `0095-zygisk-headers`
-   (Magisk v31.0 `zygisk.hpp`). Every pinned hash was computed from a freshly
-   downloaded copy of the real artifact at pin time (cross-checked against
-   the upstream-published `.sha256`/`sha256checksums.txt` sidecar where one
-   exists — starship and payload-dumper-go publish one; rpi-imager, eza,
-   Magisk, and the LineageOS raw-file mirrors do not, so those hashes are
-   trust-on-first-use, verified on every subsequent build from here on). A
-   hash mismatch fails the build (`exit 1`); a network failure to reach the
-   pinned URL still degrades the same way these hooks always did (warn and
-   continue, since some of what they install is optional at runtime) — the
-   two failure modes are handled differently on purpose, since one means
-   "try again later" and the other means "something about this artifact
-   changed and must not be installed silently." Versions will go stale over
-   time by design — bumping one means fetching the new artifact, computing
-   its real hash, and updating both together, per the comment at the top of
-   each hook.
-
----
-
-## P2 — Important
-
-10. **`rootforge module create/lint/build`.**
-    Wraps `new_module_scaffold.sh` and `lint_module.sh` behind the unified
-    CLI. Adds the two module targets the audit found missing (APatch,
-    standalone Zygisk) alongside the existing Magisk/KernelSU/Xposed
-    targets. Extends the linter with shell-syntax checking, native-lib
-    presence checks, and JSON output for CI consumption — extending
-    `lint_module.sh`'s real 121-line implementation, not replacing it.
-
-11. **`rootforge boot inspect/unpack/patch/repack/verify`.**
-    Unifies the existing, already-real boot-image tooling (magiskboot,
-    avbtool, mkbootimg, unpack_bootimg, repack_bootimg) behind one
-    subcommand group, recording tool version, patch config, and output hash
-    for each operation via the P1 logging module.
-
-12. **`rootforge ota inspect/extract`.**
-    Formalizes existing OTA/payload-dumper handling (currently invoked
-    directly via `0062-payload-dumper`-provisioned tooling) as CLI
-    subcommands with consistent logging and output paths.
-
-13. **`rootforge avd create/list/start/stop/snapshot`.**
-    Wraps `setup_rooted_avd.sh`, which already implements create/boot/list
-    and a real Magisk ramdisk patch via `magiskboot cpio`. Adds snapshot
-    support, which the current script lacks.
-
-14. **Reproducibility manifest.**
-    Write `system-manifest.json` at ISO build time (package versions, hook
-    versions/hashes, build timestamp, git commit) so a given ISO's contents
-    can be verified against its claimed provenance after the fact.
-
----
-
-## P3 — Future
-
-15. **`rootforge-kernel`.**
-    Entirely new subsystem for kernel source management, defconfig/toolchain
-    handling, and build orchestration. Nothing today does this — largest net
-    -new scope in the plan. Do not start until P0–P2 are stable, per the
-    directive's explicit phase-ordering requirement.
-
-16. **Dynamic-partition tooling (`lpunpack`/`lpmake`).**
-    Currently entirely absent. Needed for modern A/B devices using
-    super.img; scope this against real device coverage once device
-    abstraction (P1.5) exists to know which devices need it.
-
-17. **GUI.**
-    Deferred correctly, not a gap — no business logic should live only in
-    the GUI; it calls the same `rootforge-core` functions the CLI does, once
-    that core is stable enough to have a GUI put in front of it.
-
-18. **CI hardening.**
-    Boot-test the produced ISO in a VM (CI today only checks `lb build`
-    exits 0 — it has never verified the ISO actually boots, the single
-    highest-value testing gap identified in the audit); add a CLI test
-    suite for `rootforge-core` (none exists today — no `tests/` directory
-    at all); add docs-consistency checks so documentation can't silently
-    drift from real behavior the way the pre-fix hook-discovery bug did.
-
-19. **Installer/docs polish.**
-    `CHANGELOG.md`; reorganize `docs/`; tag README features
-    Implemented/Partial/Planned so completeness claims stay honest going
-    forward — directly motivated by the audit's finding that documentation
-    has historically overclaimed completeness relative to verified behavior.
-
----
-
-## Sequencing notes
-
-- P0.1 (flash safety gate) can and should land independently and
-  immediately — it does not depend on the CLI skeleton.
-- P0.2–P0.4 should land together as one reviewable changeset (new package
-  skeleton + doctor + dedup), since doctor is the first real consumer of the
-  skeleton.
-- P1 items depend on P0.2 (the package skeleton) but are otherwise
-  independently reviewable; device abstraction (P1.5) should land before
-  config (P1.6) since config's device-override layer references it.
-- P2 items each wrap one existing subsystem and should land as separate
-  changesets per subsystem, not as one large "wrap everything" commit.
-- No P3 item should begin before P0–P2 are merged and stable.
+Gate: Stages 2 and 5 validated on real systems. Then, in this order, each as a client of the
+same CLI contracts rather than a new implementation of them:
+1. A service/API layer over `rootforge.core` (the CLI's JSON output is the stable seam today).
+2. Remote nodes: identity, mutual authentication, authorization (discovery must never
+   imply authorization), transport, audit. Requires a threat model first.
+3. Windows-hosted: WSL2 + USB passthrough path assessed on real hardware before any native
+   code.
+4. Android APK / GUI: separate repositories or modules once a service layer exists.

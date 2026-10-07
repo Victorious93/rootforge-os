@@ -63,6 +63,7 @@ LOG_DIR="$ROOTFORGE_HOME/logs"
 CACHE_DIR="$ROOTFORGE_HOME/modules/.cache"
 mkdir -p "$LOG_DIR" "$CACHE_DIR"
 LOG_FILE="$LOG_DIR/lsposed_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[lsposed] $*" | tee -a "$LOG_FILE"; }
 
 command -v jq >/dev/null 2>&1 || { echo "jq is required (apt install jq)" >&2; exit 1; }

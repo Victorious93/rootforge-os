@@ -10,6 +10,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 CMD="${1:-init}"
 
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
@@ -18,6 +21,7 @@ LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$WG_DIR" "$LOG_DIR"
 chmod 700 "$WG_DIR"
 LOG_FILE="$LOG_DIR/vpn_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[vpn] $*" | tee -a "$LOG_FILE"; }
 
 IFACE="wg0"

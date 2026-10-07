@@ -1,6 +1,6 @@
 """`rootforge flash` and `rootforge backup` — the destructive command groups.
 
-P2 of docs/IMPLEMENTATION_PLAN.md. Wraps flash_patched_boot.sh,
+P2 of docs/archive/IMPLEMENTATION_PLAN_P0-P3_2026-10-07.md. Wraps flash_patched_boot.sh,
 backup_partitions.sh and restore_partitions.sh.
 
 These are ported before the lower-stakes groups on purpose: they take the most
@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 from pathlib import Path
 from typing import List
 
+from rootforge.core import backup
 from rootforge.core.runner import exec_script
 
 PARTITIONS = ("boot", "init_boot")
@@ -55,6 +57,20 @@ def device_serial(value: str) -> str:
     return value
 
 
+PARTITION_NAME_RE = re.compile(r"^[a-z0-9_]+$")
+
+
+def partition_list(value: str) -> str:
+    """Comma-separated partition names, each a plain lowercase name."""
+    parts = value.split(",")
+    if not value or any(not PARTITION_NAME_RE.match(p) for p in parts) or len(set(parts)) != len(parts):
+        raise argparse.ArgumentTypeError(
+            f"'{value}' is not a list of distinct partition names "
+            f"(lowercase letters, digits and underscores, comma-separated)"
+        )
+    return value
+
+
 def existing_image(value: str) -> str:
     """An image that must exist and have content before anything is flashed."""
     path = Path(value)
@@ -85,7 +101,15 @@ def add_parser(subparsers) -> None:
     )
     boot.add_argument(
         "--both-slots", action="store_true",
-        help="Mirror the write to the inactive slot as well, for OTA safety",
+        help="Write the same image to both slots (requires --slots-same-build)",
+    )
+    boot.add_argument(
+        "--slots-same-build", action="store_true",
+        help="Assert that both slots hold the same build; RootForge cannot verify this",
+    )
+    boot.add_argument(
+        "--no-boot-check", action="store_true",
+        help="Do not wait for the device to finish booting (exit status will be 4)",
     )
     boot.add_argument("--serial", type=device_serial, help="Target this device serial")
 
@@ -97,12 +121,38 @@ def add_parser(subparsers) -> None:
     )
     backup_actions = backup.add_subparsers(dest="backup_command", required=True)
 
-    create = backup_actions.add_parser("create", help="Back up partitions from a device.")
+    create = backup_actions.add_parser(
+        "create", help="Back up partitions from a device.", allow_abbrev=False,
+    )
     create.add_argument("codename", type=path_component)
     create.add_argument("--serial", type=device_serial)
+    create.add_argument(
+        "--partitions", type=partition_list,
+        help="Comma-separated partitions to capture (default: backup.partitions from config)",
+    )
 
     listing = backup_actions.add_parser("list", help="List backups held for a device.")
     listing.add_argument("codename", type=path_component)
+
+    verify = backup_actions.add_parser(
+        "verify", help="Check a stored backup against its manifest.",
+        allow_abbrev=False,
+    )
+    verify.add_argument("codename", type=path_component)
+    verify.add_argument(
+        "timestamp", type=path_component,
+        help="Which backup to check, as shown by 'backup list'",
+    )
+    verify.add_argument("--partitions", type=partition_list, help="Only check these partitions")
+    verify.add_argument("--json", action="store_true", help="Machine-readable result")
+
+    legacy = backup_actions.add_parser(
+        "import-legacy",
+        help="Record an older SHA256SUMS-only backup as 'legacy-imported' (never 'captured').",
+        allow_abbrev=False,
+    )
+    legacy.add_argument("codename", type=path_component)
+    legacy.add_argument("timestamp", type=path_component)
 
     restore = backup_actions.add_parser(
         "restore", help="Flash a stored backup back to a device.",
@@ -114,6 +164,14 @@ def add_parser(subparsers) -> None:
         help="Which backup to restore, as shown by 'backup list'",
     )
     restore.add_argument("--serial", type=device_serial)
+    restore.add_argument(
+        "--partitions", type=partition_list,
+        help="Restore only these partitions (default: every image in the manifest)",
+    )
+    restore.add_argument(
+        "--accept-legacy-import", action="store_true",
+        help="Allow a 'legacy-imported' backup, whose device and slot are unknown",
+    )
 
 
 def dispatch(args: argparse.Namespace) -> int:
@@ -121,9 +179,18 @@ def dispatch(args: argparse.Namespace) -> int:
         if args.flash_command == "boot":
             # Positional order matters to the script; the list form is what
             # stops a path with spaces re-splitting on the way through.
+            if args.both_slots and not args.slots_same_build:
+                print(
+                    "rootforge: error: --both-slots writes the same image to both slots, which is "
+                    "only correct if both hold the same build. Add --slots-same-build to confirm.",
+                    file=sys.stderr,
+                )
+                return 2
             script_args: List[str] = [args.image, args.partition]
             if args.both_slots:
-                script_args.append("--both-slots")
+                script_args += ["--both-slots", "--slots-same-build"]
+            if args.no_boot_check:
+                script_args.append("--no-boot-check")
             if args.serial:
                 script_args.append(args.serial)
             return exec_script("flash_patched_boot.sh", script_args)
@@ -132,6 +199,8 @@ def dispatch(args: argparse.Namespace) -> int:
     if args.command == "backup":
         if args.backup_command == "create":
             script_args = [args.codename]
+            if args.partitions:
+                script_args += ["--partitions", args.partitions]
             if args.serial:
                 script_args.append(args.serial)
             return exec_script("backup_partitions.sh", script_args)
@@ -140,8 +209,19 @@ def dispatch(args: argparse.Namespace) -> int:
             # restore_partitions.sh lists when given no timestamp.
             return exec_script("restore_partitions.sh", [args.codename])
 
+        if args.backup_command == "verify":
+            selected = args.partitions.split(",") if args.partitions else None
+            return backup.cmd_verify(args.codename, args.timestamp, args.json, selected)
+
+        if args.backup_command == "import-legacy":
+            return backup.cmd_import_legacy(args.codename, args.timestamp)
+
         if args.backup_command == "restore":
             script_args = [args.codename, args.timestamp]
+            if args.partitions:
+                script_args += ["--partitions", args.partitions]
+            if args.accept_legacy_import:
+                script_args.append("--accept-legacy-import")
             if args.serial:
                 script_args.append(args.serial)
             return exec_script("restore_partitions.sh", script_args)

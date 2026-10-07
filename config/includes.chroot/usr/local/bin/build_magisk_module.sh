@@ -11,6 +11,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 MODULE_ID="${1:?Usage: build_magisk_module.sh <module_id> [--install] [--framework magisk|kernelsu]}"
 shift || true
 
@@ -51,6 +54,7 @@ MODULE_DIR="$ROOTFORGE_HOME/modules/$MODULE_ID"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/build_${MODULE_ID}_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[build] $*" | tee -a "$LOG_FILE"; }
 
 [[ -d "$MODULE_DIR" ]] || { echo "No module at $MODULE_DIR — run new_module_scaffold.sh first." >&2; exit 1; }

@@ -4,9 +4,16 @@ Precedence (lowest to highest): built-in defaults < user config
 (~/.config/rootforge/config.yaml) < project config (rootforge.yaml, found
 by walking up from the current directory) < per-device override
 ($ROOTFORGE_HOME/devices/<codename>/rootforge.yaml, when a codename is
-known). Layers merge recursively on nested dicts, so a device override can
-set just `backup.compress: true` without repeating the rest of a project's
-`backup:` block.
+known) < an explicit command-line option (e.g. `backup create --partitions`).
+Layers merge recursively on nested dicts, so a device override can set just
+`backup.compress: true` without repeating the rest of a project's `backup:`
+block.
+
+Every layer is validated before it is merged (see `_validate_layer`), and an
+invalid value is a ConfigError naming the file — nothing runs on a value that
+was never checked. The schema deliberately contains no key that can switch
+off a safety check (device validation, typed confirmation, integrity
+verification); those are not configurable.
 
 A missing file at any layer is not an error — every layer is optional.
 Malformed YAML IS an error (raised as ConfigError): silently ignoring a
@@ -15,7 +22,10 @@ it.
 """
 from __future__ import annotations
 
+import json
 import os
+import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -68,13 +78,41 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
             data = yaml.safe_load(fh)
     except yaml.YAMLError as exc:
         raise ConfigError(f"{path}: invalid YAML — {exc}") from exc
+    except OSError as exc:
+        raise ConfigError(f"{path}: cannot be read — {exc.strerror or exc}") from exc
     if data is None:
         return {}
     if not isinstance(data, dict):
         raise ConfigError(
             f"{path}: expected a mapping at the top level, got {type(data).__name__}"
         )
+    _validate_layer(path, data)
     return data
+
+
+_PARTITION_RE = re.compile(r"^[a-z0-9_]+$")
+
+
+def _validate_layer(path: Path, data: Dict[str, Any]) -> None:
+    """Reject values of the wrong type or shape in one config layer."""
+    backup = data.get("backup")
+    if backup is None:
+        return
+    if not isinstance(backup, dict):
+        raise ConfigError(f"{path}: 'backup' must be a mapping, got {type(backup).__name__}")
+    partitions = backup.get("partitions")
+    if partitions is None:
+        return
+    if not isinstance(partitions, list) or not partitions:
+        raise ConfigError(f"{path}: backup.partitions must be a non-empty list of partition names")
+    for name in partitions:
+        if not isinstance(name, str) or not _PARTITION_RE.match(name):
+            raise ConfigError(
+                f"{path}: backup.partitions entry {name!r} is not a partition name "
+                f"(lowercase letters, digits and underscores only)"
+            )
+    if len(set(partitions)) != len(partitions):
+        raise ConfigError(f"{path}: backup.partitions lists a partition more than once")
 
 
 def _merge(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
@@ -119,12 +157,16 @@ def load_config(
     return config
 
 
-def cmd_show(codename: Optional[str] = None) -> int:
+def cmd_show(codename: Optional[str] = None, as_json: bool = False) -> int:
     try:
         config = load_config(codename=codename)
     except ConfigError as exc:
-        print(f"Config error: {exc}")
+        print(f"Config error: {exc}", file=sys.stderr if as_json else sys.stdout)
         return 1
+
+    if as_json:
+        print(json.dumps(config, indent=2, sort_keys=True))
+        return 0
 
     sources = config.pop("_sources", [])
     print("Effective RootForge config")

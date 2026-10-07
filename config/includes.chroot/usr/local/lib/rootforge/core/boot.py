@@ -72,6 +72,15 @@ def add_parser(subparsers) -> None:
     unpack.add_argument("image"); unpack.add_argument("out_dir")
     repack = actions.add_parser("repack", help="Repack a working directory.", allow_abbrev=False)
     repack.add_argument("work_dir")
+    cpio = actions.add_parser(
+        "cpio", help="Run magiskboot cpio commands against an unpacked ramdisk.", allow_abbrev=False,
+    )
+    cpio.add_argument("work_dir")
+    cpio.add_argument("ramdisk")
+    cpio.add_argument(
+        "cpio_commands", nargs=argparse.REMAINDER,
+        help="magiskboot cpio commands, e.g. -- 'add 0750 init magiskinit'",
+    )
     verify = actions.add_parser("verify", help="Verify an AVB image.", allow_abbrev=False)
     verify.add_argument("image")
 
@@ -95,6 +104,9 @@ def dispatch(args) -> int:
     if args.boot_command == "inspect": return cmd_inspect(args.image)
     if args.boot_command == "unpack": return cmd_unpack(args.image, args.out_dir)
     if args.boot_command == "repack": return cmd_repack(args.work_dir)
+    if args.boot_command == "cpio":
+        commands = args.cpio_commands[1:] if args.cpio_commands[:1] == ["--"] else args.cpio_commands
+        return cmd_patch(args.work_dir, args.ramdisk, commands)
     if args.boot_command == "verify": return cmd_verify(args.image)
     raise AssertionError(f"unknown boot command: {args.boot_command!r}")
 
@@ -240,7 +252,8 @@ def cmd_repack(work_dir: str) -> int:
         )
     else:
         print("magiskboot repack exited 0 but new-boot.img wasn't produced — check its output above.")
-        logger.warn("repack produced no new-boot.img")
+        logger.error("repack produced no new-boot.img")
+        return 1
     return 0
 
 

@@ -14,12 +14,16 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 CMD="${1:-install}"
 
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$ROOTFORGE_HOME/esp32-projects" "$LOG_DIR"
 LOG_FILE="$LOG_DIR/esp32_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[esp32] $*" | tee -a "$LOG_FILE"; }
 
 case "$CMD" in

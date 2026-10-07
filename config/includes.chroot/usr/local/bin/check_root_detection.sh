@@ -14,6 +14,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 SERIAL=""
 CHECKER_APK=""
 while [[ $# -gt 0 ]]; do
@@ -30,6 +33,7 @@ ADB="adb"
 LOG_DIR="${ROOTFORGE_HOME:-$HOME/rootforge}/logs"
 mkdir -p "$LOG_DIR"
 REPORT="$LOG_DIR/root_detection_$(date +%Y%m%d_%H%M%S).md"
+rf_private_file "$REPORT"
 
 $ADB wait-for-device
 

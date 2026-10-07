@@ -119,12 +119,14 @@ module_name/
 Three scripts, deliberately separated because they're destructive operations you want to reason about independently rather than one script that does everything silently:
 
 - `config/includes.chroot/usr/local/bin/unlock_bootloader.sh` — detects vendor via `fastboot getvar all`, runs the correct unlock command for AOSP-standard devices (Pixel/Nexus-lineage: `fastboot flashing unlock`; older bootloaders: `fastboot oem unlock`), and **refuses to proceed** with a clear message rather than guessing on Samsung/Xiaomi/other vendors that need out-of-band tools. Requires typed confirmation before wiping data (unlocking always wipes on unlockable devices — this is a hardware/firmware guarantee, not a script choice).
-- `config/includes.chroot/usr/local/bin/flash_patched_boot.sh` — takes a stock `boot.img`/`init_boot.img`, runs it through Magisk's patch routine (either via a connected already-rooted device's Magisk app in "patch a file" headless mode, or `magiskboot` directly for KernelSU-style kernel patch application), and flashes the result to the correct slot with an A/B-aware fallback flash to the other slot if the device uses seamless updates.
+- `config/includes.chroot/usr/local/bin/flash_patched_boot.sh` (also `rootforge flash boot`) — flashes an **already patched** `boot.img`/`init_boot.img` (patching is a separate step: Magisk's app on a rooted device, `kernelsu_patch_boot.sh`, or `rootforge boot ...`). It targets one explicitly selected device, runs the same go/no-go gate as `rootforge device check`, prints the plan (device, product, slot, partition, image, size) and requires you to type `FLASH <serial>`, re-checks the device immediately before writing, writes the **explicit** slot with `fastboot --slot`, reboots, and waits for `adb` to report `sys.boot_completed`. It refuses an image that lacks the `ANDROID!` header, a partition the device does not report, an image larger than the partition, a locked bootloader, and a device whose slot layout cannot be established. **`--both-slots` is refused unless you also pass `--slots-same-build`**, an assertion that both slots hold the same build, which RootForge cannot verify. Exit codes: `0` flashed and booted, `3` blocked before any write, `4` flashed but boot not verified (or `--no-boot-check`), `5` flashed but the reboot command failed, `130` interrupted.
 - `config/includes.chroot/usr/local/bin/kernelsu_patch_boot.sh` (referenced, template provided) — for KernelSU, patches happen at the kernel/boot image level rather than via an on-device app, so this script wraps the "download/build GKI kernel with KernelSU built in → flash boot" flow for GKI (Generic Kernel Image) devices, which covers most Pixels and a growing set of Treble devices since Android 12.
 
-All three log every fastboot/adb command and their exit codes to `~/.rootforge/logs/`, since "what exactly did the last unlock attempt run" is the first question you ask when a device won't boot.
+`rootforge device check [serial] --partition boot [--image boot.img] [--both-slots] [--expect-product ...] [--expect-slot a|b] [--json]` is the read-only go/no-go behind both flashing and restoring: it reports what was actually established about the device and exits `3` with the reasons when a write would be unsafe. It reads `fastboot getvar all` from **both** stdout and stderr (real fastboot reports on stderr), takes the bootloader state from the `unlocked` variable only (`secure` is a different thing), and treats an unknown slot layout as a blocker rather than assuming one. **[Certain]** these semantics are exercised against stubs; **[Guessing]** that they hold on every vendor's bootloader. No real device was used.
 
-`rootforge boot inspect/unpack/repack/patch/verify` unifies the lower-level magiskboot/avbtool primitives these scripts already use — `unpack`/`repack` reuse `kernelsu_patch_boot.sh`'s proven `magiskboot unpack`/`repack` pair, `patch` reuses `setup_rooted_avd.sh`'s proven `magiskboot cpio` ramdisk-patch invocation (generalized to accept arbitrary cpio commands), and `verify` runs `avbtool verify_image`. Each operation logs its tool version, inputs, and output SHA-256 to a structured JSON log.
+Flash, unlock and backup scripts write their own logs under `${ROOTFORGE_HOME:-$HOME/rootforge}/logs/`; the Python CLI additionally records JSON-lines audit events for `doctor`, `boot`, `ota` and device operations.
+
+`rootforge boot inspect/unpack/repack/cpio/patch/verify` unifies the lower-level magiskboot/avbtool primitives these scripts already use — `unpack`/`repack` wrap `magiskboot unpack`/`repack` (`repack` needs an explicit output), `cpio` runs arbitrary `magiskboot cpio` commands against an unpacked ramdisk, `patch` runs the KernelSU patch flow of `kernelsu_patch_boot.sh`, and `verify` runs `avbtool verify_image`. Each operation records its inputs and outcome as a JSON-lines audit event (`rootforge.core.log`, secrets redacted).
 
 ## 5. Emulator support — rooted and unrooted
 
@@ -146,6 +148,8 @@ setup_rooted_avd.sh list
 3. Patches `ramdisk.img` with `magiskboot cpio` — swapping `init` for `magiskinit` and staging the Magisk binaries under `overlay.d` — the same mechanism Magisk's own `boot_patch.sh` uses on a real device boot image, adapted for the emulator's separate ramdisk rather than a packed `boot.img`. **[Likely]** the exact `cpio` command list needs revisiting against Magisk's current `scripts/boot_patch.sh` if a future release changes its ramdisk layout — the script logs a note to that effect if root verification fails.
 4. Boots the emulator writable with the patched ramdisk and verifies root live with `adb shell su -c id` rather than assuming success
 5. Snapshots the booted, rooted state as `rootforge-rooted` so `setup_rooted_avd.sh boot --name <avd>` starts pre-rooted on every subsequent run instead of repeating the patch
+
+**Architecture note [Certain]:** Google publishes the Android Emulator and its Linux SDK tools for **x86-64 hosts only**; there is no Linux arm64 emulator. On an arm64 host (including the Termux/PRoot rootfs on a phone) `bootstrap_proot.sh` therefore installs only what can run there and says what it skipped; `setup_rooted_avd.sh` is for x86-64 Linux hosts.
 
 **KVM note [Certain]:** emulator acceleration requires `/dev/kvm` access — add your user to the `kvm` group and confirm with `kvm-ok` (from `cpu-checker`) before assuming acceleration is active; a silently-software-rendered emulator is the most common "why is this so slow" support question for exactly this kind of distro.
 
@@ -221,21 +225,14 @@ Zygisk-API-compatible loader such as Zygisk Next installed on the device.
 
 ## 10. Partition backup & restore
 
-`flash_patched_boot.sh` always recommended keeping the stock image around; it never
-automated that. `config/includes.chroot/usr/local/bin/backup_partitions.sh` now pulls boot/init_boot/vendor_boot/
-dtbo/vbmeta before you touch anything, trying `fastboot fetch` first (supported on
-many Pixel-lineage bootloaders), falling back to `adb root` + `dd` from
-`/dev/block/by-name/<partition>` if the device is already rooted, and printing exact
-manual `dd` instructions rather than silently skipping a partition it can't reach.
-Backups land in `devices/<codename>/backups/<timestamp>/` with a manifest and a
-`SHA256SUMS` sidecar — verify one at any time with
-`(cd <backup_dir> && sha256sum -c SHA256SUMS)`.
-`config/includes.chroot/usr/local/bin/restore_partitions.sh` flashes an entire backup back in one confirmed
-command — pass no timestamp to list what's available for that device. It verifies
-every image against `SHA256SUMS` **before** flashing and refuses outright on a
-mismatch: a truncated or bit-rotted `boot`/`vendor_boot` image is the one failure
-here with no recourse afterward, and it is entirely detectable beforehand. A restore
-in which any partition failed to flash exits non-zero and says which.
+One contract, enforced in code (`rootforge.core.backup`) and by both scripts:
+
+- `backup_partitions.sh` (`rootforge backup create <codename> [--serial S] [--partitions boot,init_boot,...]`) captures the configured partitions (config key `backup.partitions`, or `--partitions`) for **one explicitly selected device**, via `fastboot fetch` where supported or `adb` + `dd` on an already-rooted device, and writes `devices/<codename>/backups/<timestamp>/` containing the images and a **`manifest.json`** (version 1, trust `captured`) recording, per image, the partition, file, SHA-256, size, capture method and slot, plus the device product, slot and bootloader at capture time. Exit `0` complete, `4` partial (some partition could not be captured; the manifest says which), `1` failure. The last line printed is `BACKUP_DIR=<path>`.
+- `rootforge backup verify <codename> <timestamp> [--partitions ...] [--json]` re-checks every listed image against the manifest. It rejects images that are not in the manifest, symlinks, empty files, wrong sizes, wrong digests, missing files, duplicate entries and names that escape the backup directory. A backup with no manifest does not verify.
+- `restore_partitions.sh` (`rootforge backup restore <codename> <timestamp> [--partitions ...] [--accept-legacy-import]`) flashes **only verified manifest entries**, only to a device whose product and slot match the backup (`device check` with expectations), after you type `RESTORE <serial>`; it re-verifies and re-hashes immediately before writing, stops at the first failed write, and does not reboot.
+- **Legacy backups** (a `SHA256SUMS` sidecar and no manifest) are not trusted for restore. `rootforge backup import-legacy <codename> <timestamp>` converts one to a manifest with trust `legacy-imported` (device and slot unknown), which restore accepts only with `--accept-legacy-import`.
+
+Pass no timestamp to `restore_partitions.sh` to list what is available for a device.
 
 ## 11. Firmware / OTA extraction
 
@@ -250,9 +247,12 @@ anything — it refuses to mount anything other than `-o ro`.
 
 `rootforge ota inspect <file>` identifies an OTA input (zip vs. raw `payload.bin`,
 whether `payload.bin` sits at the zip root) without extracting anything — useful
-before committing to a full extraction. `rootforge ota extract <file> [--output <out_dir>]
+before committing to a full extraction. `rootforge ota extract <file> [output_dir | -o <out_dir>]
 [--partitions a,b,c]` wraps `extract_ota.sh` and records a SHA-256 per extracted
-partition image.
+partition image (only the requested ones; giving the output directory twice in
+conflicting ways is an error). `rootforge ota inspect-image <image>` is the
+read-only loop mount of `inspect_partition_image.sh`; before this release
+`ota inspect` was wired to that script by mistake.
 
 ## 12. Module linting
 
@@ -299,9 +299,13 @@ gives the same three choices Ubuntu's installer gives: erase the disk, install
 alongside an existing OS (auto-detected via `os-prober` — Debian ships this
 disabled by default in GRUB, RootForge turns it on specifically so an existing
 Ubuntu install shows up in the dual-boot menu instead of silently vanishing), or
-manual partitioning. GRUB installs in UEFI mode with a `grub-efi-amd64` target,
-matching how current Ubuntu installs itself; BIOS/legacy boot is a secondary path,
-not the primary target.
+manual partitioning. The installed system is configured with `grub-efi-amd64` (and
+the signed variants), but **the live ISO this repository builds boots through
+isolinux, i.e. BIOS/legacy only** (`auto/config` explains why: live-build's GRUB
+image in this version is BIOS-only and `isohybrid` accepts only isolinux). Calamares
+chooses its install mode from the firmware the live session was booted under, so
+today's ISO installs in BIOS mode. **UEFI boot of the live ISO and Secure Boot are
+not supported and have never been verified**; see `docs/PLATFORM_SUPPORT.md`.
 
 **[Likely]** worth being explicit about: `os-prober` re-scanning at every GRUB
 update can occasionally misdetect or reorder entries on multi-OS systems — this is
@@ -537,30 +541,52 @@ sudo termux/build-rootfs.sh arm64 --flavor chroot --with-x11   # rooted + XFCE d
 sudo termux/build-rootfs.sh amd64                              # x86 Android, or a desktop-Linux sandbox
 ```
 
-`--with-x11` roughly triples the tarball, which is why it is opt-in rather than baked in. Output is `rootforge-<flavor>-<arch>[-x11]-<timestamp>.tar.xz` plus a `.sha256`; the flavour is in the filename because a chroot rootfs and a PRoot rootfs are not interchangeable. The build also writes `/etc/rootforge/build-info` inside the image, so you can tell later what you're actually running.
+`--with-x11` roughly triples the tarball, which is why it is opt-in rather than baked in. Output is `rootforge-<flavor>-<arch>[-x11]-<timestamp>.tar.xz` plus a `.sha256` in `sha256sum` format; the flavour is in the filename because a chroot rootfs and a PRoot rootfs are not interchangeable. The build also writes `/etc/rootforge/build-info` inside the image, so you can tell later what you're actually running.
 
-`.github/workflows/release.yml` builds all four arch × flavour combinations on a tagged push and attaches them to a draft GitHub Release under stable names.
+`.github/workflows/release.yml` builds all four arch × flavour combinations on a tagged push (after lint and tests pass on the same commit), generates the install metadata from them, verifies the whole asset set with `tests/verify-release-assets.sh`, and only then attaches it to a **draft** GitHub Release. It has not yet been run on GitHub's infrastructure.
 
-### Installing — unrooted (PRoot)
+### Installing — what exists today, and what does not
+
+**[Certain, 2026-10-07]** this repository has tags (`v0.1.0`, `v0.1.1`) but **no published GitHub Release**, so there are no prebuilt rootfs tarballs to download yet. The install files (`install.sh`, the `proot-distro` plugin, `release-metadata.json`, `SHA256SUMS`) are not checked in either: they are *generated per release* by `termux/make-release-metadata.sh` from the real tarballs, so the tag, URL and SHA-256 inside them are computed, never typed. The checked-in `termux/templates/*.in` files refuse to run. Two ways to get a verified install:
+
+**A. From a published release** (once `release.yml` has produced one; the draft must be published by a maintainer). In Termux:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/Victorious93/rootforge-os/main/termux/install.sh | bash
+curl -fsSLO https://github.com/Victorious93/rootforge-os/releases/download/<tag>/install.sh
+curl -fsSLO https://github.com/Victorious93/rootforge-os/releases/download/<tag>/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS      # checks install.sh itself
+bash install.sh
 proot-distro login rootforge
 ```
 
-`termux/install.sh` installs `proot-distro`, drops the plugin into `$PREFIX/etc/proot-distro/`, and runs `proot-distro install rootforge`. It also detects root and tells you the chroot variant exists before spending a multi-GB download.
+`install.sh` installs `proot-distro`, downloads the plugin pinned to that tag and refuses to use it unless its SHA-256 matches the value embedded in the installer; `proot-distro` then verifies the rootfs tarball against the digest inside the plugin. It also detects root and tells you the chroot variant exists before spending a multi-GB download. The `SHA256SUMS` you check comes from the same release, so this protects against corruption and partial tampering of individual files, not against someone who controls the whole release; compare the digest with one obtained another way if that matters to you.
+
+**B. Locally built.** Build the rootfs (above), then generate the metadata and serve the files to the phone:
+
+```
+termux/make-release-metadata.sh --tag local1 --dist <dir-with-tarballs> --out <dir> \
+    --base-url http://<host>:8000 --arches arm64 --flavors proot
+```
+
+This fails, writing nothing, if a tarball is missing, empty, does not match its recorded digest, or its `/etc/rootforge/build-info` disagrees with its filename about flavor or architecture.
 
 ### Installing — rooted (chroot)
 
+`rootforge-chroot.sh install` **requires** a digest and refuses to unpack without one; it also scans the archive for absolute paths, `..` components and device nodes before extracting, unpacks into a staging directory, and marks the install complete only at the end (an interrupted install is not mistaken for a working one, and `login` refuses it).
+
 ```
-# in Termux, on the device
-curl -fsSLO https://github.com/Victorious93/rootforge-os/releases/latest/download/rootforge-chroot-arm64.tar.xz
-curl -fsSLO https://raw.githubusercontent.com/Victorious93/rootforge-os/main/termux/rootforge-chroot.sh
+# in Termux, on the device, with files from one release (<tag>) — or from your local build
+curl -fsSLO <base-url>/rootforge-chroot-arm64.tar.xz
+curl -fsSLO <base-url>/rootforge-chroot.sh
+curl -fsSLO <base-url>/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS     # tarball and launcher
 chmod +x rootforge-chroot.sh
-./rootforge-chroot.sh install rootforge-chroot-arm64.tar.xz
+./rootforge-chroot.sh install rootforge-chroot-arm64.tar.xz --sha256 <digest from SHA256SUMS>
 ./rootforge-chroot.sh login
 ./rootforge-chroot.sh umount        # when you're done, to release the bind mounts
 ```
+
+**[Likely]** none of this has been run on a real phone; the launcher and generator are covered by the hermetic test suite with stubs, not by a device.
 
 The rootfs lands in `/data/local/rootforge` (override with `ROOTFORGE_CHROOT_DIR`) rather than under `/sdcard`, which Android mounts `noexec`. The launcher bind-mounts `/proc`, `/sys`, `/dev`, `devpts`, Termux's tmp, and `/sdcard` if present.
 

@@ -17,6 +17,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # release.yml runs these same jobs on the commit it is about to build.
+  workflow_call:
 
 jobs:
   shellcheck:

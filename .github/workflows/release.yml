@@ -18,6 +18,14 @@
 # tag) or manually via workflow_dispatch (builds and uploads artifacts for
 # inspection without touching Releases, since a manual run may not have a
 # tag ref).
+#
+# Nothing is built unless lint.yml's checks (shellcheck, YAML, package lists,
+# the test suite, the CLI smoke test) pass on the same commit, and nothing is
+# attached to a release until the install metadata has been generated from the
+# real artifacts and tests/verify-release-assets.sh has accepted the whole set.
+# The Termux install files (install.sh, the proot-distro plugin) are generated
+# per release by termux/make-release-metadata.sh; there is no checked-in copy
+# with placeholder digests.
 
 name: Release
 
@@ -31,7 +39,12 @@ permissions:
   contents: write
 
 jobs:
+  checks:
+    # The same workflow PRs run, on the commit being released.
+    uses: ./.github/workflows/lint.yml
+
   build-iso:
+    needs: checks
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -67,6 +80,7 @@ jobs:
             rootforge-os-amd64.hybrid.iso
             rootforge-os-amd64.hybrid.iso.sha256
           retention-days: 14
+          if-no-files-found: error
 
       - name: Upload build log (always, even on failure)
         # A failed `Build ISO` step only shows a handful of echo lines in
@@ -76,12 +90,15 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rootforge-build-log
+          # Not named rootforge-*: the release job downloads rootforge-* only,
+          # so a build log can never be published as a release asset.
+          name: build-log-iso
           path: rootforge-build-*.log
           retention-days: 14
           if-no-files-found: ignore
 
   build-termux-rootfs:
+    needs: checks
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
@@ -112,8 +129,12 @@ jobs:
         run: |
           cd dist
           src="$(ls rootforge-${{ matrix.flavor }}-${{ matrix.arch }}-*.tar.xz)"
-          mv "$src" "rootforge-${{ matrix.flavor }}-${{ matrix.arch }}.tar.xz"
-          mv "$src.sha256" "rootforge-${{ matrix.flavor }}-${{ matrix.arch }}.tar.xz.sha256"
+          name="rootforge-${{ matrix.flavor }}-${{ matrix.arch }}.tar.xz"
+          mv "$src" "$name"
+          rm -f "$src.sha256"
+          # The sidecar names the file it covers, so it must be regenerated
+          # under the stable name for `sha256sum -c` to work for users.
+          sha256sum "$name" > "$name.sha256"
 
       - name: Upload rootfs artifact
         uses: actions/upload-artifact@v4
@@ -130,17 +151,39 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - name: Download all build artifacts
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends jq xz-utils
+
+      - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
+          pattern: rootforge-*
           merge-multiple: true
+
+      - name: Generate install metadata from the real artifacts
+        # Binds this tag, each architecture and flavor, the download URL and
+        # the SHA-256 together; fails if a tarball is missing, mismatched or
+        # not what its name says. Also publishes the launcher it pins.
+        run: termux/make-release-metadata.sh --tag "$GITHUB_REF_NAME" --dist release-assets --out release-assets
+
+      - name: Add the ISO to SHA256SUMS
+        run: |
+          cd release-assets
+          sha256sum -c rootforge-os-amd64.hybrid.iso.sha256
+          cat rootforge-os-amd64.hybrid.iso.sha256 >> SHA256SUMS
+
+      - name: Verify the release assets
+        run: tests/verify-release-assets.sh release-assets --tag "$GITHUB_REF_NAME"
 
       - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

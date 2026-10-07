@@ -13,6 +13,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 SERVER_URL="${1:?Usage: join_headscale.sh <headscale-login-server-url> [--advertise-exit-node] [--hostname NAME]}"
 shift || true
 
@@ -45,6 +48,7 @@ ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/headscale_join_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[headscale] $*" | tee -a "$LOG_FILE"; }
 
 log "Installing Tailscale client (used as the Headscale-compatible client)"

@@ -12,6 +12,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 usage() {
   echo "Usage: extract_ota.sh <ota.zip|payload.bin> [output_dir] [--partitions a,b,c]" >&2
   exit "${1:-1}"
@@ -59,6 +62,7 @@ BIN_DIR="$ROOTFORGE_HOME/bin"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$BIN_DIR" "$LOG_DIR" "$OUTPUT_DIR"
 LOG_FILE="$LOG_DIR/extract_ota_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[extract-ota] $*" | tee -a "$LOG_FILE"; }
 
 # Sets DUMPER rather than echoing the path. It previously returned the path

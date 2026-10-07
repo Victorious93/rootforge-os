@@ -7,13 +7,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 from typing import Optional, Sequence
 
 from rootforge.core import __version__, avd, boot, device, devices, flashing, module, ota
-from rootforge.core.device import profile_device
+from rootforge.core.device import compatibility_findings, profile_device
 from rootforge.core.devices import list_devices
 from rootforge.core.doctor import run_doctor
+from rootforge.core.log import execution_scope
+
+
+def _partition_name(value: str) -> str:
+    if not re.fullmatch(r"[a-z0-9_]+", value):
+        raise argparse.ArgumentTypeError(
+            f"'{value}' is not a partition name (lowercase letters, digits and underscores only)"
+        )
+    return value
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,11 +52,32 @@ def build_parser() -> argparse.ArgumentParser:
     show.add_argument("serial", nargs="?", default=None)
     show.add_argument("--serial", dest="serial_option", default=None)
     show.add_argument("--json", action="store_true")
+    check = device_sub.add_parser(
+        "check",
+        help="Decide whether a write to a device may proceed (exit 3 = blocked).",
+        allow_abbrev=False,
+    )
+    check.add_argument("serial", nargs="?", default=None)
+    check.add_argument("--operation", choices=("flash-partition",), default="flash-partition")
+    check.add_argument(
+        "--partition", required=True, action="append", type=_partition_name,
+        help="Partition to be written; repeat for several.",
+    )
+    check.add_argument(
+        "--image", action="append", default=None,
+        help="Image for the matching --partition (same order); its size is checked.",
+    )
+    check.add_argument("--both-slots", action="store_true")
+    check.add_argument("--expect-product", default=None, help="Device the images were captured from.")
+    check.add_argument("--expect-slot", default=None, choices=("a", "b"))
+    check.add_argument("--expect-bootloader-version", default=None)
+    check.add_argument("--json", action="store_true")
 
     config_parser = sub.add_parser("config", help="Inspect layered RootForge configuration.", allow_abbrev=False)
     config_sub = config_parser.add_subparsers(dest="config_command", required=True)
     show_config = config_sub.add_parser("show", help="Print merged configuration.", allow_abbrev=False)
     show_config.add_argument("--codename", default=None)
+    show_config.add_argument("--json", action="store_true", help="Machine-readable output.")
 
     flashing.add_parser(sub)
     module.add_parser(sub)
@@ -92,6 +124,61 @@ def cmd_device_info(args: argparse.Namespace) -> int:
 
 _device_info = cmd_device_info
 
+EXIT_BLOCKED = 3
+
+
+def cmd_device_check(args: argparse.Namespace) -> int:
+    """Operation-specific go/no-go for a device write. Never writes anything."""
+    profile = None
+    warnings: list = []
+    blockers: list = []
+    partitions = args.partition
+    images = args.image or []
+    try:
+        if images and len(images) != len(partitions):
+            raise LookupError("--image must be given once per --partition, in the same order")
+        resolved, mode = _select_device(args.serial)
+        profile = profile_device(resolved, mode)
+        for index, partition in enumerate(partitions):
+            size = None
+            if images:
+                try:
+                    size = os.stat(images[index]).st_size
+                except OSError as exc:
+                    raise LookupError(f"cannot read image {images[index]}: {exc.strerror}") from exc
+            for reason in profile.write_blockers(partition, image_size=size, both_slots=args.both_slots):
+                if reason not in blockers:
+                    blockers.append(reason)
+        extra_blockers, warnings = compatibility_findings(
+            profile, args.expect_product, args.expect_slot, args.expect_bootloader_version
+        )
+        blockers += extra_blockers
+    except LookupError as exc:
+        blockers = [str(exc)]
+    payload = {
+        "allowed": not blockers,
+        "operation": args.operation,
+        "partitions": partitions,
+        "both_slots": args.both_slots,
+        "blockers": blockers,
+        "warnings": warnings,
+        "profile": profile.as_dict() if profile else None,
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2))
+    elif blockers:
+        print(f"BLOCKED: {args.operation} {','.join(partitions)}", file=sys.stderr)
+        for reason in blockers:
+            print(f"  - {reason}", file=sys.stderr)
+        message = profile.refusal_message() if profile else None
+        if message:
+            print(message, file=sys.stderr)
+    else:
+        print(f"OK: {args.operation} {','.join(partitions)} on {profile.serial} ({profile.codename})")
+        for note in warnings:
+            print(f"  note: {note}")
+    return 0 if not blockers else EXIT_BLOCKED
+
 
 def _devices(args: argparse.Namespace) -> int:
     found = devices.list_devices(detailed=args.detailed)
@@ -111,11 +198,20 @@ def _devices(args: argparse.Namespace) -> int:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    # One execution ID for everything this invocation does, including the
+    # scripts it runs (they inherit it from the environment).
+    with execution_scope():
+        return _dispatch(parser, args)
+
+
+def _dispatch(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if args.command == "doctor":
         return run_doctor(as_json=args.json, quiet=args.quiet, strict=args.strict)
     if args.command == "devices":
         return _devices(args)
     if args.command == "device":
+        if args.device_command == "check":
+            return cmd_device_check(args)
         return _device_info(args)
     if args.command == "config":
         try:
@@ -123,7 +219,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         except ImportError as exc:
             print("rootforge config requires python3-yaml; install the package and retry.", file=sys.stderr)
             return 1
-        return cmd_show(args.codename)
+        return cmd_show(args.codename, args.json)
     if args.command in ("flash", "backup"):
         return flashing.dispatch(args)
     if args.command == "module":

@@ -271,7 +271,10 @@ X11_SUFFIX=""
 TARBALL="$OUT_DIR/rootforge-${FLAVOR}-${ARCH}${X11_SUFFIX}-${STAMP}.tar.xz"
 log "Stage 7: packing $TARBALL"
 tar -C "$ROOTFS" -cJf "$TARBALL" .
-sha256sum "$TARBALL" | awk '{print $1}' > "${TARBALL}.sha256"
+# sha256sum's own "<digest>  <name>" format with the bare file name, so
+# `sha256sum -c <name>.sha256` works next to the tarball. A digest on its own
+# line cannot be checked that way.
+( cd "$OUT_DIR" && sha256sum "$(basename "$TARBALL")" > "$(basename "$TARBALL").sha256" )
 
 # This whole script must run as root (debootstrap/chroot need it), so
 # $OUT_DIR and the tarball/checksum land root-owned — confirmed by a real
@@ -284,9 +287,11 @@ fi
 
 log "Done."
 log "  Tarball: $TARBALL"
-log "  SHA256:  $(cat "${TARBALL}.sha256")"
+log "  SHA256:  $(cut -d' ' -f1 "${TARBALL}.sha256")"
 log ""
-log "Publish both to a GitHub Release, then fill TARBALL_URL / TARBALL_SHA256 for"
-log "'$ARCH' in termux/proot-distro-plugins/rootforge.sh."
+log "Next: build the other flavor/arch you need, collect the tarballs and their .sha256 files in one"
+log "directory (named rootforge-<flavor>-<arch>.tar.xz), then generate the install metadata from them:"
+log "  termux/make-release-metadata.sh --tag <vX.Y.Z> --dist <dir> --out <dir>"
+log "(release.yml does this on a tagged push; for a local build add --base-url and --arches/--flavors.)"
 
 # Victorious Framework

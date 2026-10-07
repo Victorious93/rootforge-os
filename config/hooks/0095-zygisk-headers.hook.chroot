@@ -37,6 +37,13 @@
 
 set -e
 
+# Append a verified entry for /usr/local/share/rootforge/build-manifest
+# (read by 0099-system-manifest.hook.chroot): "<ts>  <label>  <sha256>  verified  <url>".
+record_verified() {
+  mkdir -p /usr/local/share/rootforge/build-manifest
+  echo "$(date -u +%FT%TZ)  $1  $2  verified  $3" >> /usr/local/share/rootforge/build-manifest/checksums.txt
+}
+
 MAGISK_VERSION="v31.0"
 HEADER_URL="https://raw.githubusercontent.com/topjohnwu/Magisk/${MAGISK_VERSION}/native/src/core/zygisk/zygisk.hpp"
 ZYGISK_HPP_SHA256="2ceb99b045ffb5c6cb7c4d911323b2e9bfd96cc702be560d6a298c9dc264e42f"
@@ -44,32 +51,7 @@ ZYGISK_HPP_SHA256="2ceb99b045ffb5c6cb7c4d911323b2e9bfd96cc702be560d6a298c9dc264e
 INSTALL_DIR="/usr/local/share/rootforge/zygisk-api"
 mkdir -p "$INSTALL_DIR"
 
-# raw.githubusercontent.com file fetches carry no digest metadata the way
-# a GitHub release asset does (see 0060-magiskboot.hook.chroot for that
-# path) — nothing upstream to verify against, so just record the checksum
-# for the audit trail rather than claim a verification that can't happen.
-record_checksum() {
-  # $1 = file path, $2 = label, $3 = source URL
-  manifest_dir="/usr/local/share/rootforge/build-manifest"
-  mkdir -p "$manifest_dir"
-  actual="$(sha256sum "$1" | cut -d' ' -f1)"
-  echo "==> SHA-256 recorded for $2 (no upstream digest published to verify against): $actual"
-  echo "$(date -u +%FT%TZ)  $2  $actual  unverified  $3" >> "$manifest_dir/checksums.txt"
-}
-
-MAGISK_API="https://api.github.com/repos/topjohnwu/Magisk/releases/latest"
-# strict=False: confirmed by a real build failure (in 0060-magiskboot,
-# which hits this same API) that GitHub's release JSON for this repo can
-# carry a raw control character somewhere in the payload (most likely the
-# free-text release-notes body) — Python's default strict json.load
-# rejects that even though we only need the small, well-formed tag_name
-# field, never the body itself.
-TAG=$(curl -fsSL "$MAGISK_API" | python3 -c "import sys,json; print(json.load(sys.stdin, strict=False)['tag_name'])")
-
-BASE="https://raw.githubusercontent.com/topjohnwu/Magisk/${TAG}"
-HEADER_URL="${BASE}/native/src/core/zygisk/zygisk.hpp"
-
-echo "==> Fetching Zygisk API header from Magisk $TAG"
+echo "==> Fetching Zygisk API header from Magisk ${MAGISK_VERSION}"
 if ! curl -fsSL -o "$INSTALL_DIR/zygisk.hpp" "$HEADER_URL"; then
   echo "WARNING: failed to fetch $HEADER_URL"
   echo "         zygisk.hpp not installed — Magisk may have moved the file again;"
@@ -85,8 +67,8 @@ if [ "$ACTUAL_SHA256" != "$ZYGISK_HPP_SHA256" ]; then
   rm -f "$INSTALL_DIR/zygisk.hpp"
   exit 1
 fi
+record_verified "zygisk.hpp" "$ACTUAL_SHA256" "$HEADER_URL"
 echo "    zygisk.hpp"
-record_checksum "$INSTALL_DIR/zygisk.hpp" "zygisk.hpp" "$HEADER_URL"
 
 # Write a minimal CMakeLists stub so new Zygisk module projects can find the header
 cat > "$INSTALL_DIR/CMakeLists.zygisk.txt" <<'EOF'

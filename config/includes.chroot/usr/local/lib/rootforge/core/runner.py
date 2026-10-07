@@ -1,6 +1,6 @@
 """Locating and invoking the standalone usr/local/bin scripts.
 
-P2 of docs/IMPLEMENTATION_PLAN.md wraps the existing scripts behind the
+P2 of docs/archive/IMPLEMENTATION_PLAN_P0-P3_2026-10-07.md wraps the existing scripts behind the
 `rootforge` CLI rather than reimplementing them: their behavior is proven and
 the shell is where the device work actually happens. What the wrapper adds is
 the argument handling, and that is not cosmetic. Every sweep in this
@@ -24,8 +24,8 @@ from pathlib import Path
 from typing import List, Optional, Sequence
 
 # Where the scripts live once installed. The repo checkout mirrors this
-# layout under config/includes.chroot, so one relative fallback covers
-# running straight out of a working tree.
+# layout under config/includes.chroot, so the sibling lookup in find_script()
+# covers running straight out of a working tree.
 INSTALLED_BIN = Path("/usr/local/bin")
 
 
@@ -34,27 +34,31 @@ class ScriptNotFound(RuntimeError):
 
 
 def find_script(name: str) -> Path:
-    """Locate a wrapped script, preferring the installed location.
+    """Locate a wrapped script, preferring the one shipped with this package.
 
-    Falls back to a path relative to this file so `rootforge` works from a
-    git checkout, and then to PATH so an operator who put the scripts
-    somewhere else is not stuck.
+    Order: the script next to this package, then the installed location, then
+    PATH. The sibling comes first so the Python code and the shell it wraps
+    are always the same revision: a checkout run on a machine that also has a
+    system-installed RootForge used to pick up the installed (older or newer)
+    script, and the scripts source `sh/common.sh` relative to themselves, so a
+    mixed pair could disagree about the CLI contract. On an installed system
+    the sibling *is* /usr/local/bin, so nothing changes there.
     """
+    # .../usr/local/lib/rootforge/core/runner.py -> .../usr/local/bin/<name>
+    sibling = Path(__file__).resolve().parents[3] / "bin" / name
+    if sibling.is_file():
+        return sibling
+
     installed = INSTALLED_BIN / name
     if installed.is_file():
         return installed
-
-    # .../usr/local/lib/rootforge/core/runner.py -> .../usr/local/bin/<name>
-    checkout = Path(__file__).resolve().parents[3] / "bin" / name
-    if checkout.is_file():
-        return checkout
 
     on_path = shutil.which(name)
     if on_path:
         return Path(on_path)
 
     raise ScriptNotFound(
-        f"{name} not found in {INSTALLED_BIN}, alongside this package, or on PATH.\n"
+        f"{name} not found alongside this package ({sibling.parent}), in {INSTALLED_BIN}, or on PATH.\n"
         f"       This usually means a partial install — reinstall the rootforge scripts."
     )
 

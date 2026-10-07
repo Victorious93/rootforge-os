@@ -5,6 +5,8 @@ argument here costs a device rather than a retry. The tests pin the specific
 bugs their scripts actually had, not just generic parsing.
 """
 import argparse
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -140,10 +142,25 @@ class TestDispatch(unittest.TestCase):
 
     def test_flash_serial_is_positional_after_flags(self):
         _, args = self.call(
-            ["flash", "boot", self.img, "--both-slots", "--serial", "ABC123"]
+            ["flash", "boot", self.img, "--both-slots", "--slots-same-build",
+             "--serial", "ABC123"]
         )
         self.assertIn("--both-slots", args)
+        self.assertIn("--slots-same-build", args)
         self.assertEqual(args[-1], "ABC123")
+
+    def test_both_slots_without_the_same_build_assertion_never_reaches_the_script(self):
+        """Cloning one patched image to a slot of unknown build is not OTA safety."""
+        with mock.patch.object(flashing, "exec_script", return_value=0) as ex:
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                rc = flashing.dispatch(parse(["flash", "boot", self.img, "--both-slots"]))
+        self.assertEqual(rc, 2)
+        ex.assert_not_called()
+        self.assertIn("--slots-same-build", err.getvalue())
+
+    def test_no_boot_check_is_forwarded(self):
+        _, args = self.call(["flash", "boot", self.img, "--no-boot-check"])
+        self.assertIn("--no-boot-check", args)
 
     def test_backup_list_omits_the_timestamp(self):
         """restore_partitions.sh lists when given no timestamp."""

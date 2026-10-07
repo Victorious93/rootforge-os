@@ -1,58 +1,61 @@
-"""rootforge.core.backup — SHA-256-verified partition backups.
+"""rootforge.core.backup — the backup/restore integrity contract.
 
-Wraps `backup_partitions.sh` / `restore_partitions.sh` rather than
-reimplementing them: the actual `fastboot fetch` / `adb root + dd` /
-`fastboot flash` logic stays in those scripts, invoked as subprocesses
-with stdio inherited (so `restore_partitions.sh`'s own typed `RESTORE`
-confirmation prompt still works normally). This module's own job is the
-part the audit found missing: a JSON manifest recording a SHA-256
-checksum per backed-up partition image, and a `verify` command that
-re-hashes and compares.
+backup_partitions.sh captures images and writes `manifest.json` (version 1);
+restore_partitions.sh restores only what this module has verified. Keeping
+the rules here, in one place, is what makes them enforceable from both the
+`rootforge backup` commands and the standalone scripts.
+
+manifest.json (version 1)::
+
+    {"manifest_version": 1, "trust": "captured" | "legacy-imported",
+     "codename": "...", "timestamp": "...", "serial": "...",
+     "created_at": "ISO-8601", "complete": true|false,
+     "requested_partitions": ["boot", ...], "missing_partitions": [...],
+     "device": {"product": ..., "slot_mode": ..., "current_slot": ...,
+                "bootloader_unlocked": ..., "version_bootloader": ...},
+     "entries": [{"partition": "boot", "file": "boot.img", "sha256": "...",
+                  "size_bytes": 123, "method": "fastboot-fetch|adb-dd|unknown",
+                  "slot": "a" | null}]}
+
+Unknown device facts are null, never guessed. A directory is valid only if
+every listed image exists as a regular, non-empty file inside it with the
+recorded size and SHA-256, no listed name escapes the directory, no entry is
+a symlink, and there is no `*.img` the manifest does not list. A backup with
+only the older `SHA256SUMS` file is "legacy": it can be verified for
+corruption but is never restorable until `backup import-legacy` records it
+as `legacy-imported` — an explicit, labelled step, not a silent upgrade.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
-import shutil
-import subprocess
+import re
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Sequence, Tuple
 
 MANIFEST_NAME = "manifest.json"
+SUMS_NAME = "SHA256SUMS"
+MANIFEST_VERSION = 1
+TRUST_CAPTURED = "captured"
+TRUST_LEGACY_IMPORTED = "legacy-imported"
+
+_PARTITION_RE = re.compile(r"^[a-z0-9_]+$")
+_SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+_SUMS_LINE_RE = re.compile(r"^([0-9a-fA-F]{64}) [ *](.+)$")
 
 
-def _rootforge_home() -> Path:
+def rootforge_home() -> Path:
     return Path(os.environ.get("ROOTFORGE_HOME", str(Path.home() / "rootforge")))
 
 
-def _backups_root(codename: str) -> Path:
-    return _rootforge_home() / "devices" / codename / "backups"
+def backup_dir(codename: str, timestamp: str) -> Path:
+    return rootforge_home() / "devices" / codename / "backups" / timestamp
 
 
-def _backup_dir(codename: str, timestamp: str) -> Path:
-    return _backups_root(codename) / timestamp
-
-
-def _script_path(name: str) -> Path:
-    # This file lives at .../usr/local/lib/rootforge/core/backup.py in both
-    # a real install and a repo checkout (config/includes.chroot/usr/local/
-    # lib/rootforge/core/backup.py) — parents[3] is usr/local in either
-    # case, so the same relative lookup finds the sibling script both ways.
-    candidate = Path(__file__).resolve().parents[3] / "bin" / name
-    if candidate.is_file():
-        return candidate
-    found = shutil.which(name)
-    if found:
-        return Path(found)
-    raise FileNotFoundError(
-        f"{name} not found next to this module ({candidate}) or on PATH — "
-        "check your RootForge install."
-    )
-
-
-def _sha256_file(path: Path) -> str:
+def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(1024 * 1024), b""):
@@ -60,135 +63,288 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _write_manifest(backup_dir: Path, codename: str, timestamp: str) -> dict:
-    partitions = {}
-    for img in sorted(backup_dir.glob("*.img")):
-        partitions[img.stem] = {
-            "sha256": _sha256_file(img),
-            "size_bytes": img.stat().st_size,
+@dataclass
+class VerifyResult:
+    ok: bool = False
+    kind: str = "none"              # "manifest" | "legacy-sums" | "none"
+    trust: Optional[str] = None
+    complete: Optional[bool] = None
+    codename: Optional[str] = None
+    timestamp: Optional[str] = None
+    device: Dict[str, object] = field(default_factory=dict)
+    problems: List[str] = field(default_factory=list)
+    # One row per image examined: {"name", "status", ...}. Status is one of
+    # OK, MISSING, MISMATCH, SIZE, EMPTY, SYMLINK, UNLISTED, MALFORMED.
+    images: List[Dict[str, object]] = field(default_factory=list)
+    # Verified entries only, ready to flash: partition, file, path, sha256,
+    # size_bytes, method, slot. Empty unless every selected image passed.
+    entries: List[Dict[str, object]] = field(default_factory=list)
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "ok": self.ok, "kind": self.kind, "trust": self.trust,
+            "complete": self.complete, "codename": self.codename,
+            "timestamp": self.timestamp, "device": self.device,
+            "problems": self.problems, "images": self.images, "entries": self.entries,
         }
-    manifest = {
-        "codename": codename,
-        "timestamp": timestamp,
-        "manifest_written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "partitions": partitions,
-    }
-    (backup_dir / MANIFEST_NAME).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    return manifest
 
 
-def _newest_backup_dir(codename: str) -> Optional[Path]:
-    root = _backups_root(codename)
-    if not root.is_dir():
-        return None
-    candidates = [d for d in root.iterdir() if d.is_dir()]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda d: d.stat().st_mtime)
+def parse_sums(text: str) -> Tuple[Dict[str, str], List[str]]:
+    """Parse sha256sum output into ({name: digest}, [malformed lines]).
 
-
-def cmd_create(codename: str, serial: Optional[str] = None) -> int:
-    try:
-        script = _script_path("backup_partitions.sh")
-    except FileNotFoundError as exc:
-        print(exc)
-        return 1
-
-    cmd = [str(script), codename]
-    if serial:
-        cmd.append(serial)
-    result = subprocess.run(cmd)  # stdio inherited — script prints its own progress/log path
-    if result.returncode != 0:
-        return result.returncode
-
-    backup_dir = _newest_backup_dir(codename)
-    if backup_dir is None:
-        print(f"backup_partitions.sh exited 0 but no backup directory was found under {_backups_root(codename)}")
-        return 1
-
-    manifest = _write_manifest(backup_dir, codename, backup_dir.name)
-    count = len(manifest["partitions"])
-    print(f"Wrote SHA-256 manifest for {count} partition(s): {backup_dir / MANIFEST_NAME}")
-    return 0
-
-
-def cmd_list(codename: Optional[str] = None) -> int:
-    codenames: List[str] = (
-        [codename] if codename else sorted(d.name for d in (_rootforge_home() / "devices").glob("*") if d.is_dir())
-    )
-    if not codenames:
-        print(f"No devices with backups found under {_rootforge_home() / 'devices'}")
-        return 0
-
-    for cn in codenames:
-        root = _backups_root(cn)
-        if not root.is_dir():
+    A name containing a path separator is malformed: the sums file sits
+    inside the backup directory, and a name like ../x would make verify hash
+    (and vouch for) a file outside it.
+    """
+    entries: Dict[str, str] = {}
+    bad: List[str] = []
+    for line in text.splitlines():
+        if not line.strip():
             continue
-        print(f"{cn}:")
-        for backup_dir in sorted(root.iterdir()):
-            if not backup_dir.is_dir():
-                continue
-            images = sorted(backup_dir.glob("*.img"))
-            has_manifest = (backup_dir / MANIFEST_NAME).is_file()
-            tag = "manifest" if has_manifest else "no manifest"
-            print(f"  {backup_dir.name}  ({len(images)} image(s), {tag})")
-    return 0
-
-
-def cmd_verify(codename: str, timestamp: str) -> int:
-    backup_dir = _backup_dir(codename, timestamp)
-    manifest_path = backup_dir / MANIFEST_NAME
-    if not manifest_path.is_file():
-        print(f"No {MANIFEST_NAME} at {backup_dir}")
-        print("This backup predates SHA-256 manifests, or wasn't created with `rootforge backup create`.")
-        return 1
-
-    manifest = json.loads(manifest_path.read_text())
-    failures = 0
-    for name, entry in sorted(manifest.get("partitions", {}).items()):
-        img_path = backup_dir / f"{name}.img"
-        if not img_path.is_file():
-            print(f"[MISSING]  {name}.img")
-            failures += 1
+        match = _SUMS_LINE_RE.match(line)
+        if not match or "/" in match.group(2) or match.group(2) in (".", ".."):
+            bad.append(line)
             continue
-        actual = _sha256_file(img_path)
-        if actual == entry["sha256"]:
-            print(f"[OK]       {name}.img")
-        else:
-            print(f"[MISMATCH] {name}.img (expected {entry['sha256'][:12]}…, got {actual[:12]}…)")
-            failures += 1
-
-    print()
-    if failures:
-        print(f"{failures} partition(s) failed verification.")
-    else:
-        print("All partitions verified OK.")
-    return 1 if failures else 0
+        entries[match.group(2)] = match.group(1).lower()
+    return entries, bad
 
 
-def cmd_restore(codename: str, timestamp: str, serial: Optional[str] = None) -> int:
-    backup_dir = _backup_dir(codename, timestamp)
-    manifest_path = backup_dir / MANIFEST_NAME
+def _check_image(directory: Path, name: str, expected_sha: str,
+                 expected_size: Optional[int]) -> Tuple[str, Optional[Path]]:
+    """Return (status, path) for one listed image. status 'OK' means safe to flash."""
+    path = directory / name
+    if path.is_symlink():
+        return "SYMLINK", None
+    if not path.is_file():
+        return "MISSING", None
+    if path.resolve().parent != directory.resolve():
+        return "SYMLINK", None
+    size = path.stat().st_size
+    if size == 0:
+        return "EMPTY", None
+    if expected_size is not None and size != expected_size:
+        return "SIZE", None
+    if sha256_file(path) != expected_sha:
+        return "MISMATCH", None
+    return "OK", path
+
+
+def _unlisted_images(directory: Path, listed: Sequence[str]) -> List[str]:
+    return sorted(p.name for p in directory.iterdir()
+                  if p.name.lower().endswith(".img") and p.name not in listed)
+
+
+def _validate_manifest(manifest: object) -> Tuple[List[Dict[str, object]], List[str]]:
+    """Return (entries, problems). Problems make the whole manifest unusable."""
+    problems: List[str] = []
+    if not isinstance(manifest, dict):
+        return [], ["manifest.json is not a JSON object"]
+    if manifest.get("manifest_version") != MANIFEST_VERSION:
+        problems.append(
+            f"unsupported manifest_version {manifest.get('manifest_version')!r} "
+            f"(this RootForge reads version {MANIFEST_VERSION})"
+        )
+    if manifest.get("trust") not in (TRUST_CAPTURED, TRUST_LEGACY_IMPORTED):
+        problems.append(f"unknown trust value {manifest.get('trust')!r}")
+    raw_entries = manifest.get("entries")
+    if not isinstance(raw_entries, list) or not raw_entries:
+        problems.append("manifest lists no images")
+        return [], problems
+    seen = set()
+    entries: List[Dict[str, object]] = []
+    for index, entry in enumerate(raw_entries):
+        label = f"entry {index}"
+        if not isinstance(entry, dict):
+            problems.append(f"{label} is not an object")
+            continue
+        partition = entry.get("partition")
+        if not isinstance(partition, str) or not _PARTITION_RE.match(partition):
+            problems.append(f"{label}: invalid partition name {partition!r}")
+            continue
+        label = f"entry '{partition}'"
+        if partition in seen:
+            problems.append(f"{label}: listed more than once")
+            continue
+        seen.add(partition)
+        if entry.get("file") != f"{partition}.img":
+            problems.append(f"{label}: file must be exactly '{partition}.img', got {entry.get('file')!r}")
+            continue
+        sha = entry.get("sha256")
+        if not isinstance(sha, str) or not _SHA_RE.match(sha):
+            problems.append(f"{label}: invalid sha256")
+            continue
+        size = entry.get("size_bytes")
+        if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
+            problems.append(f"{label}: invalid size_bytes")
+            continue
+        entries.append(entry)
+    return entries, problems
+
+
+def check_backup(directory: Path, partitions: Optional[Sequence[str]] = None) -> VerifyResult:
+    """Verify a backup directory. Never prints and never writes."""
+    result = VerifyResult()
+    if not directory.is_dir():
+        result.problems.append(f"no such backup: {directory}")
+        return result
+    manifest_path = directory / MANIFEST_NAME
+    sums_path = directory / SUMS_NAME
+
     if manifest_path.is_file():
-        print("Verifying backup integrity before restore...")
-        if cmd_verify(codename, timestamp) != 0:
-            print()
-            print("WARNING: integrity verification failed above. Proceeding will let")
-            print("restore_partitions.sh's own confirmation prompt decide whether to flash")
-            print("a backup that no longer matches its recorded checksums.")
-        print()
+        result.kind = "manifest"
+        try:
+            manifest = json.loads(manifest_path.read_text())
+        except (OSError, ValueError) as exc:
+            result.problems.append(f"{MANIFEST_NAME} could not be read: {exc}")
+            return result
+        entries, problems = _validate_manifest(manifest)
+        result.problems += problems
+        if problems:
+            return result
+        result.trust = manifest.get("trust")
+        result.complete = manifest.get("complete")
+        result.codename = manifest.get("codename")
+        result.timestamp = manifest.get("timestamp")
+        device = manifest.get("device")
+        result.device = device if isinstance(device, dict) else {}
+
+        by_partition = {str(e["partition"]): e for e in entries}
+        selected = list(by_partition)
+        if partitions is not None:
+            selected = list(dict.fromkeys(partitions))
+            unknown = [p for p in selected if p not in by_partition]
+            for name in unknown:
+                result.problems.append(f"'{name}' is not in this backup's manifest")
+            selected = [p for p in selected if p in by_partition]
+        verified: List[Dict[str, object]] = []
+        for partition in selected:
+            entry = by_partition[partition]
+            status, path = _check_image(
+                directory, str(entry["file"]), str(entry["sha256"]), int(entry["size_bytes"])
+            )
+            result.images.append({"name": entry["file"], "status": status})
+            if status != "OK":
+                result.problems.append(f"{entry['file']}: {status}")
+            else:
+                verified.append({
+                    "partition": partition, "file": entry["file"], "path": str(path),
+                    "sha256": entry["sha256"], "size_bytes": entry["size_bytes"],
+                    "method": entry.get("method"), "slot": entry.get("slot"),
+                })
+        for name in _unlisted_images(directory, [str(e["file"]) for e in entries]):
+            result.images.append({"name": name, "status": "UNLISTED"})
+            result.problems.append(f"{name}: UNLISTED (not in the manifest; refusing to treat the backup as intact)")
+        result.ok = not result.problems
+        result.entries = verified if result.ok else []
+        return result
+
+    if sums_path.is_file():
+        result.kind = "legacy-sums"
+        result.trust = "legacy"
+        try:
+            sums, bad = parse_sums(sums_path.read_text())
+        except OSError as exc:
+            result.problems.append(f"{SUMS_NAME} could not be read: {exc}")
+            return result
+        for line in bad:
+            result.images.append({"name": line, "status": "MALFORMED"})
+            result.problems.append(f"malformed checksum line: {line}")
+        if not sums and not bad:
+            result.problems.append(f"{SUMS_NAME} is empty — nothing was verified")
+            return result
+        for name, expected in sorted(sums.items()):
+            status, _ = _check_image(directory, name, expected, None)
+            result.images.append({"name": name, "status": status})
+            if status != "OK":
+                result.problems.append(f"{name}: {status}")
+        for name in _unlisted_images(directory, list(sums)):
+            result.images.append({"name": name, "status": "UNLISTED"})
+            result.problems.append(f"{name}: UNLISTED (not covered by {SUMS_NAME})")
+        result.ok = not result.problems
+        return result
+
+    result.problems.append(
+        f"no {MANIFEST_NAME} or {SUMS_NAME} in {directory} — integrity cannot be verified"
+    )
+    return result
+
+
+def import_legacy(directory: Path, codename: str) -> Tuple[bool, str]:
+    """Record a verified legacy (SHA256SUMS-only) backup as `legacy-imported`.
+
+    The result is deliberately labelled: it proves the images still match the
+    checksums taken at capture time, but nothing about which device or slot
+    they came from, so restore demands an explicit opt-in for these.
+    """
+    if (directory / MANIFEST_NAME).exists():
+        return False, f"{MANIFEST_NAME} already exists in {directory}; nothing to import"
+    result = check_backup(directory)
+    if result.kind != "legacy-sums":
+        return False, f"{directory} is not a legacy SHA256SUMS backup"
+    if not result.ok:
+        return False, "the legacy backup does not verify, so it cannot be imported: " + "; ".join(result.problems)
+    sums, _ = parse_sums((directory / SUMS_NAME).read_text())
+    entries = []
+    for name, digest in sorted(sums.items()):
+        if not name.endswith(".img"):
+            return False, f"cannot import: '{name}' is not an .img file"
+        partition = name[: -len(".img")]
+        if not _PARTITION_RE.match(partition):
+            return False, f"cannot import: '{name}' is not a valid partition image name"
+        entries.append({
+            "partition": partition, "file": name, "sha256": digest,
+            "size_bytes": (directory / name).stat().st_size,
+            "method": "unknown", "slot": None,
+        })
+    manifest = {
+        "manifest_version": MANIFEST_VERSION, "trust": TRUST_LEGACY_IMPORTED,
+        "codename": codename, "timestamp": directory.name, "serial": None,
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "complete": None, "requested_partitions": None, "missing_partitions": None,
+        "device": {}, "entries": entries,
+    }
+    tmp = directory / f".{MANIFEST_NAME}.tmp"
+    tmp.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    os.replace(tmp, directory / MANIFEST_NAME)
+    return True, (
+        f"Imported {len(entries)} image(s) as '{TRUST_LEGACY_IMPORTED}'. Device identity and slot "
+        "are unknown; restore will require --accept-legacy-import."
+    )
+
+
+def _render(result: VerifyResult) -> None:
+    for problem in result.problems:
+        if not any(problem.startswith(str(img["name"])) for img in result.images):
+            print(problem)
+    for img in sorted(result.images, key=lambda i: str(i["name"])):
+        status = str(img["status"])
+        print(f"[{status}]".ljust(12) + str(img["name"]))
+    print()
+    if not result.ok:
+        print(f"{len(result.problems)} problem(s) found; do not restore this backup.")
+        return
+    count = len(result.images)
+    print(f"All {count} image(s) verified OK.")
+    if result.kind == "legacy-sums":
+        print(f"Legacy backup (checksums only): it records no device identity. To make it "
+              f"restorable, run `rootforge backup import-legacy`.")
+    elif result.complete is False:
+        print("Note: this backup is INCOMPLETE — some requested partitions were not captured.")
+    if result.trust == TRUST_LEGACY_IMPORTED:
+        print("Trust: legacy-imported (device and slot unknown).")
+
+
+def cmd_verify(codename: str, timestamp: str, as_json: bool = False,
+               partitions: Optional[Sequence[str]] = None) -> int:
+    result = check_backup(backup_dir(codename, timestamp), partitions)
+    if as_json:
+        print(json.dumps(result.as_dict(), indent=2))
     else:
-        print(f"No {MANIFEST_NAME} for this backup — integrity cannot be verified before restore.")
-        print()
+        _render(result)
+    return 0 if result.ok else 1
 
-    try:
-        script = _script_path("restore_partitions.sh")
-    except FileNotFoundError as exc:
-        print(exc)
-        return 1
 
-    cmd = [str(script), codename, timestamp]
-    if serial:
-        cmd.append(serial)
-    result = subprocess.run(cmd)  # stdio inherited — this is what shows the RESTORE prompt
-    return result.returncode
+def cmd_import_legacy(codename: str, timestamp: str) -> int:
+    ok, message = import_legacy(backup_dir(codename, timestamp), codename)
+    print(message)
+    return 0 if ok else 1
