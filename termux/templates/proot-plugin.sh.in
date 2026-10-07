@@ -1,0 +1,49 @@
+# shellcheck shell=bash
+# RootForge OS proot-distro plugin — Victorious Framework | Origin Source Labs
+#
+# GENERATED for release @TAG@ by termux/make-release-metadata.sh from the
+# exact tarballs that release publishes. Do not hand-edit, and do not use the
+# copy under termux/templates/ — it is a template: its tokens are only filled
+# in by a release build, and it refuses to load until they are.
+#
+# No shebang — proot-distro sources this file, it never executes it directly.
+#
+# [Likely] this matches proot-distro's current plugin API (DISTRO_NAME/
+# DISTRO_COMMENT strings, TARBALL_URL/TARBALL_SHA256 associative arrays keyed
+# by `uname -m`-style arch names, an optional distro_setup() hook with
+# $DISTRO_PATH available). Check against a plugin shipped in proot-distro's own
+# repo if `proot-distro install` rejects this file; this repo cannot pin a
+# proot-distro version.
+
+DISTRO_NAME="rootforge"
+DISTRO_COMMENT="RootForge OS @TAG@ — Android root module dev toolchain, non-root/PRoot (Victorious Framework)"
+
+# An unfilled template must fail loudly rather than install something
+# unverified, so every digest is checked before use.
+__rf_check_digest() {
+	case "$1" in
+		@*|REPLACE*|"") echo "rootforge plugin: this is an unreleased template (no digest filled in); use the plugin published with a release." >&2; return 1 ;;
+	esac
+	[ "${#1}" -eq 64 ] || { echo "rootforge plugin: '$1' is not a SHA-256 digest." >&2; return 1; }
+}
+
+TARBALL_URL['aarch64']="@BASE_URL@/rootforge-proot-arm64.tar.xz"  # arch:aarch64
+TARBALL_SHA256['aarch64']="@SHA256_AARCH64@"  # arch:aarch64
+__rf_check_digest "${TARBALL_SHA256['aarch64']}" || return 1  # arch:aarch64
+
+# x86_64 only matters for x86 Android hardware (rare) or a desktop-Linux
+# PRoot sandbox used for testing this plugin without a phone. Real Android
+# hardware almost always wants aarch64 above.
+TARBALL_URL['x86_64']="@BASE_URL@/rootforge-proot-amd64.tar.xz"  # arch:x86_64
+TARBALL_SHA256['x86_64']="@SHA256_X86_64@"  # arch:x86_64
+__rf_check_digest "${TARBALL_SHA256['x86_64']}" || return 1  # arch:x86_64
+
+distro_setup() {
+	# Real DNS for the container — Termux's own resolv.conf isn't visible
+	# inside the PRoot mount namespace by default.
+	mkdir -p "${DISTRO_PATH}/etc"
+	{
+		echo "nameserver 1.1.1.1"
+		echo "nameserver 8.8.8.8"
+	} > "${DISTRO_PATH}/etc/resolv.conf"
+}

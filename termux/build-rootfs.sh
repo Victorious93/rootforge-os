@@ -286,7 +286,9 @@ log "Done."
 log "  Tarball: $TARBALL"
 log "  SHA256:  $(cat "${TARBALL}.sha256")"
 log ""
-log "Publish both to a GitHub Release, then fill TARBALL_URL / TARBALL_SHA256 for"
-log "'$ARCH' in termux/proot-distro-plugins/rootforge.sh."
+log "Next: build the other flavor/arch you need, collect the tarballs and their .sha256 files in one"
+log "directory (named rootforge-<flavor>-<arch>.tar.xz), then generate the install metadata from them:"
+log "  termux/make-release-metadata.sh --tag <vX.Y.Z> --dist <dir> --out <dir>"
+log "(release.yml does this on a tagged push; for a local build add --base-url and --arches/--flavors.)"
 
 # Victorious Framework

@@ -1839,6 +1839,117 @@ run_script bash "$CHROOT_LAUNCHER" install
 assert_eq "install with no tarball is rejected" "$RC" "1"
 assert_contains "install with no tarball prints usage" "$OUT" "install <rootfs.tar.xz>"
 
+# --- install: verified, scanned, staged ---
+
+# make_rootfs_tar <out.tar.xz> — a tiny rootfs-shaped archive.
+make_rootfs_tar() {
+  local out="$1" src="$SANDBOX/rootfs-src"
+  mkdir -p "$src/etc" "$src/bin"
+  printf 'original\n' > "$src/etc/hostname"
+  printf '#!/bin/sh\n' > "$src/bin/sh"
+  tar -C "$src" -cJf "$out" .
+}
+
+new_sandbox
+export ROOTFORGE_CHROOT_DIR="$SANDBOX/rootfs"
+make_rootfs_tar "$SANDBOX/rootfs.tar.xz"
+run_script bash "$CHROOT_LAUNCHER" install "$SANDBOX/rootfs.tar.xz"
+assert_eq "install without a checksum is refused" "$RC" "1"
+assert_contains "the missing checksum is explained" "$OUT" "No checksum given"
+assert_eq "nothing is unpacked without a checksum" "$([ -e "$ROOTFORGE_CHROOT_DIR" ] && echo present || echo absent)" "absent"
+
+WRONG="$(printf '0%.0s' $(seq 1 64))"
+run_script bash "$CHROOT_LAUNCHER" install "$SANDBOX/rootfs.tar.xz" --sha256 "$WRONG"
+assert_eq "a wrong checksum is refused" "$RC" "1"
+assert_contains "the mismatch shows expected and actual" "$OUT" "Checksum mismatch"
+assert_eq "nothing is unpacked on a mismatch" "$([ -e "$ROOTFORGE_CHROOT_DIR" ] && echo present || echo absent)" "absent"
+
+run_script bash "$CHROOT_LAUNCHER" install "$SANDBOX/rootfs.tar.xz" --sha256 "not-hex"
+assert_eq "a malformed digest is refused" "$RC" "1"
+
+GOOD="$(sha256sum "$SANDBOX/rootfs.tar.xz" | cut -d' ' -f1)"
+run_script bash "$CHROOT_LAUNCHER" install "$SANDBOX/rootfs.tar.xz" --sha256 "$GOOD"
+assert_eq "a verified archive installs" "$RC" "0"
+assert_eq "the completion marker records the digest" "$(cat "$ROOTFORGE_CHROOT_DIR/etc/rootforge/install-complete")" "$GOOD"
+assert_eq "the container hostname is set" "$(cat "$ROOTFORGE_CHROOT_DIR/etc/hostname")" "rootforge-chroot"
+assert_eq "no staging directory is left behind" "$([ -e "$ROOTFORGE_CHROOT_DIR.partial" ] && echo present || echo absent)" "absent"
+run_script bash "$CHROOT_LAUNCHER" install "$SANDBOX/rootfs.tar.xz" --sha256 "$GOOD"
+assert_eq "an existing install is not overwritten" "$RC" "1"
+assert_contains "the existing install is named" "$OUT" "already exists"
+
+# A digest-only .sha256 (what build-rootfs.sh writes) and the sha256sum
+# "digest  name" format are both accepted.
+new_sandbox
+export ROOTFORGE_CHROOT_DIR="$SANDBOX/rootfs"
+make_rootfs_tar "$SANDBOX/rootfs.tar.xz"
+sha256sum "$SANDBOX/rootfs.tar.xz" | cut -d' ' -f1 > "$SANDBOX/rootfs.tar.xz.sha256"
+run_script bash "$CHROOT_LAUNCHER" install "$SANDBOX/rootfs.tar.xz" --sha256-file "$SANDBOX/rootfs.tar.xz.sha256"
+assert_eq "--sha256-file accepts a digest-only file" "$RC" "0"
+new_sandbox
+export ROOTFORGE_CHROOT_DIR="$SANDBOX/rootfs"
+make_rootfs_tar "$SANDBOX/rootfs.tar.xz"
+( cd "$SANDBOX" && sha256sum rootfs.tar.xz > SHA256SUMS )
+run_script bash "$CHROOT_LAUNCHER" install "$SANDBOX/rootfs.tar.xz" --sha256-file "$SANDBOX/SHA256SUMS"
+assert_eq "--sha256-file accepts sha256sum output" "$RC" "0"
+
+# craft_tar <out> <python-body> — build a hostile archive with tarfile.
+craft_tar() {
+  python3 -I - "$1" "$2" <<'PY'
+import io, sys, tarfile
+out, kind = sys.argv[1], sys.argv[2]
+with tarfile.open(out, "w:xz") as tar:
+    def add(name, data=b"x", link=None):
+        info = tarfile.TarInfo(name)
+        if link is not None:
+            info.type = tarfile.SYMTYPE
+            info.linkname = link
+            tar.addfile(info)
+        else:
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    add("etc/hostname", b"ok\n")
+    if kind == "absolute":
+        add("/tmp/rf-evil-absolute")
+    elif kind == "dotdot":
+        add("../rf-evil-dotdot")
+    elif kind == "symlink-through":
+        add("escape", link="/tmp")
+        add("escape/rf-evil-through")
+PY
+}
+
+for kind in absolute dotdot symlink-through; do
+  new_sandbox
+  export ROOTFORGE_CHROOT_DIR="$SANDBOX/rootfs"
+  craft_tar "$SANDBOX/evil.tar.xz" "$kind"
+  EVIL_SUM="$(sha256sum "$SANDBOX/evil.tar.xz" | cut -d' ' -f1)"
+  run_script bash "$CHROOT_LAUNCHER" install "$SANDBOX/evil.tar.xz" --sha256 "$EVIL_SUM"
+  assert_eq "a $kind member is refused even with a matching checksum" "$RC" "1"
+  assert_contains "the $kind refusal says it is not safe to unpack as root" "$OUT" "not safe to unpack as root"
+  assert_eq "a $kind archive unpacks nothing" "$([ -e "$ROOTFORGE_CHROOT_DIR" ] && echo present || echo absent)" "absent"
+  assert_eq "a $kind archive leaves no staging directory" "$([ -e "$ROOTFORGE_CHROOT_DIR.partial" ] && echo present || echo absent)" "absent"
+done
+
+# A truncated download whose checksum was computed *from the truncated file*
+# still must not install.
+new_sandbox
+export ROOTFORGE_CHROOT_DIR="$SANDBOX/rootfs"
+make_rootfs_tar "$SANDBOX/rootfs.tar.xz"
+head -c 100 "$SANDBOX/rootfs.tar.xz" > "$SANDBOX/trunc.tar.xz"
+TRUNC_SUM="$(sha256sum "$SANDBOX/trunc.tar.xz" | cut -d' ' -f1)"
+run_script bash "$CHROOT_LAUNCHER" install "$SANDBOX/trunc.tar.xz" --sha256 "$TRUNC_SUM"
+assert_eq "a truncated archive is refused" "$RC" "1"
+assert_eq "a truncated archive installs nothing" "$([ -e "$ROOTFORGE_CHROOT_DIR" ] && echo present || echo absent)" "absent"
+
+# login must not enter a rootfs that was never completed and verified.
+new_sandbox
+export ROOTFORGE_CHROOT_DIR="$SANDBOX/rootfs"
+mkdir -p "$ROOTFORGE_CHROOT_DIR/etc"
+run_script bash "$CHROOT_LAUNCHER" login
+assert_eq "login refuses a rootfs without the completion marker" "$RC" "1"
+assert_contains "the marker refusal says how to reinstall" "$OUT" "completed-install marker"
+drop_sandbox
+
 new_sandbox
 # Android's `su -c` takes one string, so every privileged command in this
 # launcher is built as text and re-parsed by a shell. ROOTFORGE_CHROOT_DIR is
@@ -1864,6 +1975,133 @@ if [ -f "$SANDBOX/pwned" ]; then
 else
   pass "rf_q blocks command injection through a rootfs path"
 fi
+drop_sandbox
+
+section "termux/make-release-metadata.sh — release metadata from the real artifacts"
+
+GEN="$REPO_ROOT/termux/make-release-metadata.sh"
+
+# make_termux_tar <dist> <flavor> <arch> [build-info flavor] [build-info arch]
+# A small rootfs-shaped archive whose /etc/rootforge/build-info says what the
+# real build-rootfs.sh would record, plus the digest-only .sha256 it writes.
+make_termux_tar() {
+  local dist="$1" flavor="$2" arch="$3" bflavor="${4:-$2}" barch="${5:-$3}"
+  local src="$SANDBOX/src-$flavor-$arch"
+  mkdir -p "$src/etc/rootforge" "$dist"
+  printf 'flavor=%s\narch=%s\nx11=0\nbuilt=20260101_000000\n' "$bflavor" "$barch" > "$src/etc/rootforge/build-info"
+  tar -C "$src" -cJf "$dist/rootforge-$flavor-$arch.tar.xz" .
+  sha256sum "$dist/rootforge-$flavor-$arch.tar.xz" | cut -d' ' -f1 > "$dist/rootforge-$flavor-$arch.tar.xz.sha256"
+}
+make_all_termux_tars() {
+  local f a
+  for f in proot chroot; do for a in arm64 amd64; do make_termux_tar "$1" "$f" "$a"; done; done
+}
+
+new_sandbox
+make_all_termux_tars "$SANDBOX/dist"
+run_script bash "$GEN" --tag v1.2.3 --dist "$SANDBOX/dist" --out "$SANDBOX/out"
+assert_eq "a complete set of artifacts generates metadata" "$RC" "0"
+ARM_SUM="$(cut -d' ' -f1 "$SANDBOX/dist/rootforge-proot-arm64.tar.xz.sha256")"
+AMD_SUM="$(cut -d' ' -f1 "$SANDBOX/dist/rootforge-proot-amd64.tar.xz.sha256")"
+assert_contains "the plugin carries the real arm64 digest" "$(cat "$SANDBOX/out/rootforge-proot-plugin.sh")" "$ARM_SUM"
+assert_contains "the plugin carries the real amd64 digest" "$(cat "$SANDBOX/out/rootforge-proot-plugin.sh")" "$AMD_SUM"
+assert_contains "the plugin URL is bound to the tag, not 'latest'" "$(cat "$SANDBOX/out/rootforge-proot-plugin.sh")" "releases/download/v1.2.3/rootforge-proot-arm64.tar.xz"
+assert_not_contains "no moving 'latest' URL survives" "$(cat "$SANDBOX/out/rootforge-proot-plugin.sh" "$SANDBOX/out/install.sh")" "releases/latest"
+assert_eq "no placeholder survives in the generated files" "$(cat "$SANDBOX/out/rootforge-proot-plugin.sh" "$SANDBOX/out/install.sh" | grep -cE '@[A-Z0-9_]+@|REPLACE_WITH' || true)" "0"
+assert_eq "the generated installer is valid shell" "$(bash -n "$SANDBOX/out/install.sh" && echo ok)" "ok"
+assert_eq "the generated plugin is valid shell" "$(bash -n "$SANDBOX/out/rootforge-proot-plugin.sh" && echo ok)" "ok"
+PLUGIN_SUM="$(sha256sum "$SANDBOX/out/rootforge-proot-plugin.sh" | cut -d' ' -f1)"
+assert_contains "the installer pins the digest of the plugin it ships with" "$(cat "$SANDBOX/out/install.sh")" "PLUGIN_SHA256=\"$PLUGIN_SUM\""
+LAUNCHER_SUM="$(sha256sum "$SANDBOX/out/rootforge-chroot.sh" | cut -d' ' -f1)"
+assert_contains "the installer pins the digest of the launcher" "$(cat "$SANDBOX/out/install.sh")" "$LAUNCHER_SUM"
+assert_eq "the published launcher is the repository's launcher" "$(cmp -s "$SANDBOX/out/rootforge-chroot.sh" "$REPO_ROOT/termux/rootforge-chroot.sh" && echo same)" "same"
+# SHA256SUMS must verify every listed file, in sha256sum's own format.
+mkdir -p "$SANDBOX/assets"
+cp "$SANDBOX"/dist/*.tar.xz "$SANDBOX"/out/* "$SANDBOX/assets/"
+assert_eq "SHA256SUMS verifies every published file" "$(cd "$SANDBOX/assets" && sha256sum -c --quiet SHA256SUMS >/dev/null 2>&1 && echo ok)" "ok"
+assert_eq "the metadata binds arch, flavor and URL to each digest" \
+  "$(jq -r '.artifacts[] | select(.flavor=="chroot" and .arch=="arm64") | "\(.url) \(.sha256)"' "$SANDBOX/out/release-metadata.json")" \
+  "https://github.com/Victorious93/rootforge-os/releases/download/v1.2.3/rootforge-chroot-arm64.tar.xz $(cut -d' ' -f1 "$SANDBOX/dist/rootforge-chroot-arm64.tar.xz.sha256")"
+
+# The checked-in templates must not be usable as they are.
+run_script bash "$REPO_ROOT/termux/templates/install.sh.in"
+assert_eq "the installer template refuses to run" "$RC" "1"
+assert_contains "the installer template says it is a template" "$OUT" "unreleased installer template"
+OUT="$(bash -c 'declare -A TARBALL_URL TARBALL_SHA256; . "$1"; echo "loaded rc=$?"' _ "$REPO_ROOT/termux/templates/proot-plugin.sh.in" 2>&1)"
+assert_contains "the plugin template refuses to load" "$OUT" "unreleased template"
+assert_not_contains "the plugin template does not reach distro_setup" "$OUT" "loaded rc=0"
+
+# A tampered installer is caught by its own embedded digest check: the plugin
+# it downloads must match the digest in the installer.
+assert_contains "the installer verifies the plugin before installing it" "$(cat "$SANDBOX/out/install.sh")" 'if [[ "$ACTUAL" != "$PLUGIN_SHA256" ]]'
+
+# --- refusals: each must fail and write nothing -------------------------------
+gen_refused() {  # gen_refused <label> <expected-text> [extra args...]
+  local label="$1" expect="$2"; shift 2
+  rm -rf "$SANDBOX/out"
+  run_script bash "$GEN" --tag v1.2.3 --dist "$SANDBOX/dist" --out "$SANDBOX/out" "$@"
+  assert_eq "$label: refused" "$RC" "1"
+  assert_contains "$label: says why" "$OUT" "$expect"
+  assert_eq "$label: writes nothing" "$([ -e "$SANDBOX/out/install.sh" ] && echo wrote || echo clean)" "clean"
+}
+
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+rm "$SANDBOX/dist/rootforge-chroot-amd64.tar.xz"
+gen_refused "a missing artifact" "missing artifact: rootforge-chroot-amd64.tar.xz"
+
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+: > "$SANDBOX/dist/rootforge-proot-arm64.tar.xz"
+gen_refused "an empty artifact" "artifact is empty"
+
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+rm "$SANDBOX/dist/rootforge-proot-arm64.tar.xz.sha256"
+gen_refused "a missing digest file" "missing digest file"
+
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+printf 'not a digest\n' > "$SANDBOX/dist/rootforge-proot-arm64.tar.xz.sha256"
+gen_refused "a malformed digest file" "does not contain a SHA-256 digest"
+
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+printf 'tampered' >> "$SANDBOX/dist/rootforge-proot-arm64.tar.xz"
+gen_refused "a tarball that no longer matches its digest" "does not match its recorded digest"
+
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+make_termux_tar "$SANDBOX/dist" proot arm64 proot amd64
+gen_refused "an arm64 file whose build-info says amd64" "claims arch 'arm64' but its build-info says 'amd64'"
+
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+make_termux_tar "$SANDBOX/dist" chroot arm64 proot arm64
+gen_refused "a chroot file whose build-info says proot" "claims flavor 'chroot' but its build-info says 'proot'"
+
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+mkdir -p "$SANDBOX/bare/etc"; printf 'x\n' > "$SANDBOX/bare/etc/hostname"
+tar -C "$SANDBOX/bare" -cJf "$SANDBOX/dist/rootforge-proot-amd64.tar.xz" .
+sha256sum "$SANDBOX/dist/rootforge-proot-amd64.tar.xz" | cut -d' ' -f1 > "$SANDBOX/dist/rootforge-proot-amd64.tar.xz.sha256"
+gen_refused "an artifact with no build-info" "has no /etc/rootforge/build-info"
+
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+printf 'this is not an archive' > "$SANDBOX/dist/rootforge-proot-amd64.tar.xz"
+sha256sum "$SANDBOX/dist/rootforge-proot-amd64.tar.xz" | cut -d' ' -f1 > "$SANDBOX/dist/rootforge-proot-amd64.tar.xz.sha256"
+gen_refused "a file that is not an archive" "not a readable .tar.xz archive"
+
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+gen_refused "a tag that is not a release tag" "is not a release tag" --tag main
+new_sandbox; make_all_termux_tars "$SANDBOX/dist"
+rm -rf "$SANDBOX/out"; run_script bash "$GEN" --tag v1.2.3 --dist "$SANDBOX/dist" --out "$SANDBOX/out" --repo 'a b/c'
+assert_eq "a malformed --repo is refused" "$RC" "1"
+
+# A locally built, single-architecture rootfs: explicit inputs, no GitHub.
+new_sandbox
+make_termux_tar "$SANDBOX/dist" proot arm64
+run_script bash "$GEN" --tag local1 --dist "$SANDBOX/dist" --out "$SANDBOX/out" \
+  --base-url http://192.168.1.5:8000 --arches arm64 --flavors proot
+assert_eq "a local single-arch build generates metadata" "$RC" "0"
+assert_contains "the local plugin points at the given host" "$(cat "$SANDBOX/out/rootforge-proot-plugin.sh")" "http://192.168.1.5:8000/rootforge-proot-arm64.tar.xz"
+assert_not_contains "the local plugin has no x86_64 entry for an arch that was not built" "$(cat "$SANDBOX/out/rootforge-proot-plugin.sh")" "TARBALL_URL['x86_64']"
+assert_not_contains "nor a digest check for it" "$(cat "$SANDBOX/out/rootforge-proot-plugin.sh")" "TARBALL_SHA256['x86_64']"
+assert_contains "the installer says when no chroot rootfs was published" "$(cat "$SANDBOX/out/install.sh")" 'CHROOT_SHA256_ARM64=""'
+run_script bash "$GEN" --tag local1 --dist "$SANDBOX/dist" --out "$SANDBOX/out2" --base-url 'http://h/x&y'
+assert_eq "a --base-url with shell/sed metacharacters is refused" "$RC" "1"
 drop_sandbox
 
 section "rootforge module — the wrapped path end to end"
