@@ -99,6 +99,28 @@ for hook in config/hooks/*.hook.chroot; do
     problem "$name: npm install -g without a pinned version" \
             "${line} — pin it (package@x.y.z) so the image is reproducible"
   done < <(grep -nE 'npm[[:space:]]+(install|i)[[:space:]].*(-g|--global)' "$hook" | drop_comments || true)
+
+  # 6. A pin that is defined but never used is worse than no pin: it reads as
+  #    verification and verifies nothing. This is exactly what a bad merge left
+  #    behind in six hooks (IMAGER_SHA256 defined, never compared). Every
+  #    *SHA256="<hex>" assignment must be referenced again in the same file.
+  while IFS= read -r var; do
+    uses="$(grep -cE "\\$\{?${var}\}?" "$hook" || true)"
+    if [ "${uses:-0}" -eq 0 ]; then
+      problem "$name: ${var} is pinned but never compared" \
+              "an unused digest verifies nothing — compare it with the downloaded file's sha256sum"
+    fi
+  done < <(grep -oE '^[[:space:]]*[A-Z0-9_]*SHA256=' "$hook" | tr -d ' \t=' | sort -u || true)
+
+  # 7. A hook that pins a version must not also ask the API for "latest": the
+  #    answer changes between builds and the pinned digest would then fail (or,
+  #    if the digest is unused, nothing would notice).
+  if grep -qE '^[[:space:]]*[A-Z0-9_]*SHA256="[0-9a-f]{64}"' "$hook"; then
+    while IFS= read -r line; do
+      problem "$name: pins a digest but also resolves 'latest'" \
+              "${line} — use the pinned version/URL only"
+    done < <(grep -nE 'releases/latest' "$hook" | drop_comments || true)
+  fi
 done
 
 # The same two download rules apply to the runtime scripts. setup_terminal.sh

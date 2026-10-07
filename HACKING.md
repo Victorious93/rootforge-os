@@ -9,17 +9,21 @@ rootforge-os/
 ├── auto/build           build wrapper — run with sudo
 ├── Makefile             convenience targets (build / checksum / list-usb / flash / clean / distclean)
 ├── BUILD.md             host prerequisites and build instructions
-├── .github/workflows/release.yml   builds + publishes the ISO and Termux rootfs on a tagged push
-├── termux/              non-root Termux/PRoot variant — see README section 17
+├── .github/workflows/release.yml   gated on lint.yml; builds the ISO and Termux rootfs, generates
+│                                   install metadata, verifies the asset set, drafts a release
+├── termux/              Termux/PRoot variant — see README section 17
 │   ├── build-rootfs.sh          debootstrap-based rootfs builder (reuses config/hooks/*)
 │   ├── package-lists/           pruned, PRoot-safe package list
-│   ├── proot-distro-plugins/    the plugin Termux users install
-│   ├── bootstrap_proot.sh       SDK/NDK fetch, replaces 00_bootstrap_distro.sh here
-│   ├── proot-setup.sh           image-bake-time motd/workspace setup
-│   └── install.sh               one-command Termux installer
+│   ├── templates/               install.sh.in and proot-plugin.sh.in — TEMPLATES that refuse to
+│   │                            run; make-release-metadata.sh fills them from the real artifacts
+│   ├── make-release-metadata.sh generates install.sh, the plugin, release-metadata.json, SHA256SUMS
+│   ├── rootforge-chroot.sh      rooted-device launcher (install requires a SHA-256)
+│   ├── bootstrap_proot.sh       installs only the SDK parts this CPU can run (--plan to preview)
+│   └── proot-setup.sh           image-bake-time motd/workspace setup
 ├── tests/               hermetic test suite — no device, Docker, or network
 │   ├── run-tests.sh             the runner (see "Running the tests" below)
-│   ├── stubs/                   fake adb/fastboot that record their arguments
+│   ├── stubs/                   fake adb/fastboot/su/... that record their arguments
+│   ├── verify-release-assets.sh checks an assembled release directory (also run by release.yml)
 │   └── test_*.py                Python unit tests
 └── config/
     ├── package-lists/   apt packages installed into the squashfs
@@ -50,8 +54,11 @@ rootforge-os/
     │   │                stages (chroot hooks have no .git access)
     │   └── (numbered ascending — gaps left for future insertion)
     │
-    │   The six hooks that fetch external content at build time (0040,
-    │   0050, 0060, 0062, 0085, 0095) record each downloaded artifact's
+    │   The hooks that fetch external content at build time pin a version
+    │   or commit and verify a SHA-256 (0040, 0050, 0060, 0062, 0085, 0095,
+    │   and 0061 for the repo launcher) or, for 0010 and 0030, a signing-key
+    │   fingerprint set and an npm integrity value. 0020 (Ollama's installer)
+    │   is the known unpinned exception. Hooks 0040, 0050, 0060, 0062, 0085 and 0095 record each downloaded artifact's
     │   SHA-256 to /usr/local/share/rootforge/build-manifest/checksums.txt,
     │   verifying against GitHub's published release-asset digest where
     │   one exists (failing the build hard on a mismatch) and simply
@@ -126,11 +133,13 @@ against real hardware. `HOME` is redirected per test, so nothing touches your re
 
 The same suite runs in CI (the `tests` job in `.github/workflows/lint.yml`).
 
-A test that touches `00_bootstrap_distro.sh` must pass `--check`. Without it
-the script really does run `apt-get upgrade`, install the toolchain and write
-udev rules — and a suite run as root (a CI container, for instance) will let
-it. `--check` resolves and prints the paths, then exits before `require_root`
-and before anything is created.
+A test that touches `00_bootstrap_distro.sh` must either pass `--check` (resolve
+and print the target user and paths, then exit before anything is created) or
+use its seams (`ROOTFORGE_TEST_EUID`, `ROOTFORGE_STATE_DIR`,
+`ROOTFORGE_INSTALL_USER_FILE`, `ROOTFORGE_UDEV_RULES`, `ROOTFORGE_APT_GET`,
+`ROOTFORGE_DEV_ROOT`) so every write lands in the sandbox. Without them the
+script really installs packages and writes udev rules, and a suite run as root
+(a CI container, for instance) would let it.
 
 ## Adding a command: prefer the CLI over a new script
 
@@ -270,7 +279,12 @@ why), are numbered `NNNN-description.hook.chroot`, and run in numeric order.
 - `0001–0099`: system setup (groups, repos, core binaries)
 - `0100+`: reserved for future feature hooks
 - Always set `set -e` at the top
-- Make the hook non-fatal for optional features: `|| { echo "WARNING: ..."; exit 0; }`
+- Fail the build on a missing or wrong tool rather than printing a warning: an ISO
+  that quietly lacks a tool is worse than a failed build. `|| true` is only for a
+  probe that exits non-zero by design. `tests/check-hooks.sh` enforces `set -e`, no
+  `curl | sh`, `curl -f`, no fabricated success lines and no unpinned `npm install -g`
+- Pin what you download: a version or commit plus a SHA-256 (or a signing-key
+  fingerprint / registry integrity value), and fail on a mismatch
 - Must be executable (`chmod +x`)
 - If it fetches a specific file path from a third-party repo (not just a
   pinned release tag), verify that path is actually correct against a real
@@ -290,7 +304,10 @@ Only add a module config here if you need to deviate from the Debian defaults.
 Claude Code, magiskboot, repo, payload-dumper-go, eza, starship, avbtool.
 
 **First boot (`rootforge-firstboot.service`):** large/version-churny downloads —
-Android SDK, NDK, emulator system images (~2–5 GB total). Requires network.
+Android SDK, NDK, emulator system images (~2–5 GB total). Requires network. It
+provisions the installed user recorded by Calamares in
+`/var/lib/rootforge/install-user`, in resumable stages with completion markers
+(see BUILD.md); it must never default to root.
 
 **User-initiated only:** `setup_ai_tools.sh` (API keys), all ten flagship scripts
 (hardening, VPN, proxy, etc.) — see the service unit comment for why.
@@ -303,5 +320,5 @@ Short title: what changed (imperative, ≤72 chars)
 - bullet explaining the why for non-obvious decisions
 - another bullet if needed
 
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Co-Authored-By: <name> <noreply@anthropic.com>   # when an AI assistant contributed
 ```
