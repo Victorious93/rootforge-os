@@ -64,6 +64,7 @@ First-boot provisioning runs automatically via `rootforge-firstboot.service` on 
 | eza | GitHub release .tar.gz (hook 0050) |
 | rpi-imager | raspberrypi.com .deb (hook 0040) |
 | All 29 automation scripts (incl. `rootforge`, the unified CLI, and `brain`, the second-brain CLI) | `/usr/local/bin/` |
+| `system-manifest.json` — package versions, fetched-artifact checksums, git commit/branch this ISO was built from | Assembled by the last-numbered hook (0099) at `/usr/local/share/rootforge/system-manifest.json` |
 
 ## Disk install
 

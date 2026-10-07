@@ -37,6 +37,13 @@ rootforge-os/
     │   ├── 007x-*       workspace skel
     │   ├── 008x-*       GNOME defaults, avbtool
     │   ├── 009x-*       Plymouth, Zygisk headers, ccache
+    │   ├── 0099-*       system-manifest.json — numbered last on purpose,
+    │   │                runs after every other hook and after package
+    │   │                install, so dpkg's package list and every earlier
+    │   │                hook's checksums.txt entries are both final by the
+    │   │                time it reads them; folds those together with the
+    │   │                git-commit/build-timestamp provenance auto/build
+    │   │                stages (chroot hooks have no .git access)
     │   └── (numbered ascending — gaps left for future insertion)
     │
     │   The six hooks that fetch external content at build time (0040,
