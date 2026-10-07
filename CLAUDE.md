@@ -8,8 +8,8 @@
 
 ## 🔖 PROJECT STATE (READ THIS FIRST)
 
-**Last Updated:** `2026-10-04`
-**Last Session Summary:** `Reviewed main at a3052ba. Repaired the CLI/module integration and device/OTA/AVD/boot interfaces, hardened module scaffolding and build-matrix validation, corrected stale README/BUILD references, and added missing PyYAML setup to Python CI jobs. Verified tests/run-tests.sh (439/0), tests/lint.sh (clean), and git diff --check. Attempted auto/build; it stops because this environment has no loop devices, so no ISO was built. See docs/PROJECT_REVIEW_2026-10-04.md for findings, verification, and release gates.`
+**Last Updated:** `2026-10-07`
+**Last Session Summary:** `Implemented RF-DCA-1 of the DroidCommand AI integration blueprint: an optional controller bridge (rootforge.core.bridge — versioned JSON over stdin/stdout, server-side controller identity, per-request grants, restricted-SSH authorized_keys generation, passive capabilities.get/devices.list only) plus tests/test_bridge.py (31 tests) and tests/ssh-roundtrip.sh (real loopback sshd, 9 checks). rootforge device info is deliberately NOT exposed (its profiler runs su -c). Verified: tests/run-tests.sh 438/0 (Python suite 192 tests), tests/lint.sh clean, ssh-roundtrip.sh 9/0, and the DroidCommand AI client passed 5 real-OpenSSH integration tests against this bridge. Not verified: any physical device, Android/Windows/Termux node, ISO build. See docs/DROIDCOMMAND_INTEGRATION.md.`
 
 ### Current Phase
 
@@ -30,7 +30,7 @@
 
 ### What To Do Next
 
-`The 2026-10-04 review repaired the CLI interfaces and CI dependency setup; re-check those against the current tree before repeating work. Next, run make build on a supported Debian/Ubuntu host with loop devices, then boot the ISO in a VM and verify installation, first-boot provisioning, and the system manifest. Hardware flashing and real OTA/emulator flows still need smoke tests. See docs/PROJECT_REVIEW_2026-10-04.md. Keep this file's historical audit sections clearly dated; some priority statements below predate the current code.`
+`Bridge follow-up (2026-10-07): RF-DCA-2 (durable build jobs, workspace snapshots, verified artifact transfer) is the next dependency-ready slice for the DroidCommand AI integration; before ANY remote write capability, repair the gates in docs/DROIDCOMMAND_INTEGRATION.md (fastboot getvar stderr + secure/unlocked conflation, restore flashing every *.img, no remote-capable confirmation plan). RootForge must never gain a DCA dependency guard. Earlier guidance: `The 2026-10-04 review repaired the CLI interfaces and CI dependency setup; re-check those against the current tree before repeating work. Next, run make build on a supported Debian/Ubuntu host with loop devices, then boot the ISO in a VM and verify installation, first-boot provisioning, and the system manifest. Hardware flashing and real OTA/emulator flows still need smoke tests. See docs/PROJECT_REVIEW_2026-10-04.md. Keep this file's historical audit sections clearly dated; some priority statements below predate the current code.`
 
 ### Open Questions / Blockers
 

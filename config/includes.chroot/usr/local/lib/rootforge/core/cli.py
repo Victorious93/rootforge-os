@@ -10,7 +10,7 @@ import json
 import sys
 from typing import Optional, Sequence
 
-from rootforge.core import __version__, avd, boot, device, devices, flashing, module, ota
+from rootforge.core import __version__, avd, boot, bridge, device, devices, flashing, module, ota
 from rootforge.core.device import profile_device
 from rootforge.core.devices import list_devices
 from rootforge.core.doctor import run_doctor
@@ -52,6 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
     boot.add_parser(sub)
     ota.add_parser(sub)
     avd.add_parser(sub)
+    bridge.add_parser(sub)
     return parser
 
 
@@ -134,6 +135,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return ota.dispatch(args)
     if args.command == "avd":
         return avd.dispatch(args)
+    if args.command == "bridge":
+        return bridge.dispatch(args)
     parser.error(f"unknown command: {args.command}")
 
 
