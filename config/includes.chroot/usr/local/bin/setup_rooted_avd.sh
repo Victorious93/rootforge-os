@@ -341,6 +341,7 @@ cmd_create() {
   fi
 
   local LOG_FILE="$LOG_DIR/avd_${name}_${STAMP}.log"
+  rf_log_init "$LOG_FILE"
   local IMAGE="system-images;android-${api};${tag};${abi}"
 
   if ! sdkmanager --list_installed 2>/dev/null | grep -qF "$IMAGE"; then

@@ -213,6 +213,7 @@ reimplemented inconsistently across scripts:
 | `rf_require_cmd` | A useful message instead of "command not found" under `set -e` |
 | `rf_shell_quote` | Escaping a secret before it is written into a file the shell sources |
 | `rf_write_private` | Writing a secrets file that is 0600 from the moment it exists |
+| `rf_log_init` / `rf_private_file` | A script's log (or report) created 0600, stamped with the run's `ROOTFORGE_EXECUTION_ID`; new scripts that write a log call `rf_log_init "$LOG_FILE"` right after defining it |
 
 Keep it small. A helper belongs here when a second script needs it, not before.
 

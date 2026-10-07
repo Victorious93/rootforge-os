@@ -15,7 +15,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 development; ISO/VM/hardware validation **blocked** on infrastructure.
 
 **What is true now** (each verified by running it this session unless marked):
-- `bash tests/run-tests.sh` → 852 passed, 0 failed (one check wraps the 319-test Python suite).
+- `bash tests/run-tests.sh` → 909 passed, 0 failed (one check wraps the Python suite, 329 tests).
   `bash tests/lint.sh` → clean (shellcheck 0.11.0 from a venv; CI installs its own, so
   version parity is unverified).
 - Implemented and stub-tested: device model + `device check`, flash contract, backup
@@ -40,7 +40,7 @@ the check.**
 **Next task (in order):**
 1. On a host with loop devices: `sudo make build`; record log + digest. Then a QEMU boot +
    scripted Calamares install test (Stage 5 of the plan).
-2. Pass the CLI execution ID into wrapped scripts; make their logs `0600` (Stage 3).
+2. CLI-side audit events for `flash`/`backup`/`module`/`avd`; redact script log contents (Stage 3). The execution ID and `0600` script logs are done.
 3. Pin/replace the Ollama installer; add release signing (Stage 4).
 4. Run the flash/backup/restore contract against a test device the owner agrees to flash.
 Do not start Stage 6 (Windows/APK/GUI/remote) before Stages 2 and 5 are validated.

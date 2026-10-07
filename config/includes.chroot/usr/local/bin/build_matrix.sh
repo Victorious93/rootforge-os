@@ -14,6 +14,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 PROJECT_DIR=""
 BUILD_CMD=""
 MATRIX_FILE=""
@@ -44,6 +47,7 @@ LOG_DIR="$ROOTFORGE_HOME/logs"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOG_DIR"
 REPORT="$LOG_DIR/build-matrix-${STAMP}.md"
+rf_private_file "$REPORT"
 # Installed layout ships this script at /usr/local/bin/build_matrix.sh with
 # its Dockerfile baked at /opt/rootforge/docker/ — that's the only path a
 # real ISO install ever reaches. The second entry is for running straight
@@ -99,6 +103,7 @@ for combo in "${COMBOS[@]}"; do
   fi
   TAG="rootforge-matrix:ndk${NDK_VER}-api${API}"
   BUILD_LOG="$LOG_DIR/matrix_${STAMP}_ndk${NDK_VER}_api${API}.log"
+  rf_private_file "$BUILD_LOG"
 
   echo ""
   echo "=== NDK $NDK_VER / API $API ==="

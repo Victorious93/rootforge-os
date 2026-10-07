@@ -27,6 +27,7 @@ LOG_DIR="$ROOTFORGE_HOME/logs"
 CACHE_DIR="$ROOTFORGE_HOME/bin"
 mkdir -p "$LOG_DIR" "$CACHE_DIR"
 LOG_FILE="$LOG_DIR/adb_ime_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[adb-ime] $*" | tee -a "$LOG_FILE"; }
 
 IME_PACKAGE="com.android.adbkeyboard"

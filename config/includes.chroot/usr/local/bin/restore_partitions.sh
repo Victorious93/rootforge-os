@@ -100,6 +100,7 @@ BACKUP_DIR="$DEVICE_BACKUP_ROOT/$TIMESTAMP"
 rf_require_cmd jq "install jq (apt install jq)"
 
 LOG_FILE="$LOG_DIR/restore_${CODENAME}_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[restore] $*" | tee -a "$LOG_FILE"; }
 blocked() {
   log "REFUSED — nothing was written to the device:"

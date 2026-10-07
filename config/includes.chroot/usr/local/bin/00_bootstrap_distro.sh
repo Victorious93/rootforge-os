@@ -266,6 +266,7 @@ reexec_as_user() {
 run_user_stages() {
   mkdir -p "$LOG_DIR" "$USER_MARKERS"
   LOG_FILE="$LOG_DIR/bootstrap_${STAMP}.log"
+  rf_log_init "$LOG_FILE"
   log "Provisioning $TARGET_USER's workspace at $ROOTFORGE_HOME"
   run_stage "$USER_MARKERS" workspace stage_workspace
   run_stage "$USER_MARKERS" sdk stage_sdk
@@ -298,6 +299,7 @@ fi
 
 mkdir -p "$STATE_DIR" "$SYSTEM_MARKERS"
 LOG_FILE="$STATE_DIR/bootstrap_${STAMP}.log"
+rf_log_init "$LOG_FILE"
 log "System stages for $TARGET_USER (from $TARGET_SOURCE)"
 run_stage "$SYSTEM_MARKERS" packages stage_packages
 run_stage "$SYSTEM_MARKERS" udev stage_udev

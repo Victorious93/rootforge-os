@@ -22,7 +22,8 @@ access to the operator's account:
 | Stale artifact released | `auto/build` removes old ISO/digest; `make` stops on failure; release verifier checks the full set | `auto/build`, `Makefile`, `tests/verify-release-assets.sh` | Stub tests |
 | Unverified rootfs on a rooted phone | `rootforge-chroot.sh install` requires `--sha256`/`--sha256-file`, scans for absolute paths, `..`, device nodes; staged install with completion marker | `termux/rootforge-chroot.sh` | Tests |
 | Placeholder digests shipped | Templates refuse to run; generator refuses surviving placeholders | `termux/templates/`, `make-release-metadata.sh` | Tests |
-| Secrets in logs | Key-name and token-shape redaction in the file and in the terminal echo | `core/log.py` | `tests/test_log.py` |
+| Secrets in logs | Key-name and token-shape redaction in the file and in the terminal echo (CLI logs) | `core/log.py` | `tests/test_log.py` |
+| Logs readable by other users | CLI JSON logs and all script logs/reports created `0600` from creation; handed to `$SUDO_USER` under sudo | `core/log.py`, `common.sh:rf_private_file`/`rf_log_init` | Tests, incl. under `umask 000` |
 | Secrets in files | API-key file created 0600 from creation (`rf_write_private`); values shell-quoted (`rf_shell_quote`) | `setup_ai_tools.sh` | Stub tests |
 | Provisioning the wrong account / root | Target user resolved explicitly; refuses rather than defaulting to root; live user removed; live sudo rule deleted; installed name cannot be `root`/`rootforge` | `00_bootstrap_distro.sh`, Calamares configs | Executed in a sandbox; **not** under real Calamares |
 
@@ -49,10 +50,12 @@ access to the operator's account:
   corruption and single-file tampering; it does not protect against an attacker who
   controls the whole release. Nothing is signed (no GPG/minisign/Sigstore).
 - **No secret scan has been run** over the tree or history by a dedicated tool.
-- **No audit trail ties a CLI invocation to the scripts it ran** beyond the CLI's own
-  events; scripts keep separate plain-text logs.
-- **Shell-script logs use the default umask.** The CLI's own JSON-lines logs are created 0600; the scripts' plain-text logs under `$ROOTFORGE_HOME/logs/` are not, and can contain device serials and
-  paths. 0600 is not enforced.
+- **The audit trail is partial.** One execution ID ties the CLI's JSON log to the wrapped
+  script's log, but `flash`/`backup`/`module`/`avd` write no CLI-side event, script log
+  contents are not redacted (never `echo` a secret into a script log), and nothing is
+  tamper-evident or shipped off the machine.
+- **Logs are private only for new files.** An existing log or report keeps the mode it has;
+  directories keep the umask default.
 - **Android-side trust is out of scope**: bootloader unlock wipes data by design; nothing
   here restores a vendor's attestation.
 

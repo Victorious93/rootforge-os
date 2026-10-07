@@ -276,6 +276,58 @@ rf_write_private() {
   chmod 600 "$path"
 }
 
+# --- logs ------------------------------------------------------------------
+
+# rf_ensure_execution_id — set and export ROOTFORGE_EXECUTION_ID in THIS shell.
+#
+# `rootforge` sets it for the command it runs, so a CLI invocation, the script
+# it wraps and any `rootforge` call that script makes all carry one ID. A
+# script started directly generates its own. An inherited value is used only if
+# it is a plain 4-32 character alphanumeric token: it is written into log
+# files, so anything else is ignored rather than trusted.
+#
+# Call it directly, never inside $( ): a command substitution runs in a
+# subshell, so the export would be lost and child processes would not inherit
+# the ID.
+rf_ensure_execution_id() {
+  if ! [[ "${ROOTFORGE_EXECUTION_ID:-}" =~ ^[A-Za-z0-9]{4,32}$ ]]; then
+    ROOTFORGE_EXECUTION_ID="$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
+  fi
+  export ROOTFORGE_EXECUTION_ID
+}
+
+# rf_private_file <path> — make sure <path> exists, mode 0600 from creation.
+#
+# Logs and reports carry device serials, partition names and local paths, so
+# they are not for other users of the machine. The mode is set when the file
+# is created (umask in a subshell) rather than chmod'ed afterwards, so there is
+# no window at the default umask; an existing file keeps the mode it has. Under
+# `sudo` a root-created 0600 file in the invoking user's home would be
+# unreadable by that user, so a new file is handed to $SUDO_USER (best effort).
+rf_private_file() {
+  local path="$1"
+  [[ -n "$path" ]] || return 1
+  mkdir -p "$(dirname "$path")" || return 1
+  [[ -e "$path" ]] && return 0
+  ( umask 077; : > "$path" ) || return 1
+  if [[ "$(id -u)" == "0" && -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]]; then
+    chown "$SUDO_USER" "$path" 2>/dev/null || true
+  fi
+  return 0
+}
+
+# rf_log_init <path> — rf_private_file plus a first line naming this run:
+#   # rootforge execution <id>: <script> started <UTC time>
+# so a script log can be matched to the CLI's JSON-lines log for the same run
+# (rootforge-<command>-<id>.jsonl).
+rf_log_init() {
+  local path="$1"
+  rf_private_file "$path" || return 1
+  rf_ensure_execution_id
+  printf '# rootforge execution %s: %s started %s\n' \
+    "$ROOTFORGE_EXECUTION_ID" "$(basename "${0:-script}")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$path"
+}
+
 # --- misc ----------------------------------------------------------------
 
 # rf_require_cmd <cmd> <install hint> — exit 1 with a useful message rather

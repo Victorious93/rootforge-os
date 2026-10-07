@@ -3123,6 +3123,79 @@ run_script python3 -m rootforge.core.cli ota
 assert_eq "a missing ota subcommand is rejected" "$RC" "2"
 drop_sandbox
 
+section "script logs — private, and tied to the CLI's execution ID"
+
+# mode_of <path> — octal permission bits.
+mode_of() { stat -c %a "$1"; }
+LOGSH="$LIB_DIR/rootforge/sh/common.sh"
+
+# The helper itself, under a permissive umask so a default-mode file would show.
+new_sandbox
+run_script bash -c '
+  umask 000
+  . "$1"
+  unset ROOTFORGE_EXECUTION_ID
+  rf_log_init "$2/logs/a.log"
+  printf "%s|%s\n" "$ROOTFORGE_EXECUTION_ID" "$(stat -c %a "$2/logs/a.log")"
+' _ "$LOGSH" "$SANDBOX"
+assert_contains "a new script log is created 0600 even under umask 000" "$OUT" "|600"
+GENERATED_ID="${OUT%%|*}"
+assert_eq "a script run on its own generates a plain hex execution ID" "$(printf '%s' "$GENERATED_ID" | grep -cE '^[0-9a-f]{8}$')" "1"
+assert_contains "the log's first line names the run" "$(head -n 1 "$SANDBOX/logs/a.log")" "# rootforge execution $GENERATED_ID: "
+
+run_script bash -c '. "$1"; ROOTFORGE_EXECUTION_ID=feedbeef; rf_log_init "$2/logs/b.log"; bash -c "echo child:\$ROOTFORGE_EXECUTION_ID"' _ "$LOGSH" "$SANDBOX"
+assert_contains "an inherited ID is kept and handed on to child processes" "$OUT" "child:feedbeef"
+assert_contains "and stamped into the log" "$(cat "$SANDBOX/logs/b.log")" "execution feedbeef:"
+
+for bad in '../../etc/x' 'a b' 'ab' 'bad;id'; do
+  run_script bash -c '. "$1"; ROOTFORGE_EXECUTION_ID="$3"; rf_log_init "$2/logs/c.log"; printf "%s" "$ROOTFORGE_EXECUTION_ID"' _ "$LOGSH" "$SANDBOX" "$bad"
+  assert_eq "an unsafe inherited ID ($bad) is replaced, not trusted" "$(printf '%s' "$OUT" | grep -cE '^[0-9a-f]{8}$')" "1"
+done
+
+# An existing file keeps the mode it already has: the helper creates, it does not chmod.
+printf 'old\n' > "$SANDBOX/logs/existing.log"; chmod 644 "$SANDBOX/logs/existing.log"
+run_script bash -c '. "$1"; rf_log_init "$2/logs/existing.log"' _ "$LOGSH" "$SANDBOX"
+assert_eq "an existing log keeps its own mode" "$(mode_of "$SANDBOX/logs/existing.log")" "644"
+assert_contains "and is appended to, not truncated" "$(cat "$SANDBOX/logs/existing.log")" "old"
+
+# rf_private_file writes no header (it is for reports, where a '#' line would be a heading).
+run_script bash -c 'umask 000; . "$1"; rf_private_file "$2/logs/report.md"' _ "$LOGSH" "$SANDBOX"
+assert_eq "a report file is 0600" "$(mode_of "$SANDBOX/logs/report.md")" "600"
+assert_eq "and has no header line" "$(wc -c < "$SANDBOX/logs/report.md" | tr -d ' ')" "0"
+
+# Under sudo, a new file is handed to the invoking user; a stub `id`/`chown` stands in for root.
+mkdir -p "$SANDBOX/fakebin2"
+printf '#!/bin/sh\necho 0\n' > "$SANDBOX/fakebin2/id"
+printf '#!/bin/sh\necho "chown $*" >> "$RF_STUB_LOG"\n' > "$SANDBOX/fakebin2/chown"
+chmod +x "$SANDBOX/fakebin2/id" "$SANDBOX/fakebin2/chown"
+run_script env PATH="$SANDBOX/fakebin2:$PATH" SUDO_USER=alice bash -c '. "$1"; rf_private_file "$2/logs/sudo.log"; rf_private_file "$2/logs/sudo.log"' _ "$LOGSH" "$SANDBOX"
+assert_eq "under sudo a new log is chowned to the invoking user, once" "$(grep -c "^chown alice " "$RF_STUB_LOG")" "1"
+: > "$RF_STUB_LOG"
+run_script env PATH="$SANDBOX/fakebin2:$PATH" SUDO_USER=root bash -c '. "$1"; rf_private_file "$2/logs/sudo2.log"' _ "$LOGSH" "$SANDBOX"
+assert_eq "SUDO_USER=root is never chowned" "$(grep -c '^chown' "$RF_STUB_LOG")" "0"
+drop_sandbox
+
+# End to end: one CLI invocation, one ID, in the CLI's JSON-lines log AND the
+# wrapped script's own log, both private.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+export RF_STUB_DUMPER_WRITES="boot.img"
+old_umask="$(umask)"; umask 000
+run_script python3 -m rootforge.core.cli ota extract "$SANDBOX/payload.bin" --partitions boot --output "$SANDBOX/out"
+umask "$old_umask"
+assert_eq "ota extract (CLI + wrapped script) succeeds" "$RC" "0"
+SCRIPT_LOG="$(ls "$ROOTFORGE_HOME"/logs/extract_ota_*.log 2>/dev/null | head -n 1)"
+JSON_LOG="$(ls "$ROOTFORGE_HOME"/logs/rootforge-ota-extract-*.jsonl 2>/dev/null | head -n 1)"
+assert_eq "the wrapped script wrote its own log" "$([ -n "$SCRIPT_LOG" ] && echo yes || echo no)" "yes"
+assert_eq "the CLI wrote its JSON-lines log" "$([ -n "$JSON_LOG" ] && echo yes || echo no)" "yes"
+CLI_ID="$(basename "$JSON_LOG" .jsonl)"; CLI_ID="${CLI_ID##*-}"
+assert_contains "the script log carries the CLI's execution ID" "$(head -n 1 "$SCRIPT_LOG")" "execution $CLI_ID:"
+assert_eq "the script log is 0600 under umask 000" "$(mode_of "$SCRIPT_LOG")" "600"
+assert_eq "the CLI log is 0600 under umask 000" "$(mode_of "$JSON_LOG")" "600"
+drop_sandbox
+
 section "kernelsu_patch_boot.sh — what ends up as the kernel"
 
 # curl and magiskboot shaped like the real ones: the release API answers with
@@ -3265,6 +3338,126 @@ plant_ksu_stubs
 run_script python3 -m rootforge.core.cli boot flash-last
 assert_eq "flash-last with nothing patched fails" "$RC" "1"
 assert_contains "flash-last says what to do first" "$OUT" "run without --flash first"
+drop_sandbox
+
+section "rootforge boot — inspect, unpack, repack, cpio and verify end to end"
+
+# plant_boot_tools — magiskboot and avbtool shaped like the real ones: unpack
+# writes kernel + ramdisk.cpio into the current directory, repack writes
+# new-boot.img, cpio edits the ramdisk, avbtool's verdict is its exit status.
+# Knobs: RF_STUB_MB_RC (magiskboot exit), RF_STUB_NO_REPACK, RF_STUB_AVB_RC.
+plant_boot_tools() {
+  mkdir -p "$SANDBOX/bootbin"
+  cat > "$SANDBOX/bootbin/magiskboot" <<'EOS'
+#!/usr/bin/env bash
+printf 'magiskboot %s\n' "$*" >> "$RF_STUB_LOG"
+[ "${RF_STUB_MB_RC:-0}" != 0 ] && exit "$RF_STUB_MB_RC"
+case "${1:-}" in
+  unpack) head -c 100 /dev/zero > kernel; printf 'CPIO' > ramdisk.cpio ;;
+  repack) [ -n "${RF_STUB_NO_REPACK:-}" ] || printf 'NEWBOOT-IMAGE' > new-boot.img ;;
+  cpio)   shift; f="$1"; shift; printf '%s\n' "$*" >> "$f" ;;
+esac
+exit 0
+EOS
+  cat > "$SANDBOX/bootbin/avbtool" <<'EOS'
+#!/usr/bin/env bash
+printf 'avbtool %s\n' "$*" >> "$RF_STUB_LOG"
+case "${1:-}" in
+  version) echo "avbtool 1.2.3" ;;
+  verify_image) exit "${RF_STUB_AVB_RC:-0}" ;;
+esac
+exit 0
+EOS
+  chmod +x "$SANDBOX/bootbin/magiskboot" "$SANDBOX/bootbin/avbtool"
+  export PATH="$SANDBOX/bootbin:$STUB_DIR:$ORIGINAL_PATH"
+  unset RF_STUB_MB_RC RF_STUB_NO_REPACK RF_STUB_AVB_RC
+  make_boot_img "$SANDBOX/boot.img"
+}
+# the single JSON-lines log a command wrote, by command name
+boot_json_log() { ls "$ROOTFORGE_HOME"/logs/rootforge-"$1"-*.jsonl 2>/dev/null | head -n 1; }
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_boot_tools
+BOOT_SUM="$(sha256sum "$SANDBOX/boot.img" | cut -d' ' -f1)"
+run_script python3 -m rootforge.core.cli boot inspect "$SANDBOX/boot.img"
+assert_eq "boot inspect succeeds" "$RC" "0"
+assert_contains "inspect lists the unpacked kernel" "$OUT" "kernel"
+assert_contains "inspect lists the unpacked ramdisk" "$OUT" "ramdisk.cpio"
+assert_eq "inspect never modifies the original image" "$(sha256sum "$SANDBOX/boot.img" | cut -d' ' -f1)" "$BOOT_SUM"
+assert_eq "inspect leaves nothing next to the image" "$(ls "$SANDBOX" | grep -cE '^(kernel|ramdisk\.cpio|boot\.img\.bak)$' || true)" "0"
+assert_contains "the audit log records the image hash" "$(cat "$(boot_json_log boot-inspect)")" "$BOOT_SUM"
+
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_boot_tools
+export RF_STUB_MB_RC=3
+run_script python3 -m rootforge.core.cli boot inspect "$SANDBOX/boot.img"
+assert_eq "a magiskboot failure is the command's exit status" "$RC" "3"
+assert_contains "and is recorded as a failure" "$(cat "$(boot_json_log boot-inspect)")" "inspect failed"
+unset RF_STUB_MB_RC
+: > "$RF_STUB_LOG"
+run_script python3 -m rootforge.core.cli boot inspect "$SANDBOX/nope.img"
+assert_eq "a missing image is rejected before any tool runs" "$RC" "1"
+assert_eq "no tool was invoked for it" "$(grep -c '^magiskboot unpack' "$RF_STUB_LOG")" "0"
+
+# unpack -> cpio -> repack, the real workflow, as separate CLI invocations.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_boot_tools
+run_script python3 -m rootforge.core.cli boot unpack "$SANDBOX/boot.img" "$SANDBOX/work"
+assert_eq "boot unpack succeeds" "$RC" "0"
+assert_eq "unpack keeps the original as repack's template" "$([ -f "$SANDBOX/work/boot.img" ] && echo yes || echo no)" "yes"
+assert_eq "unpack produced the ramdisk" "$([ -f "$SANDBOX/work/ramdisk.cpio" ] && echo yes || echo no)" "yes"
+
+run_script python3 -m rootforge.core.cli boot cpio "$SANDBOX/work" ramdisk.cpio -- 'add 0750 init magiskinit'
+assert_eq "boot cpio succeeds" "$RC" "0"
+assert_contains "the cpio commands reached magiskboot untouched" "$(cat "$RF_STUB_LOG")" "magiskboot cpio ramdisk.cpio add 0750 init magiskinit"
+assert_contains "the ramdisk was changed" "$(cat "$SANDBOX/work/ramdisk.cpio")" "add 0750 init magiskinit"
+assert_contains "cpio reports the patched ramdisk's hash" "$OUT" "SHA-256: $(sha256sum "$SANDBOX/work/ramdisk.cpio" | cut -d' ' -f1)"
+
+run_script python3 -m rootforge.core.cli boot repack "$SANDBOX/work"
+assert_eq "boot repack succeeds" "$RC" "0"
+assert_contains "repack names the new image and its hash" "$OUT" "SHA-256: $(sha256sum "$SANDBOX/work/new-boot.img" | cut -d' ' -f1)"
+assert_contains "the audit log records the output hash" "$(cat "$(boot_json_log boot-repack)")" "$(sha256sum "$SANDBOX/work/new-boot.img" | cut -d' ' -f1)"
+
+# cpio refuses to run without a ramdisk or without commands.
+run_script python3 -m rootforge.core.cli boot cpio "$SANDBOX/work" ramdisk.cpio
+assert_eq "boot cpio with no commands fails" "$RC" "1"
+run_script python3 -m rootforge.core.cli boot cpio "$SANDBOX/work" missing.cpio -- 'add 0750 init magiskinit'
+assert_eq "boot cpio on a missing ramdisk fails" "$RC" "1"
+assert_contains "and says to unpack first" "$OUT" "boot unpack"
+
+# repack failure modes: no template, and a tool that exits 0 but produces nothing.
+mkdir -p "$SANDBOX/empty"
+run_script python3 -m rootforge.core.cli boot repack "$SANDBOX/empty"
+assert_eq "repack without an unpacked template fails" "$RC" "1"
+assert_contains "and says to unpack first" "$OUT" "boot unpack"
+export RF_STUB_NO_REPACK=1
+rm -f "$SANDBOX/work/new-boot.img"
+run_script python3 -m rootforge.core.cli boot repack "$SANDBOX/work"
+assert_eq "repack that produced no image is a failure, not a success" "$RC" "1"
+unset RF_STUB_NO_REPACK
+
+# verify: avbtool's verdict is the exit status.
+run_script python3 -m rootforge.core.cli boot verify "$SANDBOX/boot.img"
+assert_eq "boot verify passes when avbtool does" "$RC" "0"
+assert_contains "and says so" "$OUT" "AVB verification passed"
+assert_contains "avbtool was asked about this image" "$(cat "$RF_STUB_LOG")" "avbtool verify_image --image $SANDBOX/boot.img"
+export RF_STUB_AVB_RC=1
+run_script python3 -m rootforge.core.cli boot verify "$SANDBOX/boot.img"
+assert_eq "boot verify fails when avbtool does" "$RC" "1"
+assert_contains "and says why it may have failed" "$OUT" "failed or image is unsigned"
+unset RF_STUB_AVB_RC
+
+# a missing tool is a clear error, not a traceback
+run_script env PATH="$SANDBOX/no-such-dir" "$(command -v python3)" -m rootforge.core.cli boot inspect "$SANDBOX/boot.img"
+assert_eq "a missing magiskboot is reported" "$RC" "1"
+assert_contains "naming the tool" "$OUT" "magiskboot not found"
+assert_not_contains "without a traceback" "$OUT" "Traceback"
+run_script env PATH="$SANDBOX/no-such-dir" "$(command -v python3)" -m rootforge.core.cli boot verify "$SANDBOX/boot.img"
+assert_eq "a missing avbtool is reported" "$RC" "1"
+assert_contains "naming the tool" "$OUT" "avbtool not found"
 drop_sandbox
 
 section "setup_rooted_avd.sh — name validation and the cached Magisk APK"

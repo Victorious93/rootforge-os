@@ -34,6 +34,7 @@ KEY_FILE="$HOME/.rootforge/ai-keys.env"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$LOG_DIR" "$HOME/.rootforge"
 LOG_FILE="$LOG_DIR/ai_tools_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 # This script handles API keys, and its log collects curl's stderr. Even with
 # the key out of the URL, a log written by a secret-handling tool should not
 # be created world-readable — the default umask made it 0644.

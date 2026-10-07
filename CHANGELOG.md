@@ -74,6 +74,21 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
   beside a pin, and unpinned `npm install -g`.
 - README: live ISO is BIOS-only; UEFI/Secure Boot unsupported.
 
+### Logging and tests (Stage 3 follow-up)
+- One `rootforge` invocation is one execution: `main()` sets `ROOTFORGE_EXECUTION_ID`
+  (validated; an inherited valid value is kept) and every wrapped script inherits it.
+- New `common.sh` helpers `rf_ensure_execution_id`, `rf_private_file`, `rf_log_init`; every
+  script that writes a log or report now creates it `0600` from creation, stamps the
+  execution ID into logs, and hands new files to `$SUDO_USER` under sudo. Scripts that did
+  not source `common.sh` (`build_matrix.sh`, `check_root_detection.sh`, `harden_kernel.sh`,
+  `join_headscale.sh`, `rpi_fleet_tools.sh`, `setup_intercept_proxy.sh`, `setup_terminal.sh`,
+  `setup_vpn.sh`, `build_magisk_module.sh`, `extract_ota.sh`) now do.
+- The CLI's JSON-lines logs are also handed to `$SUDO_USER` under sudo.
+- New subprocess-level tests for `boot inspect/unpack/repack/cpio/verify` (stub
+  `magiskboot`/`avbtool`), including missing-tool errors without a traceback.
+- Migration: existing log files keep their mode; only newly created ones are `0600`. A log
+  line `# rootforge execution <id>: ...` now begins each new script log.
+
 ### Documentation
 - `CLAUDE.md` consolidated (history archived under `docs/archive/`); new `AGENTS.md`,
   `docs/ARCHITECTURE.md`, `docs/PLATFORM_SUPPORT.md`, `docs/SECURITY_MODEL.md`; plan rewritten as a staged roadmap;

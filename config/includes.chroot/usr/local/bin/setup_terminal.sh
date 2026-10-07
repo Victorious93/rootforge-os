@@ -10,10 +10,14 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/terminal_setup_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[terminal] $*" | tee -a "$LOG_FILE"; }
 
 log "Installing terminal tooling"

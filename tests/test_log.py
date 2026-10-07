@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from rootforge.core import log as rflog
 from rootforge.core.log import Logger
 
 
@@ -121,6 +122,102 @@ class TestRedaction(LogTestCase):
         record = self.logged(count=3, ok=True, path="/tmp/x", note=None)
         self.assertEqual((record["count"], record["ok"], record["path"], record["note"]),
                          (3, True, "/tmp/x", None))
+
+
+class TestExecutionId(LogTestCase):
+    def setUp(self):
+        super().setUp()
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(rflog.EXECUTION_ID_ENV, None)
+
+    def test_a_valid_inherited_id_is_used(self):
+        os.environ[rflog.EXECUTION_ID_ENV] = "abc12345"
+        self.assertEqual(Logger("doctor", echo=False).execution_id, "abc12345")
+
+    def test_an_unsafe_inherited_id_is_ignored(self):
+        """The ID reaches file names and log lines, so it must be a plain token."""
+        for bad in ("../../etc/x", "a b", "ab", "x" * 40, "id\nINJECTED", ""):
+            os.environ[rflog.EXECUTION_ID_ENV] = bad
+            got = Logger("doctor", echo=False).execution_id
+            self.assertNotEqual(got, bad, bad)
+            self.assertRegex(got, r"^[0-9a-f]{8}$")
+
+    def test_without_a_scope_each_logger_gets_its_own_id(self):
+        self.assertNotEqual(Logger("a", echo=False).execution_id, Logger("b", echo=False).execution_id)
+
+    def test_a_scope_gives_every_logger_one_id_and_is_restored_after(self):
+        with rflog.execution_scope() as scoped:
+            first = Logger("boot-inspect", echo=False)
+            second = Logger("boot-verify", echo=False)
+            self.assertEqual(first.execution_id, scoped)
+            self.assertEqual(second.execution_id, scoped)
+            self.assertEqual(os.environ[rflog.EXECUTION_ID_ENV], scoped)
+        self.assertNotIn(rflog.EXECUTION_ID_ENV, os.environ)
+
+    def test_a_scope_keeps_an_id_inherited_from_a_calling_script(self):
+        os.environ[rflog.EXECUTION_ID_ENV] = "feedbeef"
+        with rflog.execution_scope() as scoped:
+            self.assertEqual(scoped, "feedbeef")
+        self.assertEqual(os.environ[rflog.EXECUTION_ID_ENV], "feedbeef")
+
+    def test_the_id_is_in_every_record_and_the_file_name(self):
+        with rflog.execution_scope() as scoped:
+            logger = Logger("doctor", echo=False)
+            logger.info("x")
+        self.assertIn(scoped, logger.path.name)
+        self.assertEqual({r["execution_id"] for r in self.records(logger)}, {scoped})
+
+    def test_main_runs_the_command_inside_a_scope_and_children_inherit_it(self):
+        from rootforge.core import cli, runner
+        seen = {}
+
+        def fake_dispatch(parser, args):
+            seen["env_in_cli"] = os.environ.get(rflog.EXECUTION_ID_ENV)
+            with mock.patch.object(runner, "find_script", return_value=Path("/bin/true")), \
+                    mock.patch.object(runner.subprocess, "run") as run:
+                run.return_value = mock.Mock(returncode=0)
+                runner.run_script("anything.sh", [])
+            seen["env_in_child"] = run.call_args.kwargs["env"].get(rflog.EXECUTION_ID_ENV)
+            return 0
+
+        with mock.patch.object(cli, "_dispatch", fake_dispatch):
+            self.assertEqual(cli.main(["doctor"]), 0)
+        self.assertRegex(seen["env_in_cli"], r"^[0-9a-f]{8}$")
+        self.assertEqual(seen["env_in_child"], seen["env_in_cli"])
+        self.assertNotIn(rflog.EXECUTION_ID_ENV, os.environ)
+
+
+class TestLogOwnership(LogTestCase):
+    """Under sudo, a root-created 0600 log must still belong to the person who ran it."""
+
+    def setUp(self):
+        super().setUp()
+        env = mock.patch.dict(os.environ, {"SUDO_USER": "alice"})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def test_a_new_log_is_handed_to_the_sudo_user_once(self):
+        with mock.patch.object(rflog.os, "geteuid", return_value=0), \
+                mock.patch.object(rflog.shutil, "chown") as chown:
+            logger = Logger("harden", execution_id="own00001", echo=False)
+            logger.info("one")
+            logger.info("two")
+        chown.assert_called_once_with(logger.path, user="alice")
+
+    def test_a_non_root_run_never_chowns(self):
+        with mock.patch.object(rflog.os, "geteuid", return_value=1000), \
+                mock.patch.object(rflog.shutil, "chown") as chown:
+            Logger("harden", execution_id="own00002", echo=False).info("x")
+        chown.assert_not_called()
+
+    def test_a_failed_chown_does_not_stop_logging(self):
+        with mock.patch.object(rflog.os, "geteuid", return_value=0), \
+                mock.patch.object(rflog.shutil, "chown", side_effect=LookupError("no such user")):
+            logger = Logger("harden", execution_id="own00003", echo=False)
+            logger.info("still written")
+        self.assertEqual(self.records(logger)[0]["event"], "still written")
 
 
 if __name__ == "__main__":

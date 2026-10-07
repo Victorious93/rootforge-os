@@ -111,15 +111,25 @@ this is deliberate. `rootforge config show [--json] [--codename CODENAME]` print
 effective configuration. `backup_partitions.sh` reads its default partition list from it,
 and falls back to a built-in list (with a notice) if the CLI or config is unavailable.
 
-### 3.5 Logging and diagnostics (`log.py`, `doctor.py`)
+### 3.5 Logging and diagnostics (`log.py`, `doctor.py`, `common.sh`)
 
-`Logger` writes one JSON-lines file per invocation under `$ROOTFORGE_HOME/logs/` with an
-execution ID. Secret-looking field names and known token shapes are redacted in the
-file **and** in anything echoed to the terminal. `doctor` runs independent checks; each
-declares whether its absence is an error or a warning via `@optional_check`, and a check
-that raises keeps its declared severity (a crash in an optional check never fails the
-run). The wrapped Bash scripts keep their own plain-text logs; they do not yet share the
-CLI's execution ID.
+One `rootforge` invocation is one **execution**: `main()` runs the command inside
+`execution_scope()`, which sets `ROOTFORGE_EXECUTION_ID` (a valid inherited value is kept;
+anything but a 4–32 character alphanumeric token is ignored). Every `Logger` the command
+opens shares that ID, writing one JSON-lines file per command under `$ROOTFORGE_HOME/logs/`
+(`rootforge-<command>-<id>.jsonl`), and every wrapped script inherits it. A script's
+`rf_log_init <file>` (in `common.sh`) creates its log `0600` from creation, hands a new file
+to `$SUDO_USER` when run under sudo, and writes `# rootforge execution <id>: <script> ...` as
+the first line, so a script log can be matched to the CLI's JSON log for the same run. Reports
+(`rf_private_file`) are `0600` without the header. A script started directly generates its
+own ID.
+
+Secret-looking field names and known token shapes are redacted in the file **and** in
+anything echoed to the terminal. `doctor` runs independent checks; each declares whether its
+absence is an error or a warning via `@optional_check`, and a check that raises keeps its
+declared severity. **Limits:** only `doctor`, `boot`, `ota` and device operations write CLI
+JSON events today; `flash`/`backup`/`module`/`avd` runs have the script log (with the ID) but
+no CLI-side event. Script log *contents* are not redacted.
 
 ### 3.6 Dispatch (`runner.py`)
 

@@ -4,7 +4,7 @@
 > are **no longer true**:
 >
 > - "No `rootforge` CLI, no `tests/` directory, no Python package" — all three exist
->   (`rootforge.core.*`, `tests/`, 319 Python tests and an 852-check shell/Python harness).
+>   (`rootforge.core.*`, `tests/`, 329 Python tests and a 909-check shell/Python harness).
 > - The installer description ("GRUB installs in UEFI mode … UEFI" as a supported path) —
 >   the **live ISO boots BIOS-only** (isolinux); UEFI boot and Secure Boot are unsupported.
 > - Any statement that a destructive flow is gated only by a typed word — flashing and

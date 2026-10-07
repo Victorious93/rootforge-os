@@ -30,6 +30,7 @@ WORK_DIR="$ROOTFORGE_HOME/kernelsu-work"
 mkdir -p "$LOG_DIR" "$WORK_DIR"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 LOG="$LOG_DIR/kernelsu_patch_${STAMP}.log"
+rf_log_init "$LOG"
 
 log()  { echo "[kernelsu-patch] $*" | tee -a "$LOG"; }
 die()  { echo "[kernelsu-patch] ERROR: $*" | tee -a "$LOG" >&2; exit 1; }

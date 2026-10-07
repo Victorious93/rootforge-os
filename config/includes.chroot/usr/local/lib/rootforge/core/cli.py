@@ -16,6 +16,7 @@ from rootforge.core import __version__, avd, boot, device, devices, flashing, mo
 from rootforge.core.device import compatibility_findings, profile_device
 from rootforge.core.devices import list_devices
 from rootforge.core.doctor import run_doctor
+from rootforge.core.log import execution_scope
 
 
 def _partition_name(value: str) -> str:
@@ -197,6 +198,13 @@ def _devices(args: argparse.Namespace) -> int:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    # One execution ID for everything this invocation does, including the
+    # scripts it runs (they inherit it from the environment).
+    with execution_scope():
+        return _dispatch(parser, args)
+
+
+def _dispatch(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if args.command == "doctor":
         return run_doctor(as_json=args.json, quiet=args.quiet, strict=args.strict)
     if args.command == "devices":

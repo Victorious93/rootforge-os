@@ -14,6 +14,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../lib/rootforge/sh/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/rootforge/sh/common.sh"
+
 LOCKDOWN=0
 DRY_RUN=0
 for arg in "$@"; do
@@ -35,6 +38,7 @@ ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/harden_kernel_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[harden-kernel] $*" | tee -a "$LOG_FILE"; }
 
 # Overridable for the same reason ROOTFORGE_GRUB_DEFAULTS is: without it the

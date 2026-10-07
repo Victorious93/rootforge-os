@@ -67,6 +67,7 @@ ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/flash_pi_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[flash-pi] $*" | tee -a "$LOG_FILE"; }
 
 # rf_confirm prompts on /dev/tty and refuses when there is no terminal, so

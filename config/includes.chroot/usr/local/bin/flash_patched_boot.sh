@@ -105,6 +105,7 @@ fi
 LOG_DIR="${ROOTFORGE_HOME:-$HOME/rootforge}/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/flash_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[flash] $*" | tee -a "$LOG_FILE"; }
 
 rf_require_cmd jq "install jq (apt install jq)"

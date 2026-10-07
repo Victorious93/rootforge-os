@@ -80,6 +80,7 @@ BACKUP_DIR="$ROOTFORGE_HOME/devices/$CODENAME/backups/$STAMP"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/backup_${CODENAME}_${STAMP}.log"
+rf_log_init "$LOG_FILE"
 log() { echo "[backup] $*" | tee -a "$LOG_FILE"; }
 
 # --- which partitions ---------------------------------------------------------

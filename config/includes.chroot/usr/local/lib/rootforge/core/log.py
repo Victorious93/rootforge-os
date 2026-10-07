@@ -14,10 +14,12 @@ a credential nobody thought to name as one.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
 import secrets
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -58,6 +60,62 @@ def _redact(obj: Any) -> Any:
     return obj
 
 
+# One invocation of `rootforge` is one execution. The CLI sets this variable for
+# its own process, so every Logger it opens shares the ID, and every wrapped
+# script inherits it (scripts/sh/common.sh: rf_log_init) and stamps it into its
+# own log. A script run directly, outside the CLI, generates its own.
+EXECUTION_ID_ENV = "ROOTFORGE_EXECUTION_ID"
+_EXECUTION_ID_RE = re.compile(r"^[A-Za-z0-9]{4,32}$")
+
+
+def new_execution_id() -> str:
+    return secrets.token_hex(4)
+
+
+def current_execution_id() -> str:
+    """The ID inherited from the environment, or a fresh one.
+
+    An inherited value is used only if it is a short alphanumeric token: it ends
+    up in file names and log lines, so anything else (a path, a newline, an
+    escape sequence) is ignored rather than trusted.
+    """
+    inherited = os.environ.get(EXECUTION_ID_ENV, "")
+    return inherited if _EXECUTION_ID_RE.match(inherited) else new_execution_id()
+
+
+@contextlib.contextmanager
+def execution_scope():
+    """Give this process (and its children) one execution ID, then restore.
+
+    Reuses a valid inherited ID, so a script that calls `rootforge` keeps its own.
+    """
+    previous = os.environ.get(EXECUTION_ID_ENV)
+    os.environ[EXECUTION_ID_ENV] = current_execution_id()
+    try:
+        yield os.environ[EXECUTION_ID_ENV]
+    finally:
+        if previous is None:
+            os.environ.pop(EXECUTION_ID_ENV, None)
+        else:
+            os.environ[EXECUTION_ID_ENV] = previous
+
+
+def _hand_to_invoking_user(path: Path) -> None:
+    """Under `sudo`, give a log the invoking user can still read.
+
+    A 0600 file created by root inside the user's home would otherwise be
+    unreadable by the person whose log it is. Best effort: a failure to chown
+    must never stop the run.
+    """
+    sudo_user = os.environ.get("SUDO_USER", "")
+    if os.geteuid() != 0 or not sudo_user or sudo_user == "root":
+        return
+    try:
+        shutil.chown(path, user=sudo_user)
+    except (OSError, LookupError):
+        pass
+
+
 def _rootforge_home() -> Path:
     return Path(os.environ.get("ROOTFORGE_HOME", str(Path.home() / "rootforge")))
 
@@ -73,7 +131,7 @@ class Logger:
 
     def __init__(self, command: str, execution_id: str = "", echo: bool = True):
         self.command = command
-        self.execution_id = execution_id or secrets.token_hex(4)
+        self.execution_id = execution_id or current_execution_id()
         self.echo = echo
         log_dir = _rootforge_home() / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -93,9 +151,12 @@ class Logger:
         # a chmod after the fact would leave a window at the default umask.
         # The mode only applies when the file is created; an existing log
         # keeps whatever mode it already has.
+        existed = self.path.exists()
         fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
         with os.fdopen(fd, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, sort_keys=True) + "\n")
+        if not existed:
+            _hand_to_invoking_user(self.path)
         if self.echo:
             stream = sys.stderr if level in ("warn", "error") else sys.stdout
             print(f"[{self.command}] {record['event']}", file=stream)

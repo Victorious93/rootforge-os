@@ -42,6 +42,7 @@ ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 LOG_DIR="$ROOTFORGE_HOME/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/harden_system_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[harden-system] $*" | tee -a "$LOG_FILE"; }
 
 # --dry-run exists because this script's default USB posture is block-all: it

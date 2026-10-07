@@ -17,6 +17,7 @@ set -euo pipefail
 LOG_DIR="${ROOTFORGE_HOME:-$HOME/rootforge}/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/unlock_$(date +%Y%m%d_%H%M%S).log"
+rf_log_init "$LOG_FILE"
 log() { echo "[unlock] $*" | tee -a "$LOG_FILE"; }
 
 SERIAL="${1:-}"
