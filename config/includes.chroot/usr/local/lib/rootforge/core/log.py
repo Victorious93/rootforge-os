@@ -31,6 +31,19 @@ _SECRET_KEY_PATTERN = re.compile(
     r"(key|token|secret|password|passwd|credential)", re.IGNORECASE
 )
 
+# Free-text redaction. The same rules exist in shell as `rf_redact` in
+# sh/common.sh (a sed script), because script logs are written by Bash; the two
+# must stay in step, and tests/test_redaction_parity.py runs one set of samples
+# through both. Order matters and is the same in both: private-key blocks, token
+# shapes, secret-valued options, secret-named assignments.
+#
+# The rules err toward redacting. A log is for diagnosing, and a pasted log is
+# how credentials usually leak, so an over-redacted value ("Public key: ...")
+# costs less than a leaked one.
+_PEM_BLOCK = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S)
+_PEM_UNTERMINATED = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*", re.S)
+_PEM_REDACTED = "***REDACTED PRIVATE KEY***"
+
 _SECRET_VALUE_PATTERNS = [
     re.compile(r"sk-ant-[A-Za-z0-9_-]{10,}"),
     re.compile(r"sk-[A-Za-z0-9]{20,}"),
@@ -38,13 +51,80 @@ _SECRET_VALUE_PATTERNS = [
     re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
     re.compile(r"AIza[A-Za-z0-9_-]{30,}"),
     re.compile(r"(?i)bearer\s+[A-Za-z0-9._-]{10,}"),
+    re.compile(r"tskey-[A-Za-z0-9-]{10,}"),
+    re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}"),
+    re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"hf_[A-Za-z0-9]{20,}"),
 ]
 
+# `--authkey VALUE`, `--password=VALUE`, `-token VALUE`
+_SECRET_OPTION = re.compile(
+    r"(?i)(--?(?:auth-?key|api-?key|password|passwd|token|secret|psk)(?:=|\s+))[^\s]+"
+)
 
-def _redact_text(value: str) -> str:
+# `NAME=VALUE`, `NAME: VALUE`, `"name": "VALUE"`, `PrivateKey = VALUE` where the
+# name ends in, or has a `_`/`-`/`.`-delimited, key/token/secret/password/...
+# word ("keyboard" is not a secret name; "api_key" and "PrivateKey" are).
+_SECRET_ASSIGNMENT = re.compile(
+    r"""(?i)\b([A-Za-z0-9_.-]*(?:key|token|secret|password|passwd|credential|psk)(?:[_.-][A-Za-z0-9_.-]*)?["']?\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s"']+)"""
+)
+
+
+def redact_text(value: str) -> str:
+    """Redact credentials from free text (log lines, event messages, script logs)."""
+    value = _PEM_BLOCK.sub(_PEM_REDACTED, value)
+    value = _PEM_UNTERMINATED.sub(_PEM_REDACTED, value)
     for pattern in _SECRET_VALUE_PATTERNS:
         value = pattern.sub(_REDACTED, value)
+    value = _SECRET_OPTION.sub(lambda m: m.group(1) + _REDACTED, value)
+    value = _SECRET_ASSIGNMENT.sub(lambda m: m.group(1) + _REDACTED, value)
     return value
+
+
+_redact_text = redact_text  # the name older callers and tests use
+
+_SECRET_OPTION_NAME = re.compile(r"(?i)^--?(?:auth-?key|api-?key|password|passwd|token|secret|psk)$")
+
+
+def redact_argv(argv):
+    """Redact an argument list, including a secret given as the NEXT argument."""
+    out, hide_next = [], False
+    for item in argv:
+        item = str(item)
+        if hide_next:
+            out.append(_REDACTED)
+            hide_next = False
+            continue
+        out.append(redact_text(item))
+        hide_next = bool(_SECRET_OPTION_NAME.match(item))
+    return out
+
+
+MAX_REDACT_BYTES = 64 * 1024 * 1024
+
+
+def redact_file(path) -> bool:
+    """Redact a log file in place. True if it changed.
+
+    Rewrites through the existing file (truncate + write), so its inode, mode and
+    owner are untouched: a 0600 log stays 0600 and stays owned by the user.
+    Symlinks, non-files and files over MAX_REDACT_BYTES are left alone.
+    """
+    path = Path(path)
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_REDACT_BYTES:
+            return False
+        text = path.read_text(encoding="utf-8", errors="surrogateescape")
+        cleaned = redact_text(text)
+        if cleaned == text:
+            return False
+        with path.open("r+", encoding="utf-8", errors="surrogateescape") as fh:
+            fh.seek(0)
+            fh.write(cleaned)
+            fh.truncate()
+        return True
+    except OSError:
+        return False
 
 
 def _redact(obj: Any) -> Any:
@@ -98,6 +178,33 @@ def execution_scope():
             os.environ.pop(EXECUTION_ID_ENV, None)
         else:
             os.environ[EXECUTION_ID_ENV] = previous
+
+
+def script_logs_for(execution_id: str, since: float = 0.0) -> list:
+    """Paths of script logs that announce this execution ID.
+
+    Scripts stamp `# rootforge execution <id>: ...` as the first line of every
+    log they create (sh/common.sh: rf_log_init). Only regular files modified
+    at or after `since` are opened, and only their first 200 bytes are read,
+    so this stays cheap in a log directory that has grown over months.
+    """
+    marker = f"# rootforge execution {execution_id}:"
+    found = []
+    try:
+        entries = sorted((_rootforge_home() / "logs").iterdir())
+    except OSError:
+        return found
+    for entry in entries:
+        try:
+            if not entry.is_file() or entry.is_symlink() or entry.stat().st_mtime < since:
+                continue
+            with entry.open("rb") as fh:
+                head = fh.read(200).decode("utf-8", "replace")
+        except OSError:
+            continue
+        if head.startswith(marker):
+            found.append(str(entry))
+    return found
 
 
 def _hand_to_invoking_user(path: Path) -> None:

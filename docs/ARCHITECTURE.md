@@ -127,9 +127,35 @@ own ID.
 Secret-looking field names and known token shapes are redacted in the file **and** in
 anything echoed to the terminal. `doctor` runs independent checks; each declares whether its
 absence is an error or a warning via `@optional_check`, and a check that raises keeps its
-declared severity. **Limits:** only `doctor`, `boot`, `ota` and device operations write CLI
-JSON events today; `flash`/`backup`/`module`/`avd` runs have the script log (with the ID) but
-no CLI-side event. Script log *contents* are not redacted.
+declared severity.
+
+**Audit trail (`audit.py`).** State-changing commands — everything under `flash`, `backup`,
+`module` and `avd`, plus `boot patch` and `boot flash-last` — run inside `audited()`, which
+writes `command started` (command, redacted argument list, euid, `SUDO_USER`, cwd) and
+`command finished` (exit status, duration, the scripts that ran with their exit statuses,
+and the script logs stamped with this execution ID) to `rootforge-<command>-<id>.jsonl`.
+Python-native commands (`backup verify`, `backup import-legacy`) are covered the same way.
+The exit status is returned untouched (non-zero is logged at `warn`, since 3 = blocked and
+4 = partial are outcomes, not crashes); an exception, including Ctrl-C, is recorded as
+`command crashed` and re-raised; if the log cannot be opened the command still runs and a
+warning says it is unrecorded. `doctor`, `ota extract` and `boot inspect/unpack/repack/cpio/
+verify` log themselves; read-only commands (`devices`, `device`, `config`) are not audited.
+**Redaction of script logs.** Logs and reports a script creates (`rf_private_file` /
+`rf_log_init`) are registered and redacted in place when the script exits (`rf_redact_file`:
+same inode, mode and owner), by an `EXIT` hook that composes with any trap already set and
+runs on normal exit, `exit N`, SIGINT, SIGTERM and SIGHUP with the script's own exit status
+preserved (checked on bash 5.2). The CLI then redacts every script log stamped with the run's
+ID once the command ends and lists the ones that changed as `script_logs_redacted`, which also
+covers a script killed with SIGKILL. The rules — private-key blocks, token shapes, secret-valued
+options such as `--authkey X`, and secret-named assignments such as `API_KEY=…` or
+`PrivateKey = …` — exist twice, as Python (`log.redact_text`) and as one sed script
+(`rf_redact`), and `tests/test_redaction_parity.py` pushes one sample table through both.
+**Limits:** it is pattern-based and errs toward redacting (a `Public key: …` line is
+redacted too); a secret with no recognisable shape or name passes through. The terminal is not
+redacted, deliberately: a registration URL or auth link has to be seen to be used. A script
+SIGKILLed outside the CLI leaves its `0600` log unredacted. Redaction happens at exit, so a
+secret sits in the `0600` file while the script runs. A command rejected by argument parsing
+runs nothing and records nothing.
 
 ### 3.6 Dispatch (`runner.py`)
 

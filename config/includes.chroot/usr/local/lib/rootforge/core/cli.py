@@ -15,6 +15,7 @@ from typing import Optional, Sequence
 from rootforge.core import __version__, avd, boot, device, devices, flashing, module, ota
 from rootforge.core.device import compatibility_findings, profile_device
 from rootforge.core.devices import list_devices
+from rootforge.core.audit import audited, command_label, is_audited
 from rootforge.core.doctor import run_doctor
 from rootforge.core.log import execution_scope
 
@@ -201,6 +202,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # One execution ID for everything this invocation does, including the
     # scripts it runs (they inherit it from the environment).
     with execution_scope():
+        if is_audited(args):
+            return audited(command_label(args), argv, lambda: _dispatch(parser, args))
         return _dispatch(parser, args)
 
 

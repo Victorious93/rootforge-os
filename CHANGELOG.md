@@ -89,6 +89,40 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 - Migration: existing log files keep their mode; only newly created ones are `0600`. A log
   line `# rootforge execution <id>: ...` now begins each new script log.
 
+### Script-log redaction
+- `common.sh`: `rf_redact` (one sed script), `rf_redact_file`, `rf_redact_registered`; every
+  file handed out by `rf_private_file`/`rf_log_init` is redacted in place when the script
+  exits (an `EXIT` hook composed with any trap already set; verified on bash 5.2 for normal
+  exit, `exit N`, `set -e` abort, SIGINT, SIGTERM and SIGHUP, with the exit status preserved).
+  `harden_system.sh` and `setup_intercept_proxy.sh` set their own `EXIT` trap and call
+  `rf_redact_registered` in it.
+- `core/log.py`: `redact_text` now also covers private-key blocks, more token shapes
+  (`tskey-`, `xox*-`, `AKIA…`, `hf_…`), secret-valued options (`--authkey X`) and secret-named
+  assignments (`API_KEY=…`, `PrivateKey = …`, JSON members); `redact_argv` handles a secret in
+  the next argument; `redact_file` rewrites in place. The CLI redacts every script log stamped
+  with the run's execution ID after the command (`script_logs_redacted` in the finish event),
+  which also covers a SIGKILLed script.
+- Tests: `tests/test_redaction_parity.py` runs one 35-sample table through both engines and
+  checks each against the intended output; shell tests cover normal exit, `exit N`, a `set -e`
+  abort, SIGTERM, SIGHUP and SIGKILL (SIGINT was checked by hand, not in the suite), composition
+  with an existing trap, in-place rewrite (inode, mode, symlinks), header-less reports, the
+  SIGKILL limit, and a real `join_headscale.sh` run whose registration URL stays visible on the
+  terminal but not in the log.
+- Known limits: pattern-based and over-redacting by design; the terminal is not redacted;
+  the secret is in the `0600` file until exit; a script SIGKILLed outside the CLI is not redacted.
+
+### CLI-side audit trail
+- New `core/audit.py`: `flash`, `backup`, `module`, `avd`, `boot patch` and `boot flash-last`
+  now write `command started` / `command finished` events (command, redacted argv, euid,
+  `SUDO_USER`, exit status, duration, scripts run with their exit statuses, script logs for
+  the run) to `rootforge-<command>-<id>.jsonl`. Python-native commands (`backup verify`,
+  `backup import-legacy`) are covered too. Exit statuses are returned untouched; an
+  exception or Ctrl-C is recorded and re-raised; an unwritable log does not stop the command
+  (a warning is printed). `runner` records the scripts it executes; `log.script_logs_for`
+  finds the script logs stamped with an execution ID.
+- Tests: `tests/test_audit.py` (22) and an end-to-end shell section (blocked flash exit 3
+  recorded at `warn` with its script log linked, backup list, backup verify, unwritable log).
+
 ### Documentation
 - `CLAUDE.md` consolidated (history archived under `docs/archive/`); new `AGENTS.md`,
   `docs/ARCHITECTURE.md`, `docs/PLATFORM_SUPPORT.md`, `docs/SECURITY_MODEL.md`; plan rewritten as a staged roadmap;

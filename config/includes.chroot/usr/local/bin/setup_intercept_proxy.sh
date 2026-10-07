@@ -58,7 +58,8 @@ case "$CMD" in
     # A fixed /tmp path named after a predictable hash is a collision (and,
     # on a shared box, a symlink) hazard.
     TMP_DIR="$(mktemp -d)"
-    trap 'rm -rf "$TMP_DIR"' EXIT
+    # This replaces the exit hook rf_log_init installed, so it redacts too.
+    trap 'rm -rf "$TMP_DIR"; rf_redact_registered' EXIT
     TMP_PEM="$TMP_DIR/$DEVICE_CERT_NAME"
     openssl x509 -inform PEM -in "$CA_CERT" -out "$TMP_PEM" -outform PEM
 

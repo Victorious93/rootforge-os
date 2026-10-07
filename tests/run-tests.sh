@@ -3196,6 +3196,199 @@ assert_eq "the script log is 0600 under umask 000" "$(mode_of "$SCRIPT_LOG")" "6
 assert_eq "the CLI log is 0600 under umask 000" "$(mode_of "$JSON_LOG")" "600"
 drop_sandbox
 
+section "script log redaction — secrets do not outlive the run"
+
+LOGSH="$LIB_DIR/rootforge/sh/common.sh"
+
+# The filter itself, on the shapes that actually show up in these scripts' output.
+new_sandbox
+run_script bash -c '. "$1"; printf "%s\n" "tailscale up --authkey tskey-auth-abcdefghijk123" "ANTHROPIC_API_KEY=sk-ant-abcdefghijkl" "PrivateKey = AbCdEf12345=" "To authenticate visit https://hs.example.com/register/mkey:0123abcd4567" "keyboard: US" "Backed up 3 partitions" | rf_redact' _ "$LOGSH"
+assert_not_contains "an auth key is redacted" "$OUT" "tskey-auth-abcdefghijk123"
+assert_not_contains "an API key is redacted" "$OUT" "sk-ant-abcdefghijkl"
+assert_not_contains "a WireGuard private key is redacted" "$OUT" "AbCdEf12345="
+assert_not_contains "a node-registration key in a URL is redacted" "$OUT" "mkey:0123abcd4567"
+assert_contains "ordinary lines are left alone" "$OUT" "Backed up 3 partitions"
+assert_contains "and a word that merely contains 'key' is not a secret name" "$OUT" "keyboard: US"
+
+# rf_redact_file works in place: same inode, same mode, symlinks never followed.
+printf 'x\nPASSWORD=hunter2\n' > "$SANDBOX/a.log"; chmod 600 "$SANDBOX/a.log"
+INODE_BEFORE="$(stat -c %i "$SANDBOX/a.log")"
+run_script bash -c '. "$1"; rf_redact_file "$2/a.log"' _ "$LOGSH" "$SANDBOX"
+assert_contains "the secret is gone from the file" "$(cat "$SANDBOX/a.log")" "PASSWORD=***REDACTED***"
+assert_eq "the file keeps its inode (rewritten in place)" "$(stat -c %i "$SANDBOX/a.log")" "$INODE_BEFORE"
+assert_eq "and its 0600 mode" "$(stat -c %a "$SANDBOX/a.log")" "600"
+assert_eq "no temp copy is left behind" "$(ls "$SANDBOX" | grep -c 'redact\.' || true)" "0"
+printf 'PASSWORD=hunter2\n' > "$SANDBOX/target.log"; ln -s "$SANDBOX/target.log" "$SANDBOX/link.log"
+run_script bash -c '. "$1"; rf_redact_file "$2/link.log"; rf_redact_file "$2/missing.log"; echo rc=$?' _ "$LOGSH" "$SANDBOX"
+assert_contains "a symlink is not followed" "$(cat "$SANDBOX/target.log")" "PASSWORD=hunter2"
+assert_contains "a missing file is not an error" "$OUT" "rc=0"
+
+# The exit hook: a script that logs a secret and leaves by every ordinary route.
+# leaky <body-after-rf_log_init> — runs a script that writes a secret to its log
+# via both write styles scripts use (tee -a and a plain redirect), then <body>.
+leaky() {
+  cat > "$SANDBOX/leaky.sh" <<EOS
+#!/usr/bin/env bash
+set -euo pipefail
+. "$LOGSH"
+LOG_FILE="\$ROOTFORGE_HOME/logs/leaky.log"
+rf_log_init "\$LOG_FILE"
+echo "joined with --authkey tskey-auth-abcdefghijk123" | tee -a "\$LOG_FILE"
+echo "API_TOKEN=abc123def456" >> "\$LOG_FILE"
+echo "serial ABC123 flashed" >> "\$LOG_FILE"
+$1
+EOS
+  chmod +x "$SANDBOX/leaky.sh"
+}
+assert_clean_log() {  # assert_clean_log <label>
+  local text; text="$(cat "$ROOTFORGE_HOME/logs/leaky.log")"
+  assert_not_contains "$1: the auth key is gone" "$text" "tskey-auth-abcdefghijk123"
+  assert_not_contains "$1: the token is gone" "$text" "abc123def456"
+  assert_contains "$1: diagnostics survive" "$text" "serial ABC123 flashed"
+  assert_contains "$1: the run header survives" "$text" "# rootforge execution"
+}
+
+new_sandbox; leaky 'exit 0'
+run_script bash "$SANDBOX/leaky.sh"
+assert_eq "a normal exit stays 0" "$RC" "0"
+assert_contains "the terminal still shows what the user needs to see" "$OUT" "tskey-auth-abcdefghijk123"
+assert_clean_log "normal exit"
+assert_eq "the log is still 0600" "$(stat -c %a "$ROOTFORGE_HOME/logs/leaky.log")" "600"
+
+new_sandbox; leaky 'exit 3'
+run_script bash "$SANDBOX/leaky.sh"
+assert_eq "the script's own exit status is preserved" "$RC" "3"
+assert_clean_log "exit 3"
+
+new_sandbox; leaky 'false; echo not-reached'
+run_script bash "$SANDBOX/leaky.sh"
+assert_eq "a set -e failure keeps its status" "$RC" "1"
+assert_clean_log "set -e abort"
+
+new_sandbox; leaky 'kill -TERM $$; sleep 5'
+run_script bash "$SANDBOX/leaky.sh"
+assert_eq "SIGTERM still ends the script with 143" "$RC" "143"
+assert_clean_log "SIGTERM"
+
+new_sandbox; leaky 'kill -HUP $$; sleep 5'
+run_script bash "$SANDBOX/leaky.sh"
+assert_eq "SIGHUP still ends the script with 129" "$RC" "129"
+assert_clean_log "SIGHUP"
+
+# An EXIT trap that already exists is kept and runs first.
+new_sandbox
+cat > "$SANDBOX/prior.sh" <<EOS
+#!/usr/bin/env bash
+set -euo pipefail
+trap 'echo prior-handler-ran >> "\$ROOTFORGE_HOME/trap-marker"' EXIT
+. "$LOGSH"
+rf_log_init "\$ROOTFORGE_HOME/logs/prior.log"
+echo "PASSWORD=hunter2" >> "\$ROOTFORGE_HOME/logs/prior.log"
+exit 4
+EOS
+run_script bash "$SANDBOX/prior.sh"
+assert_eq "composing with an existing EXIT trap keeps the exit status" "$RC" "4"
+assert_contains "the existing trap still runs" "$(cat "$ROOTFORGE_HOME/trap-marker")" "prior-handler-ran"
+assert_contains "and the log is redacted too" "$(cat "$ROOTFORGE_HOME/logs/prior.log")" "PASSWORD=***REDACTED***"
+
+# SIGKILL cannot be trapped. Say so with a test rather than leave it implied:
+# the script's own log stays unredacted (0600); the CLI redacts it afterwards.
+new_sandbox; leaky 'kill -KILL $$'
+run_script bash "$SANDBOX/leaky.sh"
+assert_eq "SIGKILL ends the script with 137" "$RC" "137"
+assert_contains "after SIGKILL the log is NOT redacted by the script (known limit)" "$(cat "$ROOTFORGE_HOME/logs/leaky.log")" "API_TOKEN=abc123def456"
+assert_eq "but it is still private" "$(stat -c %a "$ROOTFORGE_HOME/logs/leaky.log")" "600"
+
+# Reports and captures made with rf_private_file (no header) are redacted too: a
+# fleet run captures each child's stdout into one of these.
+new_sandbox
+cat > "$SANDBOX/report.sh" <<EOS
+#!/usr/bin/env bash
+set -euo pipefail
+. "$LOGSH"
+rf_private_file "\$ROOTFORGE_HOME/logs/report.md"
+echo "- PASS creds checked PASSWORD=hunter2" >> "\$ROOTFORGE_HOME/logs/report.md"
+echo "- WARN root detection leaks nothing" >> "\$ROOTFORGE_HOME/logs/report.md"
+EOS
+run_script bash "$SANDBOX/report.sh"
+assert_eq "a script that only makes a report exits 0" "$RC" "0"
+assert_contains "the report is redacted at exit" "$(cat "$ROOTFORGE_HOME/logs/report.md")" "PASSWORD=***REDACTED***"
+assert_contains "and keeps its content" "$(cat "$ROOTFORGE_HOME/logs/report.md")" "root detection leaks nothing"
+
+# Scripts that set their own EXIT trap after rf_log_init must still redact.
+assert_eq "harden_system.sh's EXIT trap also redacts" "$(grep -c "trap '.*rf_redact_registered.*' EXIT" "$BIN_DIR/harden_system.sh")" "1"
+assert_eq "setup_intercept_proxy.sh's EXIT trap also redacts" "$(grep -c "trap '.*rf_redact_registered.*' EXIT" "$BIN_DIR/setup_intercept_proxy.sh")" "1"
+
+# A real script end to end: headscale registration prints a URL with a node key.
+new_sandbox
+mkdir -p "$SANDBOX/tsbin"
+cat > "$SANDBOX/tsbin/tailscale" <<'EOS'
+#!/usr/bin/env bash
+echo "To authenticate, visit: https://hs.example.com/register/mkey:0123abcd4567ef89"
+EOS
+chmod +x "$SANDBOX/tsbin/tailscale"
+export PATH="$SANDBOX/tsbin:$STUB_DIR:$ORIGINAL_PATH"
+run_script bash "$BIN_DIR/join_headscale.sh" https://hs.example.com
+assert_eq "join_headscale.sh runs to completion" "$RC" "0"
+assert_contains "the user still sees the registration URL" "$OUT" "mkey:0123abcd4567ef89"
+HS_LOG="$(ls "$ROOTFORGE_HOME"/logs/headscale_join_*.log | head -n 1)"
+assert_not_contains "the node key is not left in the script's log" "$(cat "$HS_LOG")" "0123abcd4567ef89"
+assert_contains "the rest of the log is intact" "$(cat "$HS_LOG")" "Joining mesh at https://hs.example.com"
+drop_sandbox
+
+section "audit trail — flash and backup leave a CLI-side record"
+
+# audit_field <jsonl> <event> <jq filter> — one value from a named event.
+audit_field() { jq -r --arg e "$2" "select(.event == \$e) | $3" "$1" | head -n 1; }
+
+# A blocked flash: nothing is written, and the record says so.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+make_boot_img "$SANDBOX/boot.img"
+run_script python3 -m rootforge.core.cli flash boot "$SANDBOX/boot.img"
+assert_eq "a flash with no device is blocked (exit 3)" "$RC" "3"
+AUDIT_LOG="$(ls "$ROOTFORGE_HOME"/logs/rootforge-flash-boot-*.jsonl 2>/dev/null | head -n 1)"
+assert_eq "the CLI wrote an audit log for it" "$([ -n "$AUDIT_LOG" ] && echo yes || echo no)" "yes"
+assert_eq "it records the command" "$(audit_field "$AUDIT_LOG" 'command started' .command)" "flash boot"
+assert_contains "it records the image argument" "$(audit_field "$AUDIT_LOG" 'command started' '.argv | join(" ")')" "$SANDBOX/boot.img"
+assert_eq "it records the exit status the user saw" "$(audit_field "$AUDIT_LOG" 'command finished' .returncode)" "3"
+assert_eq "a blocked run is a warning, not an error" "$(audit_field "$AUDIT_LOG" 'command finished' .level)" "warn"
+assert_eq "it names the script that ran" "$(audit_field "$AUDIT_LOG" 'command finished' '.scripts[0].script')" "flash_patched_boot.sh"
+assert_eq "and that script's exit status" "$(audit_field "$AUDIT_LOG" 'command finished' '.scripts[0].returncode')" "3"
+SCRIPT_LOG_PATH="$(audit_field "$AUDIT_LOG" 'command finished' '.script_logs[0]')"
+assert_eq "it links the script's own log" "$([ -f "$SCRIPT_LOG_PATH" ] && echo yes || echo no)" "yes"
+AUDIT_ID="$(audit_field "$AUDIT_LOG" 'command started' .execution_id)"
+assert_contains "and that log carries the same execution ID" "$(head -n 1 "$SCRIPT_LOG_PATH")" "execution $AUDIT_ID:"
+assert_eq "the fastboot write was never reached" "$(grep -c 'flash' "$RF_STUB_LOG" || true)" "0"
+
+# A script-backed read-only command still leaves a record.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+run_script python3 -m rootforge.core.cli backup list testdev
+assert_eq "backup list succeeds" "$RC" "0"
+AUDIT_LOG="$(ls "$ROOTFORGE_HOME"/logs/rootforge-backup-list-*.jsonl 2>/dev/null | head -n 1)"
+assert_eq "backup list is audited" "$(audit_field "$AUDIT_LOG" 'command finished' .returncode)" "0"
+assert_eq "at info level" "$(audit_field "$AUDIT_LOG" 'command finished' .level)" "info"
+
+# A Python-native command (no script) is audited too.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+run_script python3 -m rootforge.core.cli backup verify nodev 20240101_000000
+assert_eq "verifying a backup that does not exist fails" "$([ "$RC" -ne 0 ] && echo failed || echo passed)" "failed"
+AUDIT_LOG="$(ls "$ROOTFORGE_HOME"/logs/rootforge-backup-verify-*.jsonl 2>/dev/null | head -n 1)"
+assert_eq "backup verify is audited" "$(audit_field "$AUDIT_LOG" 'command finished' .command)" "backup verify"
+assert_eq "no script was involved" "$(audit_field "$AUDIT_LOG" 'command finished' '.scripts | length')" "0"
+assert_eq "its status matches what the user saw" "$(audit_field "$AUDIT_LOG" 'command finished' .returncode)" "$RC"
+
+# An unwritable log location must not stop the command, and says so.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+printf 'x' > "$SANDBOX/blocker"
+run_script env ROOTFORGE_HOME="$SANDBOX/blocker/rf" python3 -m rootforge.core.cli backup verify nodev 20240101_000000
+assert_contains "an unrecordable run is announced" "$OUT" "will not be recorded"
+assert_not_contains "and does not crash" "$OUT" "Traceback"
+drop_sandbox
+
 section "kernelsu_patch_boot.sh — what ends up as the kernel"
 
 # curl and magiskboot shaped like the real ones: the release API answers with

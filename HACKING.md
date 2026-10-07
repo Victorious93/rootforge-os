@@ -213,7 +213,8 @@ reimplemented inconsistently across scripts:
 | `rf_require_cmd` | A useful message instead of "command not found" under `set -e` |
 | `rf_shell_quote` | Escaping a secret before it is written into a file the shell sources |
 | `rf_write_private` | Writing a secrets file that is 0600 from the moment it exists |
-| `rf_log_init` / `rf_private_file` | A script's log (or report) created 0600, stamped with the run's `ROOTFORGE_EXECUTION_ID`; new scripts that write a log call `rf_log_init "$LOG_FILE"` right after defining it |
+| `rf_log_init` / `rf_private_file` | A script's log (or report) created 0600, stamped with the run's `ROOTFORGE_EXECUTION_ID`, and registered for redaction at exit; new scripts that write a log call `rf_log_init "$LOG_FILE"` right after defining it |
+| `rf_redact` / `rf_redact_file` / `rf_redact_registered` | Credential redaction for logs. A script that sets its own `EXIT` trap after `rf_log_init` must call `rf_redact_registered` in it. Rules live twice (Python `log.redact_text` and this sed script): change both, and add a sample to `tests/test_redaction_parity.py` |
 
 Keep it small. A helper belongs here when a second script needs it, not before.
 

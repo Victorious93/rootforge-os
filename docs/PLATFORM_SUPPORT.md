@@ -57,9 +57,9 @@ amd64 only.
 
 ## Where each claim is checked
 
-- Device, backup, config, log, doctor, dispatch: `tests/test_*.py` (329 tests).
+- Device, backup, config, log, doctor, dispatch: `tests/test_*.py` (358 tests).
 - Scripts, provisioning, installer cleanup, Termux generator/launcher, Makefile and
-  `auto/build` failure paths, release-asset verifier: `tests/run-tests.sh` (909 checks, one
+  `auto/build` failure paths, release-asset verifier: `tests/run-tests.sh` (983 checks, one
   of which wraps the Python suite).
 - Hooks (static only): `tests/check-hooks.sh`.
 - Nothing here runs `lb build`, boots an ISO, or talks to a device.
