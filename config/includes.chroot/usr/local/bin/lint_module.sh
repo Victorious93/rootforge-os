@@ -10,23 +10,70 @@
 #
 # Works against either a module source directory or an already-built zip.
 #
-# Usage: ./lint_module.sh <module_dir_or_zip>
+# Usage: ./lint_module.sh [--json] <module_dir_or_zip>
+#   --json  emit machine-readable findings on stdout instead of the human
+#           report (for CI consumption); still exits 0/1 the same way.
 
 set -euo pipefail
 
-TARGET="${1:?Usage: lint_module.sh <module_dir_or_zip>}"
+JSON_MODE=0
+TARGET=""
+for arg in "$@"; do
+  case "$arg" in
+    --json) JSON_MODE=1 ;;
+    *) TARGET="$arg" ;;
+  esac
+done
+[[ -n "$TARGET" ]] || { echo "Usage: lint_module.sh [--json] <module_dir_or_zip>" >&2; exit 1; }
 
 WORKDIR=""
-cleanup() { [[ -n "$WORKDIR" ]] && rm -rf "$WORKDIR"; }
+# [Certain] under `set -e`, an EXIT trap whose last command evaluates false
+# overrides the script's own explicit exit code with 1 — reproduced
+# directly: `set -euo pipefail; trap 'cmd_that_returns_false' EXIT; exit 0`
+# exits 1, not 0. WORKDIR is empty whenever TARGET is a directory (not a
+# zip), so `[[ -n "$WORKDIR" ]]` is false here on every directory lint —
+# meaning a passing `lint_module.sh some_dir` has always actually exited 1.
+# The trailing `true` keeps cleanup's own exit status from leaking out.
+cleanup() { [[ -n "$WORKDIR" ]] && rm -rf "$WORKDIR"; true; }
 trap cleanup EXIT
 
 ISSUES=0
-note() { echo "  [FAIL] $*"; ISSUES=$((ISSUES+1)); }
-warn() { echo "  [WARN] $*"; }
-ok()   { echo "  [ OK ] $*"; }
+FINDINGS=()  # each entry: "<level>\t<message>", level one of fail/warn/ok
+
+note() {
+  # [Certain] `[[ cond ]] && echo ...` as a standalone statement returns
+  # the *test's* exit status when cond is false — under `set -e` that
+  # aborts the whole script right there the first time JSON_MODE
+  # suppresses output, before FINDINGS/ISSUES ever get updated.
+  # Reproduced directly: `set -e; false && echo hi; echo unreachable`
+  # never prints "unreachable". `if`/`fi` sidesteps it: an `if` whose
+  # condition is false and has no `else` always exits 0 itself.
+  if [[ $JSON_MODE -eq 0 ]]; then
+    echo "  [FAIL] $*"
+  fi
+  FINDINGS+=("fail	$*")
+  ISSUES=$((ISSUES+1))
+}
+warn() {
+  if [[ $JSON_MODE -eq 0 ]]; then
+    echo "  [WARN] $*"
+  fi
+  FINDINGS+=("warn	$*")
+}
+ok() {
+  if [[ $JSON_MODE -eq 0 ]]; then
+    echo "  [ OK ] $*"
+  fi
+  FINDINGS+=("ok	$*")
+}
+say() {
+  if [[ $JSON_MODE -eq 0 ]]; then
+    echo "$@"
+  fi
+}
 
 if [[ -f "$TARGET" && "$TARGET" == *.zip ]]; then
-  echo "== Checking zip structure: $TARGET =="
+  say "== Checking zip structure: $TARGET =="
   ZIP_ROOT_ENTRIES="$(unzip -l "$TARGET" | awk 'NR>3 {print $4}' | grep -v '^$' | grep -v '/.*/' || true)"
   if unzip -l "$TARGET" | awk 'NR>3{print $4}' | grep -q '^module.prop$'; then
     ok "module.prop found at zip root"
@@ -44,7 +91,7 @@ if [[ -f "$TARGET" && "$TARGET" == *.zip ]]; then
 else
   MODULE_DIR="$TARGET"
   [[ -d "$MODULE_DIR" ]] || { echo "Not a directory or zip: $TARGET" >&2; exit 1; }
-  echo "== Checking module directory: $MODULE_DIR =="
+  say "== Checking module directory: $MODULE_DIR =="
 fi
 
 # module.prop required fields
@@ -79,8 +126,8 @@ else
 fi
 
 # CRLF line ending check across all shell scripts
-echo ""
-echo "== Checking line endings =="
+say ""
+say "== Checking line endings =="
 while IFS= read -r -d '' f; do
   if file "$f" | grep -qi 'CRLF'; then
     note "CRLF line endings in $(basename "$f") — convert with: sed -i 's/\\r$//' '$f' (or dos2unix)"
@@ -90,8 +137,8 @@ while IFS= read -r -d '' f; do
 done < <(find "$MODULE_DIR" -maxdepth 1 -type f \( -name "*.sh" -o -name "customize.sh" \) -print0 2>/dev/null)
 
 # Shebang sanity check
-echo ""
-echo "== Checking shebangs =="
+say ""
+say "== Checking shebangs =="
 for script in customize.sh post-fs-data.sh service.sh uninstall.sh; do
   f="$MODULE_DIR/$script"
   [[ -f "$f" ]] || continue
@@ -103,18 +150,73 @@ for script in customize.sh post-fs-data.sh service.sh uninstall.sh; do
   fi
 done
 
+# Shell-syntax check — on-device lifecycle scripts run under Android's
+# /system/bin/sh (a minimal shell, not bash), so this checks with `sh -n`
+# (dash locally) rather than bash -n, closer to the real runtime even
+# though it can't catch every toybox/mksh-vs-dash quirk.
+say ""
+say "== Checking shell syntax =="
+for script in customize.sh post-fs-data.sh service.sh uninstall.sh; do
+  f="$MODULE_DIR/$script"
+  [[ -f "$f" ]] || continue
+  if sh -n "$f" 2>/tmp/lint_module_syntax_err; then
+    ok "$script parses cleanly under sh -n"
+  else
+    note "$script has a shell syntax error: $(tr '\n' ' ' < /tmp/lint_module_syntax_err)"
+  fi
+  rm -f /tmp/lint_module_syntax_err
+done
+
+# Native Zygisk lib presence — only applies to modules that ship a zygisk/
+# directory at all (most modules don't); when one exists, at least one
+# arch's .so needs to actually be there or the module silently no-ops on
+# every device that loads it.
+if [[ -d "$MODULE_DIR/zygisk" ]]; then
+  say ""
+  say "== Checking Zygisk native libraries =="
+  ZYGISK_LIBS_FOUND=0
+  for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+    if [[ -f "$MODULE_DIR/zygisk/${abi}.so" ]]; then
+      ok "zygisk/${abi}.so present"
+      ZYGISK_LIBS_FOUND=$((ZYGISK_LIBS_FOUND+1))
+    fi
+  done
+  [[ $ZYGISK_LIBS_FOUND -eq 0 ]] && note "zygisk/ directory exists but contains no <abi>.so (expected e.g. zygisk/arm64-v8a.so) — the module will silently do nothing on every device"
+fi
+
 # Executable bit on update-binary (matters when zipping from a filesystem that lost it)
 UB="$MODULE_DIR/META-INF/com/google/android/update-binary"
 if [[ -f "$UB" && ! -x "$UB" ]]; then
   warn "update-binary is not executable in this extracted copy — verify the zip preserves the exec bit (zip -X can strip it on some platforms)"
 fi
 
-echo ""
+if [[ $JSON_MODE -eq 1 ]]; then
+  printf '%s\n' "${FINDINGS[@]}" | python3 -c "
+import json, sys
+
+findings = []
+for line in sys.stdin:
+    line = line.rstrip('\n')
+    if not line:
+        continue
+    level, message = line.split('\t', 1)
+    findings.append({'level': level, 'message': message})
+
+issues = sum(1 for f in findings if f['level'] == 'fail')
+print(json.dumps({'pass': issues == 0, 'issue_count': issues, 'findings': findings}, indent=2))
+"
+else
+  say ""
+  if [[ $ISSUES -eq 0 ]]; then
+    say "PASS — no blocking issues found."
+  else
+    say "FAIL — $ISSUES blocking issue(s) found. Fix before pushing to a device."
+  fi
+fi
+
 if [[ $ISSUES -eq 0 ]]; then
-  echo "PASS — no blocking issues found."
   exit 0
 else
-  echo "FAIL — $ISSUES blocking issue(s) found. Fix before pushing to a device."
   exit 1
 fi
 
