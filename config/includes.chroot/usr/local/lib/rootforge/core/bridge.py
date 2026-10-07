@@ -43,6 +43,11 @@ from pathlib import Path
 from typing import Any, Callable, Dict, IO, List, Optional
 
 from rootforge.core import __version__
+from rootforge.core.bridge_base import (  # noqa: F401 — re-exported for callers and tests
+    BridgeError, Context, ERR_BUSY, ERR_CONFLICT, ERR_INTEGRITY, ERR_INTERNAL, ERR_INVALID, ERR_NOT_FOUND,
+    ERR_PROTOCOL, ERR_QUOTA, ERR_TIMEOUT, ERR_UNAUTHORIZED, ERR_UNSUPPORTED, ERR_WRONG_NODE,
+    check_grant, load_grants as _load_grants, save_grants as _save_grants, write_private as _write_private,
+)
 
 PROTOCOL_MAJOR = 1
 MAX_REQUEST_BYTES = 64 * 1024
@@ -70,22 +75,7 @@ STATE_DIR_RE = re.compile(r"^/[A-Za-z0-9._/+-]+$")
 # assurance.
 KNOWN_GRANTS = ("inspect",)
 
-ERR_UNAUTHORIZED = "unauthorized"
-ERR_UNSUPPORTED = "unsupported_capability"
-ERR_INVALID = "invalid_request"
-ERR_PROTOCOL = "incompatible_protocol"
-ERR_WRONG_NODE = "wrong_node"
-ERR_TIMEOUT = "timeout"
-ERR_INTERNAL = "internal"
-
 _TOP_LEVEL_KEYS = {"protocol_major", "request_id", "target_node_id", "operation", "timeout_ms", "parameters"}
-
-
-class BridgeError(Exception):
-    def __init__(self, category: str, message: str):
-        super().__init__(message)
-        self.category = category
-        self.message = message
 
 
 # --------------------------------------------------------------------------
@@ -95,22 +85,6 @@ class BridgeError(Exception):
 def default_state_dir() -> Path:
     base = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
     return Path(base) / "rootforge" / "bridge"
-
-
-def _write_private(path: Path, data: str) -> None:
-    """Atomically write `data` to `path`, mode 0600 from creation."""
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".")
-    try:
-        with os.fdopen(fd, "w") as handle:  # mkstemp creates the file 0600
-            handle.write(data)
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
 
 
 def init_node(state_dir: Path) -> str:
@@ -132,40 +106,6 @@ def load_node_id(state_dir: Path) -> str:
     if not NODE_ID_RE.match(value):
         raise BridgeError(ERR_INTERNAL, f"node identity file {path} is malformed")
     return value
-
-
-def _load_grants(state_dir: Path) -> Dict[str, Any]:
-    path = state_dir / "controllers.json"
-    if not path.exists():
-        return {"version": 1, "controllers": {}}
-    try:
-        data = json.loads(path.read_text())
-    except (OSError, ValueError) as exc:
-        raise BridgeError(ERR_INTERNAL, f"grants file unreadable: {exc}")
-    if not isinstance(data, dict) or not isinstance(data.get("controllers"), dict):
-        raise BridgeError(ERR_INTERNAL, "grants file malformed")
-    return data
-
-
-def _save_grants(state_dir: Path, data: Dict[str, Any]) -> None:
-    _write_private(state_dir / "controllers.json", json.dumps(data, indent=2, sort_keys=True) + "\n")
-
-
-def check_grant(state_dir: Path, controller: str, grant: str) -> None:
-    """Raise unauthorized unless `controller` currently holds `grant`.
-
-    Fails closed: any problem reading grants denies the request.
-    """
-    try:
-        data = _load_grants(state_dir)
-    except BridgeError:
-        raise BridgeError(ERR_UNAUTHORIZED, "controller is not authorized")
-    entry = data["controllers"].get(controller)
-    if not isinstance(entry, dict) or entry.get("revoked") is True:
-        raise BridgeError(ERR_UNAUTHORIZED, "controller is not authorized")
-    grants = entry.get("grants")
-    if not isinstance(grants, list) or grant not in grants:
-        raise BridgeError(ERR_UNAUTHORIZED, f"controller lacks the '{grant}' grant")
 
 
 # --------------------------------------------------------------------------
@@ -220,13 +160,6 @@ OPERATIONS: Dict[str, OperationSpec] = {
     # root is requested.
     "rootforge.devices.list": OperationSpec(_op_devices_list, "inspect", "may start the local adb server"),
 }
-
-
-class Context:
-    def __init__(self, state_dir: Path, controller: str, node_id: str):
-        self.state_dir = state_dir
-        self.controller = controller
-        self.node_id = node_id
 
 
 # --------------------------------------------------------------------------
