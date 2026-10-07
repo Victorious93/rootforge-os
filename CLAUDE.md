@@ -11,20 +11,23 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-07 · **Branch:** `claude/new-session-78u9fc` · **Phase:** active
-development; ISO/VM/hardware validation **blocked** on infrastructure.
+**Last updated:** 2026-10-07 · **Branch:** `claude/new-session-78u9fc` (reset to `main` at `7120aae`
+after PR #42 merged) · **Phase:** active development; ISO/VM/hardware validation **blocked** on
+infrastructure.
 
 **What is true now** (each verified by running it this session unless marked):
 - `bash tests/run-tests.sh` → 909 passed, 0 failed (one check wraps the Python suite, 329 tests).
-  `bash tests/lint.sh` → clean (shellcheck 0.11.0 from a venv; CI installs its own, so
-  version parity is unverified).
+  `bash tests/lint.sh` → clean locally (shellcheck 0.11.0 from a venv). **GitHub CI also passed
+  on the PR #42 head** (`34936af`: `shellcheck`, `tests`, `package-lists`, `yaml-lint`, `python`),
+  so lint under CI's own shellcheck is verified. PR #42 was merged by the owner on 2026-10-07.
 - Implemented and stub-tested: device model + `device check`, flash contract, backup
   manifest/verify/import-legacy/restore, layered config, redacted private JSON-lines log,
   doctor severity model, OTA/boot/module/avd dispatch, provisioning with Calamares cleanup,
   Termux verified install + per-release metadata generation + CPU-honest SDK bootstrap,
   Makefile/`auto/build` failure handling, release-asset verifier, release workflow gating.
 - **Not run anywhere:** `lb build` (no loop device), ISO boot, Calamares install, systemd
-  first boot, real devices, a phone, `release.yml` on GitHub.
+  first boot, real devices, a phone, `release.yml` (it only runs on `v*` tags or manual
+  dispatch; merging did not trigger it).
 - **Known unpinned:** Ollama installer (hook 0020). Claude Code's native npm dependency.
   Nothing is signed.
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), Windows,
@@ -48,8 +51,8 @@ Do not start Stage 6 (Windows/APK/GUI/remote) before Stages 2 and 5 are validate
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed
 from `docs/ARCHITECTURE_AUDIT.md`; the "governing directive" it cites was never found in the
 repository. Whether Calamares expands `${USER}` in `shellprocess` as documented upstream is
-unverified. An unexplained one-off 853 vs 852 shell-check count was seen once and not
-reproduced in five subsequent runs.
+unverified. An unexplained one-off 853 vs 852 shell-check count was seen once (before the
+log/boot tests were added) and not reproduced in five subsequent runs.
 
 ## SESSION PROTOCOL
 
