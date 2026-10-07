@@ -25,7 +25,8 @@ Status: Specification / Build Guide (v1.0) — living document, update in place 
 - **Desktop:** GNOME (GNOME Shell + GDM3) — **[Likely]** this is the heavier choice versus XFCE when the same box also needs headroom for an accelerated emulator plus a kernel build running concurrently; budget accordingly (16GB+ RAM recommended over the 8GB that would be fine under XFCE) — swappable for a WM-only headless profile for CI/build-server use
 - **Install path:** boots to a live session, then offers an on-disk installer (Calamares) with the same "erase disk / install alongside existing OS / manual partitioning" choice Ubuntu's own installer gives you — see section 14
 - **Signed artifacts:** every module, script, and image this distro produces carries a `Victorious Framework` footer in its metadata
-- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) is a thin wrapper around a Python package at `/usr/local/lib/rootforge/core/`. Subcommands so far: `doctor` (environment checks), `device show` (fastboot/adb detection, with the same vendor-refusal messaging `unlock_bootloader.sh` uses), `config show` (layered YAML config), `backup create/list/verify/restore` (SHA-256-manifested partition backups), and `module create/lint/build` (module scaffolding/linting/packaging — see section 12). Existing scripts under `/usr/local/bin/` are unaffected and keep working standalone; each `rootforge` subcommand wraps them as subprocesses rather than reimplementing their logic. Remaining plan in `docs/IMPLEMENTATION_PLAN.md`.
+- **Build provenance:** every ISO carries `/usr/local/share/rootforge/system-manifest.json` — the git commit/branch it was built from, every installed package's version, and a SHA-256 per build-time-fetched artifact (from the six hooks that fetch external content) — so a given image's actual contents can be checked against what it claims to be, after the fact.
+- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) is a thin wrapper around a Python package at `/usr/local/lib/rootforge/core/`. Subcommands so far: `doctor` (environment checks), `device show` (fastboot/adb detection, with the same vendor-refusal messaging `unlock_bootloader.sh` uses), `config show` (layered YAML config), `backup create/list/verify/restore` (SHA-256-manifested partition backups), `avd create/list/start/stop/snapshot` (emulator AVDs), and `module create/lint/build` (module scaffolding/linting/packaging — see section 12). Existing scripts under `/usr/local/bin/` are unaffected and keep working standalone; each `rootforge` subcommand wraps them as subprocesses rather than reimplementing their logic. Remaining plan in `docs/IMPLEMENTATION_PLAN.md`.
 
 ## 2. Core package stack
 
@@ -116,6 +117,13 @@ setup_rooted_avd.sh list
 5. Snapshots the booted, rooted state as `rootforge-rooted` so `setup_rooted_avd.sh boot --name <avd>` starts pre-rooted on every subsequent run instead of repeating the patch
 
 **KVM note [Certain]:** emulator acceleration requires `/dev/kvm` access — add your user to the `kvm` group and confirm with `kvm-ok` (from `cpu-checker`) before assuming acceleration is active; a silently-software-rendered emulator is the most common "why is this so slow" support question for exactly this kind of distro.
+
+`rootforge avd create/list/start` wraps `setup_rooted_avd.sh`'s own create/list/boot
+subcommands one-to-one. `stop` and `snapshot` are new — the underlying script has no
+equivalent — implemented via the emulator's standard `adb emu` console commands
+(`emu avd name` to find which running instance is the target AVD, `emu kill` to stop
+it, `emu avd snapshot save|load|list|delete <name>` for snapshots beyond the single
+`rootforge-rooted` one the rooting flow itself creates automatically).
 
 ## 6. Directory & workspace convention
 
