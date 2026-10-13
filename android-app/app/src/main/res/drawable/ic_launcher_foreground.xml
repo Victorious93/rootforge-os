@@ -1,0 +1,7 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- An anvil in the adaptive-icon safe zone -->
+    <path android:fillColor="#FFA24C"
+        android:pathData="M30,42 L78,42 L78,50 L70,50 C68,58 62,62 58,62 L58,68 L66,68 L66,76 L42,76 L42,68 L50,68 L50,62 C46,62 40,58 38,50 L30,50 Z" />
+    <path android:fillColor="#7A3E00" android:pathData="M30,42 L22,42 C22,48 26,52 30,50 Z" />
+</vector>
