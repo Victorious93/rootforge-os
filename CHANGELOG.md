@@ -5,6 +5,15 @@ published GitHub Release; entries below are under **Unreleased** until one is cu
 Nothing here has been validated on real hardware, a booted ISO, a VM or a phone; see
 `docs/PLATFORM_SUPPORT.md`.
 
+## Unreleased — 2026-10-12
+
+### OTA extract
+- `extract_ota.sh` and `rootforge ota extract` treat an image as produced only
+  when this run created or replaced it. A reused output directory that already
+  held a file (a previous payload's `boot.img`, or any unrelated file) used to
+  make an empty extraction exit 0, and the CLI hashed that leftover as if it
+  had come out of the payload just extracted.
+
 ## Unreleased — 2026-10-07 (architecture repair)
 
 ### Device detection and flashing (A)

@@ -138,6 +138,29 @@ fi
 
 ensure_payload_dumper
 
+# Stamp each requested image before the dumper runs. Success is "this run
+# wrote that image", not "some file exists in the output directory". A reused
+# directory often already holds an image from an earlier payload (or an
+# unrelated file). Counting every file there used to print "Extraction
+# complete" and exit 0, and the caller would hash the leftover boot.img as if
+# it had come out of this payload.
+image_stamp() {  # image_stamp <path> — empty unless it is a non-empty regular file
+  local f="$1"
+  [[ -f "$f" && ! -L "$f" && -s "$f" ]] || return 0
+  stat -c '%Y.%N %s' "$f" 2>/dev/null || true
+}
+
+declare -A IMAGE_STAMP
+REQUESTED_PARTS=()
+IFS=',' read -r -a _raw_parts <<<"$PARTITIONS"
+for part in "${_raw_parts[@]}"; do
+  part="${part#"${part%%[![:space:]]*}"}"
+  part="${part%"${part##*[![:space:]]}"}"
+  [[ "$part" =~ ^[A-Za-z0-9_-]+$ ]] || continue
+  REQUESTED_PARTS+=("$part")
+  IMAGE_STAMP["$part"]="$(image_stamp "$OUTPUT_DIR/${part}.img")"
+done
+
 log "Dumping partitions [$PARTITIONS] from $PAYLOAD_BIN -> $OUTPUT_DIR"
 "$DUMPER" -o "$OUTPUT_DIR" -p "$PARTITIONS" "$PAYLOAD_BIN" 2>>"$LOG_FILE" \
   || { log "payload-dumper-go failed — see $LOG_FILE. Some OTAs use full (non-incremental) payloads only decodable with -c 0 or need a matching source build for delta payloads."; exit 1; }
@@ -146,20 +169,24 @@ log "Dumping partitions [$PARTITIONS] from $PAYLOAD_BIN -> $OUTPUT_DIR"
 
 # Silence is not a pass. payload-dumper-go can exit 0 having written nothing —
 # a payload that simply does not contain the requested partitions is the
-# ordinary way to get here. The old code then printed "Extraction complete"
-# over an empty directory and exited 0, and the failure surfaced one step
-# later as a confusing "no such file" from whatever was going to patch the
-# boot image. Verified: with a dumper that exits 0 and writes nothing, this
-# script reported success and produced 0 files.
-EXTRACTED_COUNT="$(find "$OUTPUT_DIR" -maxdepth 1 -type f | wc -l)"
-if [[ "$EXTRACTED_COUNT" -eq 0 ]]; then
+# ordinary way to get here. An empty directory was the first form of that bug;
+# a directory that already contained a file was the second, and it is the one
+# that hands the previous payload's boot image to whatever patches and flashes
+# next.
+PRODUCED_PARTS=()
+for part in "${REQUESTED_PARTS[@]}"; do
+  now="$(image_stamp "$OUTPUT_DIR/${part}.img")"
+  [[ -n "$now" && "$now" != "${IMAGE_STAMP[$part]}" ]] || continue
+  PRODUCED_PARTS+=("$part")
+done
+if [[ ${#PRODUCED_PARTS[@]} -eq 0 ]]; then
   log "payload-dumper-go exited 0 but produced no files in $OUTPUT_DIR."
   log "The payload most likely does not contain [$PARTITIONS]. List what it does"
   log "contain with: $DUMPER -l '$PAYLOAD_BIN'"
   exit 1
 fi
 
-log "Extraction complete ($EXTRACTED_COUNT file(s)). Contents:"
+log "Extraction complete (${#PRODUCED_PARTS[@]} file(s)). Contents:"
 ls -la "$OUTPUT_DIR" | tee -a "$LOG_FILE"
 log ""
 log "Sparse .img files here are typically already raw from payload-dumper-go, but if"
