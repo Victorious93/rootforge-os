@@ -1,6 +1,6 @@
 # RootForge OS — Security model
 
-Status as of 2026-10-07. This document says what the code enforces, what it does not,
+Status as of 2026-10-12. This document says what the code enforces, what it does not,
 and what depends on the operator. It does not describe a security posture the project
 does not have.
 
@@ -15,6 +15,7 @@ access to the operator's account:
 | Flashing the wrong device | Exactly one device selected explicitly; plan shows serial, product, slot; typed `FLASH <serial>` / `RESTORE <serial>` on `/dev/tty` | `flash_patched_boot.sh`, `restore_partitions.sh`, `common.sh:rf_confirm` | Stub tests |
 | Writing to an unknown or locked device | `device check` blocks: probe failed, vendor refused, bootloader locked/unknown (`unlocked` variable only), partition unreported, image too large, slot layout unknown | `core/device.py` | `tests/test_device.py` |
 | Writing the wrong slot | Explicit `--slot`; `--both-slots` needs `--slots-same-build` | flash script | Stub tests |
+| Flashing a different file than the one confirmed | The plan's SHA-256 is checked again immediately before each `fastboot flash`; a mismatch exits 3 and does not reboot | `flash_patched_boot.sh` | Stub test (`RF_STUB_TAMPER_FILE`) |
 | Restoring a corrupt or foreign backup | Manifest with per-image SHA-256/size, device and slot; restore verifies, re-hashes before writing, matches product/slot | `core/backup.py`, `restore_partitions.sh` | `tests/test_backup_verify.py`, stub tests |
 | Path escape from a backup/sums file | Names with separators, `..`, symlinks rejected | `core/backup.py` | Tests |
 | Truncated download cached as good | Atomic rename + minimum size; pinned digests for tool downloads | `common.sh:rf_download_cached`, `rf_fetch_verified` | Stub tests |

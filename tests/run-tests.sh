@@ -399,6 +399,21 @@ assert_not_contains "no invented fastboot wait command" "$(cat "$RF_STUB_LOG")" 
 assert_contains "boot completion is reported as verified" "$OUT" "Boot verified"
 assert_contains "unattended use is audited" "$OUT" "UNATTENDED"
 
+# The plan prints a SHA-256, then the post-confirmation device check runs.
+# The fastboot stub appends to the image on that second `getvar all`. The
+# size check still passes (the partition is far larger than the image), so
+# without a re-hash the new bytes are what gets flashed and rebooted into.
+new_sandbox
+make_boot_img "$SANDBOX/boot.img"
+fb_device FB1 a
+export RF_STUB_TAMPER_FILE="$SANDBOX/boot.img"
+export ROOTFORGE_ASSUME_YES=1
+run_script bash "$BIN_DIR/flash_patched_boot.sh" "$SANDBOX/boot.img"
+assert_eq "an image changed after confirmation is not written" "$RC" "3"
+assert_contains "the late change is reported" "$OUT" "changed after confirmation"
+assert_not_contains "a late-changed image is never flashed" "$(cat "$RF_STUB_LOG")" " flash "
+assert_not_contains "a late-changed image is never rebooted into" "$(cat "$RF_STUB_LOG")" "reboot"
+
 # A failed write must not reboot into a half-written partition.
 new_sandbox
 make_boot_img "$SANDBOX/boot.img"

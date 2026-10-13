@@ -18,7 +18,9 @@
 #      slot layout, the target partition present and large enough. Missing
 #      evidence blocks the write (exit 3). Read-only commands stay usable.
 #   4. The operator confirms the displayed plan by typing FLASH <serial>.
-#   5. The device is re-checked and must be the same one, then written.
+#   5. The device is re-checked and must be the same one. The image is hashed
+#      again immediately before every write and must still match the SHA-256
+#      in the plan; a different file is not written.
 #   6. The device is rebooted and, unless --no-boot-check, watched until it
 #      reports sys.boot_completed=1.
 #
@@ -208,12 +210,37 @@ on_interrupt() {
 }
 trap on_interrupt INT TERM
 
+# Slots whose write already returned success. A hash mismatch before the
+# first of these aborts with nothing written; a mismatch after one slot
+# succeeded stops there and does not reboot.
+WRITTEN=()
+
 write_partition() {  # write_partition [slot]
-  local slot="${1:-}" cmd=("${FB[@]}")
+  local slot="${1:-}" cmd=("${FB[@]}") now="" why="" rc=0
+  # The plan's SHA-256 was computed before the operator confirmed. The
+  # post-confirmation device check only looks at size, so a file replaced
+  # while that prompt was up (a rebuild finishing into the same path, a
+  # download landing) would otherwise be what fastboot writes — and the
+  # script would then reboot into it. Hash again at the write itself.
+  now="$(rf_sha256_file "$IMG" 2>/dev/null)" || now=""
+  if [[ -z "$now" || "$now" != "$IMG_SHA" ]]; then
+    if [[ -z "$now" ]]; then
+      why="$IMG could not be re-read immediately before writing"
+    else
+      why="$IMG changed after confirmation (expected sha256 $IMG_SHA, now $now)"
+    fi
+    if [[ ${#WRITTEN[@]} -eq 0 ]]; then
+      blocked "$why"
+    fi
+    log "$why. Stopping. Written so far: ${WRITTEN[*]}"
+    exit 1
+  fi
   [[ -n "$slot" ]] && cmd+=(--slot "$slot")
   cmd+=(flash "$PARTITION" "$IMG")
   log "Running: ${cmd[*]}"
-  "${cmd[@]}" 2>>"$LOG_FILE"
+  "${cmd[@]}" 2>>"$LOG_FILE" || rc=$?
+  [[ $rc -eq 0 ]] || return "$rc"
+  WRITTEN+=("${slot:-$PARTITION}")
 }
 
 WRITE_FAILED_RC=0

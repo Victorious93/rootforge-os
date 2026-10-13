@@ -80,8 +80,10 @@ is one implementation of each rule, not a Python copy and a Bash copy.
 ### 3.2 Flashing (`flash_patched_boot.sh`, `rootforge flash boot`)
 
 Order of operations: validate the image (exists, `ANDROID!` header) → select exactly one
-device → `device check` → print the plan → typed `FLASH <serial>` on `/dev/tty` →
-re-check → `fastboot --slot <explicit> flash` per target slot → reboot → wait for
+device → `device check` → print the plan (including the image SHA-256) → typed
+`FLASH <serial>` on `/dev/tty` → re-check the device → re-hash the image and refuse if
+it is not the one in the plan → `fastboot --slot <explicit> flash` per target slot
+(hash checked again immediately before each write) → reboot → wait for
 `sys.boot_completed`. Both slots require `--slots-same-build` (an operator assertion
 RootForge cannot verify). Exit codes: 0 booted, 2 usage, 3 blocked, 4 flashed but boot
 unverified, 5 reboot failed, 130 interrupted. **[Certain]** against stubs;

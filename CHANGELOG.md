@@ -5,6 +5,15 @@ published GitHub Release; entries below are under **Unreleased** until one is cu
 Nothing here has been validated on real hardware, a booted ISO, a VM or a phone; see
 `docs/PLATFORM_SUPPORT.md`.
 
+## Unreleased — 2026-10-12
+
+### Flashing
+- `flash_patched_boot.sh` hashes the image again immediately before each
+  `fastboot flash`. If the file no longer matches the SHA-256 printed in the
+  confirmation plan, the script exits 3 and does not write or reboot. A change
+  between the two slots of a `--both-slots` write stops after the slot that
+  already succeeded and does not reboot.
+
 ## Unreleased — 2026-10-07 (architecture repair)
 
 ### Device detection and flashing (A)
