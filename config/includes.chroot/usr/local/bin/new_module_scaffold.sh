@@ -165,21 +165,29 @@ EOF
 
 cat > "$MODULE_DIR/META-INF/com/google/android/update-binary" <<'EOF'
 #!/sbin/sh
-# RootForge OS — generated module installer shim
+# RootForge OS — generated module installer shim (recovery / sideload path)
 # Victorious Framework
+#
+# The Magisk, KernelSU and APatch managers install modules with their own
+# installer and ignore this file. A custom recovery runs it, and then it must
+# load Magisk's util_functions.sh and call install_module, which does the
+# real work (unzip, customize.sh, permissions).
 umask 022
 OUTFD=$2
 ZIPFILE=$3
 mount /data 2>/dev/null
-[ -f /data/adb/magisk/util_functions.sh ] && MAGISK_VER_CODE=$(grep_prop MAGISK_VER_CODE /data/adb/magisk/util_functions.sh)
-ui_print() { echo "ui_print $1" >&$OUTFD; echo -en "ui_print\n" >&$OUTFD; }
+ui_print() { echo "ui_print $1" >&$OUTFD; echo "ui_print" >&$OUTFD; }
 require_new_magisk() {
   ui_print "*******************************"
   ui_print " Please install Magisk v20.4+ "
   ui_print "*******************************"
   exit 1
 }
-[ -z "$MAGISK_VER_CODE" ] && require_new_magisk
+[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk
+. /data/adb/magisk/util_functions.sh
+[ "${MAGISK_VER_CODE:-0}" -ge 20400 ] || require_new_magisk
+install_module
+exit 0
 EOF
 
 cat > "$MODULE_DIR/customize.sh" <<EOF

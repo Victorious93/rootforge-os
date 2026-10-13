@@ -1718,6 +1718,14 @@ run_script bash "$BIN_DIR/new_module_scaffold.sh" mymod "My Mod" magisk
 assert_eq "scaffolding a magisk module succeeds" "$RC" "0"
 run_script bash "$BIN_DIR/lint_module.sh" "$ROOTFORGE_HOME/modules/mymod"
 assert_eq "a scaffolded magisk module passes lint_module.sh" "$RC" "0"
+# Regression: the shim called grep_prop before sourcing util_functions.sh (so
+# it always demanded "Magisk v20.4+") and never called install_module (so a
+# recovery flash would have installed nothing).
+UB_TEXT="$(cat "$ROOTFORGE_HOME/modules/mymod/META-INF/com/google/android/update-binary")"
+assert_contains "update-binary sources Magisk's util_functions.sh" "$UB_TEXT" ". /data/adb/magisk/util_functions.sh"
+assert_contains "update-binary calls install_module" "$UB_TEXT" "install_module"
+assert_not_contains "update-binary no longer calls grep_prop before it exists" "$UB_TEXT" "grep_prop"
+assert_eq "update-binary parses under sh -n" "$(sh -n "$ROOTFORGE_HOME/modules/mymod/META-INF/com/google/android/update-binary" && echo ok)" "ok"
 
 new_sandbox
 run_script bash "$BIN_DIR/new_module_scaffold.sh" mykmod "My KMod" kernelsu
