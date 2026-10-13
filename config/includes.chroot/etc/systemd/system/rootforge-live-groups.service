@@ -29,7 +29,7 @@ Wants=live-config.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/sh -c 'for g in kvm plugdev docker; do getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" user || true; done'
+ExecStart=/bin/sh -c 'for g in kvm plugdev docker; do getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" rootforge || true; done'
 StandardOutput=journal
 StandardError=journal
 

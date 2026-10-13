@@ -34,6 +34,13 @@ if [[ ! "$MODULE_ID" =~ ^[a-zA-Z][a-zA-Z0-9_.-]*$ ]]; then
   exit 1
 fi
 
+# The display name lands in module.prop, one key=value per line; a control
+# character (a newline above all) would let it inject further keys.
+if [[ -z "${DISPLAY_NAME//[[:space:]]/}" || "$DISPLAY_NAME" =~ [[:cntrl:]] ]]; then
+  echo "Invalid display name: it must be non-empty and contain no control characters or newlines." >&2
+  exit 1
+fi
+
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 MODULE_DIR="$ROOTFORGE_HOME/modules/$MODULE_ID"
 

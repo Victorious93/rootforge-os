@@ -1078,6 +1078,14 @@ assert_eq "no devices -> exit 1" "$RC" "1"
 assert_contains "no devices -> says so" "$OUT" "No devices found"
 drop_sandbox
 
+new_sandbox
+# A phone listed by both adb and fastboot (mid-reboot) is one device.
+export RF_STUB_ADB_DEVICES='AAA\tdevice\n'
+export RF_STUB_FASTBOOT_DEVICES='AAA\tfastboot\n'
+run_script bash "$BIN_DIR/fleet_orchestrate.sh" root-detect
+assert_contains "a serial in both adb and fastboot is run once" "$OUT" "Found 1 device(s): AAA"
+drop_sandbox
+
 section "build_matrix.sh — matrix file handling"
 
 new_sandbox
@@ -1742,6 +1750,18 @@ assert_eq "an unknown target is refused" "$RC" "1"
 assert_contains "an unknown target lists the real ones" "$OUT" "expected magisk, kernelsu, apatch, zygisk or xposed"
 drop_sandbox
 
+new_sandbox
+# A control character in the display name would add keys to module.prop.
+run_script bash "$BIN_DIR/new_module_scaffold.sh" injmod $'Evil\nid=injected' magisk
+assert_eq "a newline in the display name is refused" "$RC" "1"
+assert_contains "the refusal names the display name" "$OUT" "Invalid display name"
+if [[ -e "$ROOTFORGE_HOME/modules/injmod" ]]; then
+  fail "no module is created for a rejected display name" "found modules/injmod"
+else
+  pass "no module is created for a rejected display name"
+fi
+drop_sandbox
+
 section "Termux variants — build flavours"
 
 new_sandbox
@@ -1800,7 +1820,10 @@ assert_contains "--check distinguishes an empty socket dir from a missing one" "
 
 new_sandbox
 export ROOTFORGE_X11_SOCKET_DIR="$SANDBOX/nope"
+# A host that really has xfce4-session installed must not change this result.
+export ROOTFORGE_DESKTOP_SESSION_BIN="rootforge-test-no-such-session"
 run_script bash "$DESKTOP" --start
+unset ROOTFORGE_DESKTOP_SESSION_BIN
 assert_eq "starting with no desktop installed fails" "$RC" "1"
 assert_contains "starting with no desktop says how to get one" "$OUT" "--install"
 drop_sandbox
@@ -2701,6 +2724,17 @@ assert_contains "a short download says why" "$OUT" "below the"
 assert_eq "a short download caches nothing" \
   "$(find "$ROOTFORGE_HOME/modules/.cache" -name '*.zip' | wc -l)" "0"
 assert_not_contains "a short download pushes nothing" "$(cat "$RF_STUB_LOG")" "push"
+drop_sandbox
+
+section "install_adb_ime.sh — a truncated cached APK is not trusted"
+
+new_sandbox
+mkdir -p "$ROOTFORGE_HOME/bin"
+printf 'oops' > "$ROOTFORGE_HOME/bin/ADBKeyboard.apk"
+run_script bash "$BIN_DIR/install_adb_ime.sh" install
+assert_not_contains "a 4-byte cached APK is not reported as usable" "$OUT" "Using cached APK"
+assert_contains "the poisoned cache is discarded" "$OUT" "smaller than any real ADBKeyboard APK"
+assert_not_contains "a 4-byte APK is never pushed to adb install" "$(cat "$RF_STUB_LOG")" "install -r"
 drop_sandbox
 
 section "install_adb_ime.sh — text reaches the device intact"

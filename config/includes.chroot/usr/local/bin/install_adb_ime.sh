@@ -44,6 +44,13 @@ case "$CMD" in
     [[ -n "$SERIAL" ]] && ADB="adb -s $SERIAL"
 
     APK_PATH="$CACHE_DIR/ADBKeyboard.apk"
+    # A cached file below the plausible-APK minimum is a poisoned cache, not a
+    # hit: without this the cached branch below never reaches the size check
+    # in rf_download_cached and a truncated file is pushed to `adb install`.
+    if [[ -f "$APK_PATH" && "$(wc -c < "$APK_PATH")" -lt 32768 ]]; then
+      log "Cached $APK_PATH is smaller than any real ADBKeyboard APK — discarding it."
+      rm -f "$APK_PATH"
+    fi
     if [[ ! -f "$APK_PATH" ]]; then
       log "Fetching latest ADBKeyboard release"
       command -v jq >/dev/null 2>&1 || { echo "jq is required (apt install jq)" >&2; exit 1; }

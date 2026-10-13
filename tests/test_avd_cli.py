@@ -121,6 +121,13 @@ class TestDispatch(unittest.TestCase):
             rc = avd.dispatch(parse(["avd", "list"]))
         self.assertEqual(rc, 1)
 
+    def test_stop_fails_when_emu_kill_fails(self):
+        failed = mock.Mock(returncode=1, stdout="", stderr="")
+        with mock.patch.object(avd.shutil, "which", return_value="/usr/bin/adb"), \
+                mock.patch.object(avd, "_find_running_serial", return_value="emulator-5554"), \
+                mock.patch.object(avd, "_adb", return_value=failed):
+            self.assertEqual(avd.cmd_stop("Pixel_6"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
