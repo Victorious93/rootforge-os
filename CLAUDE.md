@@ -11,15 +11,21 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-07 · **Branch:** `claude/new-session-78u9fc` (reset to `main` at `7120aae`
-after PR #42 merged) · **Phase:** active development; ISO/VM/hardware validation **blocked** on
+**Last updated:** 2026-10-12 · **Branch:** `cursor/critical-bug-management-bb36` (from `main` at
+`b53836f`, PR #43) · **Phase:** active development; ISO/VM/hardware validation **blocked** on
 infrastructure.
 
 **What is true now** (each verified by running it this session unless marked):
-- `bash tests/run-tests.sh` → 983 passed, 0 failed (one check wraps the Python suite, 358 tests).
-  `bash tests/lint.sh` → clean locally (shellcheck 0.11.0 from a venv). **GitHub CI also passed
-  on the PR #42 head** (`34936af`: `shellcheck`, `tests`, `package-lists`, `yaml-lint`, `python`),
-  so lint under CI's own shellcheck is verified. PR #42 was merged by the owner on 2026-10-07.
+- `bash tests/run-tests.sh shell` → 997 passed, 1 failed. The failure is
+  `rootforge_desktop.sh --start` on a host that already has `xfce4-session`: the script starts
+  XFCE instead of printing `--install`. Not exercised against a device. `bash tests/run-tests.sh
+  python` → 360 passed, 0 failed. `bash tests/lint.sh` → clean locally with shellcheck 0.9.0
+  (Debian package; not CI's shellcheck). **GitHub CI also passed on the PR #42 head**
+  (`34936af`: `shellcheck`, `tests`, `package-lists`, `yaml-lint`, `python`); that run is not
+  this commit. PR #43 was merged by the owner on 2026-10-07.
+- `extract_ota.sh` / `rootforge ota extract` count an image as produced only when this run
+  created or replaced it. A reused output directory used to make an empty dump exit 0, and the
+  CLI hashed a leftover `*.img` as if it had come from the payload just extracted.
 - Implemented and stub-tested: device model + `device check`, flash contract, backup
   manifest/verify/import-legacy/restore, layered config, redacted private JSON-lines log with a CLI-side audit trail for state-changing commands and exit-time redaction of script logs,
   doctor severity model, OTA/boot/module/avd dispatch, provisioning with Calamares cleanup,

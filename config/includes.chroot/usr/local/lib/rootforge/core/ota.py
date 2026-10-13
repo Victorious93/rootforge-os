@@ -16,11 +16,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
+import stat
 import sys
 import time
 import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from rootforge.core.log import Logger
 from rootforge.core.runner import exec_script
@@ -97,6 +98,21 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _fresh_image_signature(path: Path) -> Optional[Tuple[int, int]]:
+    """mtime and size of a non-empty regular file, or None.
+
+    Symlinks are ignored: an image the dumper did not write must not be hashed
+    and reported as this extraction, including one planted as a link.
+    """
+    try:
+        st = path.lstat()
+    except OSError:
+        return None
+    if not stat.S_ISREG(st.st_mode) or st.st_size <= 0:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
 def cmd_inspect(input_path: str) -> int:
     path = Path(input_path)
     if not path.is_file():
@@ -148,26 +164,37 @@ def cmd_extract(input_path: str, output_dir: Optional[str] = None,
         partitions=requested,
     )
 
+    # Taken before the script runs. A file whose signature is unchanged was
+    # already in the output directory; hashing it would vouch for the previous
+    # payload's image.
+    out_path = Path(output)
+    before = {
+        partition: _fresh_image_signature(out_path / f"{partition}.img")
+        for partition in requested
+    }
+
     returncode = exec_script("extract_ota.sh", [str(input_file), output, "--partitions", ",".join(requested)])
     if returncode != 0:
         logger.error("extract failed", returncode=returncode)
         return returncode
 
-    # Hash only the partitions that were asked for. Globbing every *.img would
-    # also report (and appear to vouch for) stale files left in a reused
-    # output directory.
+    # Hash only requested images this run created or replaced.
     extracted = {}
     absent = []
-    out_path = Path(output)
     for partition in requested:
         image = out_path / f"{partition}.img"
-        if image.is_file() and image.stat().st_size > 0:
-            extracted[image.name] = _sha256_file(image)
-            print(f"  {image.name}  SHA-256: {extracted[image.name]}")
-        else:
+        signature = _fresh_image_signature(image)
+        if signature is None or signature == before.get(partition):
             absent.append(partition)
+            continue
+        extracted[image.name] = _sha256_file(image)
+        print(f"  {image.name}  SHA-256: {extracted[image.name]}")
     for partition in absent:
         print(f"  {partition}.img  not produced (the package may not contain this partition)")
+
+    if not extracted:
+        logger.error("extract produced nothing", not_produced=absent, log_path=str(logger.path))
+        return 1
 
     logger.info("extract finished", extracted=extracted, not_produced=absent, log_path=str(logger.path))
     return 0

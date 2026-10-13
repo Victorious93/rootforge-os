@@ -222,8 +222,35 @@ class TestCmdExtract(unittest.TestCase):
 
     def test_an_empty_image_counts_as_not_produced(self):
         with mock.patch.object(ota, "exec_script", self.fake_script({"boot.img": b""})):
-            _, out = self.extract("boot")
+            rc, out = self.extract("boot")
+        self.assertEqual(rc, 1)
         self.assertIn("boot.img  not produced", out)
+        self.assertEqual(self.logged()[-1]["event"], "extract produced nothing")
+
+    def test_a_stale_requested_image_is_not_reported_as_extracted(self):
+        self.out.mkdir()
+        (self.out / "boot.img").write_bytes(b"old-boot")
+        with mock.patch.object(ota, "exec_script", self.fake_script({})):
+            rc, out = self.extract("boot")
+        self.assertEqual(rc, 1)
+        self.assertNotIn(hashlib.sha256(b"old-boot").hexdigest(), out)
+        self.assertIn("boot.img  not produced", out)
+        self.assertEqual(self.logged()[-1]["not_produced"], ["boot"])
+
+    def test_a_stale_sibling_is_not_hashed_when_another_image_was_written(self):
+        self.out.mkdir()
+        (self.out / "vbmeta.img").write_bytes(b"old-vb")
+        with mock.patch.object(ota, "exec_script", self.fake_script({"boot.img": b"new-boot"})):
+            rc, out = self.extract("boot,vbmeta")
+        self.assertEqual(rc, 0)
+        self.assertIn(hashlib.sha256(b"new-boot").hexdigest(), out)
+        self.assertNotIn(hashlib.sha256(b"old-vb").hexdigest(), out)
+        self.assertIn("vbmeta.img  not produced", out)
+        self.assertEqual(
+            self.logged()[-1]["extracted"],
+            {"boot.img": hashlib.sha256(b"new-boot").hexdigest()},
+        )
+        self.assertEqual(self.logged()[-1]["not_produced"], ["vbmeta"])
 
     def test_a_failed_script_is_logged_and_its_exit_code_returned(self):
         with mock.patch.object(ota, "exec_script", self.fake_script({}, rc=7)):

@@ -3073,6 +3073,44 @@ export RF_STUB_DUMPER_WRITES="boot.img"
 run_script bash "$BIN_DIR/extract_ota.sh" "$SANDBOX/payload.bin" "$SANDBOX/out" --partitions boot
 assert_eq "a real extraction still succeeds" "$RC" "0"
 assert_contains "a real extraction counts what it produced" "$OUT" "Extraction complete (1 file(s))"
+
+# A reused output directory. The empty-directory check above does not catch
+# this: any pre-existing file made `find | wc -l` non-zero, so a payload that
+# contains neither requested partition still exited 0. The leftover boot.img
+# is then what a later patch-and-flash step writes to the device.
+new_sandbox
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+mkdir -p "$SANDBOX/out"
+printf 'notes\n' > "$SANDBOX/out/README"
+run_script bash "$BIN_DIR/extract_ota.sh" "$SANDBOX/payload.bin" "$SANDBOX/out" --partitions boot
+assert_eq "a pre-existing unrelated file does not make an empty extraction succeed" "$RC" "1"
+assert_contains "that failure still says nothing was produced" "$OUT" "produced no files"
+assert_not_contains "it is not called complete" "$OUT" "Extraction complete"
+assert_eq "the unrelated file is left in place" "$(cat "$SANDBOX/out/README")" "notes"
+
+new_sandbox
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+mkdir -p "$SANDBOX/out"
+printf 'old-boot' > "$SANDBOX/out/boot.img"
+run_script bash "$BIN_DIR/extract_ota.sh" "$SANDBOX/payload.bin" "$SANDBOX/out" --partitions boot
+assert_eq "a stale requested image is not a successful extraction" "$RC" "1"
+assert_contains "the stale image is described as not produced" "$OUT" "produced no files"
+assert_eq "the stale image is not rewritten" "$(cat "$SANDBOX/out/boot.img")" "old-boot"
+
+new_sandbox
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+mkdir -p "$SANDBOX/out"
+printf 'old-boot' > "$SANDBOX/out/boot.img"
+printf 'old-vbmeta' > "$SANDBOX/out/vbmeta.img"
+export RF_STUB_DUMPER_WRITES="boot.img"
+run_script bash "$BIN_DIR/extract_ota.sh" "$SANDBOX/payload.bin" "$SANDBOX/out" --partitions boot,vbmeta
+assert_eq "a run that replaces one image and leaves another still succeeds" "$RC" "0"
+assert_contains "only the image this run wrote is counted" "$OUT" "Extraction complete (1 file(s))"
+assert_eq "the replaced image is the dumper's, not the leftover" "$(wc -c < "$SANDBOX/out/boot.img" | tr -d ' ')" "1024"
+assert_eq "the image the payload did not contain is left untouched" "$(cat "$SANDBOX/out/vbmeta.img")" "old-vbmeta"
 drop_sandbox
 
 section "rootforge ota — the wrapped path end to end"
@@ -3096,6 +3134,25 @@ if [ -d "$SANDBOX/--partitions" ]; then
 else
   pass "no directory is ever named after a flag"
 fi
+
+# The script can exit 0 because it did write boot, while vbmeta.img is still
+# the previous payload's. The CLI must not hash that leftover and present it
+# as this extraction — that is the image a later flash would write.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+mkdir -p "$SANDBOX/out"
+printf 'old-vbmeta' > "$SANDBOX/out/vbmeta.img"
+export RF_STUB_DUMPER_WRITES="boot.img"
+STALE_VBMETA_SHA="$(sha256sum "$SANDBOX/out/vbmeta.img" | awk '{print $1}')"
+run_script python3 -m rootforge.core.cli ota extract "$SANDBOX/payload.bin" \
+  --partitions boot,vbmeta --output "$SANDBOX/out"
+assert_eq "CLI extract succeeds when one requested image was written" "$RC" "0"
+assert_contains "the image this run wrote is hashed" "$OUT" "$(sha256sum "$SANDBOX/out/boot.img" | awk '{print $1}')"
+assert_not_contains "a leftover requested image is not hashed" "$OUT" "$STALE_VBMETA_SHA"
+assert_contains "the leftover is reported as not produced" "$OUT" "vbmeta.img  not produced"
+assert_eq "the leftover image is not rewritten" "$(cat "$SANDBOX/out/vbmeta.img")" "old-vbmeta"
 
 new_sandbox
 export PYTHONPATH="$LIB_DIR"
