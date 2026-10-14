@@ -17,6 +17,8 @@ on:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    env:
+      HAS_KEYSTORE: ${{ secrets.ROOTFORGE_KEYSTORE_BASE64 != '' }}
     defaults:
       run:
         working-directory: android-app
@@ -61,7 +63,7 @@ jobs:
 
       - name: Decode the release keystore
         id: keystore
-        if: ${{ secrets.ROOTFORGE_KEYSTORE_BASE64 != '' }}
+        if: env.HAS_KEYSTORE == 'true'
         env:
           B64: ${{ secrets.ROOTFORGE_KEYSTORE_BASE64 }}
         run: |
