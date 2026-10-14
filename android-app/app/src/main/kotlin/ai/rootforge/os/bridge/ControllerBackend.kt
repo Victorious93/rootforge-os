@@ -7,6 +7,8 @@ import ai.rootforge.os.usb.TargetMode
 
 /** Adapts the real [TargetController] to the narrow surface the bridge may use. */
 class ControllerBackend(private val controller: TargetController, override val appVersion: String) : BridgeBackend {
+    override val nodeKind: String = "android-host-app"
+    override val usbHost: Boolean = true
 
     override fun devices(): List<BridgeDevice> {
         val linked = controller.link.value as? ai.rootforge.os.core.LinkState.Connected

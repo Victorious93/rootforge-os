@@ -42,9 +42,18 @@ fun main(args: Array<String>) {
 
     val pairing = PairingStore(FilePairingPersistence(File(home, "paired.json")))
     val backend = HostBridgeBackend(controller, DESKTOP_VERSION)
-    val executor = BridgeExecutor(settings.nodeId, backend, approvals, pairing)
+    val headless = args.contains("--headless") || args.contains("--api")
+    // Headless auth is the bearer token (HeadlessApi auto-pairs that caller).
+    // The Settings switch gates the GUI / Messenger-shaped path only.
+    val executor = BridgeExecutor(
+        settings.nodeId,
+        backend,
+        approvals,
+        pairing,
+        bridgeEnabled = { headless || settings.bridgeEnabled },
+    )
 
-    if (args.contains("--headless") || args.contains("--api")) {
+    if (headless) {
         val port = args.portArg() ?: 8787
         val token = System.getenv("ROOTFORGE_API_TOKEN")?.takeIf { it.isNotBlank() } ?: settings.ensureApiToken()
         val bindAll = args.contains("--bind-all")

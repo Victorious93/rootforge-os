@@ -14,9 +14,42 @@ import kotlinx.serialization.json.JsonObject
  */
 const val BRIDGE_PROTOCOL_MAJOR = 1
 
+/** Bound-service action. Debug APKs keep this action; only the package name changes. */
+const val BRIDGE_ACTION = "ai.rootforge.os.action.BRIDGE"
+
+const val BRIDGE_PACKAGE = "ai.rootforge.os"
+const val BRIDGE_PACKAGE_DEBUG = "ai.rootforge.os.debug"
+
+/** Messenger `Message.what` / Bundle keys. One request, one reply. */
+const val BRIDGE_MSG_REQUEST = 1
+const val BRIDGE_MSG_RESPONSE = 2
+const val BRIDGE_KEY_REQUEST = "request"
+const val BRIDGE_KEY_RESPONSE = "response"
+
 val bridgeJson = Json {
     ignoreUnknownKeys = true
     encodeDefaults = true
+}
+
+/** Operation names the Android host-app bridge accepts. Do not invent others here. */
+object BridgeOp {
+    const val CAPABILITIES = "rootforge.capabilities.get"
+    const val DEVICES_LIST = "rootforge.devices.list"
+    const val DEVICE_INFO = "rootforge.device.info"
+    const val ADB_SHELL = "rootforge.adb.shell"
+    const val ADB_REBOOT = "rootforge.adb.reboot"
+    const val FASTBOOT_REBOOT = "rootforge.fastboot.reboot"
+    const val MODULE_BUILD = "rootforge.module.build"
+    const val FASTBOOT_FLASH = "rootforge.fastboot.flash"
+    const val FASTBOOT_SLOT = "rootforge.fastboot.slot.set"
+    const val FASTBOOT_UNLOCK = "rootforge.fastboot.unlock"
+    const val FASTBOOT_LOCK = "rootforge.fastboot.lock"
+
+    val ALL: Set<String> = setOf(
+        CAPABILITIES, DEVICES_LIST, DEVICE_INFO,
+        ADB_SHELL, ADB_REBOOT, FASTBOOT_REBOOT, MODULE_BUILD,
+        FASTBOOT_FLASH, FASTBOOT_SLOT, FASTBOOT_UNLOCK, FASTBOOT_LOCK,
+    )
 }
 
 @Serializable

@@ -8,6 +8,8 @@ import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.usb.TargetMode
 
 class HostBridgeBackend(private val controller: HostController, override val appVersion: String) : BridgeBackend {
+    override val nodeKind: String = "desktop-host"
+    override val usbHost: Boolean = false
     override fun devices(): List<BridgeDevice> {
         val linked = controller.link.value as? LinkState.Connected
         return controller.targets.value.map { t ->

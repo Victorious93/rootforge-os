@@ -84,6 +84,10 @@ CI uploads `rootforge-os-toolkit-docker` (`docker load` the `.tar.gz`).
 The API is the same bridge JSON as the apps; destructive calls need a
 `confirmation` phrase. USB re-enumeration (adb → fastboot → EDL) is why
 `--privileged` is documented, not because the API itself needs root.
+`rootforge.capabilities.get` reports `node_kind=desktop-host` and
+`usb_host=false` (host `adb`/`fastboot`, not the phone USB-Host stack).
+The desktop Settings switch gates the GUI executor; `--headless` is
+authenticated by the bearer token instead.
 
 ## Shared core
 

@@ -11,10 +11,10 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-14 · **Branch:** `cursor/critical-bug-management-7076` (PR #47, with
-`main` at `5f267c9` merged in: #48 Android APK, #49 desktop + Docker toolkit, #50 APK workflow
-fix) · **Phase:** active development; ISO/VM/hardware validation **blocked** on
-infrastructure. Not run on a device.
+**Last updated:** 2026-10-14 · **Branch:** `cursor/droidcommand-bridge-47b8` (from `main` at
+`a7ff073`, which includes merged PRs #47–#51) · **Phase:** active development; ISO/VM/hardware
+validation **blocked** on infrastructure. Android host-phone APK is on `main`; this branch
+deepens the DroidCommand Messenger bridge. Not run on a device.
 
 **What is true now** (each verified by running it this session unless marked):
 - `bash tests/run-tests.sh` → 1016 passed, 0 failed on the merged tree (main's 1010 plus six

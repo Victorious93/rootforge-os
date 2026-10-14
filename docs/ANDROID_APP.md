@@ -68,3 +68,5 @@ Paparazzi goldens: `android-app/app/src/test/snapshots/`. Human-facing copies: `
 ## droidcommand-ai
 
 RootForge is an **independent node**, not a companion APK. See `docs/DROIDCOMMAND_INTEGRATION.md`.
+
+The debug APK (`ai.rootforge.os.debug`) exports `ai.rootforge.os.action.BRIDGE`. Pairing is Settings → External control: copy the node id, let DCA send `rootforge.capabilities.get`, then Pair the pending package+cert. The switch defaults off. EDL, sideload-zip and raw `fastboot oem` are GUI-only.

@@ -46,14 +46,23 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
             KeyValueRow("Node id", state.nodeId.ifBlank { "unknown" })
             if (state.pending.isNotEmpty()) {
                 Text("Waiting for approval", style = MaterialTheme.typography.titleSmall)
-                state.pending.forEach { PendingRow(it, actions) }
+                state.pending.forEach { PendingRow(it, state.paired, actions) }
             }
-            if (state.paired.isNotEmpty()) {
+            val stale = state.pending.map { it.packageName }.toSet()
+            val activePaired = state.paired.filterNot { it.packageName in stale }
+            if (activePaired.isNotEmpty()) {
                 Text("Paired controllers", style = MaterialTheme.typography.titleSmall)
-                state.paired.forEach { PairedRow(it, actions) }
+                activePaired.forEach { PairedRow(it, actions) }
             }
             if (state.pending.isEmpty() && state.paired.isEmpty()) {
-                Text("No controller has asked to pair yet. In droidcommand-ai, add this node id and send a capabilities request; it will appear here.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "No controller has asked to pair yet. Copy the node id, bind droidcommand-ai on " +
+                        "action ai.rootforge.os.action.BRIDGE (debug RootForge package is ai.rootforge.os.debug) " +
+                        "and send rootforge.capabilities.get. The caller appears here even if this switch is still off; " +
+                        "tap Pair before it can do anything.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             NoticeCard("Reads are allowed after pairing. Anything that runs a command or changes the target asks you on this phone every time, and writes need a typed confirmation. No setting turns that off.")
         }
@@ -83,10 +92,18 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
 }
 
 @Composable
-private fun PendingRow(c: CallerIdentity, actions: AppActions) {
+private fun PendingRow(c: CallerIdentity, paired: List<PairedController>, actions: AppActions) {
+    val certChanged = paired.any { it.packageName == c.packageName }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(c.packageName, style = MaterialTheme.typography.bodyMedium)
         Text("certificate sha256 ${c.certSha256.take(24)}...", style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (certChanged) {
+            Text(
+                "This package was paired with a different signing certificate. Pair again to replace it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionButton("Pair", kind = ActionKind.Primary) { actions.approveController(c) }
             ActionButton("Dismiss", kind = ActionKind.Outline) { actions.dismissController(c) }
