@@ -11,25 +11,29 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-14 · **Branch:** `cursor/linux-windows-docker-f6fd` (from `main` at
-`a772d0f`, which includes merged PR #48) · **Phase:** active development; ISO/VM/hardware
-validation **blocked** on infrastructure. Android host-phone APK is on `main`; Linux/Windows
-desktop + Docker toolkit are this branch. Not run on a device.
+**Last updated:** 2026-10-14 · **Branch:** `cursor/critical-bug-management-7076` (PR #47, with
+`main` at `5f267c9` merged in: #48 Android APK, #49 desktop + Docker toolkit, #50 APK workflow
+fix) · **Phase:** active development; ISO/VM/hardware validation **blocked** on
+infrastructure. Not run on a device.
 
 **What is true now** (each verified by running it this session unless marked):
-- `bash tests/run-tests.sh` → 1010 passed, 0 failed (Python unittest reported 375 tests in
-  1.559s, including `tests/test_toolkit_api.py`). `bash tests/lint.sh` → clean with
-  shellcheck 0.9.0. GitHub `Lint` was green on `main` at `cec7f7e`.
-- `cd android-app && ./gradlew :core:test :app:assembleDebug :app:testDebugUnitTest :desktop:compileKotlin`
-  → BUILD SUCCESSFUL. `:core` 48 tests, `:app` 19 tests (protocol + Paparazzi), 0 failed.
-  Debug APK at `android-app/app/build/outputs/apk/debug/app-debug.apk`. **Not installed on a
+- `bash tests/run-tests.sh` → 1016 passed, 0 failed on the merged tree (main's 1010 plus six
+  assertions for the same-sized OTA rewrite). `bash tests/lint.sh` → clean with shellcheck
+  0.9.0.
+- On the merged tree `cd android-app && ./gradlew :core:test :desktop:compileKotlin` → BUILD
+  SUCCESSFUL, `:core` 48 tests, 0 failed. `:app:assembleDebug` / `:app:testDebugUnitTest` were
+  **not** re-run after the merge (no Android SDK on this agent); their last recorded result
+  (main, #48/#49: `:app` 19 tests, APK built) is from a prior session. **Not installed on a
   phone, not exercised over USB.**
 - `./gradlew :desktop:packageDeb` → `android-app/desktop/build/compose/binaries/main/deb/rootforgeos_0.1.0-1_amd64.deb`
   (local, gitignored). Windows `.exe`/`.msi` not built here. Docker image **not** built
   (`docker` is not installed on this agent). **Not run against a PC/phone pair.**
 - `extract_ota.sh` / `rootforge ota extract` count an image as produced only when this run
-  created or replaced it. A reused output directory used to make an empty dump exit 0, and the
-  CLI hashed a leftover `*.img` as if it had come from the payload just extracted.
+  created or replaced it, judged by SHA-256 of the file. A reused output directory used to make
+  an empty dump exit 0, and the CLI hashed a leftover `*.img` as if it had come from the payload
+  just extracted. An earlier stamp compared `stat` `%Y.%N`, but GNU stat's `%N` is the file
+  name, not nanoseconds, so a same-sized rewrite in the same second was reported as "produced
+  no files" after the bytes had already been replaced.
 - Implemented and stub-tested: device model + `device check`, flash contract, backup
   manifest/verify/import-legacy/restore, layered config, redacted private JSON-lines log with a CLI-side audit trail for state-changing commands and exit-time redaction of script logs,
   doctor severity model, OTA/boot/module/avd dispatch, provisioning with Calamares cleanup,

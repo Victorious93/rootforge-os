@@ -237,6 +237,30 @@ class TestCmdExtract(unittest.TestCase):
         self.assertIn("boot.img  not produced", out)
         self.assertEqual(self.logged()[-1]["not_produced"], ["boot"])
 
+    def test_same_size_rewrite_with_unchanged_mtime_is_the_new_image(self):
+        import os
+        self.out.mkdir()
+        image = self.out / "boot.img"
+        previous = b"old-boot-bytes"
+        replacement = b"new-boot-bytes"
+        image.write_bytes(previous)
+        stamp = image.stat().st_mtime_ns
+
+        def _run(name, argv, **kwargs):
+            image.write_bytes(replacement)
+            os.utime(image, ns=(stamp, stamp))
+            return 0
+
+        with mock.patch.object(ota, "exec_script", _run):
+            rc, out = self.extract("boot")
+        self.assertEqual(rc, 0)
+        self.assertIn(hashlib.sha256(replacement).hexdigest(), out)
+        self.assertNotIn(hashlib.sha256(previous).hexdigest(), out)
+        self.assertEqual(
+            self.logged()[-1]["extracted"],
+            {"boot.img": hashlib.sha256(replacement).hexdigest()},
+        )
+
     def test_a_stale_sibling_is_not_hashed_when_another_image_was_written(self):
         self.out.mkdir()
         (self.out / "vbmeta.img").write_bytes(b"old-vb")
