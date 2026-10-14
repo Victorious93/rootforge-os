@@ -2,6 +2,7 @@ package ai.rootforge.os.bridge
 
 import ai.rootforge.os.core.ApprovalCenter
 import ai.rootforge.os.module.ModuleSpec
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -49,7 +50,7 @@ class BridgeExecutorTest {
 
     private fun parse(line: String) = bridgeJson.decodeFromString<BridgeResponse>(line)
 
-    private suspend fun approveNext(approvals: ApprovalCenter, ex: BridgeExecutor, request: String, ok: Boolean = true): BridgeResponse {
+    private suspend fun CoroutineScope.approveNext(approvals: ApprovalCenter, ex: BridgeExecutor, request: String, ok: Boolean = true): BridgeResponse {
         val pending = async { parse(ex.handle(request, caller)) }
         approvals.answer(approvals.pending.value.single().id, ok)
         return pending.await()

@@ -17,17 +17,17 @@ validation **blocked** on infrastructure. Android host-phone APK is on `main`; t
 deepens the DroidCommand Messenger bridge. Not run on a device.
 
 **What is true now** (each verified by running it this session unless marked):
-- `bash tests/run-tests.sh` → 1016 passed, 0 failed on the merged tree (main's 1010 plus six
-  assertions for the same-sized OTA rewrite). `bash tests/lint.sh` → clean with shellcheck
-  0.9.0.
-- On the merged tree `cd android-app && ./gradlew :core:test :desktop:compileKotlin` → BUILD
-  SUCCESSFUL, `:core` 48 tests, 0 failed. `:app:assembleDebug` / `:app:testDebugUnitTest` were
-  **not** re-run after the merge (no Android SDK on this agent); their last recorded result
-  (main, #48/#49: `:app` 19 tests, APK built) is from a prior session. **Not installed on a
-  phone, not exercised over USB.**
-- `./gradlew :desktop:packageDeb` → `android-app/desktop/build/compose/binaries/main/deb/rootforgeos_0.1.0-1_amd64.deb`
-  (local, gitignored). Windows `.exe`/`.msi` not built here. Docker image **not** built
-  (`docker` is not installed on this agent). **Not run against a PC/phone pair.**
+- `bash tests/run-tests.sh` → 1016 passed, 0 failed. `bash tests/lint.sh` → clean with
+  shellcheck 0.9.0 (installed this session; was missing on the image).
+- `cd android-app && ./gradlew :core:test :app:assembleDebug :app:testDebugUnitTest :desktop:compileKotlin`
+  → BUILD SUCCESSFUL. `:core` 68 tests, 0 failed (27 BridgeExecutor + 4 PairingStore). `:app`
+  19 tests (protocol + Paparazzi), 0 failed. `:app:verifyPaparazziDebug` green after recording
+  the Settings pairing snapshot. Debug APK at
+  `android-app/app/build/outputs/apk/debug/app-debug.apk`. **Not installed on a phone, not
+  bound from a live DCA, not exercised over USB.**
+- `./gradlew :desktop:packageDeb` was **not** re-run. Windows `.exe`/`.msi` not built.
+  Docker image **not** built (`docker` is not installed on this agent). **Not run against a
+  PC/phone pair.**
 - `extract_ota.sh` / `rootforge ota extract` count an image as produced only when this run
   created or replaced it, judged by SHA-256 of the file. A reused output directory used to make
   an empty dump exit 0, and the CLI hashed a leftover `*.img` as if it had come from the payload
@@ -50,9 +50,9 @@ deepens the DroidCommand Messenger bridge. Not run on a device.
   Nothing is signed.
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
   administration. Android host-phone GUI APK is on `main` (USB Host, not Termux).
-  Linux/Windows desktop (`android-app/desktop`) and Docker toolkit (`docker/`) are on this
-  branch. No GitHub Release exists (tags `v0.1.0`, `v0.1.1` only), so the Termux install
-  paths need a locally generated or future release.
+  Linux/Windows desktop and Docker toolkit are on `main` (PR #49). This branch is the
+  Messenger bridge deepening. No GitHub Release exists (tags `v0.1.0`, `v0.1.1` only), so
+  the Termux install paths need a locally generated or future release.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`.
 
@@ -68,8 +68,10 @@ the check.**
 2. Extend the config schema only where a script consumes a key (Stage 3). Done: shared execution ID, `0600` script logs redacted at exit and by the CLI (pattern-based; SIGKILL outside the CLI and unrecognised secret shapes are the known gaps), and CLI-side audit events for `flash`/`backup`/`module`/`avd`/`boot patch`/`boot flash-last`.
 3. Pin/replace the Ollama installer; add release signing (Stage 4).
 4. Run the flash/backup/restore contract against a test device the owner agrees to flash.
-The Android GUI APK landed in PR #48. Linux/Windows/Docker toolkit clients are this
-branch. ISO Stage 5 is still blocked and is still the next hardware task.
+The Android GUI APK landed in PR #48. Linux/Windows/Docker toolkit clients landed in
+PR #49. The DroidCommand Messenger path is this branch (PR #52): all 11 documented
+operations, pairing UI, executor gates. ISO Stage 5 is still blocked and is still the
+next hardware task. A live DCA bind on a phone has not been run.
 
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed
 from `docs/ARCHITECTURE_AUDIT.md`; the "governing directive" it cites was never found in the
