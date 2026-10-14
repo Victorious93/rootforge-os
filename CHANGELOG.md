@@ -5,6 +5,34 @@ published GitHub Release; entries below are under **Unreleased** until one is cu
 Nothing here has been validated on real hardware, a booted ISO, a VM or a phone; see
 `docs/PLATFORM_SUPPORT.md`.
 
+## Unreleased — 2026-10-14
+
+### Android host-phone app
+- New `android-app/`: Material 3 toolkit APK. Host phone talks to a target over
+  USB-C using the USB Host API and a pure-Kotlin ADB / fastboot / Sahara stack.
+  Module zip builder, Magisk/KernelSU/APatch patching workflow (the manager app
+  on the target does the patch; this app moves images), typed confirmations for
+  writes. droidcommand-ai integration is a bound Messenger service speaking the
+  same JSON envelope as `core-rootforge` (`docs/DROIDCOMMAND_INTEGRATION.md`).
+  Compiles locally; protocol tests and Paparazzi snapshots pass; **not run on a
+  phone**.
+
+### Bugfixes (hermetic)
+- `boot cpio` refuses a ramdisk path that leaves the unpack directory.
+- Module display names and `brain new` titles cannot inject extra keys via newlines.
+- Adb+fastboot serial lists are deduplicated (CLI devices list and fleet).
+- A truncated cached ADBKeyboard APK is discarded instead of installed.
+- Fleet treats flash exit 4 as "written, boot unverified" rather than FAIL.
+- Live-groups unit adds `rootforge` to kvm/plugdev/docker, not `user`.
+- Chroot rootfs hostname/motd no longer claim to be unrooted PRoot.
+- Scaffolded Magisk `update-binary` sources `util_functions.sh` and calls
+  `install_module`.
+- Desktop launcher `--start` test no longer fails on a host that has XFCE.
+
+### Docs
+- `docs/REVIEW.md`, `docs/ANDROID_APP.md`, `docs/DROIDCOMMAND_INTEGRATION.md`.
+  README no longer claims cryptographic signing.
+
 ## Unreleased — 2026-10-12
 
 ### OTA extract

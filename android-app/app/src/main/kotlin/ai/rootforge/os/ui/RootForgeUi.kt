@@ -13,7 +13,6 @@ import ai.rootforge.os.ui.screens.SettingsScreen
 import ai.rootforge.os.ui.screens.modeColor
 import ai.rootforge.os.ui.theme.ForgeColors
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth

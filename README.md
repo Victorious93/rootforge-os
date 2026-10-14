@@ -56,6 +56,7 @@ Build it. Control it. Make Android yours.
 - **Branded artifacts (not cryptographically signed):** every module, script, and image this distro produces carries a `Victorious Framework` footer in its metadata. Nothing is signed; see `docs/SECURITY_MODEL.md`.
 - **Build provenance:** every ISO carries `/usr/local/share/rootforge/system-manifest.json` — the git commit/branch it was built from, every installed package's version, and a SHA-256 per build-time-fetched artifact (from the hooks that verify a pinned digest and record it; the Ollama installer, NodeSource repository and Claude Code npm package are fetched without a pinned digest and are not in this list) — so a given image's actual contents can be checked against what it claims to be, after the fact.
 - **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) wraps the project command scripts. Its current command groups are `doctor`, `devices`, `device`, `config`, `flash`, `backup`, `module`, `boot`, `ota`, and `avd`. See `rootforge --help` and each group's `--help` for the implemented commands; module scaffolding is `rootforge module scaffold` (section 12). Existing scripts under `/usr/local/bin/` remain usable on their own.
+- **Host-phone Android app:** `android-app/` is a Material 3 toolkit APK that runs on one phone and controls a second phone over a USB-C cable (USB Host API, pure-Kotlin ADB/fastboot/Sahara). Not a Termux fork. See section 19 and `docs/ANDROID_APP.md`.
 
 ## 2. Core package stack
 
@@ -633,6 +634,29 @@ XFCE rather than GNOME: GNOME wants systemd/logind and a compositor stack that n
 ## 18. What's still a manual step
 
 Bootloader unlock permits for Xiaomi/OnePlus regional variants that require an account-linked waiting period, Samsung Download Mode flashing (Odin/Heimdall, not fastboot), and initial OEM driver installation on the host for less common vendors. RootForge's scripts detect these cases and stop with an explanation rather than failing silently or guessing.
+
+## 19. Android app (host phone → target phone over USB-C)
+
+The APK in `android-app/` is a button-first toolkit: Dashboard, ADB, Fastboot, EDL, Root/Patching, Module Builder, Recovery, Logs/Terminal, Settings. It talks to the **target** over Android's USB Host API (no bundled `adb` binary, no network). Destructive actions print a plan and require a typed confirmation.
+
+**Install**
+
+1. Build or download the debug APK (`android-app/app/build/outputs/apk/debug/app-debug.apk`, also a GitHub Actions artifact on this branch).
+2. Install it on the **host** phone: `adb install -r app-debug.apk`.
+3. Connect the **target** with a USB-C to USB-C **data** cable. On the target enable USB debugging (or reboot to bootloader / EDL). Accept the host's USB-permission prompt, then Dashboard → Connect. On first ADB use, accept the RSA key dialog on the **target** (the fingerprint is under Settings).
+
+If the host does not switch into USB-host mode, put a USB-C OTG adapter on the **host** end of the cable. Charge-only cables will show no device.
+
+Screenshots (Paparazzi, not a real phone): `android-app/screenshots/`. Full USB notes, limits, and why the stack is pure Kotlin: `docs/ANDROID_APP.md`.
+
+**droidcommand-ai:** the app is an independent node, not a companion. Pair it under Settings → External control. The JSON envelope matches `core-rootforge`; the Android transport is a bound Messenger service. Canonical spec: `docs/DROIDCOMMAND_INTEGRATION.md`.
+
+```
+cd android-app
+./gradlew :app:assembleDebug :app:testDebugUnitTest
+```
+
+CI: `.github/workflows/android-apk.yml` uploads the debug APK (and a release APK if signing secrets are set).
 
 -Victorious Framework
 
