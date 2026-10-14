@@ -11,38 +11,50 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-13 · **Branch:** `cursor/critical-bug-management-7076` · **Phase:**
-active development; ISO/VM/hardware validation **blocked** on infrastructure.
+**Last updated:** 2026-10-14 · **Branch:** `cursor/critical-bug-management-7076` (PR #47, with
+`main` at `5f267c9` merged in: #48 Android APK, #49 desktop + Docker toolkit, #50 APK workflow
+fix) · **Phase:** active development; ISO/VM/hardware validation **blocked** on
+infrastructure. Not run on a device.
 
 **What is true now** (each verified by running it this session unless marked):
-- `bash tests/run-tests.sh` → 1004 passed, 1 failed. The failure is
-  `rootforge_desktop.sh --start` on a host that already has `xfce4-session`
-  (`/usr/bin/xfce4-session` is installed here): the script starts XFCE instead of printing
-  `--install`. Not exercised against a device. The Python unittest suite inside that run:
-  361 passed, 0 failed. `bash tests/lint.sh` → clean with shellcheck 0.9.0 (Debian package,
-  installed in this environment; not CI's shellcheck). **GitHub CI also passed on the PR #42
-  head** (`34936af`: `shellcheck`, `tests`, `package-lists`, `yaml-lint`, `python`); that run
-  is not this commit. PR #43 was merged by the owner on 2026-10-07. PR #45 (leftover OTA
-  image) and PR #46 (README) are merged on `main`.
-- `extract_ota.sh` / `rootforge ota extract` count an image as produced only when this run's
-  bytes differ from what was already in the output directory (SHA-256). A reused output
-  directory used to make an empty dump exit 0, and the CLI hashed a leftover `*.img` as if it
-  had come from the payload just extracted. The follow-up stamp compared `stat` `%Y.%N`, but
-  GNU stat's `%N` is the file name, not nanoseconds, so a same-sized rewrite in the same
-  second was reported as "produced no files" after the bytes had already been replaced.
+- `bash tests/run-tests.sh` → 1016 passed, 0 failed on the merged tree (main's 1010 plus six
+  assertions for the same-sized OTA rewrite). `bash tests/lint.sh` → clean with shellcheck
+  0.9.0.
+- On the merged tree `cd android-app && ./gradlew :core:test :desktop:compileKotlin` → BUILD
+  SUCCESSFUL, `:core` 48 tests, 0 failed. `:app:assembleDebug` / `:app:testDebugUnitTest` were
+  **not** re-run after the merge (no Android SDK on this agent); their last recorded result
+  (main, #48/#49: `:app` 19 tests, APK built) is from a prior session. **Not installed on a
+  phone, not exercised over USB.**
+- `./gradlew :desktop:packageDeb` → `android-app/desktop/build/compose/binaries/main/deb/rootforgeos_0.1.0-1_amd64.deb`
+  (local, gitignored). Windows `.exe`/`.msi` not built here. Docker image **not** built
+  (`docker` is not installed on this agent). **Not run against a PC/phone pair.**
+- `extract_ota.sh` / `rootforge ota extract` count an image as produced only when this run
+  created or replaced it, judged by SHA-256 of the file. A reused output directory used to make
+  an empty dump exit 0, and the CLI hashed a leftover `*.img` as if it had come from the payload
+  just extracted. An earlier stamp compared `stat` `%Y.%N`, but GNU stat's `%N` is the file
+  name, not nanoseconds, so a same-sized rewrite in the same second was reported as "produced
+  no files" after the bytes had already been replaced.
 - Implemented and stub-tested: device model + `device check`, flash contract, backup
   manifest/verify/import-legacy/restore, layered config, redacted private JSON-lines log with a CLI-side audit trail for state-changing commands and exit-time redaction of script logs,
   doctor severity model, OTA/boot/module/avd dispatch, provisioning with Calamares cleanup,
   Termux verified install + per-release metadata generation + CPU-honest SDK bootstrap,
   Makefile/`auto/build` failure handling, release-asset verifier, release workflow gating.
 - **Not run anywhere:** `lb build` (no loop device), ISO boot, Calamares install, systemd
-  first boot, real devices, a phone, `release.yml` (it only runs on `v*` tags or manual
-  dispatch; merging did not trigger it).
+  first boot, real devices, a phone, a desktop USB session, `docker build -f docker/Dockerfile`,
+  `release.yml` (it only runs on `v*` tags or manual dispatch; merging did not trigger it).
+  PR #49 Toolkit CI (run 38523858203) after the `packages: platform-tools` fix: Lint,
+  linux-desktop, windows-desktop, and docker all green. `android-apk.yml` still does
+  not produce jobs on this repo's PRs (0-second empty runs even on the #48 merge to
+  main); APK was built locally, not by that workflow.
 - **Known unpinned:** Ollama installer (hook 0020). Claude Code's native npm dependency.
   Nothing is signed.
-- **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), Windows,
-  Android APK, GUI, remote administration. No GitHub Release exists (tags `v0.1.0`,
-  `v0.1.1` only), so the Termux install paths need a locally generated or future release.
+- **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
+  administration. Android host-phone GUI APK is on `main` (USB Host, not Termux).
+  Linux/Windows desktop (`android-app/desktop`) and Docker toolkit (`docker/`) are on this
+  branch. No GitHub Release exists (tags `v0.1.0`, `v0.1.1` only), so the Termux install
+  paths need a locally generated or future release.
+- Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
+  Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`.
 
 **Incident worth remembering:** merge `b02e7c4` silently reverted six build hooks to a flavour
 that defined SHA-256 pins and never compared them (one also used an undefined variable),
@@ -56,7 +68,8 @@ the check.**
 2. Extend the config schema only where a script consumes a key (Stage 3). Done: shared execution ID, `0600` script logs redacted at exit and by the CLI (pattern-based; SIGKILL outside the CLI and unrecognised secret shapes are the known gaps), and CLI-side audit events for `flash`/`backup`/`module`/`avd`/`boot patch`/`boot flash-last`.
 3. Pin/replace the Ollama installer; add release signing (Stage 4).
 4. Run the flash/backup/restore contract against a test device the owner agrees to flash.
-Do not start Stage 6 (Windows/APK/GUI/remote) before Stages 2 and 5 are validated.
+The Android GUI APK landed in PR #48. Linux/Windows/Docker toolkit clients are this
+branch. ISO Stage 5 is still blocked and is still the next hardware task.
 
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed
 from `docs/ARCHITECTURE_AUDIT.md`; the "governing directive" it cites was never found in the

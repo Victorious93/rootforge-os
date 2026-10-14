@@ -75,7 +75,14 @@ mapfile -t ADB_SERIALS < <(rf_adb_serials)
 mapfile -t FASTBOOT_SERIALS < <(rf_fastboot_serials)
 ALL_SERIALS=()
 [[ ${#ADB_SERIALS[@]} -gt 0 ]] && ALL_SERIALS+=("${ADB_SERIALS[@]}")
-[[ ${#FASTBOOT_SERIALS[@]} -gt 0 ]] && ALL_SERIALS+=("${FASTBOOT_SERIALS[@]}")
+# A phone mid-reboot can be listed by both adb and fastboot. Run each serial
+# once; the destructive operations below must never hit one phone twice.
+for fb_serial in "${FASTBOOT_SERIALS[@]}"; do
+  [[ -n "$fb_serial" ]] || continue
+  dup=0
+  for have in "${ALL_SERIALS[@]}"; do [[ "$have" == "$fb_serial" ]] && dup=1; done
+  [[ $dup -eq 1 ]] || ALL_SERIALS+=("$fb_serial")
+done
 
 if [[ ${#ALL_SERIALS[@]} -eq 0 ]]; then
   echo "No devices found in adb or fastboot mode." >&2
@@ -140,7 +147,15 @@ for serial in "${ALL_SERIALS[@]}"; do
       if bash "$SCRIPT_DIR/unlock_bootloader.sh" "$serial" "${EXTRA_ARGS[@]}" > "$DEV_LOG" 2>&1; then RESULT="OK"; fi
       ;;
     flash)
-      if bash "$SCRIPT_DIR/flash_patched_boot.sh" "$OP_ARG" boot "$serial" "${EXTRA_ARGS[@]}" > "$DEV_LOG" 2>&1; then RESULT="OK"; fi
+      # flash_patched_boot.sh exits 4 when the image was written but boot was
+      # not verified (e.g. --no-boot-check). That is not a failed flash, and
+      # it must not be reported as one; it is not a verified success either.
+      FLASH_RC=0
+      bash "$SCRIPT_DIR/flash_patched_boot.sh" "$OP_ARG" boot "$serial" "${EXTRA_ARGS[@]}" > "$DEV_LOG" 2>&1 || FLASH_RC=$?
+      case "$FLASH_RC" in
+        0) RESULT="OK" ;;
+        4) RESULT="WRITTEN (boot unverified)" ;;
+      esac
       ;;
     *)
       echo "Unknown operation: $OP_NAME" >&2

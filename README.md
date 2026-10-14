@@ -13,7 +13,7 @@
 [![CLI](https://img.shields.io/badge/CLI-rootforge-black)](#unified-cli)
 ![Status](https://img.shields.io/badge/status-active%20·%20ISO%20unverified%20here-orange)
 
-> **Honesty first:** this repository contains a full Debian `live-build` tree, automation scripts, tests, and Termux/PRoot packaging. **ISO production, booting, Calamares install, and on-phone rootfs use have not been independently verified in the environment that last updated these docs** (no loop device / no published GitHub Release assets as of 2026-10-07). Tags `v0.1.0` / `v0.1.1` exist; no published Release yet. See [BUILD.md](BUILD.md) and [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md).
+> **Honesty first:** this repository contains a full Debian `live-build` tree, automation scripts, tests, and Termux/PRoot packaging. **ISO production, booting, Calamares install, and on-phone rootfs use have not been independently verified in the environment that last updated these docs** (no loop device / no published GitHub Release assets as of 2026-10-07). Tags `v0.1.0` / `v0.1.1` exist; no published Release yet. See [BUILD.md](BUILD.md) and [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md). Artifacts carry a `Victorious Framework` footer; **nothing is cryptographically signed** — see [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md).
 
 ## Overview
 
@@ -21,12 +21,15 @@ RootForge OS targets people building and testing Android root modules and boot i
 
 1. **Host ISO (x86_64 primary)** — Debian live image with GNOME + Calamares, Android SDK/NDK tooling (mostly first-boot), kernel/boot-image toolchain (magiskboot, avbtool, cross compilers), Magisk/KernelSU-oriented scripts, rooted/unrooted AVD helpers, OTA extraction, backups, and a unified `rootforge` CLI.
 2. **On-device Debian rootfs (Termux)** — PRoot (unrooted) and chroot (rooted) flavours, optional XFCE via Termux:X11 — same project scripts where the Android kernel allows.
+3. **Host-phone Android app** — `android-app/` is a Material 3 toolkit APK that runs on one phone and controls a **target** phone over a USB-C cable (USB Host API, pure-Kotlin ADB/fastboot/Sahara). Not a Termux fork. Compiles and has hermetic protocol tests; **not run on a real host/target pair.** See [docs/ANDROID_APP.md](docs/ANDROID_APP.md).
+4. **Linux / Windows desktop** — same GUI (`android-app/desktop`), talking to host `adb`/`fastboot` (optional `edl`). Shared Kotlin core with the APK. **Not run on a real PC/phone pair.** See [docs/DESKTOP.md](docs/DESKTOP.md).
+5. **Docker toolkit image** — CLI + adb/fastboot + headless API (`docker/`). USB is a run-time passthrough (`--device /dev/bus/usb`, `--privileged`). See [docker/README.md](docker/README.md).
 
 It does **not** claim a single unlock/root script for every OEM. Unlock/flash flows detect vendor constraints (Samsung/Xiaomi/etc.) and refuse to guess. Live ISO boot is **BIOS/isolinux only**; UEFI/Secure Boot are unsupported/unverified.
 
 ## Features
 
-Grounded in `config/`, `termux/`, and the `rootforge` CLI (see also section-level detail in the long-form docs under `docs/`):
+Grounded in `config/`, `termux/`, `android-app/`, and the `rootforge` CLI (see also section-level detail in the long-form docs under `docs/`):
 
 - **Live + installable Debian** — GNOME session, Calamares (erase / alongside / manual), system manifest for build provenance
 - **Unified CLI** — `rootforge` groups: `doctor`, `devices`, `device`, `config`, `flash`, `backup`, `module`, `boot`, `ota`, `avd`
@@ -37,7 +40,10 @@ Grounded in `config/`, `termux/`, and the `rootforge` CLI (see also section-leve
 - **AVD helpers** — create/list/start rooted or unrooted profiles (x86_64 host + KVM; not available on phone arm64)
 - **AI tooling hooks** — Node 22, Claude Code (pinned), Ollama installer (unpinned — see BUILD.md), `brain` second-brain CLI
 - **Termux delivery** — `termux/build-rootfs.sh` for proot/chroot (± X11); digest-required installers generated per release
-- **CI & tests** — lint/unit/static hook checks; `release.yml` builds ISO + rootfs assets into a **draft** release after verification
+- **Host-phone toolkit APK** — ADB, fastboot, EDL, Magisk/KernelSU/APatch patching workflow, module zip builder, recovery install, logs/terminal; typed confirmation on writes; droidcommand-ai bridge ([docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md))
+- **Linux/Windows desktop GUI** — same screens; host platform-tools; CI uploads `.deb` / `.exe` (and `.msi` / AppImage when the packager produces them)
+- **Docker toolkit** — `rootforge` CLI + API on `:8787`; USB passthrough documented, not assumed
+- **CI & tests** — lint/unit/static hook checks; `android-apk.yml` builds the debug APK; `toolkit.yml` packages desktop + Docker; `release.yml` builds ISO + rootfs assets into a **draft** release after verification
 
 ## Screenshots
 
@@ -46,6 +52,8 @@ Grounded in `config/`, `termux/`, and the `rootforge` CLI (see also section-leve
 | *TODO* | *TODO* | *TODO* | *TODO* | *TODO* | *TODO* |
 
 Capture only after a real boot/install; do not mock device serials or secrets in audit log screenshots.
+
+Paparazzi screenshots of the host-phone app (not a real phone): `android-app/screenshots/`.
 
 ## Requirements
 
@@ -65,6 +73,23 @@ Capture only after a real boot/install; do not mock device serials or secrets in
 
 - Termux on device; `proot-distro` for unrooted flavour; root/`su` for chroot flavour
 - Multi-GB free storage; optional Termux:X11 app for desktop
+
+### Host-phone Android app
+
+- A phone with **USB Host / OTG** hardware (the APK declares `android.hardware.usb.host` as required)
+- USB-C to USB-C **data** cable (charge-only cables enumerate nothing)
+- Android SDK (or CI) to build: JDK 17+, `ANDROID_HOME`, then `cd android-app && ./gradlew :app:assembleDebug`
+
+### Linux / Windows desktop
+
+- JDK 17 to build; a packaged `.deb` / `.exe` to run
+- Host `adb`/`fastboot` on `PATH` or `ANDROID_HOME/platform-tools`
+- **Windows USB drivers** (not bundled): [Google USB Driver](https://developer.android.com/studio/run/win-usb) for adb/fastboot; Qualcomm HS-USB QDLoader 9008 for EDL (`VID_05C6&PID_9008`). Details: [docs/DESKTOP.md](docs/DESKTOP.md)
+
+### Docker toolkit
+
+- Docker Engine on Linux for USB passthrough (`--device /dev/bus/usb`, usually also `--privileged`)
+- `ROOTFORGE_API_TOKEN`; publish `127.0.0.1:8787` only. [docker/README.md](docker/README.md)
 
 ## Build
 
@@ -88,6 +113,35 @@ sudo termux/build-rootfs.sh arm64
 sudo termux/build-rootfs.sh arm64 --flavor chroot --with-x11
 ```
 
+Host-phone APK:
+
+```bash
+cd android-app
+./gradlew :app:assembleDebug :app:testDebugUnitTest
+# → app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/debug/app-debug.apk   # on the host phone
+```
+
+CI: `.github/workflows/android-apk.yml` uploads the debug APK (and a release APK if signing secrets are set). `.github/workflows/toolkit.yml` uploads Linux `.deb`, Windows `.exe`, and a `docker save` of the toolkit image.
+
+Linux / Windows desktop:
+
+```bash
+cd android-app
+./gradlew :desktop:run
+./gradlew :desktop:packageDeb          # Linux
+# On Windows: gradlew :desktop:packageExe
+```
+
+Docker:
+
+```bash
+docker build -f docker/Dockerfile -t rootforge-os-toolkit .
+docker run --rm -it --privileged --device /dev/bus/usb \
+  -v /dev/bus/usb:/dev/bus/usb -p 127.0.0.1:8787:8787 \
+  -e ROOTFORGE_API_TOKEN=… rootforge-os-toolkit
+```
+
 Release automation: `.github/workflows/release.yml` (draft release + checksum verification). **Has not been run successfully on GitHub’s infrastructure for a published Release yet.**
 
 ## Usage (installed or live)
@@ -107,20 +161,28 @@ Flash/unlock/backup scripts refuse unsafe vendors/states where possible; they wi
 
 USB flash helper (when you have an ISO + checksum): `make list-usb` / `sudo make flash USB=/dev/sdX`.
 
+### Host phone → target phone over USB-C
+
+Install the APK on the **host**. Plug the **target** in with a data cable. On the target enable USB debugging (or reboot to bootloader / EDL). Accept the host's USB-permission prompt, then Dashboard → Connect. On first ADB use, accept the RSA key dialog on the **target** (the fingerprint is under Settings). If the host does not switch into USB-host mode, put a USB-C OTG adapter on the **host** end. Destructive GUI actions print a plan and require a typed phrase.
+
+**droidcommand-ai:** the app is an independent node, not a companion. Pair it under Settings → External control. The JSON envelope matches `core-rootforge`; the Android transport is a bound Messenger service. Canonical spec: [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md).
+
 ## Project structure
 
 ```text
 auto/                 live-build entry (config, build)
 config/               package lists, hooks, includes.chroot (scripts under usr/local/bin)
 termux/               PRoot/chroot rootfs build + release metadata templates
+android-app/          Toolkit: :core (shared), :app (Android APK), :desktop (Linux/Windows)
+docker/               Toolkit image (CLI + headless API) + USB passthrough notes
 tests/                Hermetic tests + stubs (adb/fastboot/su/…)
-docs/                 ARCHITECTURE, PLATFORM_SUPPORT, SECURITY_MODEL, …
+docs/                 ARCHITECTURE, PLATFORM_SUPPORT, SECURITY_MODEL, ANDROID_APP, …
 Makefile              build, checksum, flash, clean targets
 BUILD.md              ISO build guide
 HACKING.md · AGENTS.md · CLAUDE.md
 ```
 
-Deep design notes that used to dominate the homepage README live in `docs/` and [BUILD.md](BUILD.md). Prefer updating those for long rationale; keep this README as the landing page.
+Deep design notes that used to dominate the homepage README live in `docs/` (including the pre-refresh long-form [docs/README-legacy.md](docs/README-legacy.md)) and [BUILD.md](BUILD.md). Prefer updating those for long rationale; keep this README as the landing page.
 
 ## Contributing
 
@@ -144,8 +206,14 @@ Third-party components fetched at build time (NodeSource, Ollama installer, Magi
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture |
 | [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md) | BIOS-only live ISO; arch caveats |
 | [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | Trust boundaries, logging, flashing gates |
+| [docs/ANDROID_APP.md](docs/ANDROID_APP.md) | Host-phone APK: USB Host, screens, limits |
+| [docs/DESKTOP.md](docs/DESKTOP.md) | Linux/Windows desktop, Windows USB drivers, Docker |
+| [docker/README.md](docker/README.md) | Toolkit image and USB passthrough |
+| [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) | Bridge protocol for droidcommand-ai |
+| [docs/REVIEW.md](docs/REVIEW.md) | Code review of this branch |
 | [CHANGELOG.md](CHANGELOG.md) | Unreleased changes (no published Release yet) |
 | [tests/README.md](tests/README.md) | Test and release-verifier notes |
+| [docs/README-legacy.md](docs/README-legacy.md) | Pre-refresh long-form README (archived) |
 
 ## Acknowledgements
 

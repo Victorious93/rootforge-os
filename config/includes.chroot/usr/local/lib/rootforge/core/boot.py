@@ -260,6 +260,11 @@ def cmd_repack(work_dir: str) -> int:
 def cmd_patch(work_dir: str, ramdisk: str, cpio_commands: List[str]) -> int:
     work_path = Path(work_dir)
     ramdisk_path = work_path / ramdisk
+    try:
+        ramdisk_path.resolve().relative_to(work_path.resolve())
+    except ValueError:
+        print(f"{ramdisk} resolves outside {work_path}; refusing to patch a file that is not part of this unpack.")
+        return 1
     if not ramdisk_path.is_file():
         print(f"{ramdisk_path} not found — run `rootforge boot unpack` first.")
         return 1

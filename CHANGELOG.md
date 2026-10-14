@@ -5,6 +5,50 @@ published GitHub Release; entries below are under **Unreleased** until one is cu
 Nothing here has been validated on real hardware, a booted ISO, a VM or a phone; see
 `docs/PLATFORM_SUPPORT.md`.
 
+## Unreleased — 2026-10-14 (toolkit clients)
+
+### Linux / Windows desktop and Docker
+- Shared Kotlin `:core` (flash planner, module builder, approvals, bridge
+  protocol, `adb devices` parser) used by the Android APK and a Compose
+  Multiplatform `:desktop` app. Desktop drives **host** `adb`/`fastboot`/`edl`,
+  not the USB-Host wire protocol.
+- Headless mode: `./gradlew :desktop:run --args='--headless --port 8787'`
+  (127.0.0.1, bearer token). Optional web UI at `/`.
+- `docker/Dockerfile` packages the CLI plus the same API. USB passthrough
+  documented (`--device /dev/bus/usb`, `--privileged`).
+- CI: `.github/workflows/toolkit.yml` uploads Linux `.deb`, Windows `.exe`,
+  and a `docker save` tarball. **Not run against a phone.**
+
+## Unreleased — 2026-10-14
+
+### Android host-phone app
+- New `android-app/`: Material 3 toolkit APK. Host phone talks to a target over
+  USB-C using the USB Host API and a pure-Kotlin ADB / fastboot / Sahara stack.
+  Module zip builder, Magisk/KernelSU/APatch patching workflow (the manager app
+  on the target does the patch; this app moves images), typed confirmations for
+  writes. droidcommand-ai integration is a bound Messenger service speaking the
+  same JSON envelope as `core-rootforge` (`docs/DROIDCOMMAND_INTEGRATION.md`).
+  Compiles locally; protocol tests and Paparazzi snapshots pass; **not run on a
+  phone**.
+
+### Bugfixes (hermetic)
+- `boot cpio` refuses a ramdisk path that leaves the unpack directory.
+- Module display names and `brain new` titles cannot inject extra keys via newlines.
+- Adb+fastboot serial lists are deduplicated (CLI devices list and fleet).
+- A truncated cached ADBKeyboard APK is discarded instead of installed.
+- Fleet treats flash exit 4 as "written, boot unverified" rather than FAIL.
+- Live-groups unit adds `rootforge` to kvm/plugdev/docker, not `user`.
+- Chroot rootfs hostname/motd no longer claim to be unrooted PRoot.
+- Scaffolded Magisk `update-binary` sources `util_functions.sh` and calls
+  `install_module`.
+- Desktop launcher `--start` test no longer fails on a host that has XFCE.
+
+### Docs
+- `docs/REVIEW.md`, `docs/ANDROID_APP.md`, `docs/DROIDCOMMAND_INTEGRATION.md`.
+  README no longer claims cryptographic signing.
+- Merged main's landing-page README (#46 / `docs/README-legacy.md` archive) and
+  kept this branch's Android app install notes, structure entry, and doc map.
+
 ## Unreleased — 2026-10-13
 
 ### OTA extract

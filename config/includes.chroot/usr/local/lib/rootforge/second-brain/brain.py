@@ -251,13 +251,16 @@ def cmd_new(args):
     folder = PARA_DIRS.get(args.into, "Inbox")
     target_dir = VAULT / folder
     target_dir.mkdir(parents=True, exist_ok=True)
-    slug = slugify(args.title)
+    # The title goes into YAML frontmatter; collapse any newline so it cannot
+    # add keys of its own.
+    title = " ".join(args.title.split())
+    slug = slugify(title)
     path = target_dir / f"{slug}.md"
     if path.exists():
         die(f"{path} already exists")
     created = time.strftime("%Y-%m-%d")
     path.write_text(
-        f"---\ntitle: {args.title}\ncreated: {created}\ntags: []\n---\n\n# {args.title}\n\n"
+        f"---\ntitle: {title}\ncreated: {created}\ntags: []\n---\n\n# {title}\n\n"
     )
     print(str(path))
 

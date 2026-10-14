@@ -121,5 +121,19 @@ class TestProperties(unittest.TestCase):
         self.assertEqual(data["properties"], {})
 
 
+class TestDedupe(unittest.TestCase):
+    def test_a_serial_in_both_adb_and_fastboot_is_one_device(self):
+        both = [
+            devices.Device("ABC", "adb", "device", True),
+            devices.Device("XYZ", "adb", "device", True),
+            devices.Device("ABC", "fastboot", "fastboot", True),
+        ]
+        with mock.patch.object(devices, "adb_devices", return_value=both[:2]), \
+                mock.patch.object(devices, "fastboot_devices", return_value=both[2:]):
+            result = devices.list_devices()
+        self.assertEqual([d.serial for d in result], ["ABC", "XYZ"])
+        self.assertEqual(result[0].mode, "fastboot")
+
+
 if __name__ == "__main__":
     unittest.main()

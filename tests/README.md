@@ -84,3 +84,6 @@ backups land there rather than in the real `~/rootforge`.
   `termux/make-release-metadata.sh`.
 - The Makefile and `auto/build` are tested with a stubbed `lb`, `id` and `losetup` (and the
   `ID_U`/`AUTO_BUILD` Makefile variables); no real live-build run happens here.
+- `tests/test_toolkit_api.py` covers `docker/api/rootforge_api.py` with a fake runner (no
+  Docker, no USB). Destructive ops without the typed confirmation phrase must not invoke
+  adb/fastboot.

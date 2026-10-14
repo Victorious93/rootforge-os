@@ -155,7 +155,7 @@ deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmwar
 deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
 deb http://deb.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
 SOURCES
-echo "rootforge-proot" > "$ROOTFS/etc/hostname"
+echo "rootforge-$FLAVOR" > "$ROOTFS/etc/hostname"
 echo "nameserver 1.1.1.1" > "$ROOTFS/etc/resolv.conf"
 
 chroot "$ROOTFS" apt-get update -q
