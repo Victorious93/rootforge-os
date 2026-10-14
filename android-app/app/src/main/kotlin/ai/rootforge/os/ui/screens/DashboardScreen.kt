@@ -48,7 +48,7 @@ fun modeColor(mode: TargetMode) = when (mode) {
 @Composable
 fun DashboardScreen(state: AppUiState, actions: AppActions) {
     ScreenColumn {
-        ForgeCard("Target device", "The phone connected to this one by USB-C", Icons.Filled.Usb) {
+        ForgeCard("Target device", state.transportCaption, Icons.Filled.Usb) {
             val link = state.link
             when (link) {
                 is LinkState.Connected -> StatusPill("Connected: ${link.mode.label}", modeColor(link.mode))
@@ -58,8 +58,10 @@ fun DashboardScreen(state: AppUiState, actions: AppActions) {
             }
             if (state.targets.isEmpty()) {
                 Text(
-                    "No USB device detected. Plug the target into this phone with a USB-C to USB-C cable, " +
-                        "then set USB debugging on the target (ADB), or hold the key combo for bootloader/EDL.",
+                    state.emptyTargetsHint ?: (
+                        "No USB device detected. Plug the target into ${state.hostCaption} with a USB-C to USB-C cable, " +
+                            "then set USB debugging on the target (ADB), or hold the key combo for bootloader/EDL."
+                        ),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

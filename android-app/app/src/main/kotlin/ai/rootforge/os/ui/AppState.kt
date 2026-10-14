@@ -33,6 +33,10 @@ data class AppUiState(
     val pending: List<CallerIdentity> = emptyList(),
     val adbFingerprint: String = "",
     val appVersion: String = "",
+    /** "this phone" on Android, "this computer" on desktop — used in empty-state copy. */
+    val hostCaption: String = "this phone",
+    val transportCaption: String = "Android USB Host API, pure Kotlin ADB, fastboot, Sahara",
+    val emptyTargetsHint: String? = null,
 )
 
 /** Every user-triggerable action. The real implementation talks to the target; the preview one does nothing. */

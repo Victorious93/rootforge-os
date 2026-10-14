@@ -67,7 +67,7 @@ class FlashPlannerTest {
 
     @Test
     fun parseVarLineStripsTheBootloaderPrefix() {
-        assertEquals("unlocked" to "yes", FastbootClient.parseVarLine("(bootloader) unlocked: yes"))
-        assertEquals(256L * 1024 * 1024, FastbootClient.parseNumber("0x10000000"))
+        assertEquals("unlocked" to "yes", FlashPlanner.parseVarLine("(bootloader) unlocked: yes"))
+        assertEquals(256L * 1024 * 1024, FlashPlanner.parseNumber("0x10000000"))
     }
 }

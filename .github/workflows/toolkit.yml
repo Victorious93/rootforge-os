@@ -1,0 +1,150 @@
+# RootForge OS — Linux/Windows desktop packages and the toolkit Docker image.
+#
+# Desktop packaging uses Compose Multiplatform (jpackage). The Android :app
+# module is in the same Gradle build, so the Android SDK is still required
+# to configure the project even when we only package :desktop.
+#
+# Nothing here talks to a phone. USB passthrough for the Docker image is
+# documented in docker/README.md and is a run-time concern.
+
+name: Toolkit packages
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  linux-desktop:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: android-app/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # Google no longer serves the obsolete `tools` package; v3 still
+          # defaults to installing it and fails with "Failed to find package 'tools'".
+          packages: 'platform-tools'
+
+      - name: Packaging tools
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends fakeroot binutils
+
+      - name: Core tests and Linux packages
+        run: ./gradlew :core:test :desktop:packageDeb :desktop:packageAppImage :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace
+
+      - name: Upload Linux .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootforge-os-linux-deb
+          path: android-app/desktop/build/compose/binaries/**/deb/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootforge-os-linux-appimage
+          path: android-app/desktop/build/compose/binaries/**/appimage/*.AppImage
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Linux portable app dir
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootforge-os-linux-app
+          path: android-app/desktop/build/compose/binaries/**/app/**
+          if-no-files-found: error
+          retention-days: 14
+
+  windows-desktop:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: android-app/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Windows packages
+        run: ./gradlew :desktop:packageExe :desktop:packageMsi :desktop:packageDistributionForCurrentOS --no-daemon --stacktrace
+
+      - name: Upload Windows .exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootforge-os-windows-exe
+          path: android-app/desktop/build/compose/binaries/**/exe/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Windows .msi
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootforge-os-windows-msi
+          path: android-app/desktop/build/compose/binaries/**/msi/*.msi
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Windows portable app dir
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootforge-os-windows-app
+          path: android-app/desktop/build/compose/binaries/**/app/**
+          if-no-files-found: error
+          retention-days: 14
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build toolkit image
+        run: docker build -f docker/Dockerfile -t rootforge-os-toolkit:ci .
+
+      - name: Smoke the API (no USB)
+        run: |
+          set -euo pipefail
+          token="ci-token"
+          cid="$(docker run -d -e ROOTFORGE_API_TOKEN="$token" -p 127.0.0.1:8787:8787 rootforge-os-toolkit:ci)"
+          cleanup() { docker logs "$cid" || true; docker rm -f "$cid" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://127.0.0.1:8787/health | grep -q '"ok": true\|"ok":true'; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8787/health
+          docker exec "$cid" rootforge --help >/dev/null
+          docker save rootforge-os-toolkit:ci | gzip > /tmp/rootforge-os-toolkit.tar.gz
+
+      - name: Upload Docker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootforge-os-toolkit-docker
+          path: /tmp/rootforge-os-toolkit.tar.gz
+          if-no-files-found: error
+          retention-days: 14

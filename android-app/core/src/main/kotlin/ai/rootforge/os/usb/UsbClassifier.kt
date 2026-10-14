@@ -12,6 +12,22 @@ data class UsbIfaceInfo(val id: Int, val usbClass: Int, val subclass: Int, val p
 
 data class UsbClassification(val mode: TargetMode, val interfaceId: Int?)
 
+/** A device attached to the host, as shown on the dashboard. */
+data class AttachedTarget(
+    val deviceName: String,
+    val vendorId: Int,
+    val productId: Int,
+    val mode: TargetMode,
+    val interfaceId: Int?,
+    val hasPermission: Boolean,
+    val serial: String?,
+    val product: String?,
+    val manufacturer: String?,
+) {
+    val vidPid: String get() = "%04x:%04x".format(vendorId, productId)
+    val displayName: String get() = listOfNotNull(manufacturer, product).joinToString(" ").ifBlank { serial ?: vidPid }
+}
+
 /**
  * Pure descriptor matching, kept free of android.hardware.usb so it is unit
  * tested. ADB is vendor-class 0xFF/0x42/0x01, fastboot 0xFF/0x42/0x03; the

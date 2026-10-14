@@ -11,18 +11,22 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-14 · **Branch:** `cursor/android-app-and-review-6b76` (from `main` at
-`cec7f7e`) · **Phase:** active development; ISO/VM/hardware validation **blocked** on
-infrastructure. Android host-phone APK compiles locally; not run on a device.
+**Last updated:** 2026-10-14 · **Branch:** `cursor/linux-windows-docker-f6fd` (from `main` at
+`a772d0f`, which includes merged PR #48) · **Phase:** active development; ISO/VM/hardware
+validation **blocked** on infrastructure. Android host-phone APK is on `main`; Linux/Windows
+desktop + Docker toolkit are this branch. Not run on a device.
 
 **What is true now** (each verified by running it this session unless marked):
-- `bash tests/run-tests.sh` → 1009 shell + 367 Python, 0 failed (desktop launcher test no
-  longer depends on the host lacking `xfce4-session`). `bash tests/lint.sh` → clean with
+- `bash tests/run-tests.sh` → 1010 passed, 0 failed (Python unittest reported 375 tests in
+  1.559s, including `tests/test_toolkit_api.py`). `bash tests/lint.sh` → clean with
   shellcheck 0.9.0. GitHub `Lint` was green on `main` at `cec7f7e`.
-- `cd android-app && ./gradlew :app:assembleDebug :app:testDebugUnitTest` → debug APK at
-  `android-app/app/build/outputs/apk/debug/app-debug.apk` (also copied to
-  `artifacts/rootforge-os-debug.apk` locally, gitignored). Protocol/planner/module/bridge
-  tests + Paparazzi snapshots pass. **Not installed on a phone, not exercised over USB.**
+- `cd android-app && ./gradlew :core:test :app:assembleDebug :app:testDebugUnitTest :desktop:compileKotlin`
+  → BUILD SUCCESSFUL. `:core` 48 tests, `:app` 19 tests (protocol + Paparazzi), 0 failed.
+  Debug APK at `android-app/app/build/outputs/apk/debug/app-debug.apk`. **Not installed on a
+  phone, not exercised over USB.**
+- `./gradlew :desktop:packageDeb` → `android-app/desktop/build/compose/binaries/main/deb/rootforgeos_0.1.0-1_amd64.deb`
+  (local, gitignored). Windows `.exe`/`.msi` not built here. Docker image **not** built
+  (`docker` is not installed on this agent). **Not run against a PC/phone pair.**
 - `extract_ota.sh` / `rootforge ota extract` count an image as produced only when this run
   created or replaced it. A reused output directory used to make an empty dump exit 0, and the
   CLI hashed a leftover `*.img` as if it had come from the payload just extracted.
@@ -32,16 +36,21 @@ infrastructure. Android host-phone APK compiles locally; not run on a device.
   Termux verified install + per-release metadata generation + CPU-honest SDK bootstrap,
   Makefile/`auto/build` failure handling, release-asset verifier, release workflow gating.
 - **Not run anywhere:** `lb build` (no loop device), ISO boot, Calamares install, systemd
-  first boot, real devices, a phone, `release.yml` (it only runs on `v*` tags or manual
-  dispatch; merging did not trigger it).
+  first boot, real devices, a phone, a desktop USB session, `docker build -f docker/Dockerfile`,
+  `release.yml` (it only runs on `v*` tags or manual dispatch; merging did not trigger it).
+  PR #49 Toolkit CI (run 38523858203) after the `packages: platform-tools` fix: Lint,
+  linux-desktop, windows-desktop, and docker all green. `android-apk.yml` still does
+  not produce jobs on this repo's PRs (0-second empty runs even on the #48 merge to
+  main); APK was built locally, not by that workflow.
 - **Known unpinned:** Ollama installer (hook 0020). Claude Code's native npm dependency.
   Nothing is signed.
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
-  administration. Android host-phone GUI APK is on this branch (USB Host, not Termux).
-  Linux/Windows desktop and Docker toolkit images are next on this same branch. No GitHub
-  Release exists (tags `v0.1.0`, `v0.1.1` only), so the Termux install paths need a locally
-  generated or future release.
-- Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`.
+  administration. Android host-phone GUI APK is on `main` (USB Host, not Termux).
+  Linux/Windows desktop (`android-app/desktop`) and Docker toolkit (`docker/`) are on this
+  branch. No GitHub Release exists (tags `v0.1.0`, `v0.1.1` only), so the Termux install
+  paths need a locally generated or future release.
+- Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
+  Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`.
 
 **Incident worth remembering:** merge `b02e7c4` silently reverted six build hooks to a flavour
 that defined SHA-256 pins and never compared them (one also used an undefined variable),
@@ -55,9 +64,8 @@ the check.**
 2. Extend the config schema only where a script consumes a key (Stage 3). Done: shared execution ID, `0600` script logs redacted at exit and by the CLI (pattern-based; SIGKILL outside the CLI and unrecognised secret shapes are the known gaps), and CLI-side audit events for `flash`/`backup`/`module`/`avd`/`boot patch`/`boot flash-last`.
 3. Pin/replace the Ollama installer; add release signing (Stage 4).
 4. Run the flash/backup/restore contract against a test device the owner agrees to flash.
-The owner asked for the Android GUI APK (and then Linux/Windows/Docker) on this
-branch; that overrides the earlier "do not start Stage 6" line. ISO Stage 5 is still
-blocked and is still the next hardware task.
+The Android GUI APK landed in PR #48. Linux/Windows/Docker toolkit clients are this
+branch. ISO Stage 5 is still blocked and is still the next hardware task.
 
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed
 from `docs/ARCHITECTURE_AUDIT.md`; the "governing directive" it cites was never found in the

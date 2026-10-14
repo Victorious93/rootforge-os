@@ -2,6 +2,7 @@ package ai.rootforge.os
 
 import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.core.LibraryFile
+import ai.rootforge.os.core.importUri
 import ai.rootforge.os.core.TerminalCommand
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.module.BuiltModule
@@ -36,7 +37,7 @@ class AppActionsImpl(
         pickDocument { uri ->
             if (uri == null) return@pickDocument
             scope.launch {
-                runCatching { withContext(Dispatchers.IO) { app.library.import(app, uri) } }
+                runCatching { withContext(Dispatchers.IO) { app.library.importUri(app, uri) } }
                     .onSuccess { log.info("Imported ${it.name}"); then(it) }
                     .onFailure { log.error("Import failed: ${it.message}") }
             }

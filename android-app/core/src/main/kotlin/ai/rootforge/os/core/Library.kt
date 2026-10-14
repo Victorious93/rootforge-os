@@ -1,13 +1,11 @@
 package ai.rootforge.os.core
 
-import android.content.Context
-import android.net.Uri
-import android.provider.OpenableColumns
 import java.io.File
+import java.io.IOException
+import java.io.InputStream
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.io.IOException
 
 data class LibraryFile(val name: String, val file: File) {
     val size: Long get() = file.length()
@@ -49,29 +47,29 @@ class Library(private val dir: File) {
         return File(dir, clean)
     }
 
-    fun import(context: Context, uri: Uri): LibraryFile {
-        val name = sanitize(displayName(context, uri) ?: "import-${System.currentTimeMillis()}")
+    fun importStream(suggestedName: String, input: InputStream): LibraryFile {
+        val name = sanitize(suggestedName.ifBlank { "import-${System.currentTimeMillis()}" })
         val target = fileFor(name)
         val tmp = File(dir, "$name.part")
-        context.contentResolver.openInputStream(uri).use { input ->
-            if (input == null) throw IOException("Cannot open the selected file")
+        try {
             tmp.outputStream().use { input.copyTo(it) }
-        }
-        if (!tmp.renameTo(target)) {
+            if (!tmp.renameTo(target)) {
+                tmp.delete()
+                throw IOException("Could not store $name")
+            }
+        } catch (e: Exception) {
             tmp.delete()
-            throw IOException("Could not store $name")
+            throw e
         }
         refresh()
         return LibraryFile(name, target)
     }
 
-    private fun displayName(context: Context, uri: Uri): String? =
-        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
-            if (it.moveToFirst()) it.getString(0) else null
-        } ?: uri.lastPathSegment
+    fun importFile(source: File): LibraryFile =
+        source.inputStream().use { importStream(source.name, it) }
 
     companion object {
         fun sanitize(name: String): String =
-            name.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_").trimStart('.').take(96)
+            name.substringAfterLast('/').substringAfterLast('\\').replace(Regex("[^A-Za-z0-9._-]"), "_").trimStart('.').take(96)
     }
 }

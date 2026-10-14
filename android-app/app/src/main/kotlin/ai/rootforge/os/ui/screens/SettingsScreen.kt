@@ -61,7 +61,7 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
         ForgeCard("About", icon = Icons.Filled.Info) {
             KeyValueRow("Version", state.appVersion)
             KeyValueRow("Network", "No internet permission is requested")
-            KeyValueRow("USB", "Android USB Host API, pure Kotlin ADB, fastboot, Sahara")
+            KeyValueRow("USB", state.transportCaption)
             Text(
                 "Known limits: EDL is experimental and unverified on hardware; oversized non-sparse images are refused; " +
                     "ADB uses classic shell (no exit status framing); sideload needs a seekable file. See docs/ANDROID_APP.md.",

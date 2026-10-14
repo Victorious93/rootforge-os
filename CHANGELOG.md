@@ -5,6 +5,20 @@ published GitHub Release; entries below are under **Unreleased** until one is cu
 Nothing here has been validated on real hardware, a booted ISO, a VM or a phone; see
 `docs/PLATFORM_SUPPORT.md`.
 
+## Unreleased — 2026-10-14 (toolkit clients)
+
+### Linux / Windows desktop and Docker
+- Shared Kotlin `:core` (flash planner, module builder, approvals, bridge
+  protocol, `adb devices` parser) used by the Android APK and a Compose
+  Multiplatform `:desktop` app. Desktop drives **host** `adb`/`fastboot`/`edl`,
+  not the USB-Host wire protocol.
+- Headless mode: `./gradlew :desktop:run --args='--headless --port 8787'`
+  (127.0.0.1, bearer token). Optional web UI at `/`.
+- `docker/Dockerfile` packages the CLI plus the same API. USB passthrough
+  documented (`--device /dev/bus/usb`, `--privileged`).
+- CI: `.github/workflows/toolkit.yml` uploads Linux `.deb`, Windows `.exe`,
+  and a `docker save` tarball. **Not run against a phone.**
+
 ## Unreleased — 2026-10-14
 
 ### Android host-phone app

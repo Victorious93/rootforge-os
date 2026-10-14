@@ -157,23 +157,9 @@ class FastbootClient(private val transport: BulkTransport) : Closeable {
             require(PARTITION.matches(name)) { "'$name' is not a plausible partition name" }
         }
 
-        fun parseVarLine(line: String): Pair<String, String>? {
-            val body = line.removePrefix("(bootloader)").trim()
-            val i = body.indexOf(':')
-            if (i <= 0) return null
-            return body.substring(0, i).trim() to body.substring(i + 1).trim()
-        }
+        fun parseVarLine(line: String): Pair<String, String>? = FlashPlanner.parseVarLine(line)
 
-        fun parseNumber(text: String?): Long? {
-            val t = text?.trim().orEmpty()
-            return if (t.startsWith("0x", ignoreCase = true)) t.substring(2).toLongOrNull(16) else t.toLongOrNull()
-        }
+        fun parseNumber(text: String?): Long? = FlashPlanner.parseNumber(text)
     }
 }
 
-enum class RebootTarget(val label: String, val command: String) {
-    SYSTEM("System", "reboot"),
-    BOOTLOADER("Bootloader", "reboot-bootloader"),
-    RECOVERY("Recovery", "reboot-recovery"),
-    FASTBOOTD("Fastbootd", "reboot-fastboot"),
-}
