@@ -1,662 +1,184 @@
-# RootForge OS — A Debian-Based Distro for Android Root Module Development
-
 <p align="center">
   <img src="assets/logo/rootforge-os-logo.jpg" alt="RootForge OS logo" width="240">
 </p>
 
+# RootForge OS
+
+**A Debian 12–based live/install distro and Termux rootfs toolkit for Android root-module development (Magisk, KernelSU, APatch), boot-image work, and device automation.**
+
 **Victorious Framework — Origin Source Labs**
-Status: Active project and build guide — the repository includes a Debian live-build implementation; ISO production requires the documented build host and has not been independently verified here.
 
----
+[![Base](https://img.shields.io/badge/base-Debian%2012%20(Bookworm)-A81D33)](https://www.debian.org/)
+[![Build](https://img.shields.io/badge/build-live--build-informational)](BUILD.md)
+[![CLI](https://img.shields.io/badge/CLI-rootforge-black)](#unified-cli)
+![Status](https://img.shields.io/badge/status-active%20·%20ISO%20unverified%20here-orange)
 
-## 🚀 Introducing RootForge-OS
+> **Honesty first:** this repository contains a full Debian `live-build` tree, automation scripts, tests, and Termux/PRoot packaging. **ISO production, booting, Calamares install, and on-phone rootfs use have not been independently verified in the environment that last updated these docs** (no loop device / no published GitHub Release assets as of 2026-10-07). Tags `v0.1.0` / `v0.1.1` exist; no published Release yet. See [BUILD.md](BUILD.md) and [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md). Artifacts carry a `Victorious Framework` footer; **nothing is cryptographically signed** — see [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md).
 
-Android gives you a powerful device. RootForge-OS is about giving you more control over it.
+## Overview
 
-RootForge-OS is an Android-focused project built around root access, customization, automation, privacy, and deeper system control—with the goal of turning your device into something you can actually shape around the way you use it.
+RootForge OS targets people building and testing Android root modules and boot images:
 
-This isn't about adding a few tweaks and calling it an OS.
+1. **Host ISO (x86_64 primary)** — Debian live image with GNOME + Calamares, Android SDK/NDK tooling (mostly first-boot), kernel/boot-image toolchain (magiskboot, avbtool, cross compilers), Magisk/KernelSU-oriented scripts, rooted/unrooted AVD helpers, OTA extraction, backups, and a unified `rootforge` CLI.
+2. **On-device Debian rootfs (Termux)** — PRoot (unrooted) and chroot (rooted) flavours, optional XFCE via Termux:X11 — same project scripts where the Android kernel allows.
+3. **Host-phone Android app** — `android-app/` is a Material 3 toolkit APK that runs on one phone and controls a **target** phone over a USB-C cable (USB Host API, pure-Kotlin ADB/fastboot/Sahara). Not a Termux fork. Compiles and has hermetic protocol tests; **not run on a real host/target pair.** See [docs/ANDROID_APP.md](docs/ANDROID_APP.md).
 
-It's about building a foundation for a more capable Android experience:
+It does **not** claim a single unlock/root script for every OEM. Unlock/flash flows detect vendor constraints (Samsung/Xiaomi/etc.) and refuse to guess. Live ISO boot is **BIOS/isolinux only**; UEFI/Secure Boot are unsupported/unverified.
 
-- 🔓 Root & advanced system control
-- ⚙️ Deep customization
-- 🤖 Automation & scripting
-- 🛠️ Developer-focused tools
-- 🔐 Privacy & security
-- 📱 Device-level control
-- 🧩 Modular architecture
-- 🚀 Built for experimentation and power users
+## Features
 
-RootForge-OS is for people who don't want their hardware to dictate what their software can do.
+Grounded in `config/`, `termux/`, `android-app/`, and the `rootforge` CLI (see also section-level detail in the long-form docs under `docs/`):
 
-This is just the beginning.
+- **Live + installable Debian** — GNOME session, Calamares (erase / alongside / manual), system manifest for build provenance
+- **Unified CLI** — `rootforge` groups: `doctor`, `devices`, `device`, `config`, `flash`, `backup`, `module`, `boot`, `ota`, `avd`
+- **Module workflow** — Magisk/KernelSU(+APatch) scaffolds, package/push/install helpers, linting, Zygisk header templates
+- **Boot & flash safety** — `device check` go/no-go, typed `FLASH <serial>` confirmation, slot-aware fastboot, audit logs + secret redaction
+- **Backups** — partition backup/restore with `manifest.json`, verify/import-legacy paths
+- **OTA / firmware** — extract/inspect helpers (payload-dumper-go pinned in image hooks)
+- **AVD helpers** — create/list/start rooted or unrooted profiles (x86_64 host + KVM; not available on phone arm64)
+- **AI tooling hooks** — Node 22, Claude Code (pinned), Ollama installer (unpinned — see BUILD.md), `brain` second-brain CLI
+- **Termux delivery** — `termux/build-rootfs.sh` for proot/chroot (± X11); digest-required installers generated per release
+- **Host-phone toolkit APK** — ADB, fastboot, EDL, Magisk/KernelSU/APatch patching workflow, module zip builder, recovery install, logs/terminal; typed confirmation on writes; droidcommand-ai bridge ([docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md))
+- **CI & tests** — lint/unit/static hook checks; `android-apk.yml` builds the debug APK; `release.yml` builds ISO + rootfs assets into a **draft** release after verification
 
-Follow the project as RootForge-OS evolves from an idea into a full platform.
+## Screenshots
 
-Build it. Control it. Make Android yours.
+| Live GNOME desktop | Calamares installer | `rootforge doctor` | Module scaffold tree | Termux PRoot login | XFCE on Termux:X11 |
+|---|---|---|---|---|---|
+| *TODO* | *TODO* | *TODO* | *TODO* | *TODO* | *TODO* |
 
----
+Capture only after a real boot/install; do not mock device serials or secrets in audit log screenshots.
 
-## 0. The assumption worth surfacing first
+Paparazzi screenshots of the host-phone app (not a real phone): `android-app/screenshots/`.
 
-**[Certain]** A single automated "unlock and root" script cannot work uniformly across OEMs. Pixel, OnePlus, and most Nexus-lineage devices unlock via `fastboot flashing unlock` / `fastboot oem unlock`. Samsung uses Download Mode and Knox, not fastboot, and Knox trips permanently on unlock — no script fixes that. Xiaomi requires an OEM-approved unlock permit tied to account and a wait timer. **[Likely]** the more valuable design is a distro that auto-detects the vendor and either runs the correct fastboot sequence or tells you which out-of-band tool (Odin, Mi Unlock, MSM tool) is required, rather than one that pretends every device is a Pixel. The scripts below are written that way.
+## Requirements
 
-**[Certain]** The other unstated variable is host CPU architecture. KVM-accelerated emulation is fast and simple on an x86_64 host running x86_64/x86 system images. If RootForge OS itself runs on ARM64 hardware (e.g., an ARM SBC or Apple Silicon VM), you lose native KVM emulator acceleration for x86 images and need ARM64 system images plus nested virtualization support from the host hypervisor. The spec below defaults to **x86_64 host**, since that's the versatile, best-supported target for both Android Studio's emulator and Magisk/kernel cross-compilation toolchains. If you're building this for an ARM64 SBC specifically, say so and the toolchain selections change.
+### Build host (ISO)
 
----
+- Debian 12 or Ubuntu 22.04+
+- Packages: `live-build`, `debootstrap`, `squashfs-tools`, `xorriso`, `isolinux`, `syslinux-utils`
+- Root, free loop device, **≥ 20 GB** disk, **≥ 4 GB** RAM (16 GB+ recommended if you will also run emulators + kernel builds)
+- Details: [BUILD.md](BUILD.md)
 
-## 1. Identity
+### Runtime (installed system)
 
-- **Name:** RootForge OS
-- **Base:** Debian 12 (Bookworm), minimal netinst base + custom meta-package
-- **Target host arch:** x86_64 (primary), arm64 (secondary profile, KVM caveats noted throughout)
-- **Desktop:** GNOME (GNOME Shell + GDM3) — **[Likely]** this is the heavier choice versus XFCE when the same box also needs headroom for an accelerated emulator plus a kernel build running concurrently; budget accordingly (16GB+ RAM recommended over the 8GB that would be fine under XFCE) — swappable for a WM-only headless profile for CI/build-server use
-- **Install path:** boots to a live session, then offers an on-disk installer (Calamares) with the same "erase disk / install alongside existing OS / manual partitioning" choice Ubuntu's own installer gives you — see section 14
-- **Branded artifacts (not cryptographically signed):** every module, script, and image this distro produces carries a `Victorious Framework` footer in its metadata. Nothing is signed; see `docs/SECURITY_MODEL.md`.
-- **Build provenance:** every ISO carries `/usr/local/share/rootforge/system-manifest.json` — the git commit/branch it was built from, every installed package's version, and a SHA-256 per build-time-fetched artifact (from the hooks that verify a pinned digest and record it; the Ollama installer, NodeSource repository and Claude Code npm package are fetched without a pinned digest and are not in this list) — so a given image's actual contents can be checked against what it claims to be, after the fact.
-- **Unified CLI:** `rootforge` (`/usr/local/bin/rootforge`) wraps the project command scripts. Its current command groups are `doctor`, `devices`, `device`, `config`, `flash`, `backup`, `module`, `boot`, `ota`, and `avd`. See `rootforge --help` and each group's `--help` for the implemented commands; module scaffolding is `rootforge module scaffold` (section 12). Existing scripts under `/usr/local/bin/` remain usable on their own.
-- **Host-phone Android app:** `android-app/` is a Material 3 toolkit APK that runs on one phone and controls a second phone over a USB-C cable (USB Host API, pure-Kotlin ADB/fastboot/Sahara). Not a Termux fork. See section 19 and `docs/ANDROID_APP.md`.
+- x86_64 machine (arm64 secondary profile has emulator/KVM caveats)
+- For Android emulator acceleration: `/dev/kvm`, user in `kvm` group
 
-## 2. Core package stack
+### Termux rootfs
 
-**Android Studio & SDK layer**
-- `openjdk-17-jdk` (Android Gradle Plugin 8.x baseline)
-- Android Studio (installed via official tarball, not apt — Google doesn't ship a Debian repo)
-- `cmdline-tools`, `platform-tools`, `build-tools;<latest>`, `emulator`, `ndk;<LTS>` via `sdkmanager`
-- `qemu-kvm`, `libvirt-daemon-system`, `virtinst`, `bridge-utils` — KVM acceleration backend for the emulator
-- `gradle` (standalone, for Magisk/module builds outside Studio's wrapper when needed)
+- Termux on device; `proot-distro` for unrooted flavour; root/`su` for chroot flavour
+- Multi-GB free storage; optional Termux:X11 app for desktop
 
-**Kernel & boot-image toolchain (the part Android Studio doesn't give you)**
-- `clang`, `lld`, `llvm`, `binutils-aarch64-linux-gnu`, `gcc-aarch64-linux-gnu` — AOSP kernel builds since ~Android 11 use Clang/LLVM primarily, with GNU binutils as fallback for older trees
-- `bc`, `bison`, `flex`, `libssl-dev`, `libelf-dev`, `dwarves` (for `pahole`/BTF), `cpio`, `rsync`, `kmod`
-- `repo` (Google's manifest tool) + `git` for pulling AOSP/kernel/device trees
-- **magiskboot** — built from Magisk source (`native/src/boot`), used for unpacking/repacking boot.img, ramdisk cpio manipulation, and dtb extraction
-- **avbtool** (from AOSP `external/avb`) — for re-signing vbmeta after patching boot/init_boot, or disabling verification on eng builds
-- **mkbootimg / unpackbootimg** (AOSP `system/tools/mkbootimg`) — header version 3/4 aware, since modern devices split `boot.img` and `init_boot.img`
-- `abootimg`, `simg2img`, `img2simg` — sparse image conversion, legacy boot.img handling
+### Host-phone Android app
 
-**Root frameworks — build from source, not just installed as APKs**
-- **Magisk**: full source checkout (`topjohnwu/Magisk`), built via Gradle + NDK. RootForge keeps a pinned known-good NDK version alongside the SDK-managed one, since Magisk's native build occasionally lags the latest NDK.
-- **KernelSU**: kernel-integrated, so the distro's real job here is a repeatable kernel build environment — device kernel source + KernelSU as a kernel module/patch, `susfs4ksu` if you're building against a device that needs syscall hooking hidden from detection, correct `.config` fragment merging (`ARCH=arm64`, `CONFIG_KSU=y`, and whatever KMI/GKI constraints the target kernel enforces)
-- **APatch** (optional third framework) — kernel-based like KernelSU but with its own patch mechanism; worth including as an alternate build target since module compatibility between the three frameworks isn't identical
+- A phone with **USB Host / OTG** hardware (the APK declares `android.hardware.usb.host` as required)
+- USB-C to USB-C **data** cable (charge-only cables enumerate nothing)
+- Android SDK (or CI) to build: JDK 17+, `ANDROID_HOME`, then `cd android-app && ./gradlew :app:assembleDebug`
 
-**Signing & verification**
-- `apksigner`, `zipalign` (from build-tools)
-- `openssl` for AVB key generation
-- A local **test signing keyring** kept separate from any production keys — RootForge should never accidentally use a "real" release key on a dev box
+## Build
 
-**Toolkit script dependencies** (backing sections 8–13)
-- `jq` — GitHub release API parsing for `install_lsposed.sh` and `extract_ota.sh`'s self-installing `payload-dumper-go` fetch
-- `docker.io` — isolated NDK/API version-matrix builds (`build_matrix.sh`); invoking user added to the `docker` group by the bootstrap script
-- `e2fsprogs` — ext4 loopback mounting for `inspect_partition_image.sh`
+```bash
+git clone https://github.com/Victorious93/rootforge-os.git
+cd rootforge-os
 
-## 3. Root module development environment
+# Static checks (no root)
+./tests/run-tests.sh
+./tests/lint.sh
 
-A Magisk/KernelSU module is fundamentally a zip with a specific directory layout and a small set of lifecycle scripts. RootForge's job is to make the edit → package → push → test → logcat loop as short as possible.
-
-**Module skeleton** (see `config/includes.chroot/usr/local/bin/new_module_scaffold.sh`):
-```
-module_name/
-├── META-INF/com/google/android/{update-binary,updater-script}   # boilerplate, don't touch
-├── module.prop            # id, name, version, versionCode, author, description
-├── customize.sh           # optional install-time logic
-├── post-fs-data.sh        # early-boot, before /data is fully mounted — for mount/bind tricks
-├── service.sh             # late-start, general daemon/hook logic
-├── system.prop            # prop overlay, applied at boot
-├── sepolicy.rule           # optional custom SELinux policy additions (Magisk 24+)
-├── system/                # files here overlay onto /system via magic mount
-└── webroot/                # optional Magisk WebUI X interface (index.html + JS)
+# ISO (as root on a suitable host)
+sudo make build
+# → rootforge-os-amd64.hybrid.iso (+ .sha256 when using make)
 ```
 
-**Zygisk modules** get a `zygisk/<arch>.so` in addition to the above, compiled from a native `.cpp` module against the Zygisk NDK API — RootForge's Studio install should have the Zygisk API headers vendored into a template project so you're not hunting for them each time.
+Termux rootfs examples:
 
-**KernelSU modules** use the same `module.prop`/lifecycle-script convention as Magisk (KernelSU's manager deliberately mirrors it), but *cannot* rely on Zygisk — KernelSU has no Zygisk implementation itself unless paired with an overlay like `zygisksu`. RootForge's scaffolding tool asks which framework you're targeting and drops the correct template, including the zygisksu overlay wiring if you want Zygisk-style hooking under KernelSU.
-
-**Testing loop:** `config/includes.chroot/usr/local/bin/build_magisk_module.sh` packages the zip, `adb push`es it to `/data/local/tmp`, and drives the framework's CLI (`magisk --install-module` or KernelSU's `ksud module install`) instead of requiring you to tap through the manager app UI every iteration. Combine with `adb logcat -s Magisk:* KernelSU:*` for boot-script debugging.
-
-## 4. Bootloader unlock & rooting automation
-
-Three scripts, deliberately separated because they're destructive operations you want to reason about independently rather than one script that does everything silently:
-
-- `config/includes.chroot/usr/local/bin/unlock_bootloader.sh` — detects vendor via `fastboot getvar all`, runs the correct unlock command for AOSP-standard devices (Pixel/Nexus-lineage: `fastboot flashing unlock`; older bootloaders: `fastboot oem unlock`), and **refuses to proceed** with a clear message rather than guessing on Samsung/Xiaomi/other vendors that need out-of-band tools. Requires typed confirmation before wiping data (unlocking always wipes on unlockable devices — this is a hardware/firmware guarantee, not a script choice).
-- `config/includes.chroot/usr/local/bin/flash_patched_boot.sh` (also `rootforge flash boot`) — flashes an **already patched** `boot.img`/`init_boot.img` (patching is a separate step: Magisk's app on a rooted device, `kernelsu_patch_boot.sh`, or `rootforge boot ...`). It targets one explicitly selected device, runs the same go/no-go gate as `rootforge device check`, prints the plan (device, product, slot, partition, image, size) and requires you to type `FLASH <serial>`, re-checks the device immediately before writing, writes the **explicit** slot with `fastboot --slot`, reboots, and waits for `adb` to report `sys.boot_completed`. It refuses an image that lacks the `ANDROID!` header, a partition the device does not report, an image larger than the partition, a locked bootloader, and a device whose slot layout cannot be established. **`--both-slots` is refused unless you also pass `--slots-same-build`**, an assertion that both slots hold the same build, which RootForge cannot verify. Exit codes: `0` flashed and booted, `3` blocked before any write, `4` flashed but boot not verified (or `--no-boot-check`), `5` flashed but the reboot command failed, `130` interrupted.
-- `config/includes.chroot/usr/local/bin/kernelsu_patch_boot.sh` (implemented and stub-tested; not run against a device) — for KernelSU, patches happen at the kernel/boot image level rather than via an on-device app, so this script wraps the "download/build GKI kernel with KernelSU built in → flash boot" flow for GKI (Generic Kernel Image) devices, which covers most Pixels and a growing set of Treble devices since Android 12.
-
-`rootforge device check [serial] --partition boot [--image boot.img] [--both-slots] [--expect-product ...] [--expect-slot a|b] [--json]` is the read-only go/no-go behind both flashing and restoring: it reports what was actually established about the device and exits `3` with the reasons when a write would be unsafe. It reads `fastboot getvar all` from **both** stdout and stderr (real fastboot reports on stderr), takes the bootloader state from the `unlocked` variable only (`secure` is a different thing), and treats an unknown slot layout as a blocker rather than assuming one. **[Certain]** these semantics are exercised against stubs; **[Guessing]** that they hold on every vendor's bootloader. No real device was used.
-
-Flash, unlock and backup scripts write their own logs (created `0600`) under `${ROOTFORGE_HOME:-$HOME/rootforge}/logs/`. The `rootforge` CLI additionally writes JSON-lines audit events to `rootforge-<command>-<id>.jsonl` in the same directory: start and finish (exit status, scripts run, linked script logs) for every `flash`, `backup`, `module` and `avd` command and for `boot patch` / `boot flash-last`, plus its own events for `doctor`, `ota extract` and the other `boot` subcommands. The `<id>` is the run's execution ID, which is also the first line of each script log, so the two halves of one run can be matched. Script logs and reports are redacted for credentials when the script exits (and again by the CLI after the run); this is pattern-based, so it is a safety net, not a reason to print secrets. These are local files the operator can edit; they are not tamper-evident.
-
-`rootforge boot inspect/unpack/repack/cpio/patch/verify` unifies the lower-level magiskboot/avbtool primitives these scripts already use — `unpack`/`repack` wrap `magiskboot unpack`/`repack` (`repack` needs an explicit output), `cpio` runs arbitrary `magiskboot cpio` commands against an unpacked ramdisk, `patch` runs the KernelSU patch flow of `kernelsu_patch_boot.sh`, and `verify` runs `avbtool verify_image`. Each operation records its inputs and outcome as a JSON-lines audit event (`rootforge.core.log`, secrets redacted).
-
-## 5. Emulator support — rooted and unrooted
-
-`config/includes.chroot/usr/local/bin/setup_rooted_avd.sh` generates both profiles through one interface, with the API level, device profile, ABI, and system-image tag all configurable rather than hardcoded, and auto-installs the chosen system image via `sdkmanager` if it isn't present yet:
-
-```
-setup_rooted_avd.sh create --name <avd> --mode rooted|unrooted [options]
-setup_rooted_avd.sh boot   --name <avd> [--snapshot <name>]
-setup_rooted_avd.sh list
+```bash
+sudo termux/build-rootfs.sh arm64
+sudo termux/build-rootfs.sh arm64 --flavor chroot --with-x11
 ```
 
-`create` options: `--api <level>` (default 34), `--device <profile>` (default `pixel_6`), `--abi <abi>` (default `x86_64`), `--tag <google_apis|google_apis_playstore|default|google_tv>` (default `google_apis`), `--force` to recreate an existing AVD. Every created AVD gets a profile file under `~/rootforge/avd-profiles/<name>.conf` recording how it was built, so `boot` and `list` can recall its mode without you tracking which AVDs were rooted by memory.
+Host-phone APK:
 
-**Unrooted AVDs**: a thin `avdmanager create avd` wrapper — these ship with dm-verity and won't take root without the writable-system route below.
-
-**Rooted AVDs**: `--tag google_apis_playstore` is refused outright — Play images are signed and locked in ways that resist both the writable-system trick and a ramdisk swap, so rooted mode forces a Google APIs (or `default`/`google_tv`) image. The script then:
-1. Creates the AVD (as above) and backs up its stock `ramdisk.img` to `ramdisk.img.stock` before touching it
-2. Fetches the latest Magisk release APK (cached at `~/rootforge/bin/magisk.apk`) and extracts the `magisk32`/`magisk64`/`magiskinit`/`magiskpolicy` components for the target ABI
-3. Patches `ramdisk.img` with `magiskboot cpio` — swapping `init` for `magiskinit` and staging the Magisk binaries under `overlay.d` — the same mechanism Magisk's own `boot_patch.sh` uses on a real device boot image, adapted for the emulator's separate ramdisk rather than a packed `boot.img`. **[Likely]** the exact `cpio` command list needs revisiting against Magisk's current `scripts/boot_patch.sh` if a future release changes its ramdisk layout — the script logs a note to that effect if root verification fails.
-4. Boots the emulator writable with the patched ramdisk and verifies root live with `adb shell su -c id` rather than assuming success
-5. Snapshots the booted, rooted state as `rootforge-rooted` so `setup_rooted_avd.sh boot --name <avd>` starts pre-rooted on every subsequent run instead of repeating the patch
-
-**Architecture note [Certain]:** Google publishes the Android Emulator and its Linux SDK tools for **x86-64 hosts only**; there is no Linux arm64 emulator. On an arm64 host (including the Termux/PRoot rootfs on a phone) `bootstrap_proot.sh` therefore installs only what can run there and says what it skipped; `setup_rooted_avd.sh` is for x86-64 Linux hosts.
-
-**KVM note [Certain]:** emulator acceleration requires `/dev/kvm` access — add your user to the `kvm` group and confirm with `kvm-ok` (from `cpu-checker`) before assuming acceleration is active; a silently-software-rendered emulator is the most common "why is this so slow" support question for exactly this kind of distro.
-
-`rootforge avd create/list/start` wraps `setup_rooted_avd.sh`'s own create/list/boot
-subcommands one-to-one. `stop` and `snapshot` are new — the underlying script has no
-equivalent — implemented via the emulator's standard `adb emu` console commands
-(`emu avd name` to find which running instance is the target AVD, `emu kill` to stop
-it, `emu avd snapshot save|load|list|delete <name>` for snapshots beyond the single
-`rootforge-rooted` one the rooting flow itself creates automatically).
-
-## 6. Directory & workspace convention
-
-```
-~/rootforge/
-├── devices/<codename>/          # per-device stock images, unlock notes, known-good boot.img
-│   └── backups/<timestamp>/     # pre-flash partition backups + manifest.txt
-├── modules/<module-name>/       # module source trees, one per project (incl. xposed/ Gradle projects)
-├── modules/.cache/               # cached LSPosed/tooling downloads
-├── kernels/<codename>/          # kernel source + KernelSU integration branch
-├── keys/                        # AVB / test-signing keys — chmod 700, never in modules/ 
-├── avd-profiles/<avd-name>.conf # rooted + unrooted AVD configs, written by setup_rooted_avd.sh
-├── avd-work/                    # scratch dir for ramdisk patching (magiskboot cpio work)
-├── bin/                          # self-installed tools (payload-dumper-go, magisk.apk cache, etc.)
-└── logs/                        # timestamped output from every automation script
-```
-
-`~/.rootforge/ai-keys.env` (note: dotfile, outside this tree entirely) holds the
-Claude Code / Grok API keys `setup_ai_tools.sh` writes — kept out of `~/rootforge/`
-specifically so it doesn't end up swept into a zip or backup of the workspace by
-habit. `~/second-brain/` (also a sibling, not nested under `~/rootforge/`) is a
-separate, general-purpose PARA-method notes vault — see section 15's `brain` CLI
-entry, not specific to root-module work the way everything above is.
-
-## 7. Optional hardware bench integration
-
-Since module and kernel work occasionally needs signals a fastboot cable can't give you — bootloader-level hangs before fastboot even enumerates, or debugging an EDL brick — it's worth keeping a small hand-solderable UART breakout (FTDI/CP2102 to the device's test points) on the bench, plus a Qualcomm EDL (9008) jig for Snapdragon devices where the eMMC/UFS test points are exposed pads rather than a connector. Neither requires anything beyond through-hole soldering and both are documented per-device on XDA/needrom-style device trees rather than something RootForge can generalize — worth a `devices/<codename>/hardware-notes.md` entry per device you're actively bricking and unbricking.
-
-## 8. Root-detection & stealth verification
-
-Building a module that hides successfully is a different job from building one that
-merely installs. `config/includes.chroot/usr/local/bin/check_root_detection.sh` runs the static/dynamic surface
-that real root-detection libraries check against a connected device or emulator —
-`ro.build.tags`, verified boot state, common su binary paths, default (non-hidden)
-manager package names, Magisk DenyList enforcement status, and mount-namespace leaks
-in `/proc/self/mountinfo` that indicate SUSFS hiding is needed. **[Certain]** it does
-not call the real Play Integrity API — that requires a signed app talking to Google's
-servers and can't be meaningfully scripted — but it accepts an optional checker APK
-path to sideload one you supply, if you want a live server-side read alongside the
-static checks.
-
-## 9. LSPosed / Xposed module support
-
-A large share of real-world root-adjacent development targets Zygisk-based Xposed
-hooking rather than a bare Magisk module. `config/includes.chroot/usr/local/bin/install_lsposed.sh` fetches and
-installs the latest LSPosed release the same way any other module gets installed —
-it *is* a Magisk/KernelSU module itself, wrapping the Zygisk hook framework. Because
-an actual Xposed module is a hook class inside a real APK rather than a Magisk-style
-zip, `new_module_scaffold.sh` now accepts an `xposed` target that generates a minimal
-Gradle Android project instead: manifest with the `xposedmodule`/`xposedscope`
-metadata, an `xposed_init` asset pointing at a Kotlin `IXposedHookLoadPackage` stub,
-and a `compileOnly` dependency on the Xposed API. Build it with Gradle, sideload the
-APK, then enable it per-target-app inside the LSPosed manager — LSPosed modules are
-disabled by default until toggled per-app.
-
-`new_module_scaffold.sh` also accepts `apatch` (APatch's APM module format mirrors
-Magisk's module.prop/lifecycle-script convention by design, so it reuses the same
-scaffold) and `zygisk` (same scaffold plus a `zygisk/jni/` native-lib subdirectory
-pre-wired to the `zygisk.hpp` header `0095-zygisk-headers.hook.chroot` vendors —
-build a `.so` per ABI with the NDK and place it at `zygisk/<abi>.so` before zipping;
-`lint_module.sh` checks that at least one exists). A Zygisk module built this way
-runs natively under Magisk; under KernelSU/APatch it additionally needs a
-Zygisk-API-compatible loader such as Zygisk Next installed on the device.
-
-## 10. Partition backup & restore
-
-One contract, enforced in code (`rootforge.core.backup`) and by both scripts:
-
-- `backup_partitions.sh` (`rootforge backup create <codename> [--serial S] [--partitions boot,init_boot,...]`) captures the configured partitions (config key `backup.partitions`, or `--partitions`) for **one explicitly selected device**, via `fastboot fetch` where supported or `adb` + `dd` on an already-rooted device, and writes `devices/<codename>/backups/<timestamp>/` containing the images and a **`manifest.json`** (version 1, trust `captured`) recording, per image, the partition, file, SHA-256, size, capture method and slot, plus the device product, slot and bootloader at capture time. Exit `0` complete, `4` partial (some partition could not be captured; the manifest says which), `1` failure. The last line printed is `BACKUP_DIR=<path>`.
-- `rootforge backup verify <codename> <timestamp> [--partitions ...] [--json]` re-checks every listed image against the manifest. It rejects images that are not in the manifest, symlinks, empty files, wrong sizes, wrong digests, missing files, duplicate entries and names that escape the backup directory. A backup with no manifest does not verify.
-- `restore_partitions.sh` (`rootforge backup restore <codename> <timestamp> [--partitions ...] [--accept-legacy-import]`) flashes **only verified manifest entries**, only to a device whose product and slot match the backup (`device check` with expectations), after you type `RESTORE <serial>`; it re-verifies and re-hashes immediately before writing, stops at the first failed write, and does not reboot.
-- **Legacy backups** (a `SHA256SUMS` sidecar and no manifest) are not trusted for restore. `rootforge backup import-legacy <codename> <timestamp>` converts one to a manifest with trust `legacy-imported` (device and slot unknown), which restore accepts only with `--accept-legacy-import`.
-
-Pass no timestamp to `restore_partitions.sh` to list what is available for a device.
-
-## 11. Firmware / OTA extraction
-
-`config/includes.chroot/usr/local/bin/extract_ota.sh` pulls partitions directly out of an official OTA zip or raw
-`payload.bin`, so you can get a real stock `boot.img` to patch without a physical
-device connected at all — useful for pre-building patched images for a device model
-before you have hardware in hand, or for diffing what changed between firmware
-versions. It self-installs `payload-dumper-go` from its GitHub releases on first run.
-`config/includes.chroot/usr/local/bin/inspect_partition_image.sh` complements it with a **read-only** loopback
-mount of an extracted ext4/erofs image for browsing contents without flashing
-anything — it refuses to mount anything other than `-o ro`.
-
-`rootforge ota inspect <file>` identifies an OTA input (zip vs. raw `payload.bin`,
-whether `payload.bin` sits at the zip root) without extracting anything — useful
-before committing to a full extraction. `rootforge ota extract <file> [output_dir | -o <out_dir>]
-[--partitions a,b,c]` wraps `extract_ota.sh` and records a SHA-256 per extracted
-partition image (only the requested ones; giving the output directory twice in
-conflicting ways is an error). `rootforge ota inspect-image <image>` is the
-read-only loop mount of `inspect_partition_image.sh`; before this release
-`ota inspect` was wired to that script by mistake.
-
-## 12. Module linting
-
-`config/includes.chroot/usr/local/bin/lint_module.sh` catches the two bugs that account for most "why won't this
-install" reports: a nested top-level folder in the zip (module.prop has to sit at
-zip root, not one directory down — the single most common mistake when zipping a
-module directory by hand) and CRLF line endings in the lifecycle shell scripts,
-which break the shebang parse on-device. It also validates required `module.prop`
-fields, the `id` character-set restriction, and META-INF boilerplate presence, checks
-each lifecycle script's shell syntax (`sh -n`) and — for Zygisk-target modules — that
-at least one `zygisk/<abi>.so` actually exists, and runs against either a raw module
-directory or an already-built zip. `--json` emits machine-readable findings instead
-of the human report, for CI consumption.
-
-`rootforge module scaffold/lint/build` wraps `new_module_scaffold.sh`/`lint_module.sh`/
-`build_magisk_module.sh` behind the unified CLI (`rootforge module scaffold <id> <name>
---target magisk|kernelsu|apatch|zygisk|xposed`, `rootforge module lint [--json] <path>`,
-`rootforge module build <id> [--install]`) — same underlying scripts, one entrypoint.
-
-## 13. NDK / API version-matrix builds
-
-Magisk and KernelSU native builds are sensitive to exact NDK versions in ways that
-are easy to miss testing against a single pinned toolchain on the host.
-`config/includes.chroot/opt/rootforge/docker/Dockerfile.ndk-matrix` is a parameterized image — NDK version and API level
-as build args, nothing else baked in — and `config/includes.chroot/usr/local/bin/build_matrix.sh` builds your
-project against a small default matrix of NDK/API combinations (or a custom
-`matrix.tsv`), bind-mounting the project directory into each container so nothing
-touches the host toolchain. Output is a pass/fail Markdown table with a build log
-path per combination, so a break shows up as "NDK 25.2 / API 31 failed" instead of
-a confusing report from whoever happened to test it on a different machine.
-
-## 14. Install-to-disk
-
-**[Certain]** A live-only ISO isn't what was asked for — this needs to install and
-boot the same way an existing Ubuntu installation does, so it can sit on the same
-disk as one. `live-build` ships a companion installer for exactly this: **Calamares**,
-based on `calamares-settings-debian` rather than a from-scratch config (that base is
-what MX Linux, Kali, and several other Debian derivatives already build on, so the
-partition/bootloader modules are proven rather than freshly written).
-
-The live session boots to GNOME with an "Install RootForge OS" launcher on the
-desktop, same convention as Ubuntu's Ubiquity icon. Calamares' partition module
-gives the same three choices Ubuntu's installer gives: erase the disk, install
-alongside an existing OS (auto-detected via `os-prober` — Debian ships this
-disabled by default in GRUB, RootForge turns it on specifically so an existing
-Ubuntu install shows up in the dual-boot menu instead of silently vanishing), or
-manual partitioning. The installed system is configured with `grub-efi-amd64` (and
-the signed variants), but **the live ISO this repository builds boots through
-isolinux, i.e. BIOS/legacy only** (`auto/config` explains why: live-build's GRUB
-image in this version is BIOS-only and `isohybrid` accepts only isolinux). Calamares
-chooses its install mode from the firmware the live session was booted under, so
-today's ISO installs in BIOS mode. **UEFI boot of the live ISO and Secure Boot are
-not supported and have never been verified**; see `docs/PLATFORM_SUPPORT.md`.
-
-**[Likely]** worth being explicit about: `os-prober` re-scanning at every GRUB
-update can occasionally misdetect or reorder entries on multi-OS systems — this is
-a known rough edge of the exact mechanism being relied on here, not something
-RootForge introduces. If a dual-boot menu ever looks wrong after installing,
-`sudo update-grub` re-running `os-prober` is the first thing to check, before
-assuming the install broke something.
-
-**Getting the ISO onto a USB drive:** the build is `iso-hybrid`, so the raw ISO
-file is already directly `dd`-able — no separate USB-creation tool step is
-required, on Linux or macOS. Two ways to get the ISO itself:
-
-- **Prebuilt**: download `rootforge-os-amd64.hybrid.iso` and its `.sha256` from
-  [GitHub Releases](https://github.com/Victorious93/rootforge-os/releases) —
-  `.github/workflows/release.yml` builds and attaches one on every tagged push.
-- **Build it yourself**: `sudo make build` (runs `auto/build`, then writes
-  `rootforge-os-amd64.hybrid.iso.sha256` automatically — see BUILD.md).
-
-Then flash it:
-
-```
-make list-usb                       # sanity-check which device is actually the USB drive
-sudo make flash USB=/dev/sdX        # verifies the .sha256 if present, confirms, then dd's
-```
-
-`make flash` refuses to run without a checksum match if a `.sha256` file is
-present alongside the ISO, and prints the target device's size/model from
-`lsblk` before the final confirmation window — **[Certain]** `dd` doesn't ask
-twice and doesn't know the difference between a USB stick and your boot disk,
-so that confirmation step is there on purpose; double-check `USB=` against
-`make list-usb`'s output before proceeding. On Windows, there's no `dd` —
-use [Rufus](https://rufus.ie/) or [balenaEtcher](https://www.balena.io/etcher/)
-with "DD/ISO image mode" pointed at the same ISO file; verify the downloaded
-file's SHA-256 against the published `.sha256` first either way.
-
-## 15. AI / LLM tooling (Claude Code, Grok, Ollama, Hermes)
-
-Bundled independently of the Android toolchain — useful on this box whether or not
-you're mid-module-development. Split the same way as the SDK: small, non-churny
-pieces bake into the ISO; large, personal, or frequently-changing pieces are a
-first-run script, not a build-time step.
-
-**Baked into the ISO** (small, stable): `nodejs` + `npm` (LTS from the NodeSource
-apt repo, not Debian's older packaged version, since Claude Code needs a
-reasonably current Node), the Claude Code CLI itself (`npm install -g
-@anthropic-ai/claude-code`), and the Ollama binary + systemd service (installed via
-Ollama's own install script at build time — the binary is tens of MB, not the
-multi-GB territory that pushed the Android SDK to first-boot).
-
-**First-run, not automatic** (`config/includes.chroot/usr/local/bin/setup_ai_tools.sh`): API key configuration
-is personal and shouldn't be baked into a shared image or run unattended. Beyond
-the original Claude Code (Anthropic) / Grok (xAI) prompts, the script is now a
-general key manager for any number of providers:
-
-```
-setup_ai_tools.sh add <provider> [--key KEY] [--env-var NAME] [--no-verify]
-setup_ai_tools.sh remove <provider>
-setup_ai_tools.sh list
-setup_ai_tools.sh setup [--non-interactive --anthropic-key KEY --xai-key KEY]
-```
-
-`anthropic`, `openai`, `xai`, `gemini`, `mistral`, `cohere`, `openrouter`,
-`deepseek`, `groq`, and `huggingface` are known by name — `add` picks the right
-env var and verifies the key live against the provider's real `/models`-style
-endpoint (or the closest unauthenticated-cost equivalent) before confirming it's
-good. Any other provider works too via `add <name> --env-var SOME_API_KEY`; it's
-stored the same way, just without a live check (`--no-verify` skips the check
-for a known provider too, e.g. on an offline box). Every key writes to
-`~/.rootforge/ai-keys.env`, `chmod 600`, sourced from the shell rc rather than
-exported globally in `/etc/environment` — `add`/`remove` only ever touch their
-own provider's two lines (the `export` and a `# provider:name:ENV_VAR` tracking
-comment), so keys accumulate across runs instead of the whole file getting
-overwritten. `setup_ai_tools.sh setup` (or no subcommand at all, for backward
-compatibility) still runs the original full first-boot flow: Anthropic + xAI
-prompts, the Ollama service check, AMD GPU/ROCm tuning below, a Claude Code CLI
-check, and the optional Hermes pull. **Hermes** is Nous Research's open-weight
-model family, pulled through Ollama rather than installed separately — offered
-as `ollama pull hermes3` (and lets you pick a size tag) as an explicit opt-in,
-not a default, since model weights run multiple GB each and picking one for
-someone else's disk budget isn't RootForge's call to make.
-
-**Second brain** (`brain`, baked into the ISO — `~/second-brain/` in every new
-user's home directory): a local, plaintext knowledge vault using the PARA method
-(Projects / Areas / Resources / Archives, plus daily notes), with semantic
-search and RAG-style Q&A layered on top so the AI tooling above actually has
-something to work *with* instead of starting from zero context every session.
-Everything stays on-device — `brain index` embeds changed notes through
-Ollama's local `nomic-embed-text` model (a small, separate opt-in pull from
-`setup_ai_tools.sh`, same "explicit, not automatic" treatment as Hermes, just
-a couple hundred MB instead of several GB), `brain search "query"` does cosine
-similarity over the local index, and `brain ask "question"` stuffs the
-top-matching notes into a prompt and answers through Ollama (`hermes3` by
-default) or, with `--provider claude`, through the already-installed Claude
-Code CLI for questions that need a stronger model than what's practical to
-run locally. No note ever leaves the machine unless that flag is used on
-purpose. `brain new`/`brain daily`/`brain list`/`brain stats` round out the
-CLI for actually writing into the vault — see `~/second-brain/README.md` or
-`brain --help` for the full command reference.
-
-**[Certain]** GPU acceleration for Ollama on an AMD card goes through ROCm, and the
-exact `HSA_OVERRIDE_GFX_VERSION` needed depends on which GPU generation is
-installed — RDNA2 desktop cards (RX 6800-class, `gfx1030`) commonly need an
-explicit override since ROCm's official support matrix lags consumer card
-releases. `setup_ai_tools.sh` detects the installed AMD GPU via `rocminfo`/`lspci`
-and sets the override automatically when it recognizes the generation, falling
-back to printing what it found and asking rather than guessing wrong on hardware
-it doesn't recognize. **[Likely]** ROCm version pinning matters more than usual
-here — a newer ROCm release doesn't always mean a more stable one for a given card,
-so the script logs the exact ROCm version it configured against, specifically so a
-later "it got unstable after an update" report has something to diff against.
-
-## 16. Flagship features — what makes RootForge OS stand out
-
-Ten additions beyond the core Android-dev toolchain. **[Certain]** several of these
-pull in a genuine tension with the rest of the distro rather than pretending
-"harden everything" and "load unsigned kernel modules for KernelSU work" coexist
-without friction — each is written to flag that instead of silently picking one
-side.
-
-**Kernel hardening** (`config/includes.chroot/usr/local/bin/harden_kernel.sh`) — a sysctl hardening baseline
-(`kptr_restrict`, `unprivileged_bpf_disabled`, BPF JIT hardening, reverse-path
-filtering, disabled SUID core dumps) via a `/etc/sysctl.d/` drop-in. Kernel lockdown
-mode is available via `--lockdown` but **not on by default** — `lockdown=integrity`
-blocks loading unsigned out-of-tree modules, which directly conflicts with KernelSU
-development. Enable it only on a box that isn't doing kernel-module work.
-
-**Security hardening** (`config/includes.chroot/usr/local/bin/harden_system.sh`) — AppArmor enforce mode,
-auditd watching identity/SSH/USBGuard-policy files, a default-deny nftables
-firewall, fail2ban for SSH, and USBGuard with a `--usbguard-learn` mode to
-snapshot an allow-list from trusted gear. USBGuard matters more here than on a
-typical desktop — this box's whole job is having unfamiliar Android devices
-plugged in over USB.
-
-**Intercepting proxy** (`config/includes.chroot/usr/local/bin/setup_intercept_proxy.sh`) — installs mitmproxy
-and automates the part that's usually manual: pushing its CA cert into a rooted
-device's *system* trust store (`/system/etc/security/cacerts`), not just the user
-store most modern apps ignore. `trust-cert` verifies adbd is actually running as
-root and that `/system` remounted before it pushes, rather than surfacing the
-failure as a confusing permission error. `start` takes the listen port as its
-first argument (`start 9090`).
-
-**VPN quick-connect** (`config/includes.chroot/usr/local/bin/setup_vpn.sh`) — WireGuard keypair generation,
-interface up/down, and a `peer-qr` mode that generates a phone-scannable config
-QR code directly in the terminal. Peer addresses are handed out as the lowest
-free slot in `10.66.66.0/24` and recorded per peer, so two peers can't be issued
-the same `AllowedIPs` — a collision there doesn't fail loudly, it just silently
-breaks routing for one of them.
-
-**Headscale mesh join** (`config/includes.chroot/usr/local/bin/join_headscale.sh`) — joins an *existing*
-Headscale control server as a client node via the Tailscale client (API-compatible)
-rather than deploying a second, competing control plane. Built for exactly the
-case where a homelab already runs Headscale somewhere and this box should join
-that mesh, not start its own.
-
-**ESP32 toolkit** (`config/includes.chroot/usr/local/bin/esp32_toolkit.sh`) — esptool.py + PlatformIO, with
-library dependencies pre-selected for CC1101 (sub-GHz) and PN532 (NFC) rather than
-generic ESP32 boilerplate, and a bare tool-node firmware scaffold (serial
-command-loop skeleton) as a starting point for ESP32-based tool nodes.
-
-**Raspberry Pi image flasher** (`config/includes.chroot/usr/local/bin/flash_pi_image.sh`) — wraps the official
-`rpi-imager` CLI (doesn't reimplement SD/USB writing) and adds SSH key + hostname
-pre-injection plus a `--role` label (`homelab-node` / `dispatcher` / `bare`) so a
-freshly flashed Pi is labeled with its intended purpose from the first boot, even
-though the actual provisioning of that role happens after boot via SSH, not baked
-into the image.
-
-**Raspberry Pi fleet tools** (`config/includes.chroot/usr/local/bin/rpi_fleet_tools.sh`) — local-network
-discovery via MAC-OUI matching, SSH key distribution, and a batch command runner
-across however many Pis answer — built for a small homelab fleet, not a
-datacenter inventory system.
-
-**Device-fleet automation** (`config/includes.chroot/usr/local/bin/fleet_orchestrate.sh`) — the one script that
-breaks the rest of this spec's "one device at a time" convention on purpose: runs
-a chosen operation (lint, root-detect, backup, module-install, or the destructive
-unlock/flash — gated behind `--allow-destructive`) across every currently
-connected device in sequence, with a per-device log and a pass/fail summary table.
-
-**Scripted IME** (`config/includes.chroot/usr/local/bin/install_adb_ime.sh`) — installs a broadcast-receiver
-keyboard (the ADBKeyboard pattern) so automated text input via
-`am broadcast -a ADB_INPUT_TEXT` bypasses the on-screen IME's text-processing
-pipeline entirely — the standard fix for `adb shell input text` mangling non-ASCII
-characters and emoji during scripted UI testing.
-
-**Upgraded terminal** (`config/includes.chroot/usr/local/bin/setup_terminal.sh`) — tmux with a
-`rootforge-session` launcher (logcat / device-watch / build-shell three-pane
-layout), starship prompt with a custom segment showing live connected-device
-count, plus fzf/eza/bat/zoxide.
-
-## 17. Android on-device variants — unrooted (PRoot), rooted (chroot), and an optional desktop
-
-Everything above targets a real install (bare metal or VM) with root on the box RootForge OS runs on. `termux/` adds a second delivery path: a Debian rootfs that runs *on the Android device itself*, inside Termux. There are two flavours of it, and an optional desktop layer that works with either.
-
-### The distinction that actually decides what works
-
-Both flavours run on **Android's own, unmodified kernel**. That is the constraint everything below follows from, and it is not the same thing as "is the phone rooted":
-
-- **PRoot** (unrooted) fakes uid 0 and a chroot-like filesystem view by intercepting syscalls with `ptrace`, entirely in userspace.
-- **chroot** (rooted) is a real `chroot(2)` entered via `su`, with `/proc`, `/sys`, `/dev` and Termux's tmp bind-mounted in.
-
-Root buys you a real chroot and real device nodes. It does **not** buy you a different kernel — so anything needing kernel subsystems Android doesn't ship stays out of reach on a rooted phone too. Being clear about that is the point of the table below.
-
-### Which tools work where
-
-| Tool | ISO (real Linux) | chroot (rooted) | PRoot (unrooted) | Why |
-|---|:--:|:--:|:--:|---|
-| Module dev — `new_module_scaffold.sh`, `build_magisk_module.sh`, `lint_module.sh` | ✅ | ✅ | ✅ | Pure file manipulation |
-| Boot image patching — `magiskboot`, `avbtool`, `mkbootimg`, `kernelsu_patch_boot.sh` | ✅ | ✅ | ✅ | Also pure file manipulation |
-| OTA extraction — `extract_ota.sh` | ✅ | ✅ | ✅ | Unpacking archives |
-| AI tooling — Claude Code, Ollama, `brain` | ✅ | ✅ | ✅ | Plain processes; no systemd needed |
-| `adb`/`fastboot` over **Wi-Fi** | ✅ | ✅ | ✅ | Just TCP |
-| `adb`/`fastboot` over **USB** | ✅ | ✅ | ⚠️ | chroot sees real USB device nodes; PRoot needs Termux:API's `termux-usb` permission flow |
-| `inspect_partition_image.sh` (loop mount) | ✅ | ✅ | ❌ | Needs a real loop device; PRoot has none |
-| `setup_vpn.sh` / `join_headscale.sh` | ✅ | ⚠️ | ❌ | chroot has `/dev/net/tun`, so a **userspace** WireGuard/tailscaled works; the kernel `wg` module generally does not exist |
-| `build_matrix.sh` (Docker NDK matrix) | ✅ | ⚠️ | ❌ | Needs cgroup controllers + overlayfs. Root is necessary but **not sufficient** — depends on your kernel's config. Try it; don't assume |
-| `setup_rooted_avd.sh` (emulator) | ✅ | ❌ | ❌ | Needs `/dev/kvm`, i.e. the SoC booted at EL2 with a KVM kernel. Root does not create that node |
-| `harden_kernel.sh` | ✅ | ❌ | ❌ | Edits GRUB and sets sysctls on a kernel you own. There is no GRUB on a phone |
-| `harden_system.sh` | ✅ | ❌ | ❌ | Drives AppArmor, auditd, nftables, USBGuard. Android uses SELinux and ships none of the rest |
-| GNOME desktop + Calamares installer | ✅ | ❌ | ❌ | This rootfs isn't bootable; there's nothing to install it *to* |
-| **XFCE via Termux:X11** | — | ✅ | ✅ | Optional layer; see below. Needs no root — an X client just talks to a socket |
-
-Legend: ✅ works · ⚠️ works with caveats, read the reason · ❌ not available
-
-The rooted flavour deliberately does **not** ship `harden_kernel.sh` or `harden_system.sh`. Including them would mean shipping a promise the environment cannot keep.
-
-### Building the rootfs
-
-Run as root on a Linux host with `debootstrap`/`qemu-user-static`/`binfmt-support` installed:
-
-```
-sudo termux/build-rootfs.sh arm64                              # unrooted (PRoot), the default
-sudo termux/build-rootfs.sh arm64 --flavor chroot              # rooted
-sudo termux/build-rootfs.sh arm64 --flavor chroot --with-x11   # rooted + XFCE desktop
-sudo termux/build-rootfs.sh amd64                              # x86 Android, or a desktop-Linux sandbox
-```
-
-`--with-x11` roughly triples the tarball, which is why it is opt-in rather than baked in. Output is `rootforge-<flavor>-<arch>[-x11]-<timestamp>.tar.xz` plus a `.sha256` in `sha256sum` format; the flavour is in the filename because a chroot rootfs and a PRoot rootfs are not interchangeable. The build also writes `/etc/rootforge/build-info` inside the image, so you can tell later what you're actually running.
-
-`.github/workflows/release.yml` builds all four arch × flavour combinations on a tagged push (after lint and tests pass on the same commit), generates the install metadata from them, verifies the whole asset set with `tests/verify-release-assets.sh`, and only then attaches it to a **draft** GitHub Release. It has not yet been run on GitHub's infrastructure.
-
-### Installing — what exists today, and what does not
-
-**[Certain, 2026-10-07]** this repository has tags (`v0.1.0`, `v0.1.1`) but **no published GitHub Release**, so there are no prebuilt rootfs tarballs to download yet. The install files (`install.sh`, the `proot-distro` plugin, `release-metadata.json`, `SHA256SUMS`) are not checked in either: they are *generated per release* by `termux/make-release-metadata.sh` from the real tarballs, so the tag, URL and SHA-256 inside them are computed, never typed. The checked-in `termux/templates/*.in` files refuse to run. Two ways to get a verified install:
-
-**A. From a published release** (once `release.yml` has produced one; the draft must be published by a maintainer). In Termux:
-
-```
-curl -fsSLO https://github.com/Victorious93/rootforge-os/releases/download/<tag>/install.sh
-curl -fsSLO https://github.com/Victorious93/rootforge-os/releases/download/<tag>/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS      # checks install.sh itself
-bash install.sh
-proot-distro login rootforge
-```
-
-`install.sh` installs `proot-distro`, downloads the plugin pinned to that tag and refuses to use it unless its SHA-256 matches the value embedded in the installer; `proot-distro` then verifies the rootfs tarball against the digest inside the plugin. It also detects root and tells you the chroot variant exists before spending a multi-GB download. The `SHA256SUMS` you check comes from the same release, so this protects against corruption and partial tampering of individual files, not against someone who controls the whole release; compare the digest with one obtained another way if that matters to you.
-
-**B. Locally built.** Build the rootfs (above), then generate the metadata and serve the files to the phone:
-
-```
-termux/make-release-metadata.sh --tag local1 --dist <dir-with-tarballs> --out <dir> \
-    --base-url http://<host>:8000 --arches arm64 --flavors proot
-```
-
-This fails, writing nothing, if a tarball is missing, empty, does not match its recorded digest, or its `/etc/rootforge/build-info` disagrees with its filename about flavor or architecture.
-
-### Installing — rooted (chroot)
-
-`rootforge-chroot.sh install` **requires** a digest and refuses to unpack without one; it also scans the archive for absolute paths, `..` components and device nodes before extracting, unpacks into a staging directory, and marks the install complete only at the end (an interrupted install is not mistaken for a working one, and `login` refuses it).
-
-```
-# in Termux, on the device, with files from one release (<tag>) — or from your local build
-curl -fsSLO <base-url>/rootforge-chroot-arm64.tar.xz
-curl -fsSLO <base-url>/rootforge-chroot.sh
-curl -fsSLO <base-url>/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS     # tarball and launcher
-chmod +x rootforge-chroot.sh
-./rootforge-chroot.sh install rootforge-chroot-arm64.tar.xz --sha256 <digest from SHA256SUMS>
-./rootforge-chroot.sh login
-./rootforge-chroot.sh umount        # when you're done, to release the bind mounts
-```
-
-**[Likely]** none of this has been run on a real phone; the launcher and generator are covered by the hermetic test suite with stubs, not by a device.
-
-The rootfs lands in `/data/local/rootforge` (override with `ROOTFORGE_CHROOT_DIR`) rather than under `/sdcard`, which Android mounts `noexec`. The launcher bind-mounts `/proc`, `/sys`, `/dev`, `devpts`, Termux's tmp, and `/sdcard` if present.
-
-Beyond the tools the table unlocks, the practical win is speed: PRoot intercepts every syscall through `ptrace`, so builds and large greps run several times faster in a real chroot.
-
-### Optional: a graphical desktop via Termux:X11
-
-The X **server** is the Termux:X11 Android app. The container only runs X **clients**, which is why this needs no root and works in both flavours:
-
-```
-Android                            RootForge container
---------------------------------   ------------------------------
-Termux:X11 APK   <-- X protocol --  xfce4-session, thunar, ...
-  (the X server)   over a unix
-                   socket in $TMPDIR/.X11-unix
-```
-
-Once, on the Termux side:
-
-```
-pkg install x11-repo
-pkg install termux-x11-nightly
-# plus the Termux:X11 APK from github.com/termux/termux-x11 releases
-termux-x11 :0 &
-```
-
-Then enter the container so the socket is visible, and start the session:
-
-```
-proot-distro login rootforge --shared-tmp     # PRoot: --shared-tmp is required
-# or: ./rootforge-chroot.sh login             # chroot: tmp is bind-mounted for you
-
-rootforge_desktop.sh --check      # what's present, what's missing, and why
-rootforge_desktop.sh              # start XFCE
-rootforge_desktop.sh --install    # if you didn't build --with-x11
-```
-
-`rootforge_desktop.sh --check` is worth running first — the two common failures are logging in without `--shared-tmp` (no socket visible) and forgetting to open the Termux:X11 app after starting the server (socket directory present but empty), and it names both specifically rather than leaving you with a blank screen.
-
-XFCE rather than GNOME: GNOME wants systemd/logind and a compositor stack that neither flavour can provide. XFCE runs as a plain X client with no session manager underneath it.
-
-**[Likely]** the proot-distro plugin file's shape (`DISTRO_NAME`/`DISTRO_COMMENT`, `TARBALL_URL`/`TARBALL_SHA256` associative arrays, an optional `distro_setup()` hook) matches proot-distro's current plugin API — it has been stable, but isn't something this repo can pin a version of, so check against a plugin shipped in proot-distro's own repo if `install` rejects it.
-
-## 18. What's still a manual step
-
-Bootloader unlock permits for Xiaomi/OnePlus regional variants that require an account-linked waiting period, Samsung Download Mode flashing (Odin/Heimdall, not fastboot), and initial OEM driver installation on the host for less common vendors. RootForge's scripts detect these cases and stop with an explanation rather than failing silently or guessing.
-
-## 19. Android app (host phone → target phone over USB-C)
-
-The APK in `android-app/` is a button-first toolkit: Dashboard, ADB, Fastboot, EDL, Root/Patching, Module Builder, Recovery, Logs/Terminal, Settings. It talks to the **target** over Android's USB Host API (no bundled `adb` binary, no network). Destructive actions print a plan and require a typed confirmation.
-
-**Install**
-
-1. Build or download the debug APK (`android-app/app/build/outputs/apk/debug/app-debug.apk`, also a GitHub Actions artifact on this branch).
-2. Install it on the **host** phone: `adb install -r app-debug.apk`.
-3. Connect the **target** with a USB-C to USB-C **data** cable. On the target enable USB debugging (or reboot to bootloader / EDL). Accept the host's USB-permission prompt, then Dashboard → Connect. On first ADB use, accept the RSA key dialog on the **target** (the fingerprint is under Settings).
-
-If the host does not switch into USB-host mode, put a USB-C OTG adapter on the **host** end of the cable. Charge-only cables will show no device.
-
-Screenshots (Paparazzi, not a real phone): `android-app/screenshots/`. Full USB notes, limits, and why the stack is pure Kotlin: `docs/ANDROID_APP.md`.
-
-**droidcommand-ai:** the app is an independent node, not a companion. Pair it under Settings → External control. The JSON envelope matches `core-rootforge`; the Android transport is a bound Messenger service. Canonical spec: `docs/DROIDCOMMAND_INTEGRATION.md`.
-
-```
+```bash
 cd android-app
 ./gradlew :app:assembleDebug :app:testDebugUnitTest
+# → app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/debug/app-debug.apk   # on the host phone
 ```
 
 CI: `.github/workflows/android-apk.yml` uploads the debug APK (and a release APK if signing secrets are set).
 
--Victorious Framework
+Release automation: `.github/workflows/release.yml` (draft release + checksum verification). **Has not been run successfully on GitHub’s infrastructure for a published Release yet.**
 
+## Usage (installed or live)
+
+```bash
+rootforge doctor              # environment checks
+rootforge devices             # adb/fastboot inventory
+rootforge device check …      # go/no-go before writes
+rootforge module scaffold …   # Magisk/KernelSU templates
+rootforge flash boot …        # flash already-patched boot/init_boot (typed confirm)
+rootforge backup create …     # partition backup with manifest
+rootforge ota extract …       # payload extraction
+rootforge avd create …        # rooted/unrooted AVD helpers (x86_64 host)
+```
+
+Flash/unlock/backup scripts refuse unsafe vendors/states where possible; they wipe or write only after explicit confirmation. Logs under `${ROOTFORGE_HOME:-$HOME/rootforge}/logs/` are created mode `0600` and redacted on exit (pattern-based — not a reason to print secrets).
+
+USB flash helper (when you have an ISO + checksum): `make list-usb` / `sudo make flash USB=/dev/sdX`.
+
+### Host phone → target phone over USB-C
+
+Install the APK on the **host**. Plug the **target** in with a data cable. On the target enable USB debugging (or reboot to bootloader / EDL). Accept the host's USB-permission prompt, then Dashboard → Connect. On first ADB use, accept the RSA key dialog on the **target** (the fingerprint is under Settings). If the host does not switch into USB-host mode, put a USB-C OTG adapter on the **host** end. Destructive GUI actions print a plan and require a typed phrase.
+
+**droidcommand-ai:** the app is an independent node, not a companion. Pair it under Settings → External control. The JSON envelope matches `core-rootforge`; the Android transport is a bound Messenger service. Canonical spec: [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md).
+
+## Project structure
+
+```text
+auto/                 live-build entry (config, build)
+config/               package lists, hooks, includes.chroot (scripts under usr/local/bin)
+termux/               PRoot/chroot rootfs build + release metadata templates
+android-app/          Host-phone Compose toolkit APK (USB Host, not Termux)
+tests/                Hermetic tests + stubs (adb/fastboot/su/…)
+docs/                 ARCHITECTURE, PLATFORM_SUPPORT, SECURITY_MODEL, ANDROID_APP, …
+Makefile              build, checksum, flash, clean targets
+BUILD.md              ISO build guide
+HACKING.md · AGENTS.md · CLAUDE.md
+```
+
+Deep design notes that used to dominate the homepage README live in `docs/` (including the pre-refresh long-form [docs/README-legacy.md](docs/README-legacy.md)) and [BUILD.md](BUILD.md). Prefer updating those for long rationale; keep this README as the landing page.
+
+## Contributing
+
+1. Run `./tests/run-tests.sh` and hook checks before PRs.
+2. Preserve fail-closed device gates and typed confirmations on destructive paths.
+3. Pin and verify downloaded artifacts in hooks (`tests/check-hooks.sh` enforces several rules).
+4. Do not claim hardware verification you did not perform — use the Certain/Likely/Guessing language from existing docs when needed.
+5. See [HACKING.md](HACKING.md) and [AGENTS.md](AGENTS.md).
+
+## License
+
+**No `LICENSE` file is present in this repository.** Add an SPDX license (and decide how Debian package licenses / pinned third-party binaries should be attributed) before advertising the project as open source. Until then, redistribution terms are undefined.
+
+Third-party components fetched at build time (NodeSource, Ollama installer, Magisk APK for magiskboot, GitHub release binaries, etc.) remain under their own licenses — see hooks under `config/hooks/` and [BUILD.md](BUILD.md).
+
+## Documentation map
+
+| Doc | Purpose |
+|---|---|
+| [BUILD.md](BUILD.md) | How to build the ISO; what is pinned vs not |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture |
+| [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md) | BIOS-only live ISO; arch caveats |
+| [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | Trust boundaries, logging, flashing gates |
+| [docs/ANDROID_APP.md](docs/ANDROID_APP.md) | Host-phone APK: USB Host, screens, limits |
+| [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) | Bridge protocol for droidcommand-ai |
+| [docs/REVIEW.md](docs/REVIEW.md) | Code review of this branch |
+| [CHANGELOG.md](CHANGELOG.md) | Unreleased changes (no published Release yet) |
+| [tests/README.md](tests/README.md) | Test and release-verifier notes |
+| [docs/README-legacy.md](docs/README-legacy.md) | Pre-refresh long-form README (archived) |
+
+## Acknowledgements
+
+Debian live-build, Magisk, KernelSU, AOSP tooling, Termux / proot-distro, and the many pinned upstream projects pulled by image hooks. RootForge OS is part of the Victorious Framework alongside related repos (e.g. droidcommand-AI’s `core-rootforge` client — passive reads only today).

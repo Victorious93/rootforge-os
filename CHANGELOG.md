@@ -32,6 +32,8 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 ### Docs
 - `docs/REVIEW.md`, `docs/ANDROID_APP.md`, `docs/DROIDCOMMAND_INTEGRATION.md`.
   README no longer claims cryptographic signing.
+- Merged main's landing-page README (#46 / `docs/README-legacy.md` archive) and
+  kept this branch's Android app install notes, structure entry, and doc map.
 
 ## Unreleased — 2026-10-12
 
