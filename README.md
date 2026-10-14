@@ -11,6 +11,8 @@
 [![Base](https://img.shields.io/badge/base-Debian%2012%20(Bookworm)-A81D33)](https://www.debian.org/)
 [![Build](https://img.shields.io/badge/build-live--build-informational)](BUILD.md)
 [![CLI](https://img.shields.io/badge/CLI-rootforge-black)](#unified-cli)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+[![License: Apache-2.0 (core)](https://img.shields.io/badge/core-Apache--2.0-blue.svg)](android-app/core/LICENSE)
 ![Status](https://img.shields.io/badge/status-active%20·%20ISO%20unverified%20here-orange)
 
 > **Honesty first:** this repository contains a full Debian `live-build` tree, automation scripts, tests, and Termux/PRoot packaging. **ISO production, booting, Calamares install, and on-phone rootfs use have not been independently verified in the environment that last updated these docs** (no loop device / no published GitHub Release assets as of 2026-10-07). Tags `v0.1.0` / `v0.1.1` exist; no published Release yet. See [BUILD.md](BUILD.md) and [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md). Artifacts carry a `Victorious Framework` footer; **nothing is cryptographically signed** — see [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md).
@@ -194,9 +196,27 @@ Deep design notes that used to dominate the homepage README live in `docs/` (inc
 
 ## License
 
-**No `LICENSE` file is present in this repository.** Add an SPDX license (and decide how Debian package licenses / pinned third-party binaries should be attributed) before advertising the project as open source. Until then, redistribution terms are undefined.
+RootForge OS uses a **split license**. Original work in this repository is
+**GPL-3.0-or-later**, except the shared Kotlin module **`android-app/core`
+(`:core`)**, which is **Apache License 2.0**.
 
-Third-party components fetched at build time (NodeSource, Ollama installer, Magisk APK for magiskboot, GitHub release binaries, etc.) remain under their own licenses — see hooks under `config/hooks/` and [BUILD.md](BUILD.md).
+| Tree | License | Text |
+|---|---|---|
+| `android-app/core/` (`:core`) | Apache-2.0 | [android-app/core/LICENSE](android-app/core/LICENSE) |
+| Everything else (CLI, scripts, ISO/live-build, Termux packaging, `:app`, `:desktop`, Docker toolkit, tests, docs) | GPL-3.0-or-later | [LICENSE](LICENSE) |
+
+Copyright, the GPL applying notice (“version 3 or later”), and third-party
+attribution are in [NOTICE](NOTICE). Apache-2.0 is compatible with GPL-3.0:
+combining `:core` into the GPL-licensed Android app or desktop client does
+**not** relicense the `:core` sources; those stay Apache-2.0 so they can be
+reused on their own terms. Combined binaries are GPL-3.0-or-later.
+
+**Third-party code is not relicensed.** Debian packages in the ISO and rootfs,
+Termux / PRoot / proot-distro, Magisk / KernelSU / APatch, the Android SDK/NDK,
+Node.js, Ollama, Claude Code, Calamares, and other build-time downloads keep
+their upstream licenses. This repository does not vendor those projects; it
+ships RootForge installers, plugins, branding, and pinned fetchers. See
+[BUILD.md](BUILD.md) and `config/hooks/`.
 
 ## Documentation map
 
@@ -213,6 +233,8 @@ Third-party components fetched at build time (NodeSource, Ollama installer, Magi
 | [docs/REVIEW.md](docs/REVIEW.md) | Code review of this branch |
 | [CHANGELOG.md](CHANGELOG.md) | Unreleased changes (no published Release yet) |
 | [tests/README.md](tests/README.md) | Test and release-verifier notes |
+| [LICENSE](LICENSE) · [NOTICE](NOTICE) | GPL-3.0-or-later text; split-license and third-party notices |
+| [android-app/core/LICENSE](android-app/core/LICENSE) | Apache-2.0 text for shared Kotlin `:core` |
 | [docs/README-legacy.md](docs/README-legacy.md) | Pre-refresh long-form README (archived) |
 
 ## Acknowledgements

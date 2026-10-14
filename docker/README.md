@@ -64,3 +64,9 @@ Typical path is `usbipd-win` (Windows) or a Linux VM. That combination is
 `"confirmation": "FLASH boot"` (or `UNLOCK` / `LOCK` / `SLOT a`) in the
 request object. Module zip building is **not** reimplemented in Python;
 use the desktop/Android library builder or `rootforge module scaffold`.
+
+## License
+
+The Docker toolkit and API are GPL-3.0-or-later (`LICENSE` at the
+repository root). Shared Kotlin `:core` is Apache-2.0. Third-party
+packages in the image keep their upstream licenses. See `NOTICE`.

@@ -11,10 +11,12 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-14 · **Branch:** `cursor/linux-windows-docker-f6fd` (from `main` at
-`a772d0f`, which includes merged PR #48) · **Phase:** active development; ISO/VM/hardware
-validation **blocked** on infrastructure. Android host-phone APK is on `main`; Linux/Windows
-desktop + Docker toolkit are this branch. Not run on a device.
+**Last updated:** 2026-10-14 · **Branch:** `cursor/dual-license-lock-0f14` (from `main` at
+`5f267c9`, which includes merged PRs #48–#50) · **Phase:** active development; ISO/VM/hardware
+validation **blocked** on infrastructure. Android host-phone APK, Linux/Windows desktop, and
+Docker toolkit are on `main`. Not run on a device. License lock: original work
+GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
+(`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (each verified by running it this session unless marked):
 - `bash tests/run-tests.sh` → 1010 passed, 0 failed (Python unittest reported 375 tests in

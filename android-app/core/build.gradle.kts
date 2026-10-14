@@ -1,3 +1,4 @@
+// Licensed under the Apache License, Version 2.0. See LICENSE in this directory.
 plugins {
     kotlin("jvm")
     kotlin("plugin.serialization")

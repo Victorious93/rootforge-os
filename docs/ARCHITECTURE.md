@@ -223,3 +223,10 @@ stale artifact, unverified download) and makes destructive actions explicit.
 | D8 | Termux installs require a digest; arm64 hosts install only what runs there | Google ships x86-64 SDK/NDK/emulator only; claiming otherwise installed unrunnable binaries |
 | D9 | A failed build must be a failed `make`, and a stale ISO must not survive | `tee` masked the status and `checksum` blessed a leftover image |
 | D10 | Wrap, don't rewrite, working scripts | Their behaviour is proven by real incidents recorded in `common.sh` comments |
+
+## 8. License
+
+Original RootForge OS work is **GPL-3.0-or-later** (`LICENSE`), except the
+shared Kotlin module `android-app/core` (`:core`), which is **Apache-2.0**
+(`android-app/core/LICENSE`). Third-party code is not relicensed. Applying
+notices and third-party attribution: `NOTICE`.
