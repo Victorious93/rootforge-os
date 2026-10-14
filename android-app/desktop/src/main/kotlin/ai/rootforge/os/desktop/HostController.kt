@@ -264,8 +264,7 @@ class HostController(
                 imageName = image.name,
                 imageSize = image.size,
                 imageHead = head,
-                maxDownload = vars["max-download-size"]?.removePrefix("0x")?.toLongOrNull(16)
-                    ?: vars["max-download-size"]?.toLongOrNull(),
+                maxDownload = FlashPlanner.parseNumber(vars["max-download-size"]),
                 deviceUnlocked = vars["unlocked"]?.let { it == "yes" || it == "true" },
             )
             if (!plan.allowed) {
@@ -529,10 +528,8 @@ class HostController(
     private fun getvarAll(): Map<String, String> {
         val r = fastboot(listOf("getvar", "all"), 30_000)
         val map = linkedMapOf<String, String>()
-        val re = Regex("""(?:\(bootloader\)\s*)?([A-Za-z0-9_.:-]+)\s*:\s*(.*)$""")
         r.output.lineSequence().forEach { line ->
-            val m = re.find(line.trim()) ?: return@forEach
-            map[m.groupValues[1]] = m.groupValues[2].trim()
+            FlashPlanner.parseVarLine(line.trim())?.let { (k, v) -> map.putIfAbsent(k, v) }
         }
         return map
     }

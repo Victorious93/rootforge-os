@@ -48,7 +48,7 @@ fun modeColor(mode: TargetMode) = when (mode) {
 @Composable
 fun DashboardScreen(state: AppUiState, actions: AppActions) {
     ScreenColumn {
-        ForgeCard("Target device", "The phone connected to this one by USB-C", Icons.Filled.Usb) {
+        ForgeCard("Target device", state.transportCaption, Icons.Filled.Usb) {
             val link = state.link
             when (link) {
                 is LinkState.Connected -> StatusPill("Connected: ${link.mode.label}", modeColor(link.mode))

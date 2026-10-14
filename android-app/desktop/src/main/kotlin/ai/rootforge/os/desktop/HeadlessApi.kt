@@ -60,7 +60,8 @@ class HeadlessApi(
         val waiter = Thread {
             val deadline = System.currentTimeMillis() + 5_000
             while (System.currentTimeMillis() < deadline) {
-                val pending = approvals.pending.value.lastOrNull() ?: run {
+                val pending = approvals.pending.value.lastOrNull()
+                if (pending == null) {
                     Thread.sleep(20)
                     continue
                 }

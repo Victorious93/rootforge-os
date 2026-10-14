@@ -10,6 +10,12 @@ import kotlinx.coroutines.flow.asStateFlow
 class DesktopSettings(private val file: File) {
     private val props = Properties()
 
+    var nodeId: String
+        get() = props.getProperty(KEY_NODE, "")
+        set(v) {
+            props.setProperty(KEY_NODE, v)
+        }
+
     init {
         if (file.isFile) file.reader().use { props.load(it) }
         if (nodeId.isBlank()) {
@@ -36,12 +42,6 @@ class DesktopSettings(private val file: File) {
             autoState.value = v
             props.setProperty(KEY_AUTO, v.toString())
             save()
-        }
-
-    var nodeId: String
-        get() = props.getProperty(KEY_NODE, "")
-        set(v) {
-            props.setProperty(KEY_NODE, v)
         }
 
     var apiToken: String

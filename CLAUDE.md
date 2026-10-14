@@ -17,13 +17,16 @@ validation **blocked** on infrastructure. Android host-phone APK is on `main`; L
 desktop + Docker toolkit are this branch. Not run on a device.
 
 **What is true now** (each verified by running it this session unless marked):
-- `bash tests/run-tests.sh` → 1009 shell + 367 Python, 0 failed (desktop launcher test no
-  longer depends on the host lacking `xfce4-session`). `bash tests/lint.sh` → clean with
+- `bash tests/run-tests.sh` → 1010 passed, 0 failed (Python unittest reported 375 tests in
+  1.559s, including `tests/test_toolkit_api.py`). `bash tests/lint.sh` → clean with
   shellcheck 0.9.0. GitHub `Lint` was green on `main` at `cec7f7e`.
-- `cd android-app && ./gradlew :app:assembleDebug :app:testDebugUnitTest` → debug APK at
-  `android-app/app/build/outputs/apk/debug/app-debug.apk` (also copied to
-  `artifacts/rootforge-os-debug.apk` locally, gitignored). Protocol/planner/module/bridge
-  tests + Paparazzi snapshots pass. **Not installed on a phone, not exercised over USB.**
+- `cd android-app && ./gradlew :core:test :app:assembleDebug :app:testDebugUnitTest :desktop:compileKotlin`
+  → BUILD SUCCESSFUL. `:core` 48 tests, `:app` 19 tests (protocol + Paparazzi), 0 failed.
+  Debug APK at `android-app/app/build/outputs/apk/debug/app-debug.apk`. **Not installed on a
+  phone, not exercised over USB.**
+- `./gradlew :desktop:packageDeb` → `android-app/desktop/build/compose/binaries/main/deb/rootforgeos_0.1.0-1_amd64.deb`
+  (local, gitignored). Windows `.exe`/`.msi` not built here. Docker image **not** built
+  (`docker` is not installed on this agent). **Not run against a PC/phone pair.**
 - `extract_ota.sh` / `rootforge ota extract` count an image as produced only when this run
   created or replaced it. A reused output directory used to make an empty dump exit 0, and the
   CLI hashed a leftover `*.img` as if it had come from the payload just extracted.
@@ -33,8 +36,9 @@ desktop + Docker toolkit are this branch. Not run on a device.
   Termux verified install + per-release metadata generation + CPU-honest SDK bootstrap,
   Makefile/`auto/build` failure handling, release-asset verifier, release workflow gating.
 - **Not run anywhere:** `lb build` (no loop device), ISO boot, Calamares install, systemd
-  first boot, real devices, a phone, `release.yml` (it only runs on `v*` tags or manual
-  dispatch; merging did not trigger it).
+  first boot, real devices, a phone, a desktop USB session, `docker build -f docker/Dockerfile`,
+  `release.yml` (it only runs on `v*` tags or manual dispatch; merging did not trigger it).
+  Toolkit CI (`.github/workflows/toolkit.yml`) has not been observed green in this session.
 - **Known unpinned:** Ollama installer (hook 0020). Claude Code's native npm dependency.
   Nothing is signed.
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote

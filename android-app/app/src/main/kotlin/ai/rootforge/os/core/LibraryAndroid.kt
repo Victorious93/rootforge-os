@@ -5,7 +5,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import java.io.IOException
 
-fun Library.import(context: Context, uri: Uri): LibraryFile {
+fun Library.importUri(context: Context, uri: Uri): LibraryFile {
     val name = Library.sanitize(displayName(context, uri) ?: "import-${System.currentTimeMillis()}")
     context.contentResolver.openInputStream(uri).use { input ->
         if (input == null) throw IOException("Cannot open the selected file")
