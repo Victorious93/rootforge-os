@@ -38,7 +38,9 @@ desktop + Docker toolkit are this branch. Not run on a device.
 - **Not run anywhere:** `lb build` (no loop device), ISO boot, Calamares install, systemd
   first boot, real devices, a phone, a desktop USB session, `docker build -f docker/Dockerfile`,
   `release.yml` (it only runs on `v*` tags or manual dispatch; merging did not trigger it).
-  Toolkit CI (`.github/workflows/toolkit.yml`) has not been observed green in this session.
+  First Toolkit CI run on PR #49: Lint green, Docker image smoke green; linux-desktop
+  and windows-desktop failed in `android-actions/setup-android@v3` (`sdkmanager tools`
+  — the `tools` package is gone). Workflows now pass `packages: platform-tools`.
 - **Known unpinned:** Ollama installer (hook 0020). Claude Code's native npm dependency.
   Nothing is signed.
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
