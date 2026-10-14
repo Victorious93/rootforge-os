@@ -11,18 +11,18 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-12 · **Branch:** `cursor/critical-bug-management-bb36` (from `main` at
-`b53836f`, PR #43) · **Phase:** active development; ISO/VM/hardware validation **blocked** on
-infrastructure.
+**Last updated:** 2026-10-14 · **Branch:** `cursor/android-app-and-review-6b76` (from `main` at
+`cec7f7e`) · **Phase:** active development; ISO/VM/hardware validation **blocked** on
+infrastructure. Android host-phone APK compiles locally; not run on a device.
 
 **What is true now** (each verified by running it this session unless marked):
-- `bash tests/run-tests.sh shell` → 997 passed, 1 failed. The failure is
-  `rootforge_desktop.sh --start` on a host that already has `xfce4-session`: the script starts
-  XFCE instead of printing `--install`. Not exercised against a device. `bash tests/run-tests.sh
-  python` → 360 passed, 0 failed. `bash tests/lint.sh` → clean locally with shellcheck 0.9.0
-  (Debian package; not CI's shellcheck). **GitHub CI also passed on the PR #42 head**
-  (`34936af`: `shellcheck`, `tests`, `package-lists`, `yaml-lint`, `python`); that run is not
-  this commit. PR #43 was merged by the owner on 2026-10-07.
+- `bash tests/run-tests.sh` → 1009 shell + 367 Python, 0 failed (desktop launcher test no
+  longer depends on the host lacking `xfce4-session`). `bash tests/lint.sh` → clean with
+  shellcheck 0.9.0. GitHub `Lint` was green on `main` at `cec7f7e`.
+- `cd android-app && ./gradlew :app:assembleDebug :app:testDebugUnitTest` → debug APK at
+  `android-app/app/build/outputs/apk/debug/app-debug.apk` (also copied to
+  `artifacts/rootforge-os-debug.apk` locally, gitignored). Protocol/planner/module/bridge
+  tests + Paparazzi snapshots pass. **Not installed on a phone, not exercised over USB.**
 - `extract_ota.sh` / `rootforge ota extract` count an image as produced only when this run
   created or replaced it. A reused output directory used to make an empty dump exit 0, and the
   CLI hashed a leftover `*.img` as if it had come from the payload just extracted.
@@ -36,9 +36,12 @@ infrastructure.
   dispatch; merging did not trigger it).
 - **Known unpinned:** Ollama installer (hook 0020). Claude Code's native npm dependency.
   Nothing is signed.
-- **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), Windows,
-  Android APK, GUI, remote administration. No GitHub Release exists (tags `v0.1.0`,
-  `v0.1.1` only), so the Termux install paths need a locally generated or future release.
+- **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
+  administration. Android host-phone GUI APK is on this branch (USB Host, not Termux).
+  Linux/Windows desktop and Docker toolkit images are next on this same branch. No GitHub
+  Release exists (tags `v0.1.0`, `v0.1.1` only), so the Termux install paths need a locally
+  generated or future release.
+- Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`.
 
 **Incident worth remembering:** merge `b02e7c4` silently reverted six build hooks to a flavour
 that defined SHA-256 pins and never compared them (one also used an undefined variable),
@@ -52,7 +55,9 @@ the check.**
 2. Extend the config schema only where a script consumes a key (Stage 3). Done: shared execution ID, `0600` script logs redacted at exit and by the CLI (pattern-based; SIGKILL outside the CLI and unrecognised secret shapes are the known gaps), and CLI-side audit events for `flash`/`backup`/`module`/`avd`/`boot patch`/`boot flash-last`.
 3. Pin/replace the Ollama installer; add release signing (Stage 4).
 4. Run the flash/backup/restore contract against a test device the owner agrees to flash.
-Do not start Stage 6 (Windows/APK/GUI/remote) before Stages 2 and 5 are validated.
+The owner asked for the Android GUI APK (and then Linux/Windows/Docker) on this
+branch; that overrides the earlier "do not start Stage 6" line. ISO Stage 5 is still
+blocked and is still the next hardware task.
 
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed
 from `docs/ARCHITECTURE_AUDIT.md`; the "governing directive" it cites was never found in the

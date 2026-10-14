@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-feature android:name="android.hardware.usb.host" android:required="true" />
+
+    <!-- Only used to tell you a controller app is waiting for approval. No INTERNET permission is requested. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <queries>
+        <package android:name="ai.droidcommand.app" />
+    </queries>
+
+    <application
+        android:name=".RootForgeApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.RootForge">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
+        </activity>
+
+        <!--
+          Exported on purpose: this is how droidcommand-ai reaches the app. Binding grants nothing.
+          Every request is checked against the owner's pairing list (package + signing certificate) and
+          the "Allow external controllers" switch, which is off by default.
+        -->
+        <service
+            android:name=".bridge.RootForgeBridgeService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="ai.rootforge.os.action.BRIDGE" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

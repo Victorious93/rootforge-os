@@ -20,12 +20,22 @@ def valid_module_id(value: str) -> str:
     return value
 
 
+def valid_display_name(value: str) -> str:
+    # The name is written into module.prop, a line-oriented key=value file; a
+    # newline would let the caller add keys such as a second `id=`.
+    if not value.strip() or any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+        raise argparse.ArgumentTypeError(
+            "display name must be non-empty and contain no control characters (including newlines)."
+        )
+    return value
+
+
 def add_parser(subparsers) -> None:
     parser = subparsers.add_parser("module", help="Scaffold, lint, and build Android modules.", allow_abbrev=False)
     actions = parser.add_subparsers(dest="module_command", required=True)
     scaffold = actions.add_parser("scaffold", help="Create a module skeleton.", allow_abbrev=False)
     scaffold.add_argument("module_id", type=valid_module_id)
-    scaffold.add_argument("display_name")
+    scaffold.add_argument("display_name", type=valid_display_name)
     scaffold.add_argument("--target", choices=VALID_TARGETS, default="magisk")
     lint = actions.add_parser("lint", help="Lint a module directory or ZIP.", allow_abbrev=False)
     lint.add_argument("path")

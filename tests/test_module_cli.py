@@ -176,5 +176,19 @@ class TestRunner(unittest.TestCase):
         self.assertEqual(found.parent, Path(runner.__file__).resolve().parents[3] / "bin")
 
 
+class TestDisplayName(unittest.TestCase):
+    def test_a_newline_is_rejected_so_module_prop_cannot_gain_keys(self):
+        with self.assertRaises(argparse.ArgumentTypeError):
+            module_cmd.valid_display_name("Evil\nid=injected")
+
+    def test_blank_and_control_characters_are_rejected(self):
+        for bad in ("", "   ", "tab\there", "nul\x00"):
+            with self.assertRaises(argparse.ArgumentTypeError):
+                module_cmd.valid_display_name(bad)
+
+    def test_an_ordinary_name_passes(self):
+        self.assertEqual(module_cmd.valid_display_name("My Module 2"), "My Module 2")
+
+
 if __name__ == "__main__":
     unittest.main()
