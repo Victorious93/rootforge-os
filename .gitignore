@@ -27,6 +27,8 @@ artifacts/
 android-app/.gradle/
 android-app/build/
 android-app/app/build/
+android-app/core/build/
+android-app/desktop/build/
 android-app/local.properties
 desktop/.gradle/
 desktop/build/

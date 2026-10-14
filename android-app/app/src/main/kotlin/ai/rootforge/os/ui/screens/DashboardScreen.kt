@@ -58,8 +58,10 @@ fun DashboardScreen(state: AppUiState, actions: AppActions) {
             }
             if (state.targets.isEmpty()) {
                 Text(
-                    "No USB device detected. Plug the target into this phone with a USB-C to USB-C cable, " +
-                        "then set USB debugging on the target (ADB), or hold the key combo for bootloader/EDL.",
+                    state.emptyTargetsHint ?: (
+                        "No USB device detected. Plug the target into ${state.hostCaption} with a USB-C to USB-C cable, " +
+                            "then set USB debugging on the target (ADB), or hold the key combo for bootloader/EDL."
+                        ),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

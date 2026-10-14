@@ -14,4 +14,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "rootforge-os-android"
+include(":core")
 include(":app")
+include(":desktop")

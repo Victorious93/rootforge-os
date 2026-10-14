@@ -1,0 +1,596 @@
+package ai.rootforge.os.desktop
+
+import ai.rootforge.os.core.ApprovalCenter
+import ai.rootforge.os.core.Library
+import ai.rootforge.os.core.LibraryFile
+import ai.rootforge.os.core.LinkState
+import ai.rootforge.os.core.OutputLog
+import ai.rootforge.os.core.Progress
+import ai.rootforge.os.core.TargetInfo
+import ai.rootforge.os.core.humanSize
+import ai.rootforge.os.fastboot.FlashPlanner
+import ai.rootforge.os.fastboot.RebootTarget
+import ai.rootforge.os.host.HostDevices
+import ai.rootforge.os.module.BuiltModule
+import ai.rootforge.os.module.ModuleBuilder
+import ai.rootforge.os.module.ModuleSpec
+import ai.rootforge.os.root.BootImageInfo
+import ai.rootforge.os.root.BootImageParser
+import ai.rootforge.os.root.RootManager
+import ai.rootforge.os.root.RootPaths
+import ai.rootforge.os.usb.AttachedTarget
+import ai.rootforge.os.usb.TargetMode
+import java.io.File
+import java.io.IOException
+import java.io.RandomAccessFile
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+
+/**
+ * Desktop controller: same plan / typed-confirmation contract as the Android
+ * [ai.rootforge.os.core.TargetController], but the transport is the host
+ * `adb` / `fastboot` / `edl` binaries rather than USB Host bulk endpoints.
+ */
+class HostController(
+    private val tools: HostToolset,
+    private val runner: ProcessRunner,
+    val log: OutputLog,
+    val library: Library,
+    val approvals: ApprovalCenter,
+    private val scope: CoroutineScope,
+) {
+    private val targetState = MutableStateFlow<List<AttachedTarget>>(emptyList())
+    val targets: StateFlow<List<AttachedTarget>> = targetState.asStateFlow()
+    private val linkState = MutableStateFlow<LinkState>(LinkState.Disconnected)
+    val link: StateFlow<LinkState> = linkState.asStateFlow()
+    private val infoState = MutableStateFlow<TargetInfo?>(null)
+    val info: StateFlow<TargetInfo?> = infoState.asStateFlow()
+    private val busyState = MutableStateFlow<String?>(null)
+    val busy: StateFlow<String?> = busyState.asStateFlow()
+    private val progressState = MutableStateFlow<Progress?>(null)
+    val progress: StateFlow<Progress?> = progressState.asStateFlow()
+    private val logcatState = MutableStateFlow(false)
+    val logcatRunning: StateFlow<Boolean> = logcatState.asStateFlow()
+
+    private val opLock = Mutex()
+    private var active: AttachedTarget? = null
+    private var logcatJob: Job? = null
+    @Volatile private var logcatStop = false
+
+    val currentMode: TargetMode? get() = (linkState.value as? LinkState.Connected)?.mode
+
+    fun scan() {
+        val adbOut = tools.adb?.let { runner.run(it, listOf("devices", "-l"), 15_000) }?.output.orEmpty()
+        val fbOut = tools.fastboot?.let { runner.run(it, listOf("devices"), 15_000) }?.output.orEmpty()
+        val lsusb = if (HostToolset.isWindows()) "" else runCatching {
+            runner.run(File("/usr/bin/lsusb").takeIf { it.isFile } ?: File("/bin/lsusb"), emptyList(), 5_000).output
+        }.getOrDefault("")
+        targetState.value = HostDevices.merge(
+            HostDevices.parseAdb(adbOut),
+            HostDevices.parseFastboot(fbOut),
+            HostDevices.parseLsusbEdl(lsusb),
+        )
+        val current = targetState.value
+        val act = active ?: return
+        if (current.none { it.serial == act.serial && it.mode == act.mode }) {
+            log.warn("The target disconnected (or changed mode).")
+            disconnect()
+        }
+    }
+
+    fun requestPermission(target: AttachedTarget) {
+        if (!target.hasPermission) {
+            log.warn("adb reports ${target.serial} as unauthorized. Unlock the target and allow this computer.")
+        }
+    }
+
+    fun disconnect() {
+        logcatStop = true
+        active = null
+        infoState.value = null
+        linkState.value = LinkState.Disconnected
+    }
+
+    suspend fun connect(target: AttachedTarget): Result<Unit> {
+        if (!target.hasPermission) {
+            requestPermission(target)
+            return Result.failure(IOException("Target ${target.serial} is unauthorized or offline."))
+        }
+        return operation("Connecting to ${target.displayName}") {
+            disconnect()
+            linkState.value = LinkState.Connecting("Talking to ${target.serial ?: target.deviceName}")
+            try {
+                active = target
+                when (target.mode) {
+                    TargetMode.ADB -> {
+                        requireAdb()
+                        loadAdbInfo()
+                        linkState.value = LinkState.Connected(TargetMode.ADB, target.displayName)
+                    }
+                    TargetMode.FASTBOOT -> {
+                        val vars = getvarAll()
+                        infoState.value = TargetInfo(TargetMode.FASTBOOT, fastbootRows(vars))
+                        linkState.value = LinkState.Connected(TargetMode.FASTBOOT, target.displayName)
+                    }
+                    TargetMode.EDL -> {
+                        infoState.value = TargetInfo(
+                            TargetMode.EDL,
+                            listOf(
+                                "Port" to target.deviceName,
+                                "VID:PID" to target.vidPid,
+                                "edl binary" to (tools.edl?.absolutePath ?: "not found — install bkerler/edl or use QFIL"),
+                            ),
+                        )
+                        linkState.value = LinkState.Connected(TargetMode.EDL, target.displayName)
+                        log.info("EDL on desktop uses the host `edl` binary when present. No programmer is bundled.")
+                    }
+                    TargetMode.UNKNOWN -> throw IOException("${target.displayName} is not an ADB, fastboot or EDL device.")
+                }
+            } catch (e: Exception) {
+                disconnect()
+                linkState.value = LinkState.Failed(e.message ?: e.javaClass.simpleName)
+                throw e
+            }
+        }
+    }
+
+    suspend fun refreshInfo(): Result<Unit> = operation("Refreshing device info") {
+        when (currentMode) {
+            TargetMode.ADB -> loadAdbInfo()
+            TargetMode.FASTBOOT -> infoState.value = TargetInfo(TargetMode.FASTBOOT, fastbootRows(getvarAll()))
+            else -> Unit
+        }
+    }
+
+    suspend fun adbShell(command: String): Result<Pair<String, Int?>> = operation("adb shell") {
+        log.command("adb shell $command")
+        val r = adb(listOf("shell", command), 120_000)
+        log.out(r.output.take(64 * 1024))
+        if (!r.ok) log.warn("exit status ${r.exit}")
+        r.output to r.exit
+    }
+
+    suspend fun adbReboot(target: String): Result<Unit> = operation("Reboot ${target.ifBlank { "system" }}") {
+        val args = if (target.isBlank()) listOf("reboot") else listOf("reboot", target)
+        log.command("adb ${args.joinToString(" ")}")
+        adb(args, 30_000)
+        log.info("Reboot requested; the target will reappear in a moment.")
+    }
+
+    suspend fun adbInstall(apk: LibraryFile): Result<String> = operation("Install ${apk.name}") {
+        log.command("adb install -r ${apk.name}")
+        val r = adb(listOf("install", "-r", apk.file.absolutePath), 300_000)
+        log.out(r.output)
+        if (!r.output.contains("Success") && !r.ok) throw IOException("adb install failed")
+        r.output.trim()
+    }
+
+    suspend fun adbPush(file: LibraryFile, remotePath: String): Result<Unit> = operation("Push ${file.name}") {
+        require(remotePath.startsWith("/")) { "Remote path must be absolute" }
+        log.command("adb push ${file.name} $remotePath")
+        val r = adb(listOf("push", file.file.absolutePath, remotePath), 300_000)
+        log.out(r.output)
+        if (!r.ok) throw IOException(r.output.ifBlank { "adb push failed" })
+    }
+
+    suspend fun adbPull(remotePath: String, saveAs: String): Result<LibraryFile> = operation("Pull $remotePath") {
+        require(remotePath.startsWith("/")) { "Remote path must be absolute" }
+        val dest = library.fileFor(saveAs)
+        log.command("adb pull $remotePath")
+        val r = adb(listOf("pull", remotePath, dest.absolutePath), 300_000)
+        log.out(r.output)
+        if (!r.ok) throw IOException(r.output.ifBlank { "adb pull failed" })
+        library.refresh()
+        log.info("Saved ${humanSize(dest.length())} to library as ${dest.name}.")
+        LibraryFile(dest.name, dest)
+    }
+
+    suspend fun adbSideload(zip: LibraryFile): Result<Unit> = operation("Sideload ${zip.name}") {
+        log.command("adb sideload ${zip.name}")
+        val r = adb(listOf("sideload", zip.file.absolutePath), 600_000)
+        log.out(r.output)
+        if (!r.ok) throw IOException(r.output.ifBlank { "adb sideload failed" })
+    }
+
+    fun startLogcat(filter: String) {
+        val exe = tools.adb ?: run { log.error("adb not found on PATH / ANDROID_HOME."); return }
+        val serial = activeSerial() ?: run { log.error("Connect to a target over ADB first."); return }
+        if (logcatState.value) return
+        logcatStop = false
+        logcatState.value = true
+        logcatJob = scope.launch(Dispatchers.IO) {
+            opLock.withLock {
+                busyState.value = "Logcat"
+                val args = listOf("-s", serial, "logcat", "-v", "threadtime") + filter.split(" ").filter { it.isNotBlank() }
+                log.command("adb ${args.joinToString(" ")}")
+                try {
+                    val proc = ProcessBuilder(listOf(exe.absolutePath) + args).start()
+                    proc.outputStream.close()
+                    proc.inputStream.bufferedReader().useLines { lines ->
+                        for (line in lines) {
+                            if (logcatStop) break
+                            log.out(line)
+                        }
+                    }
+                    proc.destroyForcibly()
+                } catch (e: Exception) {
+                    log.error("logcat ended: ${e.message}")
+                } finally {
+                    busyState.value = null
+                    logcatState.value = false
+                }
+            }
+        }
+    }
+
+    fun stopLogcat() {
+        logcatStop = true
+    }
+
+    suspend fun fastbootGetvar(name: String): Result<String> = operation("fastboot getvar $name") {
+        log.command("fastboot getvar $name")
+        val r = fastboot(listOf("getvar", name), 30_000)
+        log.out(r.output)
+        r.output
+    }
+
+    suspend fun fastbootReboot(target: RebootTarget): Result<Unit> = operation("Reboot ${target.label}") {
+        log.command("fastboot ${target.command}")
+        val args = when (target) {
+            RebootTarget.SYSTEM -> listOf("reboot")
+            RebootTarget.BOOTLOADER -> listOf("reboot-bootloader")
+            RebootTarget.RECOVERY -> listOf("reboot-recovery")
+            RebootTarget.FASTBOOTD -> listOf("reboot-fastboot")
+        }
+        fastboot(args, 30_000)
+        log.info("Reboot requested.")
+    }
+
+    suspend fun fastbootFlash(partition: String, image: LibraryFile, source: String = "RootForge OS"): Result<Unit> =
+        operation("Flash $partition") {
+            val vars = getvarAll()
+            val head = image.file.inputStream().use { it.readNBytes(4096) }
+            val plan = FlashPlanner.plan(
+                partition = partition,
+                slot = vars["current-slot"],
+                imageName = image.name,
+                imageSize = image.size,
+                imageHead = head,
+                maxDownload = vars["max-download-size"]?.removePrefix("0x")?.toLongOrNull(16)
+                    ?: vars["max-download-size"]?.toLongOrNull(),
+                deviceUnlocked = vars["unlocked"]?.let { it == "yes" || it == "true" },
+            )
+            if (!plan.allowed) {
+                plan.blockers.forEach { log.error("Refused: $it") }
+                throw IOException("Refused: " + plan.blockers.first())
+            }
+            val approved = approvals.request(
+                title = "Flash ${plan.partition}",
+                lines = plan.lines,
+                source = source,
+                phrase = plan.confirmationPhrase,
+            )
+            if (!approved) throw IOException("Flash was not confirmed; nothing was written.")
+            val after = getvarAll()
+            if (after["unlocked"] != vars["unlocked"] || after["current-slot"] != vars["current-slot"] || after["serialno"] != vars["serialno"]) {
+                throw IOException("The device state changed after you confirmed; nothing was written. Start again.")
+            }
+            log.command("fastboot flash $partition ${image.name}")
+            val r = fastboot(listOf("flash", partition, image.file.absolutePath), 600_000)
+            log.out(r.output)
+            if (!r.ok) throw IOException(r.output.ifBlank { "fastboot flash failed" })
+            log.info("Flashed $partition.")
+        }
+
+    suspend fun fastbootBootImage(image: LibraryFile): Result<Unit> = operation("Boot ${image.name} (temporary)") {
+        val head = image.file.inputStream().use { it.readNBytes(8) }
+        if (String(head, Charsets.ISO_8859_1) != "ANDROID!") throw IOException("${image.name} is not an Android boot image.")
+        log.command("fastboot boot ${image.name}")
+        val r = fastboot(listOf("boot", image.file.absolutePath), 180_000)
+        log.out(r.output)
+        if (!r.ok) throw IOException(r.output.ifBlank { "fastboot boot failed" })
+        log.info("The image was sent; the device boots it once and nothing is written.")
+    }
+
+    suspend fun fastbootSetSlot(slot: String, source: String = "RootForge OS"): Result<Unit> = operation("Switch to slot $slot") {
+        val vars = getvarAll()
+        if ((vars["slot-count"]?.toIntOrNull() ?: 0) < 2) throw IOException("This device reports no A/B slots.")
+        val ok = approvals.request(
+            title = "Switch active slot to $slot",
+            lines = listOf("Current slot: ${vars["current-slot"] ?: "unknown"}", "New slot: $slot", "If the other slot holds an older or incomplete build the device may not boot."),
+            source = source,
+            phrase = "SLOT $slot",
+        )
+        if (!ok) throw IOException("Not confirmed; slot unchanged.")
+        log.command("fastboot set_active $slot")
+        val r = fastboot(listOf("set_active", slot), 30_000)
+        log.out(r.output)
+        if (!r.ok) throw IOException(r.output.ifBlank { "set_active failed" })
+        infoState.value = TargetInfo(TargetMode.FASTBOOT, fastbootRows(getvarAll()))
+    }
+
+    suspend fun fastbootErase(partition: String): Result<Unit> = operation("Erase $partition") {
+        if (!Regex("[A-Za-z0-9_.-]{1,40}").matches(partition)) throw IOException("Not a plausible partition name.")
+        val ok = approvals.request(
+            title = "Erase $partition",
+            lines = listOf("Partition: $partition", "Erasing destroys its contents permanently.", if (partition == "userdata") "All user data on the target will be lost." else "Make sure you have a backup."),
+            phrase = "ERASE $partition",
+        )
+        if (!ok) throw IOException("Not confirmed; nothing was erased.")
+        log.command("fastboot erase $partition")
+        val r = fastboot(listOf("erase", partition), 120_000)
+        log.out(r.output)
+        if (!r.ok) throw IOException(r.output.ifBlank { "fastboot erase failed" })
+    }
+
+    suspend fun fastbootUnlock(source: String = "RootForge OS"): Result<Unit> = operation("Unlock bootloader") {
+        val vars = getvarAll()
+        if (vars["unlocked"] == "yes") throw IOException("The bootloader is already unlocked.")
+        val ok = approvals.request(
+            title = "Unlock bootloader",
+            lines = listOf(
+                "Unlocking ERASES ALL DATA on the target (factory reset).",
+                "It can trip tamper flags (Knox, Widevine L1, banking apps) and void warranty.",
+                "The target will ask you to confirm with its volume and power keys.",
+                "Product: ${vars["product"] ?: "unknown"}",
+            ),
+            source = source,
+            phrase = "UNLOCK",
+        )
+        if (!ok) throw IOException("Not confirmed; the bootloader was not touched.")
+        log.command("fastboot flashing unlock")
+        var r = fastboot(listOf("flashing", "unlock"), 60_000)
+        log.out(r.output)
+        if (!r.ok) {
+            log.warn("flashing unlock refused; trying oem unlock")
+            r = fastboot(listOf("oem", "unlock"), 60_000)
+            log.out(r.output)
+        }
+    }
+
+    suspend fun fastbootLock(source: String = "RootForge OS"): Result<Unit> = operation("Lock bootloader") {
+        val vars = getvarAll()
+        val ok = approvals.request(
+            title = "Lock bootloader",
+            lines = listOf(
+                "Locking ERASES ALL DATA on the target.",
+                "Do NOT lock with a custom or patched boot, recovery or vendor image installed: with verified boot enforced the device will refuse to start (a hard brick on many models).",
+                "Product: ${vars["product"] ?: "unknown"}",
+            ),
+            source = source,
+            phrase = "LOCK",
+        )
+        if (!ok) throw IOException("Not confirmed; the bootloader was not touched.")
+        log.command("fastboot flashing lock")
+        val r = fastboot(listOf("flashing", "lock"), 60_000)
+        log.out(r.output)
+        if (!r.ok) throw IOException(r.output.ifBlank { "flashing lock failed" })
+    }
+
+    suspend fun edlUpload(file: LibraryFile): Result<Unit> = operation("EDL upload programmer") {
+        val edl = tools.edl ?: throw IOException("No `edl` binary on PATH. Desktop EDL uses bkerler's edl (Linux) or a vendor tool; this app ships none.")
+        val ok = approvals.request(
+            title = "Send programmer to the EDL device",
+            lines = listOf(
+                "File: ${file.name} (${humanSize(file.size)})",
+                "Binary: ${edl.absolutePath}",
+                "Use only the loader built for this exact model and OEM.",
+            ),
+            phrase = "EDL",
+        )
+        if (!ok) throw IOException("Not confirmed; nothing was sent.")
+        log.command("edl --loader ${file.name} printgpt")
+        val r = runner.run(edl, listOf("--loader", file.file.absolutePath, "printgpt"), 180_000)
+        log.out(r.output)
+        if (!r.ok) throw IOException(r.output.ifBlank { "edl failed" })
+    }
+
+    suspend fun firehoseConfigure(memory: String): Result<Unit> = operation("Firehose configure") {
+        log.warn("Desktop Firehose configure is not implemented as a raw Sahara client; use `edl` (bkerler) for $memory, or the Android USB-Host app.")
+    }
+
+    suspend fun firehoseInfo(lun: Int): Result<Unit> = operation("Firehose storage info") {
+        val edl = tools.edl ?: throw IOException("No `edl` binary on PATH.")
+        log.command("edl printgpt --lun $lun")
+        val r = runner.run(edl, listOf("printgpt", "--lun", lun.toString()), 60_000)
+        log.out(r.output)
+    }
+
+    suspend fun firehoseProgram(lun: Int, startSector: Long, sectorSize: Int, file: LibraryFile): Result<Unit> =
+        operation("Firehose program") {
+            val edl = tools.edl ?: throw IOException("No `edl` binary on PATH.")
+            val ok = approvals.request(
+                title = "Write raw sectors via edl",
+                lines = listOf("LUN $lun, start sector $startSector, sector size $sectorSize", "File: ${file.name} (${humanSize(file.size)})", "This overwrites storage at that exact location."),
+                phrase = "WRITE LUN $lun SECTOR $startSector",
+            )
+            if (!ok) throw IOException("Not confirmed; nothing was written.")
+            log.command("edl w ...")
+            val r = runner.run(
+                edl,
+                listOf("w", "--lun", lun.toString(), "--startsector", startSector.toString(), "--sectorsize", sectorSize.toString(), file.file.absolutePath),
+                600_000,
+            )
+            log.out(r.output)
+            if (!r.ok) throw IOException(r.output.ifBlank { "edl write failed" })
+        }
+
+    suspend fun firehoseReset(): Result<Unit> = operation("Firehose reset") {
+        val edl = tools.edl ?: throw IOException("No `edl` binary on PATH.")
+        val r = runner.run(edl, listOf("reset"), 30_000)
+        log.out(r.output)
+    }
+
+    fun inspectBootImage(file: LibraryFile): BootImageParser.Result {
+        RandomAccessFile(file.file, "r").use { raf ->
+            val head = ByteArray(minOf(4096L, raf.length()).toInt()).also { raf.readFully(it) }
+            val tailLen = minOf(65536L, raf.length()).toInt()
+            raf.seek(raf.length() - tailLen)
+            val tail = ByteArray(tailLen).also { raf.readFully(it) }
+            return BootImageParser.parse(head, tail, raf.length())
+        }
+    }
+
+    fun bootImageInfoOrNull(file: LibraryFile): BootImageInfo? =
+        (inspectBootImage(file) as? BootImageParser.Result.Ok)?.info
+
+    suspend fun stageBootImage(image: LibraryFile): Result<Unit> = operation("Stage boot image on target") {
+        val parsed = inspectBootImage(image)
+        if (parsed is BootImageParser.Result.Invalid) throw IOException(parsed.reason)
+        adbPush(image, RootPaths.stagedBootPath()).getOrThrow()
+        log.info("Staged at ${RootPaths.stagedBootPath()}. Patch it with the manager app, then fetch the result.")
+    }
+
+    suspend fun launchManager(manager: RootManager): Result<Unit> = operation("Open ${manager.label} on target") {
+        log.command("adb shell monkey -p ${manager.packageName}")
+        val r = adb(listOf("shell", "monkey", "-p", manager.packageName, "-c", "android.intent.category.LAUNCHER", "1"), 30_000)
+        log.out(r.output)
+    }
+
+    suspend fun findPatchedImage(manager: RootManager): Result<String?> = operation("Look for patched image") {
+        val r = adb(listOf("shell", "ls", "-t", RootPaths.DOWNLOAD_DIR), 15_000)
+        r.output.lines().map { it.trim() }.firstOrNull { it.startsWith(manager.patchedPrefix) && it.endsWith(".img") }
+            .also { log.info(it?.let { n -> "Found $n" } ?: "No ${manager.patchedPrefix}*.img in Download yet.") }
+    }
+
+    suspend fun pullPatchedImage(remoteName: String): Result<LibraryFile> {
+        require(Regex("[A-Za-z0-9._-]+\\.img").matches(remoteName)) { "unexpected file name" }
+        return adbPull("${RootPaths.DOWNLOAD_DIR}/$remoteName", remoteName)
+    }
+
+    suspend fun buildModule(spec: ModuleSpec): Result<BuiltModule> = operation("Build module ${spec.id}") {
+        val built = ModuleBuilder.build(spec)
+        library.fileFor(built.fileName).writeBytes(built.zip)
+        library.refresh()
+        log.info("Built ${built.fileName} (${humanSize(built.zip.size.toLong())}, sha256 ${built.sha256})")
+        built.entries.forEach { log.out("  $it") }
+        built
+    }
+
+    suspend fun installModuleOnTarget(zip: LibraryFile, manager: RootManager): Result<String> =
+        operation("Install ${zip.name} via ${manager.label}") {
+            val remote = "/data/local/tmp/rf-module.zip"
+            adb(listOf("push", zip.file.absolutePath, remote), 120_000)
+            val bin = when (manager) {
+                RootManager.MAGISK -> "magisk"
+                RootManager.KERNELSU -> "/data/adb/ksud"
+                RootManager.APATCH -> "/data/adb/apd"
+            }
+            val cmd = "su -c '$bin ${manager.moduleInstallCommand.substringAfter(' ')} $remote'"
+            log.warn("The target may show a Superuser prompt for the shell; allow it once.")
+            log.command("adb shell $cmd")
+            val r = adb(listOf("shell", cmd), 180_000)
+            log.out(r.output)
+            adb(listOf("shell", "rm", "-f", remote), 15_000)
+            if (!r.ok) throw IOException("Module install exited with ${r.exit}. Is ${manager.label} active and root granted to shell?")
+            r.output
+        }
+
+    private fun loadAdbInfo() {
+        val keys = listOf(
+            "ro.product.manufacturer", "ro.product.model", "ro.product.device",
+            "ro.build.version.release", "ro.build.version.sdk", "ro.build.version.security_patch",
+            "ro.build.fingerprint", "ro.product.cpu.abi", "ro.serialno",
+            "ro.boot.verifiedbootstate", "ro.boot.flash.locked", "ro.boot.slot_suffix",
+        )
+        val p = mutableMapOf<String, String>()
+        for (k in keys) {
+            val r = adb(listOf("shell", "getprop", k), 10_000)
+            p[k] = r.stdout.trim()
+        }
+        val pkgs = adb(listOf("shell", "pm", "list", "packages"), 15_000).output
+        val managers = RootManager.entries.filter { pkgs.contains("package:${it.packageName}") }
+        infoState.value = TargetInfo(
+            TargetMode.ADB,
+            listOf(
+                "Model" to listOfNotNull(p["ro.product.manufacturer"], p["ro.product.model"]).joinToString(" ").ifBlank { "unknown" },
+                "Codename" to (p["ro.product.device"] ?: "unknown"),
+                "Android" to "${p["ro.build.version.release"] ?: "?"} (SDK ${p["ro.build.version.sdk"] ?: "?"})",
+                "Security patch" to (p["ro.build.version.security_patch"] ?: "unknown"),
+                "Build" to (p["ro.build.fingerprint"] ?: "unknown"),
+                "ABI" to (p["ro.product.cpu.abi"] ?: "unknown"),
+                "Serial" to (p["ro.serialno"] ?: active?.serial ?: "unknown"),
+                "Verified boot" to (p["ro.boot.verifiedbootstate"] ?: "unknown"),
+                "Bootloader locked" to when (p["ro.boot.flash.locked"]) { "1" -> "yes"; "0" -> "no"; else -> "unknown" },
+                "Slot" to (p["ro.boot.slot_suffix"]?.ifBlank { null } ?: "none / unknown"),
+                "Root managers" to managers.joinToString { it.label }.ifBlank { "none detected" },
+            ),
+        )
+    }
+
+    private fun getvarAll(): Map<String, String> {
+        val r = fastboot(listOf("getvar", "all"), 30_000)
+        val map = linkedMapOf<String, String>()
+        val re = Regex("""(?:\(bootloader\)\s*)?([A-Za-z0-9_.:-]+)\s*:\s*(.*)$""")
+        r.output.lineSequence().forEach { line ->
+            val m = re.find(line.trim()) ?: return@forEach
+            map[m.groupValues[1]] = m.groupValues[2].trim()
+        }
+        return map
+    }
+
+    private fun fastbootRows(v: Map<String, String>): List<Pair<String, String>> = listOf(
+        "Product" to (v["product"] ?: "unknown"),
+        "Variant" to (v["variant"] ?: "unknown"),
+        "Serial" to (v["serialno"] ?: active?.serial ?: "unknown"),
+        "Bootloader unlocked" to (v["unlocked"] ?: "unknown"),
+        "Secure" to (v["secure"] ?: "unknown"),
+        "Current slot" to (v["current-slot"] ?: "none / unknown"),
+        "Slot count" to (v["slot-count"] ?: "unknown"),
+        "Max download" to (v["max-download-size"] ?: "unknown"),
+        "Bootloader version" to (v["version-bootloader"] ?: "unknown"),
+        "Baseband" to (v["version-baseband"] ?: "unknown"),
+        "Userspace fastboot" to (v["is-userspace"] ?: "unknown"),
+    )
+
+    private fun activeSerial(): String? = active?.serial ?: active?.deviceName
+
+    private fun requireAdb(): File = tools.adb ?: throw IOException("adb not found. Install Android platform-tools and put them on PATH, or set ANDROID_HOME.")
+    private fun requireFastboot(): File = tools.fastboot ?: throw IOException("fastboot not found. Install Android platform-tools and put them on PATH, or set ANDROID_HOME.")
+
+    private fun adb(args: List<String>, timeoutMs: Long): CmdResult {
+        val exe = requireAdb()
+        val serial = activeSerial()
+        val full = if (serial != null) listOf("-s", serial) + args else args
+        val r = runner.run(exe, full, timeoutMs)
+        if (!r.ok && r.output.contains("no devices", ignoreCase = true)) throw IOException("No adb device (current mode: ${currentMode?.label ?: "none"}).")
+        return r
+    }
+
+    private fun fastboot(args: List<String>, timeoutMs: Long): CmdResult {
+        val exe = requireFastboot()
+        val serial = activeSerial()
+        val full = if (serial != null) listOf("-s", serial) + args else args
+        return runner.run(exe, full, timeoutMs)
+    }
+
+    private suspend fun <T> operation(label: String, block: suspend () -> T): Result<T> {
+        if (logcatState.value && label != "Logcat") {
+            val msg = "Stop logcat before running another action."
+            log.error(msg)
+            return Result.failure(IOException(msg))
+        }
+        return opLock.withLock {
+            busyState.value = label
+            try {
+                Result.success(withContext(Dispatchers.IO) { block() })
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.error("$label failed: ${e.message ?: e.javaClass.simpleName}")
+                Result.failure(e)
+            } finally {
+                progressState.value = null
+                busyState.value = null
+            }
+        }
+    }
+}

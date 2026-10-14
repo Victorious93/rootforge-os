@@ -22,6 +22,8 @@ RootForge OS targets people building and testing Android root modules and boot i
 1. **Host ISO (x86_64 primary)** — Debian live image with GNOME + Calamares, Android SDK/NDK tooling (mostly first-boot), kernel/boot-image toolchain (magiskboot, avbtool, cross compilers), Magisk/KernelSU-oriented scripts, rooted/unrooted AVD helpers, OTA extraction, backups, and a unified `rootforge` CLI.
 2. **On-device Debian rootfs (Termux)** — PRoot (unrooted) and chroot (rooted) flavours, optional XFCE via Termux:X11 — same project scripts where the Android kernel allows.
 3. **Host-phone Android app** — `android-app/` is a Material 3 toolkit APK that runs on one phone and controls a **target** phone over a USB-C cable (USB Host API, pure-Kotlin ADB/fastboot/Sahara). Not a Termux fork. Compiles and has hermetic protocol tests; **not run on a real host/target pair.** See [docs/ANDROID_APP.md](docs/ANDROID_APP.md).
+4. **Linux / Windows desktop** — same GUI (`android-app/desktop`), talking to host `adb`/`fastboot` (optional `edl`). Shared Kotlin core with the APK. **Not run on a real PC/phone pair.** See [docs/DESKTOP.md](docs/DESKTOP.md).
+5. **Docker toolkit image** — CLI + adb/fastboot + headless API (`docker/`). USB is a run-time passthrough (`--device /dev/bus/usb`, `--privileged`). See [docker/README.md](docker/README.md).
 
 It does **not** claim a single unlock/root script for every OEM. Unlock/flash flows detect vendor constraints (Samsung/Xiaomi/etc.) and refuse to guess. Live ISO boot is **BIOS/isolinux only**; UEFI/Secure Boot are unsupported/unverified.
 
@@ -39,7 +41,9 @@ Grounded in `config/`, `termux/`, `android-app/`, and the `rootforge` CLI (see a
 - **AI tooling hooks** — Node 22, Claude Code (pinned), Ollama installer (unpinned — see BUILD.md), `brain` second-brain CLI
 - **Termux delivery** — `termux/build-rootfs.sh` for proot/chroot (± X11); digest-required installers generated per release
 - **Host-phone toolkit APK** — ADB, fastboot, EDL, Magisk/KernelSU/APatch patching workflow, module zip builder, recovery install, logs/terminal; typed confirmation on writes; droidcommand-ai bridge ([docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md))
-- **CI & tests** — lint/unit/static hook checks; `android-apk.yml` builds the debug APK; `release.yml` builds ISO + rootfs assets into a **draft** release after verification
+- **Linux/Windows desktop GUI** — same screens; host platform-tools; CI uploads `.deb` / `.exe` (and `.msi` / AppImage when the packager produces them)
+- **Docker toolkit** — `rootforge` CLI + API on `:8787`; USB passthrough documented, not assumed
+- **CI & tests** — lint/unit/static hook checks; `android-apk.yml` builds the debug APK; `toolkit.yml` packages desktop + Docker; `release.yml` builds ISO + rootfs assets into a **draft** release after verification
 
 ## Screenshots
 
@@ -76,6 +80,17 @@ Paparazzi screenshots of the host-phone app (not a real phone): `android-app/scr
 - USB-C to USB-C **data** cable (charge-only cables enumerate nothing)
 - Android SDK (or CI) to build: JDK 17+, `ANDROID_HOME`, then `cd android-app && ./gradlew :app:assembleDebug`
 
+### Linux / Windows desktop
+
+- JDK 17 to build; a packaged `.deb` / `.exe` to run
+- Host `adb`/`fastboot` on `PATH` or `ANDROID_HOME/platform-tools`
+- **Windows USB drivers** (not bundled): [Google USB Driver](https://developer.android.com/studio/run/win-usb) for adb/fastboot; Qualcomm HS-USB QDLoader 9008 for EDL (`VID_05C6&PID_9008`). Details: [docs/DESKTOP.md](docs/DESKTOP.md)
+
+### Docker toolkit
+
+- Docker Engine on Linux for USB passthrough (`--device /dev/bus/usb`, usually also `--privileged`)
+- `ROOTFORGE_API_TOKEN`; publish `127.0.0.1:8787` only. [docker/README.md](docker/README.md)
+
 ## Build
 
 ```bash
@@ -107,7 +122,25 @@ cd android-app
 adb install -r app/build/outputs/apk/debug/app-debug.apk   # on the host phone
 ```
 
-CI: `.github/workflows/android-apk.yml` uploads the debug APK (and a release APK if signing secrets are set).
+CI: `.github/workflows/android-apk.yml` uploads the debug APK (and a release APK if signing secrets are set). `.github/workflows/toolkit.yml` uploads Linux `.deb`, Windows `.exe`, and a `docker save` of the toolkit image.
+
+Linux / Windows desktop:
+
+```bash
+cd android-app
+./gradlew :desktop:run
+./gradlew :desktop:packageDeb          # Linux
+# On Windows: gradlew :desktop:packageExe
+```
+
+Docker:
+
+```bash
+docker build -f docker/Dockerfile -t rootforge-os-toolkit .
+docker run --rm -it --privileged --device /dev/bus/usb \
+  -v /dev/bus/usb:/dev/bus/usb -p 127.0.0.1:8787:8787 \
+  -e ROOTFORGE_API_TOKEN=… rootforge-os-toolkit
+```
 
 Release automation: `.github/workflows/release.yml` (draft release + checksum verification). **Has not been run successfully on GitHub’s infrastructure for a published Release yet.**
 
@@ -140,7 +173,8 @@ Install the APK on the **host**. Plug the **target** in with a data cable. On th
 auto/                 live-build entry (config, build)
 config/               package lists, hooks, includes.chroot (scripts under usr/local/bin)
 termux/               PRoot/chroot rootfs build + release metadata templates
-android-app/          Host-phone Compose toolkit APK (USB Host, not Termux)
+android-app/          Toolkit: :core (shared), :app (Android APK), :desktop (Linux/Windows)
+docker/               Toolkit image (CLI + headless API) + USB passthrough notes
 tests/                Hermetic tests + stubs (adb/fastboot/su/…)
 docs/                 ARCHITECTURE, PLATFORM_SUPPORT, SECURITY_MODEL, ANDROID_APP, …
 Makefile              build, checksum, flash, clean targets
@@ -173,6 +207,8 @@ Third-party components fetched at build time (NodeSource, Ollama installer, Magi
 | [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md) | BIOS-only live ISO; arch caveats |
 | [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | Trust boundaries, logging, flashing gates |
 | [docs/ANDROID_APP.md](docs/ANDROID_APP.md) | Host-phone APK: USB Host, screens, limits |
+| [docs/DESKTOP.md](docs/DESKTOP.md) | Linux/Windows desktop, Windows USB drivers, Docker |
+| [docker/README.md](docker/README.md) | Toolkit image and USB passthrough |
 | [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) | Bridge protocol for droidcommand-ai |
 | [docs/REVIEW.md](docs/REVIEW.md) | Code review of this branch |
 | [CHANGELOG.md](CHANGELOG.md) | Unreleased changes (no published Release yet) |

@@ -34,7 +34,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Unit tests and debug APK
-        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
+        run: ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

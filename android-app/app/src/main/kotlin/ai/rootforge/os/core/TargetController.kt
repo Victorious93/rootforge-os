@@ -35,18 +35,6 @@ import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
 
-sealed interface LinkState {
-    data object Disconnected : LinkState
-    data class Connecting(val message: String) : LinkState
-    data class Connected(val mode: TargetMode, val label: String) : LinkState
-    data class Failed(val message: String) : LinkState
-}
-
-data class TargetInfo(val mode: TargetMode, val rows: List<Pair<String, String>>)
-data class Progress(val label: String, val done: Long, val total: Long) {
-    val fraction: Float get() = if (total <= 0) 0f else (done.toFloat() / total).coerceIn(0f, 1f)
-}
-
 /**
  * The single place that touches the target. The UI, the bridge for
  * droidcommand-ai and tests all go through here, so every destructive

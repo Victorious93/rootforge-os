@@ -18,22 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.IOException
 
-/** A device attached to the host phone, as shown on the dashboard. */
-data class AttachedTarget(
-    val deviceName: String,
-    val vendorId: Int,
-    val productId: Int,
-    val mode: TargetMode,
-    val interfaceId: Int?,
-    val hasPermission: Boolean,
-    val serial: String?,
-    val product: String?,
-    val manufacturer: String?,
-) {
-    val vidPid: String get() = "%04x:%04x".format(vendorId, productId)
-    val displayName: String get() = listOfNotNull(manufacturer, product).joinToString(" ").ifBlank { vidPid }
-}
-
 /** Bulk endpoints of one claimed interface, driven through the Android USB Host API. */
 class UsbHostTransport(
     private val connection: UsbDeviceConnection,

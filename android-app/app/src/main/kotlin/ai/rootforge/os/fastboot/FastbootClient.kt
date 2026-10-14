@@ -171,9 +171,3 @@ class FastbootClient(private val transport: BulkTransport) : Closeable {
     }
 }
 
-enum class RebootTarget(val label: String, val command: String) {
-    SYSTEM("System", "reboot"),
-    BOOTLOADER("Bootloader", "reboot-bootloader"),
-    RECOVERY("Recovery", "reboot-recovery"),
-    FASTBOOTD("Fastbootd", "reboot-fastboot"),
-}
