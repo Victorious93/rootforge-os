@@ -15,9 +15,9 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 `origin/main` at `467232a`, which includes PR #53 license lock plus #47–#51) · **Phase:**
 active development; ISO/VM/hardware validation **blocked** on infrastructure. Android
 host-phone APK is on `main`; this branch deepens the DroidCommand Messenger bridge. Not
-run on a device. License lock: original work GPL-3.0-or-later (`LICENSE`); shared Kotlin
-`:core` Apache-2.0 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not
-relicensed (`NOTICE`).
+run on a device. License lock (#53): original work GPL-3.0-or-later (`LICENSE`); shared
+Kotlin `:core` Apache-2.0 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code
+not relicensed (`NOTICE`).
 
 **What is true now** (each verified by running it this session unless marked):
 - License lock is in-tree from #53: `LICENSE` (GNU GPL v3 text; applying notice is
@@ -27,10 +27,11 @@ relicensed (`NOTICE`).
 - `bash tests/run-tests.sh` → **1016 passed, 0 failed** on this merged tree
   (`origin/main` at `467232a` plus this branch's Messenger work). `bash tests/lint.sh`
   → **lint clean** with shellcheck 0.9.0.
-- Prior Gradle on this branch (before merging #53): `:core` 68 tests (27 BridgeExecutor
-  + 4 PairingStore), `:app` 19 tests, `assembleDebug` succeeded. **Not re-run after
-  merging #53. Not installed on a phone, not bound from a live DCA, not exercised
-  over USB.**
+- Gradle on this branch (pre-#53 merge; #53 is docs/license plus one `:core` comment):
+  `:core` 68 tests, 0 failed (27 BridgeExecutor + 4 PairingStore). `:app` 19 tests
+  (protocol + Paparazzi), 0 failed. `:app:verifyPaparazziDebug` green. Debug APK at
+  `android-app/app/build/outputs/apk/debug/app-debug.apk`. **Not re-run after merging
+  #53. Not installed on a phone, not bound from a live DCA, not exercised over USB.**
 - `./gradlew :desktop:packageDeb` was **not** re-run. Windows `.exe`/`.msi` not built.
   Docker image **not** built (`docker` is not installed on this agent). **Not run against a
   PC/phone pair.**
