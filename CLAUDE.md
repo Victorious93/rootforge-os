@@ -29,15 +29,18 @@ third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
   GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
   (split + third-party not relicensed). README License section matches the polished
   landing page from #51 (license badges replace “none yet”).
-- Hermetic CLI tests and Gradle on this branch: **not yet recorded in this paragraph**;
-  re-run `bash tests/run-tests.sh`, `bash tests/lint.sh`, and
-  `./gradlew :core:test :app:assembleDebug :app:testDebugUnitTest :desktop:compileKotlin`
-  and replace this line with the real counts. Previous `main` session claimed 1016
-  hermetic passes (not re-run here until that command finishes).
+- `bash tests/run-tests.sh` → **1016 passed, 0 failed**. `bash tests/lint.sh` →
+  **lint clean** with shellcheck 0.9.0 (installed this session; it was missing at
+  first).
+- Gradle this session: `:core:test` **98 tests, 0 failed**; `:app:testDebugUnitTest`
+  **25 tests, 0 failed** (protocol + 6 Paparazzi including Flash Tools +
+  `FlashToolsContractTest`); `:app:assembleDebug` produced
+  `android-app/app/build/outputs/apk/debug/app-debug.apk`; `:desktop:compileKotlin`
+  succeeded. **Not installed on a phone, not bound from a live DCA, not exercised
+  over USB, not used to unlock or flash a device.**
 - Flash Tools is in-tree: `docs/FLASH_TOOLS_PLAN.md`, `:core` device-match / SHA-256 /
   persisted `OutputLog` / `UsbScanFilter`, Flash Tools Compose hub, same gate on
-  desktop `HostController.fastbootFlash`. **Not installed on a phone, not bound from a
-  live DCA, not exercised over USB, not used to unlock or flash a device.**
+  desktop `HostController.fastbootFlash`. EDL-Commander JNI is plan-only.
 - `./gradlew :desktop:packageDeb` was **not** re-run. Windows `.exe`/`.msi` not built.
   Docker image **not** built (`docker` is not installed on this agent). **Not run against a
   PC/phone pair.**
