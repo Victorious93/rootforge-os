@@ -33,9 +33,10 @@ third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
   (split + third-party not relicensed). README License section still matches that
   split; this session added Flash Tools / DroidCommand / git-clone CLI / Victorious
   Framework context on the same landing page.
-- `bash tests/run-tests.sh` / `bash tests/lint.sh` results: **pending this session
-  (will fill after the run).** Previous Flash Tools session on `main` recorded
-  1016 passed / lint clean; do not treat that as this session’s evidence.
+- `bash tests/run-tests.sh` → **1016 passed, 0 failed** (376 Python tests).
+  `bash tests/lint.sh` → **lint clean** with shellcheck 0.9.0 (installed this
+  session; it was missing at first). README/docs-only change; suite count
+  matches the Flash Tools tree on `main`.
 - Gradle was **not** re-run this session (README/docs only). The Flash Tools PR
   (#56) recorded `:core:test` 98/0, `:app:testDebugUnitTest` 25/0, `assembleDebug`,
   and `:desktop:compileKotlin`. **Not installed on a phone, not bound from a live
