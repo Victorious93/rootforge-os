@@ -24,11 +24,13 @@ relicensed (`NOTICE`).
   GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
   (split + third-party not relicensed). README License section matches the polished
   landing page from #51 (license badges replace “none yet”).
-- `bash tests/run-tests.sh` / `bash tests/lint.sh` will be re-run on this merge; prior
-  figures on the pre-#53 tree were 1016 passed / lint clean with shellcheck 0.9.0.
-- Prior Gradle on this branch: `:core` 68 tests (27 BridgeExecutor + 4 PairingStore),
-  `:app` 19 tests, `assembleDebug` succeeded. **Not re-run after merging #53. Not
-  installed on a phone, not bound from a live DCA, not exercised over USB.**
+- `bash tests/run-tests.sh` → **1016 passed, 0 failed** on this merged tree
+  (`origin/main` at `467232a` plus this branch's Messenger work). `bash tests/lint.sh`
+  → **lint clean** with shellcheck 0.9.0.
+- Prior Gradle on this branch (before merging #53): `:core` 68 tests (27 BridgeExecutor
+  + 4 PairingStore), `:app` 19 tests, `assembleDebug` succeeded. **Not re-run after
+  merging #53. Not installed on a phone, not bound from a live DCA, not exercised
+  over USB.**
 - `./gradlew :desktop:packageDeb` was **not** re-run. Windows `.exe`/`.msi` not built.
   Docker image **not** built (`docker` is not installed on this agent). **Not run against a
   PC/phone pair.**
