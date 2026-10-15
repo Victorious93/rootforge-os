@@ -101,3 +101,10 @@ authenticated by the bearer token instead.
 
 Writes still print a plan and require the typed phrase. There is no
 setting that skips that.
+
+## License
+
+`android-app/core` (`:core`) is Apache-2.0. The desktop client, Docker
+toolkit, CLI, and ISO tree are GPL-3.0-or-later. Third-party packages
+and build-time downloads keep their upstream licenses. See `LICENSE`,
+`android-app/core/LICENSE`, and `NOTICE`.

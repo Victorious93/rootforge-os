@@ -11,20 +11,24 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-14 · **Branch:** `cursor/droidcommand-bridge-47b8` (from `main` at
-`a7ff073`, which includes merged PRs #47–#51) · **Phase:** active development; ISO/VM/hardware
-validation **blocked** on infrastructure. Android host-phone APK is on `main`; this branch
-deepens the DroidCommand Messenger bridge. Not run on a device.
+**Last updated:** 2026-10-15 · **Branch:** `cursor/droidcommand-bridge-47b8` (merged
+`origin/main` at `467232a`, which includes PR #53 license lock plus #47–#51) · **Phase:**
+active development; ISO/VM/hardware validation **blocked** on infrastructure. Android
+host-phone APK is on `main`; this branch deepens the DroidCommand Messenger bridge. Not
+run on a device. License lock: original work GPL-3.0-or-later (`LICENSE`); shared Kotlin
+`:core` Apache-2.0 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not
+relicensed (`NOTICE`).
 
 **What is true now** (each verified by running it this session unless marked):
-- `bash tests/run-tests.sh` → 1016 passed, 0 failed. `bash tests/lint.sh` → clean with
-  shellcheck 0.9.0 (installed this session; was missing on the image).
-- `cd android-app && ./gradlew :core:test :app:assembleDebug :app:testDebugUnitTest :desktop:compileKotlin`
-  → BUILD SUCCESSFUL. `:core` 68 tests, 0 failed (27 BridgeExecutor + 4 PairingStore). `:app`
-  19 tests (protocol + Paparazzi), 0 failed. `:app:verifyPaparazziDebug` green after recording
-  the Settings pairing snapshot. Debug APK at
-  `android-app/app/build/outputs/apk/debug/app-debug.apk`. **Not installed on a phone, not
-  bound from a live DCA, not exercised over USB.**
+- License lock is in-tree from #53: `LICENSE` (GNU GPL v3 text; applying notice is
+  GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
+  (split + third-party not relicensed). README License section matches the polished
+  landing page from #51 (license badges replace “none yet”).
+- `bash tests/run-tests.sh` / `bash tests/lint.sh` will be re-run on this merge; prior
+  figures on the pre-#53 tree were 1016 passed / lint clean with shellcheck 0.9.0.
+- Prior Gradle on this branch: `:core` 68 tests (27 BridgeExecutor + 4 PairingStore),
+  `:app` 19 tests, `assembleDebug` succeeded. **Not re-run after merging #53. Not
+  installed on a phone, not bound from a live DCA, not exercised over USB.**
 - `./gradlew :desktop:packageDeb` was **not** re-run. Windows `.exe`/`.msi` not built.
   Docker image **not** built (`docker` is not installed on this agent). **Not run against a
   PC/phone pair.**
@@ -43,16 +47,15 @@ deepens the DroidCommand Messenger bridge. Not run on a device.
   first boot, real devices, a phone, a desktop USB session, `docker build -f docker/Dockerfile`,
   `release.yml` (it only runs on `v*` tags or manual dispatch; merging did not trigger it).
   PR #49 Toolkit CI (run 38523858203) after the `packages: platform-tools` fix: Lint,
-  linux-desktop, windows-desktop, and docker all green. `android-apk.yml` still does
-  not produce jobs on this repo's PRs (0-second empty runs even on the #48 merge to
-  main); APK was built locally, not by that workflow.
+  linux-desktop, windows-desktop, and docker all green. PR #50 changed
+  `android-apk.yml`; this session did not re-check that workflow's jobs.
 - **Known unpinned:** Ollama installer (hook 0020). Claude Code's native npm dependency.
   Nothing is signed.
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
-  administration. Android host-phone GUI APK is on `main` (USB Host, not Termux).
-  Linux/Windows desktop and Docker toolkit are on `main` (PR #49). This branch is the
-  Messenger bridge deepening. No GitHub Release exists (tags `v0.1.0`, `v0.1.1` only), so
-  the Termux install paths need a locally generated or future release.
+  administration. Android host-phone GUI APK, Linux/Windows desktop, and Docker toolkit
+  are on `main` (USB Host, not Termux). This branch is the Messenger bridge deepening.
+  No GitHub Release exists (tags `v0.1.0`, `v0.1.1` only), so the Termux install paths
+  need a locally generated or future release.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`.
 
@@ -68,10 +71,11 @@ the check.**
 2. Extend the config schema only where a script consumes a key (Stage 3). Done: shared execution ID, `0600` script logs redacted at exit and by the CLI (pattern-based; SIGKILL outside the CLI and unrecognised secret shapes are the known gaps), and CLI-side audit events for `flash`/`backup`/`module`/`avd`/`boot patch`/`boot flash-last`.
 3. Pin/replace the Ollama installer; add release signing (Stage 4).
 4. Run the flash/backup/restore contract against a test device the owner agrees to flash.
-The Android GUI APK landed in PR #48. Linux/Windows/Docker toolkit clients landed in
-PR #49. The DroidCommand Messenger path is this branch (PR #52): all 11 documented
-operations, pairing UI, executor gates. ISO Stage 5 is still blocked and is still the
-next hardware task. A live DCA bind on a phone has not been run.
+The Android GUI APK landed in PR #48; Linux/Windows/Docker toolkit in PR #49.
+Licensing is PR #53 (now on `main`). The DroidCommand Messenger path is this branch
+(PR #52): all 11 documented operations, pairing UI, executor gates. ISO Stage 5 is
+still blocked and is still the next hardware task. A live DCA bind on a phone has
+not been run.
 
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed
 from `docs/ARCHITECTURE_AUDIT.md`; the "governing directive" it cites was never found in the
