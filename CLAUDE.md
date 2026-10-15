@@ -43,8 +43,10 @@ code not relicensed (`NOTICE`).
   session did not re-run Gradle; the published APK is that CI debug artifact.
   **Not installed on a phone, not bound from a live DCA, not exercised over USB,
   not used to unlock or flash a device.**
-- Hermetic suite / lint: **not re-run yet this session** (workflow + docs).
-  Prior README session on this tree: 1016 passed / lint clean.
+- Hermetic suite / lint this session (workflow + docs): `bash tests/run-tests.sh`
+  → **1016 passed, 0 failed** (376 Python tests). `bash tests/lint.sh` → **lint
+  clean** with shellcheck 0.9.0. Gradle was **not** re-run; the published APK is
+  the CI debug artifact from run 38680669216.
 - Flash Tools is in-tree: `docs/FLASH_TOOLS_PLAN.md`, `:core` device-match / SHA-256 /
   persisted `OutputLog` / `UsbScanFilter`, Flash Tools Compose hub, same gate on
   desktop `HostController.fastbootFlash`. EDL-Commander JNI is plan-only.
