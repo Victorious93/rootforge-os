@@ -89,12 +89,13 @@ jobs:
         # diagnosable without re-running the whole build.
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           # Not named rootforge-*: the release job downloads rootforge-* only,
           # so a build log can never be published as a release asset.
           name: build-log-iso
           path: rootforge-build-*.log
-          retention-days: 14
+          retention-days: 7
           if-no-files-found: ignore
 
   build-termux-rootfs:
