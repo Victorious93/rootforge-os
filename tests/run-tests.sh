@@ -1759,6 +1759,28 @@ assert_contains "an unknown target lists the real ones" "$OUT" "expected magisk,
 drop_sandbox
 
 new_sandbox
+# customize.sh is sourced by Magisk/KernelSU/APatch. The display name used to be
+# spliced into double quotes, so a name containing $(...) or a quote breakout
+# ran as root at install time. Quoting must keep it as data, including an
+# apostrophe, and the file must still parse.
+evil_name="O'Brien \$(touch $SANDBOX/pwned-dollar)\"; touch $SANDBOX/pwned-break"
+run_script bash "$BIN_DIR/new_module_scaffold.sh" evilmod "$evil_name" magisk
+assert_eq "a display name with shell metacharacters still scaffolds" "$RC" "0"
+CUST="$ROOTFORGE_HOME/modules/evilmod/customize.sh"
+assert_eq "quoted customize.sh parses under sh -n" "$(sh -n "$CUST" && echo ok)" "ok"
+run_script sh -c 'ui_print() { printf "%s\n" "$1"; }; . "$1"' sh "$CUST"
+assert_eq "sourcing customize.sh does not run the display name" "$RC" "0"
+assert_contains "the display name is passed to ui_print as text" "$OUT" '$(touch'
+assert_contains "an apostrophe in the display name survives quoting" "$OUT" "O'Brien"
+if [[ -e "$SANDBOX/pwned-dollar" || -e "$SANDBOX/pwned-break" ]]; then
+  fail "a display name is not executed when customize.sh is sourced" "payload file was created"
+else
+  pass "a display name is not executed when customize.sh is sourced"
+fi
+run_script bash "$BIN_DIR/lint_module.sh" "$ROOTFORGE_HOME/modules/evilmod"
+assert_eq "a quoted customize.sh still passes lint_module.sh" "$RC" "0"
+
+new_sandbox
 # A control character in the display name would add keys to module.prop.
 run_script bash "$BIN_DIR/new_module_scaffold.sh" injmod $'Evil\nid=injected' magisk
 assert_eq "a newline in the display name is refused" "$RC" "1"

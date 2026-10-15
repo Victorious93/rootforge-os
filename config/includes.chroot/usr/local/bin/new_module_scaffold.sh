@@ -36,10 +36,20 @@ fi
 
 # The display name lands in module.prop, one key=value per line; a control
 # character (a newline above all) would let it inject further keys.
+# customize.sh is sourced by the root manager, so the name is also
+# shell-quoted before it is written there. Splicing it into double quotes
+# would run a `$()`, backtick, or `"..."` breakout as root at install time.
 if [[ -z "${DISPLAY_NAME//[[:space:]]/}" || "$DISPLAY_NAME" =~ [[:cntrl:]] ]]; then
   echo "Invalid display name: it must be non-empty and contain no control characters or newlines." >&2
   exit 1
 fi
+
+# POSIX '...'\''...' quoting. Same shape as rf_shell_quote; this script does
+# not source common.sh, and the generated customize.sh is read by Android sh.
+shell_quote() {
+  local q="'\\''"
+  printf "'%s'" "${1//\'/$q}"
+}
 
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 MODULE_DIR="$ROOTFORGE_HOME/modules/$MODULE_ID"
@@ -190,12 +200,13 @@ install_module
 exit 0
 EOF
 
-cat > "$MODULE_DIR/customize.sh" <<EOF
-# RootForge OS — customize.sh (install-time hook)
-# Victorious Framework
-ui_print "- Installing $DISPLAY_NAME"
-# set_perm_recursive \$MODPATH/system 0 0 0755 0644
-EOF
+quoted_install="$(shell_quote "- Installing $DISPLAY_NAME")"
+{
+  echo '# RootForge OS — customize.sh (install-time hook)'
+  echo '# Victorious Framework'
+  printf 'ui_print %s\n' "$quoted_install"
+  echo '# set_perm_recursive $MODPATH/system 0 0 0755 0644'
+} > "$MODULE_DIR/customize.sh"
 
 cat > "$MODULE_DIR/post-fs-data.sh" <<'EOF'
 #!/system/bin/sh

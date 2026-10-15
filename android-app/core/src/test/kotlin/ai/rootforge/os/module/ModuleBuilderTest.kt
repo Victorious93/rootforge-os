@@ -36,6 +36,14 @@ class ModuleBuilderTest {
     }
 
     @Test
+    fun aNameWithShellMetacharactersIsQuotedInCustomizeSh() {
+        val built = ModuleBuilder.build(spec(name = """O'Brien $(touch pwned)"; touch also"""))
+        val script = zipEntry(built.zip, "customize.sh")
+        assertTrue(script.contains("""ui_print '- Installing O'\''Brien $(touch pwned)"; touch also'"""))
+        assertTrue(!script.contains("""ui_print "- Installing"""))
+    }
+
+    @Test
     fun aLeadingDigitIdIsRejected() {
         assertTrue(ModuleBuilder.validate(spec(id = "9bad")).isNotEmpty())
     }

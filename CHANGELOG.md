@@ -5,6 +5,11 @@ published GitHub Release; entries below are under **Unreleased** until one is cu
 Nothing here has been validated on real hardware, a booted ISO, a VM or a phone; see
 `docs/PLATFORM_SUPPORT.md`.
 
+## Unreleased — 2026-10-15 (module install quoting)
+
+### Modules
+- A module display name is shell-quoted before it is written into `customize.sh` (`new_module_scaffold.sh` and the Kotlin `ModuleBuilder`). That file is sourced by Magisk, KernelSU, and APatch. A name containing `$(...)`, backticks, or a `"` used to be spliced into double quotes and ran as root at install time. Newlines in the name are still rejected so `module.prop` cannot gain extra keys.
+
 ## Unreleased — 2026-10-15 (README)
 
 ### Docs
