@@ -1,16 +1,43 @@
 # Changelog
 
-All notable changes to RootForge OS. The project has tags `v0.1.0` and `v0.1.1` but no
-published GitHub Release; entries below are under **Unreleased** until one is cut.
+All notable changes to RootForge OS. First published GitHub Release is **v0.2.0**
+(tag on `e1f84ea`). Older tags `v0.1.0` and `v0.1.1` have no Release.
 Nothing here has been validated on real hardware, a booted ISO, a VM or a phone; see
 `docs/PLATFORM_SUPPORT.md`.
 
-## Unreleased — 2026-10-15 (README)
+## Unreleased
+
+### Build and release
+- `release.yml` builds the debug host-phone APK on `v*` tags and attaches
+  `rootforge-os-android-debug.apk` (plus SHA-256) to a published GitHub Release
+  without waiting for the ISO / Termux draft job. The APK artifact is not named
+  `rootforge-*`, so `tests/verify-release-assets.sh` still sees only the ISO
+  set. Desktop/Docker stay on `toolkit.yml` CI artifacts. Not release-signed
+  unless `ROOTFORGE_KEYSTORE_*` secrets exist (`android-apk.yml`).
+
+## v0.2.0 — 2026-10-15
+
+First published GitHub Release, tagged at `e1f84ea` on `main`. Attaches the
+**debug** host-phone APK (`rootforge-os-android-debug.apk`, applicationId
+`ai.rootforge.os.debug`, versionName `0.1.0-debug`). Built by `android-apk.yml`
+on that commit (`assembleDebug`); signed with the Android **debug** keystore,
+not a release key. No `ROOTFORGE_KEYSTORE_*` secrets were present, so no
+release-signed APK exists. ISO and Termux rootfs are **not** attached:
+`release.yml` still drafts those only after live-build +
+`tests/verify-release-assets.sh`, and that path was not used for this tag.
+Desktop/Docker remain 14-day `toolkit.yml` artifacts.
+
+Direct APK:
+https://github.com/Victorious93/rootforge-os/releases/download/v0.2.0/rootforge-os-android-debug.apk
+
+The dated notes below are the contents of this tag (previously Unreleased).
+
+## 2026-10-15 (README)
 
 ### Docs
 - README landing page covers Flash Tools (USB OTG hub, device-match gate, SHA-256 inspector, command log, typed warnings; EDL-Commander JNI plan-only), DroidCommand Messenger pairing, git-clone CLI on Linux/Termux, Victorious Framework / VictorSuite `:core` sharing, and the existing APK / desktop / Docker / license sections. Stale “README §17” / “section 14” pointers in `HACKING.md`, `BUILD.md`, `docs/PLATFORM_SUPPORT.md`, `docs/FLASH_TOOLS_PLAN.md`, `.github/workflows/release.yml`, and the Makefile release comment updated.
 
-## Unreleased — 2026-10-15 (Flash Tools)
+## 2026-10-15 (Flash Tools)
 
 ### Android host-phone app
 - New **Flash Tools** drawer section: USB/OTG scan with ignored-device filter, connection guide, ADB tools (device check, shell, packages, push/pull, logcat, screen info, screenshot), fastboot tools (product/partition info, unlock, flash, reboot), image/APK inspector with SHA-256 verify, persistent redacted command log.
@@ -19,7 +46,7 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 - Unit tests in `:core` and `:app` for the match gate, SHA-256, command log, and USB filtering. **Not run on a host/target pair, not flashed, not unlocked.**
 - EDL-Commander JNI/NDK is plan-only (`docs/FLASH_TOOLS_PLAN.md` Phase 4).
 
-## Unreleased — 2026-10-15 (licensing)
+## 2026-10-15 (licensing)
 
 ### License
 - Repository license locked: original work is **GPL-3.0-or-later**
@@ -29,7 +56,7 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
   relicensed. README polish from #51 kept; license badges replace
   “none yet”.
 
-## Unreleased — 2026-10-14 (toolkit clients)
+## 2026-10-14 (toolkit clients)
 
 ### Linux / Windows desktop and Docker
 - Shared Kotlin `:core` (flash planner, module builder, approvals, bridge
@@ -43,7 +70,7 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 - CI: `.github/workflows/toolkit.yml` uploads Linux `.deb`, Windows `.exe`,
   and a `docker save` tarball. **Not run against a phone.**
 
-## Unreleased — 2026-10-14
+## 2026-10-14
 
 ### Android host-phone app
 - Bridge executor owns every documented gate (pending callers are recorded even
@@ -79,7 +106,7 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 - Merged main's landing-page README (#46 / `docs/README-legacy.md` archive) and
   kept this branch's Android app install notes, structure entry, and doc map.
 
-## Unreleased — 2026-10-13
+## 2026-10-13
 
 ### OTA extract
 - A same-sized image replaced in the same second is counted as produced.
@@ -88,7 +115,7 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
   clock ticked was reported as "produced no files" while the bytes on disk
   were already the new payload. Identity is now the SHA-256.
 
-## Unreleased — 2026-10-12
+## 2026-10-12
 
 ### OTA extract
 - `extract_ota.sh` and `rootforge ota extract` treat an image as produced only
@@ -97,7 +124,7 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
   make an empty extraction exit 0, and the CLI hashed that leftover as if it
   had come out of the payload just extracted.
 
-## Unreleased — 2026-10-07 (architecture repair)
+## 2026-10-07 (architecture repair)
 
 ### Device detection and flashing (A)
 - `rootforge.core.device`: `fastboot getvar` is parsed from stdout **and** stderr; names

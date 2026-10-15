@@ -11,21 +11,24 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-15 (README):** branch `cursor/readme-flash-tools-7fd1` off `origin/main`
-> at `8cf8d53` (Flash Tools already on `main` via #56). README landing page now
-> documents Flash Tools, DroidCommand Messenger pairing, git-clone CLI on
-> Linux/Termux, Victorious Framework / VictorSuite `:core` sharing, APK /
-> desktop / Docker builds, and the GPL-3.0-or-later / Apache-2.0 split.
-> EDL-Commander JNI is still plan-only. Still no GitHub Release (tags `v0.1.0`,
-> `v0.1.1` only).
+> **Update 2026-10-15 (v0.2.0 release):** branch `cursor/release-apk-assets-bb13` off
+> `origin/main` at `e1f84ea`. First published GitHub Release is **v0.2.0** on that
+> commit, with the debug host-phone APK attached (`rootforge-os-android-debug.apk`,
+> `ai.rootforge.os.debug`, debug-keystore signed). `release.yml` on that commit
+> does not attach an APK (ISO/Termux draft only), so the APK was taken from
+> `android-apk.yml` run 38680669216 and published with `gh release create`. This
+> branch adds `build-apk` / `attach-apk` jobs so later `v*` tags attach the APK
+> without waiting for live-build. Do not merge until asked. EDL-Commander JNI is
+> still plan-only. No ISO/Termux assets. Not run on a device.
 
-**Last updated:** 2026-10-15 · **Branch:** `cursor/readme-flash-tools-7fd1` (from
-`origin/main` at `8cf8d53`) · **Phase:** active development; ISO/VM/hardware validation
+**Last updated:** 2026-10-15 · **Branch:** `cursor/release-apk-assets-bb13` (from
+`origin/main` at `e1f84ea`) · **Phase:** active development; ISO/VM/hardware validation
 **blocked** on infrastructure. Android host-phone APK, Flash Tools, desktop/Docker
-toolkit, DroidCommand bridge, and license lock are on `main`. This branch is README
-accuracy. Not run on a device. License lock (#53): original work GPL-3.0-or-later
-(`LICENSE`); shared Kotlin `:core` Apache-2.0 (`android-app/core/LICENSE`);
-third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
+toolkit, DroidCommand bridge, and license lock are on `main`. This branch is the
+`release.yml` APK-attach fix plus changelog/docs for v0.2.0. Not run on a device.
+License lock (#53): original work GPL-3.0-or-later (`LICENSE`); shared Kotlin
+`:core` Apache-2.0 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK
+code not relicensed (`NOTICE`).
 
 **What is true now** (each verified by running it this session unless marked):
 - License lock is in-tree from #53: `LICENSE` (GNU GPL v3 text; applying notice is
@@ -33,14 +36,15 @@ third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
   (split + third-party not relicensed). README License section still matches that
   split; this session added Flash Tools / DroidCommand / git-clone CLI / Victorious
   Framework context on the same landing page.
-- `bash tests/run-tests.sh` → **1016 passed, 0 failed** (376 Python tests).
-  `bash tests/lint.sh` → **lint clean** with shellcheck 0.9.0 (installed this
-  session; it was missing at first). README/docs-only change; suite count
-  matches the Flash Tools tree on `main`.
-- Gradle was **not** re-run this session (README/docs only). The Flash Tools PR
-  (#56) recorded `:core:test` 98/0, `:app:testDebugUnitTest` 25/0, `assembleDebug`,
-  and `:desktop:compileKotlin`. **Not installed on a phone, not bound from a live
-  DCA, not exercised over USB, not used to unlock or flash a device.**
+- `android-apk.yml` on `main` at `e1f84ea` (run 38680669216) succeeded and
+  uploaded `rootforge-os-android-debug` (`app-debug.apk`, 17306765 bytes,
+  SHA-256 `faf743faba1b14aa5288f69883a0a1e2c284e43a77d7b32575ea3aaed8045e2f`).
+  No `rootforge-os-android-release` artifact — keystore secrets absent. This
+  session did not re-run Gradle; the published APK is that CI debug artifact.
+  **Not installed on a phone, not bound from a live DCA, not exercised over USB,
+  not used to unlock or flash a device.**
+- Hermetic suite / lint: **not re-run yet this session** (workflow + docs).
+  Prior README session on this tree: 1016 passed / lint clean.
 - Flash Tools is in-tree: `docs/FLASH_TOOLS_PLAN.md`, `:core` device-match / SHA-256 /
   persisted `OutputLog` / `UsbScanFilter`, Flash Tools Compose hub, same gate on
   desktop `HostController.fastbootFlash`. EDL-Commander JNI is plan-only.
@@ -60,7 +64,8 @@ third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
   Makefile/`auto/build` failure handling, release-asset verifier, release workflow gating.
 - **Not run anywhere:** `lb build` (no loop device), ISO boot, Calamares install, systemd
   first boot, real devices, a phone, a desktop USB session, `docker build -f docker/Dockerfile`,
-  `release.yml` (it only runs on `v*` tags or manual dispatch; merging did not trigger it).
+  `release.yml` ISO/Termux half (unexercised on a tag from this tree). v0.2.0
+  used `gh release create`, not the ISO job.
   PR #49 Toolkit CI (run 38523858203) after the `packages: platform-tools` fix: Lint,
   linux-desktop, windows-desktop, and docker all green. PR #50 changed
   `android-apk.yml`; this session did not re-check that workflow's jobs.
@@ -69,9 +74,9 @@ third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
   administration. EDL-Commander JNI/NDK (Phase 4 of `docs/FLASH_TOOLS_PLAN.md` only).
   Android host-phone GUI APK, Flash Tools, Linux/Windows desktop, and Docker toolkit
-  are on `main` (USB Host, not Termux). This branch is README docs. No GitHub Release
-  exists (tags `v0.1.0`, `v0.1.1` only), so the Termux *rootfs* install path still
-  needs a locally generated or future release; the Python CLI can run from a git clone.
+  are on `main` (USB Host, not Termux). Published Release **v0.2.0** has the
+  debug APK only. The Termux *rootfs* install path still needs a locally
+  generated or future ISO/rootfs release; the Python CLI can run from a git clone.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`. Flash Tools: `docs/FLASH_TOOLS_PLAN.md`.
 
@@ -89,8 +94,9 @@ the check.**
 4. Run the flash/backup/restore contract against a test device the owner agrees to flash.
 The Android GUI APK landed in PR #48; Linux/Windows/Docker toolkit in PR #49.
 Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`).
-Flash Tools is PR #56 (now on `main`). This branch is README accuracy. ISO Stage 5
-is still blocked and is still the next hardware task. A live host/target USB session
+Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
+This branch is `release.yml` APK attach for future tags. ISO Stage 5 is still
+blocked and is still the next hardware task. A live host/target USB session
 has not been run.
 
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed
@@ -186,8 +192,9 @@ assuming a regression.
   only when the `ROOTFORGE_KEYSTORE_*` repository secrets exist.
 - `toolkit.yml` ("Toolkit packages"): PRs, pushes to `main`, `v*` tags, manual. Jobs
   linux-desktop, windows-desktop, docker.
-- `release.yml`: only on `v*` tags or manual dispatch (`contents: write`); builds the ISO and
-  Termux rootfs, generates and verifies release assets. Never trigger it without being asked.
+- `release.yml`: only on `v*` tags or manual dispatch (`contents: write`); builds a
+  debug APK and attaches it to a published release; ISO and Termux rootfs still
+  generate and verify assets into a draft. Never trigger the ISO half without being asked.
 
 Key files: `config/includes.chroot/usr/local/lib/rootforge/core/` (CLI package),
 `.../sh/common.sh` (shared shell helpers), `config/includes.chroot/usr/local/bin/` (scripts),

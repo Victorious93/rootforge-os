@@ -34,7 +34,7 @@ The Android app **compiles** (`assembleDebug`), and its protocol / planner / mod
 
 ## What does not work / has not been run **[Certain]**
 
-- `lb build` / `sudo make build` — no loop-device ISO in this environment; GitHub `release.yml` has succeeded in the past on `workflow_dispatch`, but there is **no published GitHub Release**.
+- `lb build` / `sudo make build` — no loop-device ISO in this environment. v0.2.0 is a published GitHub Release with the **debug** APK only; ISO/Termux assets are still missing.
 - Calamares install, systemd first boot, QEMU boot of the ISO.
 - Any real phone, fastboot, Magisk/KernelSU patch, or EDL device.
 - The Android app's USB path: unit-tested against in-memory pipes, not against `UsbManager`.

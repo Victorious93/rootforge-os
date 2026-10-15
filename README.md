@@ -21,7 +21,7 @@
 
 > **Status, plainly:** the `live-build` tree, scripts, tests and packaging are all in this repository, but
 > **ISO production, ISO boot, Calamares install and on-phone use have not been verified end to end**
-> (no loop device in the build environment, and no published GitHub Release yet; tags `v0.1.0` and `v0.1.1` exist).
+> (no loop device in the build environment; v0.2.0 publishes a debug APK only — no ISO/rootfs).
 > The Android and desktop apps compile and have hermetic tests, but have **not been run on a real phone/PC pair**.
 > Nothing is cryptographically signed. See [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md) and
 > [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md).
@@ -127,8 +127,14 @@ Desktop / Docker reuse the same JSON envelope over HTTP (`docs/DESKTOP.md`); tha
 
 ## Install
 
-There is **no published release yet**, so there are no download links. Use a git clone for the CLI,
-or build the piece you need (see [Build from source](#build-from-source)).
+**v0.2.0** is the first published GitHub Release. The host-phone APK is a **debug**
+build (`ai.rootforge.os.debug`, debug-keystore signed — not release-signed):
+
+- Release: https://github.com/Victorious93/rootforge-os/releases/tag/v0.2.0
+- APK: https://github.com/Victorious93/rootforge-os/releases/download/v0.2.0/rootforge-os-android-debug.apk
+
+There is still no prebuilt ISO or Termux rootfs. Use a git clone for the CLI, or
+build the piece you need (see [Build from source](#build-from-source)).
 
 ### CLI from a git clone (Linux or Termux)
 
@@ -150,11 +156,11 @@ is missing. This is the Termux CLI path today; it is **not** the Debian-in-Termu
 
 ### Phone APK, desktop, Docker, ISO, Termux rootfs
 
-- **Phone app:** build the debug APK and `adb install -r app/build/outputs/apk/debug/app-debug.apk` on the **host** phone. It requires USB Host hardware (`android.hardware.usb.host`). Debug applicationId is `ai.rootforge.os.debug`.
+- **Phone app:** download the v0.2.0 debug APK from the [GitHub Release](https://github.com/Victorious93/rootforge-os/releases/download/v0.2.0/rootforge-os-android-debug.apk) and `adb install -r` it on the **host** phone, or build with Gradle (`app/build/outputs/apk/debug/app-debug.apk`). It requires USB Host hardware (`android.hardware.usb.host`). Debug applicationId is `ai.rootforge.os.debug`. Not release-signed.
 - **Desktop:** build the `.deb` / AppImage (Linux) or `.exe` (Windows) with Gradle; CI uploads these as `toolkit.yml` artifacts. Windows USB drivers are **not** bundled.
 - **Docker:** build the image locally.
 - **ISO:** `sudo make build`, then write it to USB with `sudo make flash USB=/dev/sdX` (verifies the checksum if present; `make list-usb` lists candidates). No prebuilt ISO exists.
-- **Termux rootfs:** build with `termux/build-rootfs.sh`. Install scripts are generated per release by `termux/make-release-metadata.sh` from the real tarballs (the checked-in templates refuse to run). There is no GitHub Release to curl from yet.
+- **Termux rootfs:** build with `termux/build-rootfs.sh`. Install scripts are generated per release by `termux/make-release-metadata.sh` from the real tarballs (the checked-in templates refuse to run). v0.2.0 does not attach a rootfs tarball.
 
 ### Requirements
 
@@ -254,7 +260,7 @@ CI (`toolkit.yml`) also attempts a Windows `.msi` (`:desktop:packageMsi`); that 
 docker build -f docker/Dockerfile -t rootforge-os-toolkit .
 ```
 
-CI: `.github/workflows/` holds `lint.yml`, `android-apk.yml`, `toolkit.yml` (desktop + Docker) and `release.yml` (draft release with checksum verification; it has not yet produced a published Release).
+CI: `.github/workflows/` holds `lint.yml`, `android-apk.yml`, `toolkit.yml` (desktop + Docker) and `release.yml` (debug APK on `v*` tags; ISO/Termux still a draft after live-build + checksum verification). v0.2.0 published the debug APK via `gh release create` because `release.yml` on that commit did not yet attach an APK.
 
 ## Project structure
 
@@ -282,7 +288,7 @@ Makefile · BUILD.md · HACKING.md · AGENTS.md · CLAUDE.md
 | [docs/DESKTOP.md](docs/DESKTOP.md) | Linux/Windows desktop, Windows USB drivers, Docker |
 | [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) | Bridge protocol for droidcommand-ai (Messenger + pairing) |
 | [tests/README.md](tests/README.md) | Test and release-verifier notes |
-| [CHANGELOG.md](CHANGELOG.md) | Unreleased changes |
+| [CHANGELOG.md](CHANGELOG.md) | v0.2.0 and later notes |
 | [LICENSE](LICENSE) · [NOTICE](NOTICE) | GPL-3.0-or-later text; split-license and third-party notices |
 | [android-app/core/LICENSE](android-app/core/LICENSE) | Apache-2.0 text for shared Kotlin `:core` |
 | [docs/README-legacy.md](docs/README-legacy.md) | Archived long-form README |
