@@ -11,6 +11,14 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-15 (docs-only refresh, `docs/update-claude-md`):** PR #52
+> (`cursor/droidcommand-bridge-47b8`) is now merged to `main` (`87ef46a`), so the
+> DroidCommand Messenger bridge work described below as "this branch" is on `main`.
+> On `main` at `87ef46a` the Lint, Android APK and Toolkit workflows all passed
+> (GitHub Actions, checked 2026-10-15). The test counts below are from the earlier
+> session and were not re-run for this refresh. Still no GitHub Release (tags `v0.1.0`,
+> `v0.1.1` only).
+
 **Last updated:** 2026-10-15 · **Branch:** `cursor/droidcommand-bridge-47b8` (merged
 `origin/main` at `467232a`, which includes PR #53 license lock plus #47–#51) · **Phase:**
 active development; ISO/VM/hardware validation **blocked** on infrastructure. Android
@@ -110,8 +118,10 @@ Source of truth when sources disagree: the implementation > this file > other do
 ## SCOPE
 
 In: the shared tool layer (`rootforge` CLI + scripts), the Debian ISO, the Termux/PRoot rootfs,
-build/release/packaging, tests, docs. Future (not started): Windows-hosted use, Android app,
-GUI, remote management — as clients of the same contracts, not reimplementations.
+build/release/packaging, tests, docs, and (now on `main`) the `android-app/` Gradle project:
+`:core` (shared Kotlin, Apache-2.0), `:app` (Android host-phone APK) and `:desktop`
+(Compose desktop; Linux .deb/AppImage, Windows .exe/.msi), plus `docker/` toolkit image —
+as clients of the same contracts, not reimplementations. Not started: remote management.
 Out: embedding unrelated OSes or projects (integrate, don't copy), committing user data,
 credentials, device images, build artifacts, or machine-specific config. Label anything
 experimental `[EXPERIMENTAL]`/`[UNSUPPORTED]`. Never silently escalate privilege or assume
@@ -151,7 +161,28 @@ bash tests/lint.sh                                        # needs shellcheck
 bash tests/check-hooks.sh                                 # static hook rules
 sudo make build                                           # ISO; needs root, loop device, ~20 GB
 tests/verify-release-assets.sh <dir> --tag vX.Y.Z         # a release directory
+# android-app/ (Gradle wrapper; same commands CI runs)
+cd android-app && ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug
+cd android-app && ./gradlew :app:verifyPaparazziDebug      # screenshot tests (Paparazzi)
+cd android-app && ./gradlew :core:test :desktop:packageDeb :desktop:packageAppImage
+docker build -f docker/Dockerfile -t rootforge-os-toolkit:ci .
 ```
+`tests/run-tests.sh` needs PyYAML (`python3-yaml`) and several host tools; in a minimal
+environment some sections fail for environmental reasons, so compare against CI before
+assuming a regression.
+
+## CI (`.github/workflows/`, verified 2026-10-15)
+
+- `lint.yml` ("Lint"): PRs, pushes to `main`, and `workflow_call` from release. Jobs:
+  shellcheck (`tests/lint.sh`), yaml-lint, package-lists, tests (`tests/run-tests.sh`),
+  python.
+- `android-apk.yml` ("Android APK"): PRs, pushes to `main`, `v*` tags, manual. Runs
+  `./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug`; a release APK is built
+  only when the `ROOTFORGE_KEYSTORE_*` repository secrets exist.
+- `toolkit.yml` ("Toolkit packages"): PRs, pushes to `main`, `v*` tags, manual. Jobs
+  linux-desktop, windows-desktop, docker.
+- `release.yml`: only on `v*` tags or manual dispatch (`contents: write`); builds the ISO and
+  Termux rootfs, generates and verifies release assets. Never trigger it without being asked.
 
 Key files: `config/includes.chroot/usr/local/lib/rootforge/core/` (CLI package),
 `.../sh/common.sh` (shared shell helpers), `config/includes.chroot/usr/local/bin/` (scripts),
@@ -159,7 +190,19 @@ Key files: `config/includes.chroot/usr/local/lib/rootforge/core/` (CLI package),
 
 ## RULES
 
+Note: `shellcheck_py-0.11.0.1-…whl` at the repo root was committed in `0aafccd`; it looks like
+a tooling artifact rather than source [Likely]. Don't add more; ask before removing it.
+
 Do: inspect before modifying; run tests after changes; report actual results; update docs
 when behaviour changes; keep PROJECT STATE current. Don't: fabricate, claim unverified
 features, commit secrets or artifacts, leave PROJECT STATE stale, flash real devices,
 merge, tag or publish without being asked.
+
+## Don's standing rules (apply to every change)
+- Work on a branch and open a PR. Never push to `main`.
+- Never merge a PR, and never ask to merge one, until every test/check on the PR passes.
+- Never commit secrets (API keys, tokens, keystore passwords, `.env` files, credentials).
+- Don't claim something works unless it was actually tested; say what was and wasn't run.
+
+Where older text here or in `AGENTS.md` says "open a PR only when asked", Don's standing
+rule above wins: changes go on a branch and through a PR.
