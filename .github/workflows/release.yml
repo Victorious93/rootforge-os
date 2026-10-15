@@ -3,7 +3,7 @@
 #
 # Builds the amd64 installable/USB-flashable ISO and the Termux/PRoot rootfs
 # tarballs (arm64 + amd64) and attaches them, with sha256 checksums, to a
-# draft GitHub Release — so both delivery paths (README sections 14 and 17)
+# draft GitHub Release — so both delivery paths (ISO and Termux rootfs; see README)
 # have real, downloadable artifacts instead of requiring every user to build
 # from source. The release is left as a draft; a maintainer publishes it
 # after a sanity check.

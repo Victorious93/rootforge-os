@@ -13,7 +13,7 @@ rootforge-os/
 ├── BUILD.md             host prerequisites and build instructions
 ├── .github/workflows/release.yml   gated on lint.yml; builds the ISO and Termux rootfs, generates
 │                                   install metadata, verifies the asset set, drafts a release
-├── termux/              Termux/PRoot variant — see README section 17
+├── termux/              Termux/PRoot variant — see README (CLI from a git clone; Termux rootfs)
 │   ├── build-rootfs.sh          debootstrap-based rootfs builder (reuses config/hooks/*)
 │   ├── package-lists/           pruned, PRoot-safe package list
 │   ├── templates/               install.sh.in and proot-plugin.sh.in — TEMPLATES that refuse to
@@ -245,8 +245,8 @@ Shipping a script in the chroot flavour that needs the third category would
 be promising something the environment cannot deliver. `harden_kernel.sh`
 and `harden_system.sh` are excluded from both for exactly that reason.
 
-The capability matrix in README section 17 is the user-facing version of
-this; keep the two in step.
+The capability matrix in `docs/PLATFORM_SUPPORT.md` is the user-facing version
+of this; keep the two in step.
 
 ## Downloading things in a script or hook
 
