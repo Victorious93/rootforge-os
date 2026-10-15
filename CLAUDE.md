@@ -11,26 +11,31 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-14 · **Branch:** `cursor/dual-license-lock-0f14` (from `main` at
-`5f267c9`, which includes merged PRs #48–#50) · **Phase:** active development; ISO/VM/hardware
-validation **blocked** on infrastructure. Android host-phone APK, Linux/Windows desktop, and
-Docker toolkit are on `main`. Not run on a device. License lock: original work
+**Last updated:** 2026-10-15 · **Branch:** `cursor/dual-license-lock-0f14` (merged
+`origin/main` at `a7ff073`: #47 OTA SHA-256 identity, #51 README polish, plus #48–#50
+already on this branch) · **Phase:** active development; ISO/VM/hardware validation
+**blocked** on infrastructure. Not run on a device. License lock: original work
 GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (each verified by running it this session unless marked):
 - License lock is in-tree: `LICENSE` (GNU GPL v3 text; applying notice is
   GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
-  (split + third-party not relicensed). README License section matches.
-- `bash tests/run-tests.sh` → 1010 passed, 0 failed. `bash tests/lint.sh` → clean with
-  shellcheck 0.9.0 (installed this session; was missing at first). GitHub `Lint` was
-  green on `main` at `5f267c9` for the pre-license tree; this branch's CI is the PR.
-- Gradle APK/desktop builds were **not re-run this session** (license-only change;
-  `:core` gained one comment line). Prior notes on `main` claimed those builds
-  succeeded; that is not re-verified here. **Not installed on a phone.**
+  (split + third-party not relicensed). README License section matches the polished
+  landing page from #51 (license badges replace “none yet”).
+- Hermetic tests/lint after this merge: **not recorded yet** in this paragraph; they
+  will be filled after `bash tests/run-tests.sh` and `bash tests/lint.sh` on the
+  merged tree. Main’s last recorded run was 1016 passed (1010 plus six same-sized
+  OTA rewrite assertions).
+- Gradle APK/desktop builds were **not re-run after this merge**. Prior notes:
+  `:core` 48 tests on the #47 tree; `:app` 19 tests / APK from #48/#49. **Not
+  installed on a phone. Docker image not built here.**
 - `extract_ota.sh` / `rootforge ota extract` count an image as produced only when this run
-  created or replaced it. A reused output directory used to make an empty dump exit 0, and the
-  CLI hashed a leftover `*.img` as if it had come from the payload just extracted.
+  created or replaced it, judged by SHA-256 of the file. A reused output directory used to make
+  an empty dump exit 0, and the CLI hashed a leftover `*.img` as if it had come from the payload
+  just extracted. An earlier stamp compared `stat` `%Y.%N`, but GNU stat's `%N` is the file
+  name, not nanoseconds, so a same-sized rewrite in the same second was reported as "produced
+  no files" after the bytes had already been replaced.
 - Implemented and stub-tested: device model + `device check`, flash contract, backup
   manifest/verify/import-legacy/restore, layered config, redacted private JSON-lines log with a CLI-side audit trail for state-changing commands and exit-time redaction of script logs,
   doctor severity model, OTA/boot/module/avd dispatch, provisioning with Calamares cleanup,

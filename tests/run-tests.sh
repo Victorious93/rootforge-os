@@ -71,7 +71,7 @@ new_sandbox() {
         RF_STUB_FLASH_RC RF_STUB_GETVAR_ALL RF_STUB_ADB_SHELL_OUT \
         RF_STUB_FLASH_FAIL_ON_CALL RF_STUB_ADB_SHELL_RC \
         RF_STUB_DL_BYTES RF_STUB_DL_RC RF_STUB_RELEASE_JSON \
-        RF_STUB_DUMPER_WRITES RF_STUB_PASSWD RF_STUB_USB_POLICY \
+        RF_STUB_DUMPER_WRITES RF_STUB_DUMPER_KEEP_MTIME RF_STUB_PASSWD RF_STUB_USB_POLICY \
         RF_STUB_CURRENT_IME \
         RF_STUB_ADB_STATE RF_STUB_BOOT_COMPLETED RF_STUB_REBOOT_RC RF_STUB_UNLOCKED \
         RF_STUB_PRODUCT RF_STUB_FASTBOOT_RC RF_STUB_FLASH_SLEEP RF_STUB_GETVAR_ALL_2 \
@@ -3090,7 +3090,14 @@ prev=""
 for a in "$@"; do [ "$prev" = "-o" ] && OUT="$a"; prev="$a"; done
 [ -n "${RF_STUB_LOG:-}" ] && printf 'dumper %s\n' "$*" >> "$RF_STUB_LOG"
 for f in ${RF_STUB_DUMPER_WRITES:-}; do
+  keep=""
+  if [ -n "${RF_STUB_DUMPER_KEEP_MTIME:-}" ] && [ -f "$OUT/$f" ] && [ ! -L "$OUT/$f" ]; then
+    keep="$(stat -c %Y "$OUT/$f")"
+  fi
   head -c 1024 /dev/zero > "$OUT/$f"
+  if [ -n "$keep" ]; then
+    touch -d "@$keep" "$OUT/$f"
+  fi
 done
 exit 0
 EOS
@@ -3153,6 +3160,24 @@ assert_eq "a run that replaces one image and leaves another still succeeds" "$RC
 assert_contains "only the image this run wrote is counted" "$OUT" "Extraction complete (1 file(s))"
 assert_eq "the replaced image is the dumper's, not the leftover" "$(wc -c < "$SANDBOX/out/boot.img" | tr -d ' ')" "1024"
 assert_eq "the image the payload did not contain is left untouched" "$(cat "$SANDBOX/out/vbmeta.img")" "old-vbmeta"
+
+# Same size and the same mtime second. Boot and vbmeta images are padded to a
+# fixed size, and re-extracting into a directory that was just written often
+# lands before the clock ticks. The old stamp was `stat -c '%Y.%N %s'`, and
+# GNU stat's %N is the file name, not nanoseconds — so the rewrite looked
+# unchanged, the script exited 1 saying the payload produced nothing, and the
+# replaced bytes were what a later flash would write.
+new_sandbox
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+mkdir -p "$SANDBOX/out"
+head -c 1024 /dev/zero | tr '\0' 'A' > "$SANDBOX/out/boot.img"
+export RF_STUB_DUMPER_WRITES="boot.img" RF_STUB_DUMPER_KEEP_MTIME=1
+run_script bash "$BIN_DIR/extract_ota.sh" "$SANDBOX/payload.bin" "$SANDBOX/out" --partitions boot
+assert_eq "a same-sized same-second replacement is a successful extraction" "$RC" "0"
+assert_contains "that replacement is counted as produced" "$OUT" "Extraction complete (1 file(s))"
+EXPECT_NEW="$(head -c 1024 /dev/zero | sha256sum | awk '{print $1}')"
+assert_eq "the same-sized replacement is the dumper's bytes" "$(sha256sum "$SANDBOX/out/boot.img" | awk '{print $1}')" "$EXPECT_NEW"
 drop_sandbox
 
 section "rootforge ota — the wrapped path end to end"
@@ -3195,6 +3220,24 @@ assert_contains "the image this run wrote is hashed" "$OUT" "$(sha256sum "$SANDB
 assert_not_contains "a leftover requested image is not hashed" "$OUT" "$STALE_VBMETA_SHA"
 assert_contains "the leftover is reported as not produced" "$OUT" "vbmeta.img  not produced"
 assert_eq "the leftover image is not rewritten" "$(cat "$SANDBOX/out/vbmeta.img")" "old-vbmeta"
+
+# The shell used to exit 1 for this case before the CLI could hash anything.
+# Both layers have to treat the bytes as the identity: a same-sized rewrite
+# whose mtime second did not move is still this extraction.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+mkdir -p "$SANDBOX/out"
+head -c 1024 /dev/zero | tr '\0' 'A' > "$SANDBOX/out/boot.img"
+OLD_SHA="$(sha256sum "$SANDBOX/out/boot.img" | awk '{print $1}')"
+export RF_STUB_DUMPER_WRITES="boot.img" RF_STUB_DUMPER_KEEP_MTIME=1
+run_script python3 -m rootforge.core.cli ota extract "$SANDBOX/payload.bin" \
+  --partitions boot --output "$SANDBOX/out"
+assert_eq "CLI extract counts a same-sized same-second replacement" "$RC" "0"
+EXPECT_NEW="$(head -c 1024 /dev/zero | sha256sum | awk '{print $1}')"
+assert_contains "the CLI hashes the replacement, not the leftover" "$OUT" "$EXPECT_NEW"
+assert_not_contains "the previous bytes are not presented as this extraction" "$OUT" "$OLD_SHA"
 
 new_sandbox
 export PYTHONPATH="$LIB_DIR"

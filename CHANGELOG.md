@@ -58,6 +58,15 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 - Merged main's landing-page README (#46 / `docs/README-legacy.md` archive) and
   kept this branch's Android app install notes, structure entry, and doc map.
 
+## Unreleased — 2026-10-13
+
+### OTA extract
+- A same-sized image replaced in the same second is counted as produced.
+  The previous check stamped `stat` `%Y.%N`, and GNU stat's `%N` is the file
+  name, not nanoseconds, so a rewrite that did not change the size before the
+  clock ticked was reported as "produced no files" while the bytes on disk
+  were already the new payload. Identity is now the SHA-256.
+
 ## Unreleased — 2026-10-12
 
 ### OTA extract
