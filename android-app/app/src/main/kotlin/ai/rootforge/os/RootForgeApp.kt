@@ -2,6 +2,7 @@ package ai.rootforge.os
 
 import ai.rootforge.os.adb.AdbKeyStore
 import ai.rootforge.os.bridge.BridgeExecutor
+import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.bridge.ControllerBackend
 import ai.rootforge.os.bridge.PairingPersistence
 import ai.rootforge.os.bridge.PairingStore
@@ -47,7 +48,15 @@ class RootForgeApp : Application() {
             override fun write(json: String) = prefs.edit().putString("paired_controllers", json).apply()
         })
     }
-    val bridge by lazy { BridgeExecutor(settings.nodeId, ControllerBackend(controller, BuildConfig.VERSION_NAME), approvals, pairing) }
+    val bridge by lazy {
+        BridgeExecutor(
+            settings.nodeId,
+            ControllerBackend(controller, BuildConfig.VERSION_NAME),
+            approvals,
+            pairing,
+            bridgeEnabled = { settings.bridgeEnabled },
+        )
+    }
 
     val adbFingerprint = kotlinx.coroutines.flow.MutableStateFlow("")
 
@@ -59,6 +68,7 @@ class RootForgeApp : Application() {
         createChannel()
         usb.start()
         refreshFingerprint()
+        watchPendingPairing()
         appScope.launch {
             usb.targets.collect { list ->
                 controller.onTargetsChanged(list)
@@ -83,11 +93,42 @@ class RootForgeApp : Application() {
     private fun createChannel() {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(
+            nm.createNotificationChannel(
             NotificationChannel(CHANNEL_APPROVALS, "Approval requests", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "A controller app is asking to run a command on the target"
+                description = "A controller app is asking to pair or run a command on the target"
             },
         )
+    }
+
+    private fun watchPendingPairing() {
+        appScope.launch {
+            var lastSize = pairing.pending.value.size
+            pairing.pending.collect { list ->
+                if (list.size > lastSize) notifyPendingPairing(list.last())
+                lastSize = list.size
+            }
+        }
+    }
+
+    private fun notifyPendingPairing(caller: CallerIdentity) {
+        if (uiVisible) return
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return
+        val open = PendingIntent.getActivity(
+            this, 1, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val n = NotificationCompat.Builder(this, CHANNEL_APPROVALS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Controller waiting to pair")
+            .setContentText("${caller.packageName} asked to control this node. Open Settings to approve.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setAutoCancel(true)
+            .setContentIntent(open)
+            .build()
+        getSystemService(NotificationManager::class.java).notify(NOTIFY_PENDING_PAIR, n)
     }
 
     private fun notifyApproval(request: ApprovalRequest) {
@@ -113,5 +154,6 @@ class RootForgeApp : Application() {
 
     private companion object {
         const val CHANNEL_APPROVALS = "approvals"
+        const val NOTIFY_PENDING_PAIR = 0x50616972 // 'Pair'
     }
 }

@@ -35,7 +35,21 @@ class ScreenshotTest {
     fun modules() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Modules) }
 
     @Test
-    fun settings() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Settings) }
+    fun settings() = snap {
+        RootForgeUi(
+            previewState().copy(
+                bridgeEnabled = true,
+                pending = listOf(
+                    ai.rootforge.os.bridge.CallerIdentity("ai.droidcommand.app.debug", "aa".repeat(32)),
+                ),
+                paired = listOf(
+                    ai.rootforge.os.bridge.PairedController("ai.example.oldcontroller", "bb".repeat(32), 0L),
+                ),
+            ),
+            NoopActions,
+            startAt = Destination.Settings,
+        )
+    }
 
     private fun snap(content: @androidx.compose.runtime.Composable () -> Unit) {
         paparazzi.snapshot { RootForgeTheme { content() } }

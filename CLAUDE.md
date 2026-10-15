@@ -11,24 +11,30 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-15 · **Branch:** `cursor/dual-license-lock-0f14` (merged
-`origin/main` at `a7ff073`: #47 OTA SHA-256 identity, #51 README polish, plus #48–#50
-already on this branch) · **Phase:** active development; ISO/VM/hardware validation
-**blocked** on infrastructure. Not run on a device. License lock: original work
-GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
-(`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
+**Last updated:** 2026-10-15 · **Branch:** `cursor/droidcommand-bridge-47b8` (merged
+`origin/main` at `467232a`, which includes PR #53 license lock plus #47–#51) · **Phase:**
+active development; ISO/VM/hardware validation **blocked** on infrastructure. Android
+host-phone APK is on `main`; this branch deepens the DroidCommand Messenger bridge. Not
+run on a device. License lock (#53): original work GPL-3.0-or-later (`LICENSE`); shared
+Kotlin `:core` Apache-2.0 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code
+not relicensed (`NOTICE`).
 
 **What is true now** (each verified by running it this session unless marked):
-- License lock is in-tree: `LICENSE` (GNU GPL v3 text; applying notice is
+- License lock is in-tree from #53: `LICENSE` (GNU GPL v3 text; applying notice is
   GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
   (split + third-party not relicensed). README License section matches the polished
   landing page from #51 (license badges replace “none yet”).
 - `bash tests/run-tests.sh` → **1016 passed, 0 failed** on this merged tree
-  (main’s 1010 plus six same-sized OTA rewrite assertions). `bash tests/lint.sh`
+  (`origin/main` at `467232a` plus this branch's Messenger work). `bash tests/lint.sh`
   → **lint clean** with shellcheck 0.9.0.
-- Gradle APK/desktop builds were **not re-run after this merge**. Prior notes:
-  `:core` 48 tests on the #47 tree; `:app` 19 tests / APK from #48/#49. **Not
-  installed on a phone. Docker image not built here.**
+- Gradle on this branch (pre-#53 merge; #53 is docs/license plus one `:core` comment):
+  `:core` 68 tests, 0 failed (27 BridgeExecutor + 4 PairingStore). `:app` 19 tests
+  (protocol + Paparazzi), 0 failed. `:app:verifyPaparazziDebug` green. Debug APK at
+  `android-app/app/build/outputs/apk/debug/app-debug.apk`. **Not re-run after merging
+  #53. Not installed on a phone, not bound from a live DCA, not exercised over USB.**
+- `./gradlew :desktop:packageDeb` was **not** re-run. Windows `.exe`/`.msi` not built.
+  Docker image **not** built (`docker` is not installed on this agent). **Not run against a
+  PC/phone pair.**
 - `extract_ota.sh` / `rootforge ota extract` count an image as produced only when this run
   created or replaced it, judged by SHA-256 of the file. A reused output directory used to make
   an empty dump exit 0, and the CLI hashed a leftover `*.img` as if it had come from the payload
@@ -50,8 +56,9 @@ GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   Nothing is signed.
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
   administration. Android host-phone GUI APK, Linux/Windows desktop, and Docker toolkit
-  are on `main` (USB Host, not Termux). No GitHub Release exists (tags `v0.1.0`,
-  `v0.1.1` only), so the Termux install paths need a locally generated or future release.
+  are on `main` (USB Host, not Termux). This branch is the Messenger bridge deepening.
+  No GitHub Release exists (tags `v0.1.0`, `v0.1.1` only), so the Termux install paths
+  need a locally generated or future release.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`.
 
@@ -68,7 +75,10 @@ the check.**
 3. Pin/replace the Ollama installer; add release signing (Stage 4).
 4. Run the flash/backup/restore contract against a test device the owner agrees to flash.
 The Android GUI APK landed in PR #48; Linux/Windows/Docker toolkit in PR #49.
-ISO Stage 5 is still blocked and is still the next hardware task. Licensing is PR #53.
+Licensing is PR #53 (now on `main`). The DroidCommand Messenger path is this branch
+(PR #52): all 11 documented operations, pairing UI, executor gates. ISO Stage 5 is
+still blocked and is still the next hardware task. A live DCA bind on a phone has
+not been run.
 
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed
 from `docs/ARCHITECTURE_AUDIT.md`; the "governing directive" it cites was never found in the

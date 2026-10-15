@@ -36,9 +36,9 @@ class RootForgeBridgeService : Service() {
         super.onCreate()
         messenger = Messenger(object : Handler(Looper.getMainLooper()) {
             override fun handleMessage(msg: Message) {
-                if (msg.what != MSG_EXCHANGE) return super.handleMessage(msg)
+                if (msg.what != BRIDGE_MSG_REQUEST) return super.handleMessage(msg)
                 val replyTo = msg.replyTo ?: return
-                val line = msg.data?.getString(KEY_REQUEST)
+                val line = msg.data?.getString(BRIDGE_KEY_REQUEST)
                 val uid = msg.sendingUid
                 scope.launch { reply(replyTo, respond(line, uid)) }
             }
@@ -59,16 +59,13 @@ class RootForgeBridgeService : Service() {
             BridgeResponse(BRIDGE_PROTOCOL_MAJOR, null, nodeId, false, null, BridgeErrorBody(category, message)),
         )
         if (line.isNullOrBlank()) return err(ErrorCategory.MALFORMED, "empty request")
-        if (!app.settings.bridgeEnabled) {
-            return err(ErrorCategory.DISABLED, "external control is switched off in RootForge OS > Settings")
-        }
         val caller = resolveCaller(uid) ?: return err(ErrorCategory.NOT_PAIRED, "could not establish the calling app's identity")
         return app.bridge.handle(line, caller)
     }
 
     private fun reply(to: Messenger, response: String) {
-        val m = Message.obtain(null, MSG_RESPONSE)
-        m.data = Bundle().apply { putString(KEY_RESPONSE, response) }
+        val m = Message.obtain(null, BRIDGE_MSG_RESPONSE)
+        m.data = Bundle().apply { putString(BRIDGE_KEY_RESPONSE, response) }
         runCatching { to.send(m) }
     }
 
@@ -99,10 +96,10 @@ class RootForgeBridgeService : Service() {
     }
 
     companion object {
-        const val ACTION_BIND = "ai.rootforge.os.action.BRIDGE"
-        const val MSG_EXCHANGE = 1
-        const val MSG_RESPONSE = 2
-        const val KEY_REQUEST = "request"
-        const val KEY_RESPONSE = "response"
+        const val ACTION_BIND = BRIDGE_ACTION
+        const val MSG_EXCHANGE = BRIDGE_MSG_REQUEST
+        const val MSG_RESPONSE = BRIDGE_MSG_RESPONSE
+        const val KEY_REQUEST = BRIDGE_KEY_REQUEST
+        const val KEY_RESPONSE = BRIDGE_KEY_RESPONSE
     }
 }

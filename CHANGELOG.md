@@ -32,6 +32,12 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 ## Unreleased — 2026-10-14
 
 ### Android host-phone app
+- Bridge executor owns every documented gate (pending callers are recorded even
+  while external control is off; unknown parameter keys and path-like image
+  names are `bad_parameters`). Messenger constants live in `Protocol.kt`.
+  Settings pairing UI shows a cert-change warning; a notification fires when a
+  controller first asks to pair. `BridgeExecutorTest` covers all eleven
+  operations plus EDL/sideload/oem rejection. **Not run next to a live DCA.**
 - New `android-app/`: Material 3 toolkit APK. Host phone talks to a target over
   USB-C using the USB Host API and a pure-Kotlin ADB / fastboot / Sahara stack.
   Module zip builder, Magisk/KernelSU/APatch patching workflow (the manager app

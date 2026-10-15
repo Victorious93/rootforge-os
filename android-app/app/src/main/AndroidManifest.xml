@@ -9,6 +9,7 @@
 
     <queries>
         <package android:name="ai.droidcommand.app" />
+        <package android:name="ai.droidcommand.app.debug" />
     </queries>
 
     <application
