@@ -23,10 +23,9 @@ GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
   (split + third-party not relicensed). README License section matches the polished
   landing page from #51 (license badges replace “none yet”).
-- Hermetic tests/lint after this merge: **not recorded yet** in this paragraph; they
-  will be filled after `bash tests/run-tests.sh` and `bash tests/lint.sh` on the
-  merged tree. Main’s last recorded run was 1016 passed (1010 plus six same-sized
-  OTA rewrite assertions).
+- `bash tests/run-tests.sh` → **1016 passed, 0 failed** on this merged tree
+  (main’s 1010 plus six same-sized OTA rewrite assertions). `bash tests/lint.sh`
+  → **lint clean** with shellcheck 0.9.0.
 - Gradle APK/desktop builds were **not re-run after this merge**. Prior notes:
   `:core` 48 tests on the #47 tree; `:app` 19 tests / APK from #48/#49. **Not
   installed on a phone. Docker image not built here.**
