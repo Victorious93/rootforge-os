@@ -10,7 +10,8 @@
 
 <p align="center">
   <a href="https://github.com/Victorious93/rootforge-os/actions/workflows/lint.yml"><img alt="Lint" src="https://github.com/Victorious93/rootforge-os/actions/workflows/lint.yml/badge.svg"></a>
-  <img alt="License: none yet" src="https://img.shields.io/badge/license-none%20yet-lightgrey">
+  <a href="LICENSE"><img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg"></a>
+  <a href="android-app/core/LICENSE"><img alt="License: Apache-2.0 (core)" src="https://img.shields.io/badge/core-Apache--2.0-blue.svg"></a>
   <img alt="Base: Debian 12" src="https://img.shields.io/badge/base-Debian%2012%20(Bookworm)-A81D33">
   <img alt="Languages: Kotlin, Shell, Python" src="https://img.shields.io/badge/code-Kotlin%20%C2%B7%20Shell%20%C2%B7%20Python-informational">
   <img alt="Status: ISO unverified" src="https://img.shields.io/badge/status-active%20%C2%B7%20ISO%20unverified-orange">
@@ -190,6 +191,8 @@ Makefile · BUILD.md · HACKING.md · AGENTS.md · CLAUDE.md
 | [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) | Bridge protocol for droidcommand-ai |
 | [tests/README.md](tests/README.md) | Test and release-verifier notes |
 | [CHANGELOG.md](CHANGELOG.md) | Unreleased changes |
+| [LICENSE](LICENSE) · [NOTICE](NOTICE) | GPL-3.0-or-later text; split-license and third-party notices |
+| [android-app/core/LICENSE](android-app/core/LICENSE) | Apache-2.0 text for shared Kotlin `:core` |
 | [docs/README-legacy.md](docs/README-legacy.md) | Archived long-form README |
 
 ## Contributing
@@ -203,9 +206,27 @@ See [HACKING.md](HACKING.md) and [AGENTS.md](AGENTS.md).
 
 ## License
 
-**This repository has no `LICENSE` file**, so redistribution terms are currently undefined. A license must be added before the project is advertised as open source.
+RootForge OS uses a **split license**. Original work in this repository is
+**GPL-3.0-or-later**, except the shared Kotlin module **`android-app/core`
+(`:core`)**, which is **Apache License 2.0**.
 
-Third-party components fetched at build time (NodeSource, the Ollama installer, the Magisk APK for `magiskboot`, GitHub release binaries, and others) keep their own licenses; see `config/hooks/` and [BUILD.md](BUILD.md).
+| Tree | License | Text |
+|---|---|---|
+| `android-app/core/` (`:core`) | Apache-2.0 | [android-app/core/LICENSE](android-app/core/LICENSE) |
+| Everything else (CLI, scripts, ISO/live-build, Termux packaging, `:app`, `:desktop`, Docker toolkit, tests, docs) | GPL-3.0-or-later | [LICENSE](LICENSE) |
+
+Copyright, the GPL applying notice (“version 3 or later”), and third-party
+attribution are in [NOTICE](NOTICE). Apache-2.0 is compatible with GPL-3.0:
+combining `:core` into the GPL-licensed Android app or desktop client does
+**not** relicense the `:core` sources; those stay Apache-2.0 so they can be
+reused on their own terms. Combined binaries are GPL-3.0-or-later.
+
+**Third-party code is not relicensed.** Debian packages in the ISO and rootfs,
+Termux / PRoot / proot-distro, Magisk / KernelSU / APatch, the Android SDK/NDK,
+Node.js, Ollama, Claude Code, Calamares, and other build-time downloads keep
+their upstream licenses. This repository does not vendor those projects; it
+ships RootForge installers, plugins, branding, and pinned fetchers. See
+[BUILD.md](BUILD.md) and `config/hooks/`.
 
 ## Credits
 

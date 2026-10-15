@@ -68,3 +68,9 @@ Paparazzi goldens: `android-app/app/src/test/snapshots/`. Human-facing copies: `
 ## droidcommand-ai
 
 RootForge is an **independent node**, not a companion APK. See `docs/DROIDCOMMAND_INTEGRATION.md`.
+
+## License
+
+The USB/protocol code and Compose UI in `:app` are GPL-3.0-or-later
+(`LICENSE` at the repository root). Shared rules in `android-app/core`
+(`:core`) are Apache-2.0 (`android-app/core/LICENSE`). See `NOTICE`.

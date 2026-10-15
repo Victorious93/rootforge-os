@@ -5,6 +5,16 @@ published GitHub Release; entries below are under **Unreleased** until one is cu
 Nothing here has been validated on real hardware, a booted ISO, a VM or a phone; see
 `docs/PLATFORM_SUPPORT.md`.
 
+## Unreleased — 2026-10-15 (licensing)
+
+### License
+- Repository license locked: original work is **GPL-3.0-or-later**
+  (`LICENSE`), except shared Kotlin `:core` (`android-app/core/`), which
+  is **Apache-2.0** (`android-app/core/LICENSE`). `NOTICE` records the
+  applying notices and that third-party/Termux/Debian/SDK code is not
+  relicensed. README polish from #51 kept; license badges replace
+  “none yet”.
+
 ## Unreleased — 2026-10-14 (toolkit clients)
 
 ### Linux / Windows desktop and Docker

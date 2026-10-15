@@ -11,23 +11,24 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-14 · **Branch:** `cursor/critical-bug-management-7076` (PR #47, with
-`main` at `5f267c9` merged in: #48 Android APK, #49 desktop + Docker toolkit, #50 APK workflow
-fix) · **Phase:** active development; ISO/VM/hardware validation **blocked** on
-infrastructure. Not run on a device.
+**Last updated:** 2026-10-15 · **Branch:** `cursor/dual-license-lock-0f14` (merged
+`origin/main` at `a7ff073`: #47 OTA SHA-256 identity, #51 README polish, plus #48–#50
+already on this branch) · **Phase:** active development; ISO/VM/hardware validation
+**blocked** on infrastructure. Not run on a device. License lock: original work
+GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
+(`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (each verified by running it this session unless marked):
-- `bash tests/run-tests.sh` → 1016 passed, 0 failed on the merged tree (main's 1010 plus six
-  assertions for the same-sized OTA rewrite). `bash tests/lint.sh` → clean with shellcheck
-  0.9.0.
-- On the merged tree `cd android-app && ./gradlew :core:test :desktop:compileKotlin` → BUILD
-  SUCCESSFUL, `:core` 48 tests, 0 failed. `:app:assembleDebug` / `:app:testDebugUnitTest` were
-  **not** re-run after the merge (no Android SDK on this agent); their last recorded result
-  (main, #48/#49: `:app` 19 tests, APK built) is from a prior session. **Not installed on a
-  phone, not exercised over USB.**
-- `./gradlew :desktop:packageDeb` → `android-app/desktop/build/compose/binaries/main/deb/rootforgeos_0.1.0-1_amd64.deb`
-  (local, gitignored). Windows `.exe`/`.msi` not built here. Docker image **not** built
-  (`docker` is not installed on this agent). **Not run against a PC/phone pair.**
+- License lock is in-tree: `LICENSE` (GNU GPL v3 text; applying notice is
+  GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
+  (split + third-party not relicensed). README License section matches the polished
+  landing page from #51 (license badges replace “none yet”).
+- `bash tests/run-tests.sh` → **1016 passed, 0 failed** on this merged tree
+  (main’s 1010 plus six same-sized OTA rewrite assertions). `bash tests/lint.sh`
+  → **lint clean** with shellcheck 0.9.0.
+- Gradle APK/desktop builds were **not re-run after this merge**. Prior notes:
+  `:core` 48 tests on the #47 tree; `:app` 19 tests / APK from #48/#49. **Not
+  installed on a phone. Docker image not built here.**
 - `extract_ota.sh` / `rootforge ota extract` count an image as produced only when this run
   created or replaced it, judged by SHA-256 of the file. A reused output directory used to make
   an empty dump exit 0, and the CLI hashed a leftover `*.img` as if it had come from the payload
@@ -43,16 +44,14 @@ infrastructure. Not run on a device.
   first boot, real devices, a phone, a desktop USB session, `docker build -f docker/Dockerfile`,
   `release.yml` (it only runs on `v*` tags or manual dispatch; merging did not trigger it).
   PR #49 Toolkit CI (run 38523858203) after the `packages: platform-tools` fix: Lint,
-  linux-desktop, windows-desktop, and docker all green. `android-apk.yml` still does
-  not produce jobs on this repo's PRs (0-second empty runs even on the #48 merge to
-  main); APK was built locally, not by that workflow.
+  linux-desktop, windows-desktop, and docker all green. PR #50 changed
+  `android-apk.yml`; this session did not re-check that workflow's jobs.
 - **Known unpinned:** Ollama installer (hook 0020). Claude Code's native npm dependency.
   Nothing is signed.
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
-  administration. Android host-phone GUI APK is on `main` (USB Host, not Termux).
-  Linux/Windows desktop (`android-app/desktop`) and Docker toolkit (`docker/`) are on this
-  branch. No GitHub Release exists (tags `v0.1.0`, `v0.1.1` only), so the Termux install
-  paths need a locally generated or future release.
+  administration. Android host-phone GUI APK, Linux/Windows desktop, and Docker toolkit
+  are on `main` (USB Host, not Termux). No GitHub Release exists (tags `v0.1.0`,
+  `v0.1.1` only), so the Termux install paths need a locally generated or future release.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`.
 
@@ -68,8 +67,8 @@ the check.**
 2. Extend the config schema only where a script consumes a key (Stage 3). Done: shared execution ID, `0600` script logs redacted at exit and by the CLI (pattern-based; SIGKILL outside the CLI and unrecognised secret shapes are the known gaps), and CLI-side audit events for `flash`/`backup`/`module`/`avd`/`boot patch`/`boot flash-last`.
 3. Pin/replace the Ollama installer; add release signing (Stage 4).
 4. Run the flash/backup/restore contract against a test device the owner agrees to flash.
-The Android GUI APK landed in PR #48. Linux/Windows/Docker toolkit clients are this
-branch. ISO Stage 5 is still blocked and is still the next hardware task.
+The Android GUI APK landed in PR #48; Linux/Windows/Docker toolkit in PR #49.
+ISO Stage 5 is still blocked and is still the next hardware task. Licensing is PR #53.
 
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed
 from `docs/ARCHITECTURE_AUDIT.md`; the "governing directive" it cites was never found in the
