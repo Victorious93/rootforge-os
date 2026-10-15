@@ -5,6 +5,11 @@ published GitHub Release; entries below are under **Unreleased** until one is cu
 Nothing here has been validated on real hardware, a booted ISO, a VM or a phone; see
 `docs/PLATFORM_SUPPORT.md`.
 
+## Unreleased — 2026-10-15 (README)
+
+### Docs
+- README landing page covers Flash Tools (USB OTG hub, device-match gate, SHA-256 inspector, command log, typed warnings; EDL-Commander JNI plan-only), DroidCommand Messenger pairing, git-clone CLI on Linux/Termux, Victorious Framework / VictorSuite `:core` sharing, and the existing APK / desktop / Docker / license sections. Stale “README §17” / “section 14” pointers in `HACKING.md`, `BUILD.md`, `docs/PLATFORM_SUPPORT.md`, `docs/FLASH_TOOLS_PLAN.md`, `.github/workflows/release.yml`, and the Makefile release comment updated.
+
 ## Unreleased — 2026-10-15 (Flash Tools)
 
 ### Android host-phone app

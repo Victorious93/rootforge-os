@@ -11,9 +11,9 @@
 #   sudo make clean           remove live-build output (keeps cache)
 #   sudo make distclean       remove everything including the package cache
 #
-# Prebuilt ISOs (and the Termux/PRoot rootfs tarballs) are also published to
-# GitHub Releases by .github/workflows/release.yml on tagged pushes — you
-# don't have to build locally just to flash a USB drive.
+# .github/workflows/release.yml is meant to attach the ISO and Termux rootfs
+# tarballs to a draft GitHub Release on tagged pushes. No published Release
+# exists yet (tags v0.1.0 and v0.1.1 only), so you still have to build locally.
 
 ISO     := rootforge-os-amd64.hybrid.iso
 

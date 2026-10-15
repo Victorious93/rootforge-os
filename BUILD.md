@@ -2,13 +2,13 @@
 **Victorious Framework | Origin Source Labs**
 
 Don't need to build it yourself? `.github/workflows/release.yml` is meant to build this
-same ISO (and the Termux/PRoot rootfs — see README section 17) on every
+same ISO (and the Termux/PRoot rootfs — see README, Termux rootfs) on every
 tagged push, after the lint/test workflow passes on that commit, verify the
 whole asset set with `tests/verify-release-assets.sh`, and attach it, with
 checksums, to a **draft** [GitHub Release](https://github.com/Victorious93/rootforge-os/releases).
-**As of 2026-10-07 no release exists** (the repository has tags `v0.1.0` and
+**As of 2026-10-15 no release exists** (the repository has tags `v0.1.0` and
 `v0.1.1` but no Release), and the workflow has not been run on GitHub's
-infrastructure after these changes. README section 14 covers flashing a
+infrastructure after these changes. README Install covers flashing a
 downloaded or locally-built ISO to a USB drive (`make list-usb` /
 `sudo make flash USB=/dev/sdX`, both checksum-aware).
 

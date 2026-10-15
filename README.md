@@ -5,11 +5,13 @@
 <h1 align="center">RootForge OS</h1>
 
 <p align="center">
-  <strong>A Debian 12 live/install distro, Termux rootfs and USB toolkit for Android root-module development, boot-image work and device automation.</strong>
+  <strong>A Debian 12 live/install distro, Termux CLI, and USB toolkit for Android root-module development, boot-image work and device automation.</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/Victorious93/rootforge-os/actions/workflows/lint.yml"><img alt="Lint" src="https://github.com/Victorious93/rootforge-os/actions/workflows/lint.yml/badge.svg"></a>
+  <a href="https://github.com/Victorious93/rootforge-os/actions/workflows/android-apk.yml"><img alt="Android APK" src="https://github.com/Victorious93/rootforge-os/actions/workflows/android-apk.yml/badge.svg"></a>
+  <a href="https://github.com/Victorious93/rootforge-os/actions/workflows/toolkit.yml"><img alt="Toolkit packages" src="https://github.com/Victorious93/rootforge-os/actions/workflows/toolkit.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg"></a>
   <a href="android-app/core/LICENSE"><img alt="License: Apache-2.0 (core)" src="https://img.shields.io/badge/core-Apache--2.0-blue.svg"></a>
   <img alt="Base: Debian 12" src="https://img.shields.io/badge/base-Debian%2012%20(Bookworm)-A81D33">
@@ -31,13 +33,24 @@ RootForge OS is one set of device-facing rules (the `rootforge` CLI and its scri
 | Front end | What it is | Where |
 |---|---|---|
 | **Host ISO** (x86_64) | Debian live/install image with GNOME, Calamares, Android SDK/NDK tooling, boot-image toolchain and the `rootforge` CLI | `config/`, `auto/`, [BUILD.md](BUILD.md) |
-| **Termux rootfs** | Debian rootfs for Android, PRoot (no root) or chroot (rooted), optional XFCE via Termux:X11 | `termux/` |
-| **Host-phone APK** | Material 3 app: one phone controls a *target* phone over USB-C (USB Host API, pure-Kotlin ADB/fastboot/Sahara). Not a Termux fork | `android-app/app`, [docs/ANDROID_APP.md](docs/ANDROID_APP.md) |
-| **Linux / Windows desktop** | Same GUI, talking to host `adb`/`fastboot` (optional `edl`) | `android-app/desktop`, [docs/DESKTOP.md](docs/DESKTOP.md) |
+| **Termux CLI** | Same Python CLI from a git clone (no Debian rootfs required). A full PRoot/chroot Debian rootfs is a separate, release-generated artifact | clone path below; `termux/` |
+| **Host-phone APK** | Material 3 app: one phone controls a *target* phone over USB OTG (USB Host API, pure-Kotlin ADB/fastboot/Sahara). Flash Tools is the guided hub. Not a Termux fork | `android-app/app`, [docs/ANDROID_APP.md](docs/ANDROID_APP.md) |
+| **Linux / Windows desktop** | Same Compose screens, talking to host `adb`/`fastboot` (optional `edl`) | `android-app/desktop`, [docs/DESKTOP.md](docs/DESKTOP.md) |
 | **Docker toolkit** | `rootforge` CLI + adb/fastboot + headless JSON API | `docker/`, [docker/README.md](docker/README.md) |
 
 It does **not** claim one unlock/root script for every OEM: flows detect vendor constraints and refuse to guess.
 The live ISO boots **BIOS/isolinux only**; UEFI and Secure Boot are unsupported.
+
+### Victorious Framework
+
+This repository is **RootForge OS**, part of the Victorious Framework (Origin Source Labs). Shared Kotlin
+rules live in `android-app/core` (`:core`) under **Apache-2.0** so other Victorious clients — including
+**VictorSuite** — can reuse the flash planner, device-match gate, approvals and DroidCommand envelope
+without taking the GPL ISO/app tree. Per [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md),
+Termux-native workflows stay with VictorSuite; Sahara / Firehose stay with
+EDL-Commander (JNI into that crate is plan-only; see
+[docs/FLASH_TOOLS_PLAN.md](docs/FLASH_TOOLS_PLAN.md) Phase 4). This repo's Termux path is the CLI
+checkout plus an optional Debian-in-Termux rootfs, not a second copy of those projects.
 
 ## Screenshots
 
@@ -49,34 +62,105 @@ Host-phone app, rendered by Paparazzi unit tests with sample data (these are not
 
 Live ISO, Calamares installer and Termux screenshots coming soon (they need a real boot/install first).
 
+## Flash Tools
+
+The **Flash Tools** drawer on the host-phone APK (and the same Compose tree on desktop) is a guided
+hub: one phone drives a target over **USB OTG**. Buttons call the existing `TargetController` /
+desktop `HostController` — there is no second USB stack and no bundled `adb` binary. **Not run on a
+real host/target pair.**
+
+| Pane | What it does |
+|---|---|
+| **Guide** | Cable, OTG adapter, USB debugging, bootloader key combo, first RSA prompt |
+| **Scan** | USB Host refresh; ADB / fastboot / EDL targets vs ignored HID/charge-only devices; grant permission and connect |
+| **ADB** | Device check (product / slot / fingerprint), shell, packages, push/pull, logcat, screen info, screenshot |
+| **Fastboot** | Product and partition info, unlock (typed `UNLOCK`), flash a library image (match gate then typed `FLASH <partition>`), reboot |
+| **Inspect** | Image / APK kind, size, SHA-256, sidecar claim, typed-hex verify. Does not talk to the target |
+| **Log** | Same redacted `OutputLog` as the output panel; persisted (`command-log.jsonl` in the app files dir; desktop: `~/.rootforge/command-log.jsonl`) |
+
+A flash is **refused** unless a sidecar `<image>.manifest.json` matches the target (product/codename,
+slot, and fingerprint *or* a declared product/slot claim). A sidecar SHA-256 is checked when present.
+Mismatches are logged as `Refused: …` and nothing is written. There is no in-app override. The same
+gate runs on the dedicated Fastboot / Recovery / Root screens and on desktop `HostController.fastbootFlash`.
+
+Unlock still shows a large on-screen warning (factory reset, Knox / Widevine / banking, warranty) and
+requires the typed phrase. Discovery (a USB device appeared) is not authorization.
+
+**EDL** on the dedicated EDL screen is an experimental Kotlin Sahara / Firehose client. This app ships
+no OEM programmer. A later JNI path that reuses EDL-Commander is **plan only**
+([docs/FLASH_TOOLS_PLAN.md](docs/FLASH_TOOLS_PLAN.md) Phase 4); it is not implemented.
+
+## DroidCommand Messenger
+
+RootForge is an **independent node**, not a droidcommand-ai companion. Removing DCA does not disable
+any RootForge feature. The phone app exports a bound Messenger service
+(`ai.rootforge.os.action.BRIDGE`; debug package `ai.rootforge.os.debug`). Pairing is
+**Settings → External control**:
+
+1. Copy the **Node id**.
+2. Let DCA bind the action and send `rootforge.capabilities.get`. The first reply is `not_paired` or
+   `bridge_disabled`; that is expected. The caller is recorded as pending even if the switch is off.
+3. Turn **Allow external controllers** on (default **off**), then **Pair** the pending package +
+   signing-certificate hash.
+
+Reads then run. Control operations prompt on the host phone. Destructive operations use the same
+typed phrase as the GUI (`FLASH boot`, `UNLOCK`, …). EDL, sideload of a zip, and raw `fastboot oem`
+are GUI-only (`unknown_operation` on the bridge). Protocol: [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md).
+**Not bound from a live DCA.**
+
+Desktop / Docker reuse the same JSON envelope over HTTP (`docs/DESKTOP.md`); that is not the Messenger path.
+
 ## Key features
 
 - **Unified CLI** - `rootforge` groups: `doctor`, `devices`, `device`, `config`, `flash`, `backup`, `module`, `boot`, `ota`, `avd`
-- **Flash safety** - `device check` go/no-go, typed `FLASH <serial>` confirmation, slot-aware fastboot, unknown state blocks writes
+- **Flash safety (CLI)** - `device check` go/no-go, typed `FLASH <serial>` confirmation, slot-aware fastboot, unknown state blocks writes
+- **Flash safety (app / desktop)** - sidecar device-match gate, SHA-256 inspect/verify, typed `FLASH <partition>` / `UNLOCK`, no skip setting
 - **Backups** - partition backup/restore with `manifest.json`, verify and legacy-import paths
 - **Module workflow** - Magisk / KernelSU / APatch scaffolds, package/push/install helpers, linting, Zygisk header templates
 - **OTA and boot images** - payload extraction/inspection (payload-dumper-go pinned in image hooks), boot patch and flash helpers
 - **AVD helpers** - create/list/start rooted or unrooted emulator profiles (x86_64 host with KVM)
 - **Logging** - private (`0600`) JSON-lines logs with secret redaction and an audit trail for state-changing commands
 - **Live + installable Debian** - GNOME session, Calamares installer (erase / alongside / manual), build provenance manifest
-- **Termux delivery** - `termux/build-rootfs.sh` for PRoot/chroot (with or without X11); digest-required installers generated per release
-- **Phone, desktop and Docker clients** - ADB, fastboot, EDL, boot patching, module zip builder, recovery install, logs/terminal; typed confirmation on writes; [droidcommand-ai bridge](docs/DROIDCOMMAND_INTEGRATION.md)
+- **Termux delivery** - git-clone CLI now; `termux/build-rootfs.sh` for a PRoot/chroot Debian rootfs when you have a tarball; digest-required installers generated per release
+- **Phone, desktop and Docker clients** - ADB and fastboot on every client; experimental in-app EDL; optional host `edl` on desktop; typed confirmation on writes
 - **Tests and CI** - hermetic shell/Python tests and static hook checks; workflows for lint, Android APK, desktop + Docker, and a draft-release pipeline
 
 ## Install
 
-There is **no published release yet**, so there are no download links. Build the piece you need (see [Build from source](#build-from-source)):
+There is **no published release yet**, so there are no download links. Use a git clone for the CLI,
+or build the piece you need (see [Build from source](#build-from-source)).
 
-- **ISO:** `sudo make build`, then write it to USB with `sudo make flash USB=/dev/sdX` (verifies the checksum if present; `make list-usb` lists candidates).
-- **Phone app:** build the debug APK and `adb install -r app/build/outputs/apk/debug/app-debug.apk` on the **host** phone. It requires USB Host hardware.
-- **Desktop:** build the `.deb` (Linux) or `.exe` (Windows) with Gradle; CI also uploads these as `toolkit.yml` artifacts.
+### CLI from a git clone (Linux or Termux)
+
+The CLI is designed to run from a working tree: `runner.py` finds `usr/local/bin` scripts next to the
+Python package. The installed `rootforge` shim hardcodes `PYTHONPATH=/usr/local/lib` and is for the
+ISO / rootfs, not a checkout.
+
+```bash
+git clone https://github.com/Victorious93/rootforge-os.git
+cd rootforge-os
+export PYTHONPATH="$PWD/config/includes.chroot/usr/local/lib"
+python3 -m rootforge.core.cli doctor
+```
+
+Device work also needs `adb`, `fastboot`, `jq`, `curl`, `unzip`, `zip` and `sha256sum` on `PATH`.
+PyYAML (`python3-yaml`) is optional except for `rootforge config`. `rootforge doctor` reports what
+is missing. This is the Termux CLI path today; it is **not** the Debian-in-Termux rootfs and has
+**not been run on a phone**.
+
+### Phone APK, desktop, Docker, ISO, Termux rootfs
+
+- **Phone app:** build the debug APK and `adb install -r app/build/outputs/apk/debug/app-debug.apk` on the **host** phone. It requires USB Host hardware (`android.hardware.usb.host`). Debug applicationId is `ai.rootforge.os.debug`.
+- **Desktop:** build the `.deb` / AppImage (Linux) or `.exe` (Windows) with Gradle; CI uploads these as `toolkit.yml` artifacts. Windows USB drivers are **not** bundled.
 - **Docker:** build the image locally.
-- **Termux rootfs:** build with `termux/build-rootfs.sh`. Install scripts are generated per release by `termux/make-release-metadata.sh`.
+- **ISO:** `sudo make build`, then write it to USB with `sudo make flash USB=/dev/sdX` (verifies the checksum if present; `make list-usb` lists candidates). No prebuilt ISO exists.
+- **Termux rootfs:** build with `termux/build-rootfs.sh`. Install scripts are generated per release by `termux/make-release-metadata.sh` from the real tarballs (the checked-in templates refuse to run). There is no GitHub Release to curl from yet.
 
 ### Requirements
 
 | Target | Needs |
 |---|---|
+| CLI from a clone | Python 3; for device work: `adb`/`fastboot`, `jq`, `curl`, `unzip`, `zip`, `sha256sum`. Optional: PyYAML |
 | ISO build | Debian 12 or Ubuntu 22.04+; `live-build`, `debootstrap`, `squashfs-tools`, `xorriso`, `isolinux`, `syslinux-utils`; root, a free loop device, 20 GB+ disk, 4 GB+ RAM |
 | Installed system | x86_64; `/dev/kvm` and `kvm` group membership for emulator acceleration |
 | Termux rootfs | Termux; `proot-distro` (unrooted) or `su` (chroot); several GB free; optional Termux:X11 |
@@ -87,27 +171,31 @@ There is **no published release yet**, so there are no download links. Build the
 ## Usage
 
 ```bash
-rootforge doctor              # environment checks
-rootforge devices             # adb/fastboot inventory
-rootforge device check …      # go/no-go before writes
-rootforge module scaffold …   # Magisk/KernelSU templates
-rootforge flash boot …        # flash an already-patched boot/init_boot (typed confirm)
-rootforge backup create …     # partition backup with manifest
-rootforge ota extract …       # payload extraction
-rootforge avd create …        # rooted/unrooted AVD helpers (x86_64 host)
+export PYTHONPATH="$PWD/config/includes.chroot/usr/local/lib"   # skip on an installed ISO/rootfs
+python3 -m rootforge.core.cli doctor              # environment checks
+python3 -m rootforge.core.cli devices             # adb/fastboot inventory
+python3 -m rootforge.core.cli device check …      # go/no-go before writes
+python3 -m rootforge.core.cli module scaffold …   # Magisk/KernelSU templates
+python3 -m rootforge.core.cli flash boot …        # flash an already-patched boot/init_boot (typed confirm)
+python3 -m rootforge.core.cli backup create …     # partition backup with manifest
+python3 -m rootforge.core.cli ota extract …       # payload extraction
+python3 -m rootforge.core.cli avd create …        # rooted/unrooted AVD helpers (x86_64 host)
 ```
 
+On an installed ISO or Termux rootfs the same verbs are `rootforge doctor`, `rootforge devices`, and so on.
+
 Flash, unlock and backup scripts refuse unsafe vendors/states where possible and write only after explicit confirmation.
+CLI confirmations are `FLASH <serial>`, `UNLOCK <serial>`, `RESTORE <serial>` (typed on `/dev/tty`).
 Logs live under `${ROOTFORGE_HOME:-$HOME/rootforge}/logs/`, are created `0600` and redacted on exit (pattern-based, so do not rely on it to hide secrets).
 
-### Host phone to target phone over USB-C
+### Host phone to target phone over USB OTG
 
-1. Install the APK on the **host** phone and plug the **target** in with a data cable.
-2. On the target, enable USB debugging (or reboot to bootloader/EDL) and accept the host's USB-permission prompt.
-3. In the app: Dashboard, then Connect. On first ADB use, accept the RSA key dialog on the **target**.
+1. Install the APK on the **host** phone and plug the **target** in with a USB-C **data** cable.
+2. On the target, enable USB debugging (or reboot to bootloader) and accept the host's USB-permission prompt.
+3. In the app: Flash Tools → Scan (or Dashboard → Connect). On first ADB use, accept the RSA key dialog on the **target**.
 4. If the host does not switch into USB-host mode, put a USB-C OTG adapter on the **host** end.
 
-Destructive actions print a plan and require a typed phrase. To pair with droidcommand-ai, use Settings, then External control; the protocol is in [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md).
+Destructive actions print a plan and require a typed phrase. Pairing with droidcommand-ai is [above](#droidcommand-messenger).
 
 ### Docker
 
@@ -154,8 +242,11 @@ cd android-app
 
 ./gradlew :desktop:run             # desktop GUI
 ./gradlew :desktop:packageDeb      # Linux .deb
+./gradlew :desktop:packageAppImage # Linux AppImage (also built in CI)
 gradlew :desktop:packageExe        # Windows .exe (run on Windows)
 ```
+
+CI (`toolkit.yml`) also attempts a Windows `.msi` (`:desktop:packageMsi`); that artifact is optional if WiX/jpackage cannot produce it.
 
 **Docker:**
 
@@ -171,7 +262,7 @@ CI: `.github/workflows/` holds `lint.yml`, `android-apk.yml`, `toolkit.yml` (des
 auto/                 live-build entry (config, build)
 config/               package lists, hooks, includes.chroot (scripts under usr/local/bin)
 termux/               PRoot/chroot rootfs build + release metadata templates
-android-app/          :core (shared), :app (Android APK), :desktop (Linux/Windows)
+android-app/          :core (shared Apache-2.0), :app (Android APK), :desktop (Linux/Windows)
 docker/               Toolkit image (CLI + headless API)
 tests/                Hermetic tests + stubs (adb/fastboot/su/…)
 docs/                 Architecture, platform support, security model, app docs, …
@@ -186,9 +277,10 @@ Makefile · BUILD.md · HACKING.md · AGENTS.md · CLAUDE.md
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture |
 | [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md) | BIOS-only live ISO; architecture caveats |
 | [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | Trust boundaries, logging, flashing gates |
-| [docs/ANDROID_APP.md](docs/ANDROID_APP.md) | Host-phone APK: USB Host, screens, limits |
+| [docs/ANDROID_APP.md](docs/ANDROID_APP.md) | Host-phone APK: USB Host, Flash Tools, screens, limits |
+| [docs/FLASH_TOOLS_PLAN.md](docs/FLASH_TOOLS_PLAN.md) | Flash Tools hub, device-match gate, EDL-Commander plan |
 | [docs/DESKTOP.md](docs/DESKTOP.md) | Linux/Windows desktop, Windows USB drivers, Docker |
-| [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) | Bridge protocol for droidcommand-ai |
+| [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) | Bridge protocol for droidcommand-ai (Messenger + pairing) |
 | [tests/README.md](tests/README.md) | Test and release-verifier notes |
 | [CHANGELOG.md](CHANGELOG.md) | Unreleased changes |
 | [LICENSE](LICENSE) · [NOTICE](NOTICE) | GPL-3.0-or-later text; split-license and third-party notices |
@@ -219,7 +311,8 @@ Copyright, the GPL applying notice (“version 3 or later”), and third-party
 attribution are in [NOTICE](NOTICE). Apache-2.0 is compatible with GPL-3.0:
 combining `:core` into the GPL-licensed Android app or desktop client does
 **not** relicense the `:core` sources; those stay Apache-2.0 so they can be
-reused on their own terms. Combined binaries are GPL-3.0-or-later.
+reused on their own terms (including by VictorSuite). Combined binaries are
+GPL-3.0-or-later.
 
 **Third-party code is not relicensed.** Debian packages in the ISO and rootfs,
 Termux / PRoot / proot-distro, Magisk / KernelSU / APatch, the Android SDK/NDK,

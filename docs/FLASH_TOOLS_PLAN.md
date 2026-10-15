@@ -6,7 +6,7 @@ existing `TargetController` / ADB / fastboot / `ApprovalCenter` / typed-phrase
 path. It does not add a second USB stack, a bundled `adb` binary, or a setting
 that skips a safety check.
 
-Status of this document: Phases 1–3 are implemented on the Flash Tools branch.
+Status of this document: Phases 1–3 are implemented on `main` (PR #56).
 Phase 4 is **plan only** and must not be implemented until the EDL-Commander
 maintainer agrees the JNI surface.
 
