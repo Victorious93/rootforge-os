@@ -3,6 +3,8 @@ package ai.rootforge.os.ui
 import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.bridge.PairedController
 import ai.rootforge.os.core.ApprovalRequest
+import ai.rootforge.os.core.DigestCheck
+import ai.rootforge.os.core.FileInspection
 import ai.rootforge.os.core.LibraryFile
 import ai.rootforge.os.core.LinkState
 import ai.rootforge.os.core.LogLine
@@ -84,6 +86,15 @@ interface AppActions {
 
     fun answerApproval(id: Long, approve: Boolean, typed: String)
 
+    fun scanUsb()
+    fun adbDeviceCheck()
+    fun adbListPackages(thirdPartyOnly: Boolean)
+    fun adbScreenInfo()
+    fun adbScreenshot()
+    fun fastbootPartitionInfo()
+    fun inspectLibraryFile(file: LibraryFile): FileInspection
+    fun verifySha256(file: LibraryFile, expectedHex: String): DigestCheck
+
     fun runTerminal(line: String)
     fun clearLog()
     fun shareLog()
@@ -132,6 +143,14 @@ object NoopActions : AppActions {
     override fun buildModule(spec: ModuleSpec, then: (BuiltModule) -> Unit) = Unit
     override fun installModule(file: LibraryFile, manager: RootManager) = Unit
     override fun answerApproval(id: Long, approve: Boolean, typed: String) = Unit
+    override fun scanUsb() = Unit
+    override fun adbDeviceCheck() = Unit
+    override fun adbListPackages(thirdPartyOnly: Boolean) = Unit
+    override fun adbScreenInfo() = Unit
+    override fun adbScreenshot() = Unit
+    override fun fastbootPartitionInfo() = Unit
+    override fun inspectLibraryFile(file: LibraryFile) = ai.rootforge.os.core.FileInspector.inspect(file.name, file.size, ByteArray(0), "")
+    override fun verifySha256(file: LibraryFile, expectedHex: String) = ai.rootforge.os.core.DigestCheck(false, expectedHex, "", "preview")
     override fun runTerminal(line: String) = Unit
     override fun clearLog() = Unit
     override fun shareLog() = Unit

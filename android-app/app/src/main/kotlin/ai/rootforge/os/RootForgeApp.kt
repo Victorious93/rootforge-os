@@ -34,7 +34,7 @@ import java.io.File
 /** Wires the long-lived pieces once so the UI, the USB receiver and the bridge service share one controller. */
 class RootForgeApp : Application() {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    val log = OutputLog()
+    val log by lazy { OutputLog(persistFile = File(filesDir, "command-log.jsonl")) }
     val settings by lazy { AppSettings(getSharedPreferences("settings", MODE_PRIVATE)) }
     val library by lazy { Library(File(filesDir, "library")) }
     val usb by lazy { UsbHost(this) }

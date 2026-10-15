@@ -94,7 +94,7 @@ authenticated by the bearer token instead.
 | Piece | Where |
 |---|---|
 | Flash planner, module zip, terminal parser, approvals, bridge ops | `android-app/core` |
-| Compose screens (Dashboard … Settings) | `android-app/app/.../ui`, compiled into both APK and desktop |
+| Compose screens (Dashboard, Flash Tools … Settings) | `android-app/app/.../ui`, compiled into both APK and desktop. Flash uses the same sidecar device-match gate as the phone app. |
 | Android USB ADB/fastboot/Sahara | `android-app/app` only |
 | Host `adb`/`fastboot`/`edl` | `android-app/desktop` |
 | Python headless API | `docker/api/rootforge_api.py` (same operation names) |

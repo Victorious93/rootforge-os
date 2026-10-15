@@ -52,6 +52,12 @@ fun PreviewDashboard() {
     RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Dashboard, startExpanded = true) }
 }
 
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Flash Tools")
+@Composable
+fun PreviewFlashTools() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.FlashTools) }
+}
+
 @Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "ADB")
 @Composable
 fun PreviewAdb() {

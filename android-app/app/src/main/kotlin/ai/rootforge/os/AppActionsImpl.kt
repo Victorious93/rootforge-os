@@ -1,6 +1,8 @@
 package ai.rootforge.os
 
 import ai.rootforge.os.bridge.CallerIdentity
+import ai.rootforge.os.core.DigestCheck
+import ai.rootforge.os.core.FileInspection
 import ai.rootforge.os.core.LibraryFile
 import ai.rootforge.os.core.importUri
 import ai.rootforge.os.core.TerminalCommand
@@ -96,6 +98,15 @@ class AppActionsImpl(
     override fun answerApproval(id: Long, approve: Boolean, typed: String) {
         app.approvals.answer(id, approve, typed)
     }
+
+    override fun scanUsb() = controller.scanUsb()
+    override fun adbDeviceCheck() { scope.launch { controller.adbDeviceCheck() } }
+    override fun adbListPackages(thirdPartyOnly: Boolean) { scope.launch { controller.adbListPackages(thirdPartyOnly) } }
+    override fun adbScreenInfo() { scope.launch { controller.adbScreenInfo() } }
+    override fun adbScreenshot() { scope.launch { controller.adbScreenshot() } }
+    override fun fastbootPartitionInfo() { scope.launch { controller.fastbootPartitionInfo() } }
+    override fun inspectLibraryFile(file: LibraryFile): FileInspection = controller.inspectLibraryFile(file)
+    override fun verifySha256(file: LibraryFile, expectedHex: String): DigestCheck = controller.verifyLibrarySha256(file, expectedHex)
 
     override fun runTerminal(line: String) {
         val cmd = TerminalCommand.parse(line) ?: return

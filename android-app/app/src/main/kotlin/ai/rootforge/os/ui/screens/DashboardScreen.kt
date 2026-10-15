@@ -117,7 +117,7 @@ fun DashboardScreen(state: AppUiState, actions: AppActions) {
 }
 
 @Composable
-private fun TargetRow(target: AttachedTarget, state: AppUiState, actions: AppActions) {
+internal fun TargetRow(target: AttachedTarget, state: AppUiState, actions: AppActions) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {

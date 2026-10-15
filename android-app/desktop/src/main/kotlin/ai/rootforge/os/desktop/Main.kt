@@ -30,7 +30,7 @@ const val DESKTOP_VERSION = "0.1.0"
 fun main(args: Array<String>) {
     val home = File(System.getProperty("user.home"), ".rootforge")
     val settings = DesktopSettings(File(home, "desktop.properties"))
-    val log = OutputLog()
+    val log = OutputLog(persistFile = File(home, "command-log.jsonl"))
     val library = Library(File(home, "library"))
     val approvals = ApprovalCenter()
     val tools = HostToolset.detect()

@@ -9,7 +9,10 @@ import ai.rootforge.os.fastboot.FastbootClient
 import ai.rootforge.os.fastboot.FastbootException
 import ai.rootforge.os.fastboot.FastbootReply
 import ai.rootforge.os.fastboot.FlashPlanner
+import ai.rootforge.os.fastboot.FlashSafety
 import ai.rootforge.os.fastboot.RebootTarget
+import ai.rootforge.os.fastboot.TargetIdentity
+import ai.rootforge.os.usb.UsbScanFilter
 import ai.rootforge.os.module.BuiltModule
 import ai.rootforge.os.module.ModuleBuilder
 import ai.rootforge.os.module.ModuleSpec
@@ -166,6 +169,7 @@ class TargetController(
         val managers = runCatching { installedManagers(conn) }.getOrDefault(emptyList())
         val rows = listOf(
             "Model" to listOfNotNull(p["ro.product.manufacturer"], p["ro.product.model"]).joinToString(" ").ifBlank { "unknown" },
+            "Product" to (p["ro.product.name"] ?: "unknown"),
             "Codename" to (p["ro.product.device"] ?: "unknown"),
             "Android" to "${p["ro.build.version.release"] ?: "?"} (SDK ${p["ro.build.version.sdk"] ?: "?"})",
             "Security patch" to (p["ro.build.version.security_patch"] ?: "unknown"),
@@ -212,6 +216,33 @@ class TargetController(
 
     fun fastbootVars(): Map<String, String> = infoState.value?.takeIf { it.mode == TargetMode.FASTBOOT }?.rows?.toMap().orEmpty()
 
+    internal fun currentIdentity(fastbootVars: Map<String, String>? = null): TargetIdentity =
+        TargetIdentity.merge(
+            fastbootVars?.let { TargetIdentity.fromFastboot(it) },
+            infoState.value?.let { TargetIdentity.fromTargetInfo(it) },
+        )
+
+    fun scanUsb() {
+        usb.refresh()
+        val scan = UsbScanFilter.partition(usb.targets.value)
+        log.command("usb scan")
+        UsbScanFilter.describe(scan).forEach { line ->
+            if (line.startsWith("Ignored ") || line.startsWith("No ADB")) log.info(line) else log.out(line)
+        }
+    }
+
+    fun inspectLibraryFile(file: LibraryFile): FileInspection {
+        val head = file.file.inputStream().use { it.readNBytes(4096) }
+        val sha = FileDigest.sha256Hex(file.file)
+        return FileInspector.inspect(file.name, file.size, head, sha, FlashSafety.loadSidecar(library, file.name))
+    }
+
+    fun verifyLibrarySha256(file: LibraryFile, expectedHex: String): DigestCheck {
+        val check = FileDigest.verify(expectedHex, FileDigest.sha256Hex(file.file))
+        if (check.ok) log.info("${file.name}: ${check.message}") else log.error("${file.name}: ${check.message}")
+        return check
+    }
+
     // ----- ADB ----------------------------------------------------------------------------------------
 
     suspend fun adbShell(command: String): Result<ShellOutcome> = operation("adb shell") {
@@ -249,14 +280,35 @@ class TargetController(
     }
 
     suspend fun adbPull(remotePath: String, saveAs: String): Result<LibraryFile> = operation("Pull $remotePath") {
-        require(remotePath.startsWith("/")) { "Remote path must be absolute" }
-        val dest = library.fileFor(saveAs)
-        log.command("adb pull $remotePath")
-        dest.outputStream().use { out -> requireAdb().pull(remotePath, out) { setProgress("Pulling", it, 0) } }
-        clearProgress()
-        library.refresh()
-        log.info("Saved ${humanSize(dest.length())} to library as ${dest.name}.")
-        LibraryFile(dest.name, dest)
+        pullToLibrary(remotePath, saveAs)
+    }
+
+    suspend fun adbDeviceCheck(): Result<Unit> = operation("Device check") {
+        loadAdbInfo(requireAdb())
+        log.command("adb device check")
+        infoState.value?.rows?.forEach { (k, v) -> log.out("$k: $v") }
+    }
+
+    suspend fun adbListPackages(thirdPartyOnly: Boolean = false): Result<String> = operation("List packages") {
+        val cmd = if (thirdPartyOnly) "pm list packages -3" else "pm list packages"
+        log.command("adb shell $cmd")
+        requireAdb().shell(cmd, timeoutMs = 60_000) { log.out(it) }.output
+    }
+
+    suspend fun adbScreenInfo(): Result<Unit> = operation("Screen info") {
+        val conn = requireAdb()
+        log.command("adb shell wm size")
+        conn.shell("wm size") { log.out(it) }
+        log.command("adb shell wm density")
+        conn.shell("wm density") { log.out(it) }
+    }
+
+    suspend fun adbScreenshot(): Result<LibraryFile> = operation("Screenshot") {
+        val remote = "/sdcard/Download/rf-screencap.png"
+        log.command("adb shell screencap -p $remote")
+        val cap = requireAdb().shell("screencap -p '$remote'", timeoutMs = 30_000) { log.out(it) }
+        if (cap.exitCode != null && cap.exitCode != 0) throw IOException("screencap failed (exit ${cap.exitCode})")
+        pullToLibrary(remote, "rf-screencap.png")
     }
 
     suspend fun adbSideload(zip: LibraryFile): Result<Unit> = operation("Sideload ${zip.name}") {
@@ -297,6 +349,16 @@ class TargetController(
 
     // ----- fastboot -----------------------------------------------------------------------------------
 
+    suspend fun fastbootPartitionInfo(): Result<Unit> = operation("Partition info") {
+        log.command("fastboot getvar all")
+        val fb = requireFastboot()
+        val vars = fb.getvarAll { log.out(it) }
+        vars.filterKeys { it.startsWith("partition-") || it in setOf("product", "current-slot", "slot-count") }
+            .toSortedMap()
+            .forEach { (k, v) -> log.out("$k: $v") }
+        infoState.value = TargetInfo(TargetMode.FASTBOOT, fastbootRows(vars))
+    }
+
     suspend fun fastbootCommand(command: String): Result<String> = operation("fastboot $command") {
         log.command("fastboot $command")
         val fb = requireFastboot()
@@ -317,6 +379,9 @@ class TargetController(
         operation("Flash $partition") {
             val fb = requireFastboot()
             val vars = fb.getvarAll()
+            val identity = currentIdentity(vars)
+            val safety = FlashSafety.evaluateLibrary(library, image, identity)
+            FlashSafety.refuse(log, safety)
             val head = image.file.inputStream().use { it.readNBytes(4096) }
             val plan = FlashPlanner.plan(
                 partition = partition,
@@ -333,7 +398,7 @@ class TargetController(
             }
             val approved = approvals.request(
                 title = "Flash ${plan.partition}",
-                lines = plan.lines,
+                lines = plan.lines + safety.planLines(identity),
                 source = source,
                 phrase = plan.confirmationPhrase,
             )
@@ -343,6 +408,7 @@ class TargetController(
             if (after["unlocked"] != vars["unlocked"] || after["current-slot"] != vars["current-slot"] || after["serialno"] != vars["serialno"]) {
                 throw IOException("The device state changed after you confirmed; nothing was written. Start again.")
             }
+            FlashSafety.refuse(log, FlashSafety.evaluateLibrary(library, image, currentIdentity(after)))
             log.command("fastboot flash $partition ${image.name}")
             image.file.inputStream().buffered().use {
                 fb.flash(partition, it, image.size, { d, t -> setProgress("Flashing $partition", d, t) }) { line -> log.out(line) }
@@ -564,6 +630,17 @@ class TargetController(
     // ----- plumbing -----------------------------------------------------------------------------------
 
     data class ShellOutcome(val output: String, val exitCode: Int?)
+
+    private fun pullToLibrary(remotePath: String, saveAs: String): LibraryFile {
+        require(remotePath.startsWith("/")) { "Remote path must be absolute" }
+        val dest = library.fileFor(saveAs)
+        log.command("adb pull $remotePath")
+        dest.outputStream().use { out -> requireAdb().pull(remotePath, out) { setProgress("Pulling", it, 0) } }
+        clearProgress()
+        library.refresh()
+        log.info("Saved ${humanSize(dest.length())} to library as ${dest.name}.")
+        return LibraryFile(dest.name, dest)
+    }
 
     private fun requireAdb(): AdbConnection = adb?.takeIf { it.connected } ?: throw IOException("The target is not connected over ADB (current mode: ${currentMode?.label ?: "none"}).")
     private fun requireFastboot(): FastbootClient = fastboot ?: throw IOException("The target is not in fastboot mode (current mode: ${currentMode?.label ?: "none"}). Use Reboot > Bootloader first.")

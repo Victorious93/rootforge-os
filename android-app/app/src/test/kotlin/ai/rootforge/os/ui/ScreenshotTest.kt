@@ -20,6 +20,9 @@ class ScreenshotTest {
     fun dashboard() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Dashboard, startExpanded = true) }
 
     @Test
+    fun flashTools() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.FlashTools) }
+
+    @Test
     fun adb() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Adb) }
 
     @Test
