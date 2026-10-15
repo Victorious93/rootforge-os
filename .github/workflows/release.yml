@@ -241,7 +241,11 @@ jobs:
         # Binds this tag, each architecture and flavor, the download URL and
         # the SHA-256 together; fails if a tarball is missing, mismatched or
         # not what its name says. Also publishes the launcher it pins.
-        run: termux/make-release-metadata.sh --tag "$GITHUB_REF_NAME" --dist release-assets --out release-assets
+        # bash: the script was 100644 (not executable). Tag v0.2.0's release
+        # job failed here with "Permission denied" after ISO + four rootfs
+        # builds had already succeeded (run 38682276372). Tests already call
+        # it with bash.
+        run: bash termux/make-release-metadata.sh --tag "$GITHUB_REF_NAME" --dist release-assets --out release-assets
 
       - name: Add the ISO to SHA256SUMS
         run: |

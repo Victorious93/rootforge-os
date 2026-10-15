@@ -14,6 +14,9 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
   `rootforge-*`, so `tests/verify-release-assets.sh` still sees only the ISO
   set. Desktop/Docker stay on `toolkit.yml` CI artifacts. Not release-signed
   unless `ROOTFORGE_KEYSTORE_*` secrets exist (`android-apk.yml`).
+- `release.yml` now runs `bash termux/make-release-metadata.sh` (the file was
+  `100644`; v0.2.0's `release` job died with Permission denied after ISO +
+  four rootfs builds succeeded). The script is also marked executable.
 
 ## v0.2.0 — 2026-10-15
 

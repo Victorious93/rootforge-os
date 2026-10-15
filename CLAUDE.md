@@ -64,10 +64,14 @@ code not relicensed (`NOTICE`).
   doctor severity model, OTA/boot/module/avd dispatch, provisioning with Calamares cleanup,
   Termux verified install + per-release metadata generation + CPU-honest SDK bootstrap,
   Makefile/`auto/build` failure handling, release-asset verifier, release workflow gating.
-- **Not run anywhere:** `lb build` (no loop device), ISO boot, Calamares install, systemd
-  first boot, real devices, a phone, a desktop USB session, `docker build -f docker/Dockerfile`,
-  `release.yml` ISO/Termux half (unexercised on a tag from this tree). v0.2.0
-  used `gh release create`, not the ISO job.
+- **Not run anywhere:** `lb build` locally (no loop device here), ISO boot, Calamares
+  install, systemd first boot, real devices, a phone, a desktop USB session,
+  `docker build -f docker/Dockerfile`. Tag `v0.2.0` triggered `release.yml` run
+  38682276372: checks, `build-iso`, and all four `build-termux-rootfs` jobs
+  **succeeded**; the `release` job failed (`termux/make-release-metadata.sh`
+  Permission denied — file was `100644`). Cancel was 403. v0.2.0 stayed
+  published with the debug APK (`gh release create`). ISO/rootfs were not
+  attached. This branch invokes the generator with `bash` and marks it +x.
   PR #49 Toolkit CI (run 38523858203) after the `packages: platform-tools` fix: Lint,
   linux-desktop, windows-desktop, and docker all green. PR #50 changed
   `android-apk.yml`; this session did not re-check that workflow's jobs.
