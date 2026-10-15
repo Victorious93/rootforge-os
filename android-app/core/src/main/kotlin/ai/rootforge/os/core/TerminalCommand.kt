@@ -32,7 +32,7 @@ sealed interface TerminalCommand {
   fastboot set_active <a|b>       (asks for confirmation)
   fastboot flashing unlock|lock   (asks for confirmation)
   devices, clear, help
-Flashing images, sideload, push/pull and EDL are on their own screens."""
+Flashing images, sideload, push/pull and EDL are on Flash Tools or their own screens."""
 
         fun parse(line: String): TerminalCommand? {
             val text = line.trim()
@@ -85,7 +85,7 @@ Flashing images, sideload, push/pull and EDL are on their own screens."""
                     "lock" -> FastbootLock
                     else -> Refused("Only 'flashing unlock' and 'flashing lock' are supported here.")
                 }
-                "flash", "boot", "update", "flashall" -> Refused("Use the Fastboot or Recovery screen: it picks the image and shows the plan before writing.")
+                "flash", "boot", "update", "flashall" -> Refused("Use Flash Tools or the Fastboot / Recovery screen: it picks the image, checks the sidecar claim, and shows the plan before writing.")
                 "oem" -> Refused("Raw OEM commands are not forwarded; they can be destructive and are vendor-specific.")
                 else -> Refused("Unsupported fastboot command. Type help.")
             }

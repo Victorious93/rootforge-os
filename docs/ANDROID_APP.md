@@ -31,7 +31,9 @@ The app declares `android.hardware.usb.host` as required. Tablets/phones without
 
 ## Screens
 
-Dashboard (target + props), ADB (shell, install, push/pull, sideload, reboot, logcat), Fastboot (getvar, flash, boot-once, lock/unlock, slot, erase), EDL, Root/Patching, Module Builder, Recovery, Logs/Terminal, Settings.
+Dashboard (target + props), **Flash Tools** (USB/OTG scan, connection guide, ADB tools, fastboot tools, image/APK inspector, persistent command log), ADB (shell, install, push/pull, sideload, reboot, logcat), Fastboot (getvar, flash, boot-once, lock/unlock, slot, erase), EDL, Root/Patching, Module Builder, Recovery, Logs/Terminal, Settings.
+
+Flash Tools is a hub: buttons call the same `TargetController` methods as the dedicated screens. A flash is **refused** unless a sidecar `<image>.manifest.json` matches the target (product/codename, slot, and fingerprint *or* a declared product/slot claim). A mismatch is logged as `Refused: …` and nothing is written. Plan: `docs/FLASH_TOOLS_PLAN.md`.
 
 Writes (flash, erase, unlock, lock, slot, Firehose program, EDL programmer upload) print a plan and require a **typed phrase**. There is no setting that skips that.
 
@@ -58,7 +60,8 @@ Paparazzi goldens: `android-app/app/src/test/snapshots/`. Human-facing copies: `
 
 ## Limits (honest)
 
-- **EDL / Firehose is experimental.** Sahara identity and programmer upload are implemented and tested against a fake device. No 9008 hardware was available. Retail phones accept only the OEM-signed programmer for that exact model; this app ships none and cannot bypass Secure Boot.
+- **Flash Tools** (and every other flash button) now requires a sidecar device claim. An image with no `<name>.manifest.json` is refused, including from the dedicated Fastboot / Recovery / Root screens. **Not run against a real host/target pair.**
+- **EDL / Firehose is experimental.** Sahara identity and programmer upload are implemented and tested against a fake device. No 9008 hardware was available. Retail phones accept only the OEM-signed programmer for that exact model; this app ships none and cannot bypass Secure Boot. A later JNI path that reuses EDL-Commander Rust is planned only (`docs/FLASH_TOOLS_PLAN.md` Phase 4); it is not implemented.
 - Sparse images that fit in one `download:` are flashed; a **raw** image larger than `max-download-size` is refused (use `img2simg` or a desktop fastboot).
 - ADB uses classic `shell:` (exit status via an echo marker), not shell_v2. No `adb forward`.
 - Sideload (`sideload-host`) expects the file to be read forward; a target that re-requests an earlier block is refused.

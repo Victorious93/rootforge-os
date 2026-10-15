@@ -11,35 +11,33 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-15 (docs-only refresh, `docs/update-claude-md`):** PR #52
-> (`cursor/droidcommand-bridge-47b8`) is now merged to `main` (`87ef46a`), so the
-> DroidCommand Messenger bridge work described below as "this branch" is on `main`.
-> On `main` at `87ef46a` the Lint, Android APK and Toolkit workflows all passed
-> (GitHub Actions, checked 2026-10-15). The test counts below are from the earlier
-> session and were not re-run for this refresh. Still no GitHub Release (tags `v0.1.0`,
-> `v0.1.1` only).
+> **Update 2026-10-15 (Flash Tools):** branch `cursor/flash-tools-e1f9` off `origin/main`
+> at `0892227` (includes #52–#55). Adds a Flash Tools hub plus a shared device-match
+> gate, SHA-256 inspect/verify, persisted command log, and USB scan filter. EDL-Commander
+> JNI is plan-only (`docs/FLASH_TOOLS_PLAN.md` Phase 4). Still no GitHub Release
+> (tags `v0.1.0`, `v0.1.1` only).
 
-**Last updated:** 2026-10-15 · **Branch:** `cursor/droidcommand-bridge-47b8` (merged
-`origin/main` at `467232a`, which includes PR #53 license lock plus #47–#51) · **Phase:**
-active development; ISO/VM/hardware validation **blocked** on infrastructure. Android
-host-phone APK is on `main`; this branch deepens the DroidCommand Messenger bridge. Not
-run on a device. License lock (#53): original work GPL-3.0-or-later (`LICENSE`); shared
-Kotlin `:core` Apache-2.0 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code
-not relicensed (`NOTICE`).
+**Last updated:** 2026-10-15 · **Branch:** `cursor/flash-tools-e1f9` (from
+`origin/main` at `0892227`) · **Phase:** active development; ISO/VM/hardware validation
+**blocked** on infrastructure. Android host-phone APK is on `main`; this branch adds
+Flash Tools. Not run on a device. License lock (#53): original work GPL-3.0-or-later
+(`LICENSE`); shared Kotlin `:core` Apache-2.0 (`android-app/core/LICENSE`);
+third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (each verified by running it this session unless marked):
 - License lock is in-tree from #53: `LICENSE` (GNU GPL v3 text; applying notice is
   GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
   (split + third-party not relicensed). README License section matches the polished
   landing page from #51 (license badges replace “none yet”).
-- `bash tests/run-tests.sh` → **1016 passed, 0 failed** on this merged tree
-  (`origin/main` at `467232a` plus this branch's Messenger work). `bash tests/lint.sh`
-  → **lint clean** with shellcheck 0.9.0.
-- Gradle on this branch (pre-#53 merge; #53 is docs/license plus one `:core` comment):
-  `:core` 68 tests, 0 failed (27 BridgeExecutor + 4 PairingStore). `:app` 19 tests
-  (protocol + Paparazzi), 0 failed. `:app:verifyPaparazziDebug` green. Debug APK at
-  `android-app/app/build/outputs/apk/debug/app-debug.apk`. **Not re-run after merging
-  #53. Not installed on a phone, not bound from a live DCA, not exercised over USB.**
+- Hermetic CLI tests and Gradle on this branch: **not yet recorded in this paragraph**;
+  re-run `bash tests/run-tests.sh`, `bash tests/lint.sh`, and
+  `./gradlew :core:test :app:assembleDebug :app:testDebugUnitTest :desktop:compileKotlin`
+  and replace this line with the real counts. Previous `main` session claimed 1016
+  hermetic passes (not re-run here until that command finishes).
+- Flash Tools is in-tree: `docs/FLASH_TOOLS_PLAN.md`, `:core` device-match / SHA-256 /
+  persisted `OutputLog` / `UsbScanFilter`, Flash Tools Compose hub, same gate on
+  desktop `HostController.fastbootFlash`. **Not installed on a phone, not bound from a
+  live DCA, not exercised over USB, not used to unlock or flash a device.**
 - `./gradlew :desktop:packageDeb` was **not** re-run. Windows `.exe`/`.msi` not built.
   Docker image **not** built (`docker` is not installed on this agent). **Not run against a
   PC/phone pair.**
@@ -63,12 +61,13 @@ not relicensed (`NOTICE`).
 - **Known unpinned:** Ollama installer (hook 0020). Claude Code's native npm dependency.
   Nothing is signed.
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
-  administration. Android host-phone GUI APK, Linux/Windows desktop, and Docker toolkit
-  are on `main` (USB Host, not Termux). This branch is the Messenger bridge deepening.
-  No GitHub Release exists (tags `v0.1.0`, `v0.1.1` only), so the Termux install paths
-  need a locally generated or future release.
+  administration. EDL-Commander JNI/NDK (Phase 4 of `docs/FLASH_TOOLS_PLAN.md` only).
+  Android host-phone GUI APK, Linux/Windows desktop, and Docker toolkit are on `main`
+  (USB Host, not Termux). This branch is Flash Tools. No GitHub Release exists
+  (tags `v0.1.0`, `v0.1.1` only), so the Termux install paths need a locally generated
+  or future release.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
-  Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`.
+  Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`. Flash Tools: `docs/FLASH_TOOLS_PLAN.md`.
 
 **Incident worth remembering:** merge `b02e7c4` silently reverted six build hooks to a flavour
 that defined SHA-256 pins and never compared them (one also used an undefined variable),
@@ -83,10 +82,9 @@ the check.**
 3. Pin/replace the Ollama installer; add release signing (Stage 4).
 4. Run the flash/backup/restore contract against a test device the owner agrees to flash.
 The Android GUI APK landed in PR #48; Linux/Windows/Docker toolkit in PR #49.
-Licensing is PR #53 (now on `main`). The DroidCommand Messenger path is this branch
-(PR #52): all 11 documented operations, pairing UI, executor gates. ISO Stage 5 is
-still blocked and is still the next hardware task. A live DCA bind on a phone has
-not been run.
+Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`).
+This branch is Flash Tools. ISO Stage 5 is still blocked and is still the next
+hardware task. A live host/target USB session has not been run.
 
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed
 from `docs/ARCHITECTURE_AUDIT.md`; the "governing directive" it cites was never found in the

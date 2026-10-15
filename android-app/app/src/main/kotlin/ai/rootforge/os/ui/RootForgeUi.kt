@@ -5,6 +5,7 @@ import ai.rootforge.os.ui.screens.AdbScreen
 import ai.rootforge.os.ui.screens.DashboardScreen
 import ai.rootforge.os.ui.screens.EdlScreen
 import ai.rootforge.os.ui.screens.FastbootScreen
+import ai.rootforge.os.ui.screens.FlashToolsScreen
 import ai.rootforge.os.ui.screens.LogsScreen
 import ai.rootforge.os.ui.screens.ModulesScreen
 import ai.rootforge.os.ui.screens.RecoveryScreen
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FlashOn
@@ -59,6 +61,7 @@ import kotlinx.coroutines.launch
 
 enum class Destination(val title: String, val icon: ImageVector) {
     Dashboard("Dashboard", Icons.Filled.Dashboard),
+    FlashTools("Flash Tools", Icons.Filled.Build),
     Adb("ADB", Icons.Filled.Android),
     Fastboot("Fastboot", Icons.Filled.FlashOn),
     Edl("EDL", Icons.Filled.Memory),
@@ -125,6 +128,7 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
             Column(Modifier.padding(padding).fillMaxSize()) {
                 when (current) {
                     Destination.Dashboard -> DashboardScreen(state, actions)
+                    Destination.FlashTools -> FlashToolsScreen(state, actions)
                     Destination.Adb -> AdbScreen(state, actions)
                     Destination.Fastboot -> FastbootScreen(state, actions)
                     Destination.Edl -> EdlScreen(state, actions)

@@ -5,6 +5,15 @@ published GitHub Release; entries below are under **Unreleased** until one is cu
 Nothing here has been validated on real hardware, a booted ISO, a VM or a phone; see
 `docs/PLATFORM_SUPPORT.md`.
 
+## Unreleased — 2026-10-15 (Flash Tools)
+
+### Android host-phone app
+- New **Flash Tools** drawer section: USB/OTG scan with ignored-device filter, connection guide, ADB tools (device check, shell, packages, push/pull, logcat, screen info, screenshot), fastboot tools (product/partition info, unlock, flash, reboot), image/APK inspector with SHA-256 verify, persistent redacted command log.
+- Shared `:core` device-match gate: a flash is refused unless a sidecar `<image>.manifest.json` matches the target product/codename, slot, and fingerprint (or a declared product/slot manifest). SHA-256 in the sidecar is checked when present. Same gate on the desktop `HostController` flash path. Mismatches are logged as `Refused: …`.
+- Unlock and flash still use `ApprovalCenter` typed phrases (`UNLOCK`, `FLASH <partition>`). No skip setting.
+- Unit tests in `:core` and `:app` for the match gate, SHA-256, command log, and USB filtering. **Not run on a host/target pair, not flashed, not unlocked.**
+- EDL-Commander JNI/NDK is plan-only (`docs/FLASH_TOOLS_PLAN.md` Phase 4).
+
 ## Unreleased — 2026-10-15 (licensing)
 
 ### License
