@@ -83,3 +83,10 @@ After install, `update-grub` will re-run os-prober and add any existing OS to th
 ## Architecture note
 
 GNOME is the configured desktop. On a machine that simultaneously runs an accelerated Android emulator and a kernel build, budget **16 GB+ RAM**. The same box with XFCE would be comfortable at 8 GB — swap by editing `auto/config` (`--bootappend-live`) and the GNOME entries in `config/package-lists/rootforge.list.chroot`.
+
+## License
+
+Pinned downloads stay under their upstream licenses; this build does not
+relicense them. RootForge OS itself is GPL-3.0-or-later except
+`android-app/core` (Apache-2.0). See `LICENSE`, `android-app/core/LICENSE`,
+and `NOTICE`.

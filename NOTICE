@@ -1,0 +1,78 @@
+RootForge OS
+Copyright 2026 Origin Source Labs / Victorious Framework
+
+This product uses a split license. The applying notices are below. The
+full license texts are in LICENSE (GNU GPL v3) and
+android-app/core/LICENSE (Apache License 2.0).
+
+==============================================================================
+Original RootForge OS work (GPL-3.0-or-later)
+==============================================================================
+
+Copyright 2026 Origin Source Labs / Victorious Framework
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+This applying notice covers original RootForge OS material in this
+repository other than android-app/core/: the Python CLI, Bash scripts,
+Debian live-build tree, Termux/PRoot packaging and launchers, the
+Android :app module, the Linux/Windows :desktop client, the Docker
+toolkit, tests, and documentation (except where a file says otherwise).
+
+==============================================================================
+Shared Kotlin :core (Apache-2.0)
+==============================================================================
+
+android-app/core/ (Gradle module :core) is licensed under the Apache
+License, Version 2.0. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+and in android-app/core/LICENSE.
+
+Apache-2.0 is compatible with GPL-3.0. Combining :core into the
+GPL-licensed Android app or desktop client does not relicense the :core
+sources; those remain Apache-2.0. The combined binaries are
+GPL-3.0-or-later.
+
+==============================================================================
+Third-party software (not relicensed)
+==============================================================================
+
+This repository does not relicense third-party code. Debian packages in
+the ISO and Termux rootfs, Gradle/Maven dependencies, and software
+fetched at build or install time keep the licenses of their upstream
+authors. There is no in-tree fork of Termux, PRoot, Magisk, or the
+Android SDK.
+
+Not exhaustive; see BUILD.md and config/hooks/ for the pin/verify table:
+
+  * Debian packages in the live ISO and Termux rootfs — each package's
+    own license (typically /usr/share/doc/<pkg>/copyright on a built
+    image).
+  * Termux, PRoot, and proot-distro — upstream licenses. This repo
+    ships RootForge installers, plugins, and a debootstrap rootfs
+    builder, not those projects' source.
+  * Magisk (magiskboot extracted at ISO build), KernelSU, APatch —
+    upstream licenses.
+  * Android SDK / NDK / platform-tools / emulator images — Google's
+    SDK license.
+  * Node.js (NodeSource), Ollama installer, Claude Code CLI, starship,
+    eza, payload-dumper-go, Google repo tool, rpi-imager, avbtool,
+    Zygisk API headers — pinned or fetched by image hooks; remain
+    under upstream licenses.
+  * Kotlin, AndroidX, Jetpack Compose, and other Gradle dependencies —
+    their published licenses (typically Apache-2.0).
+  * Calamares and other installer/desktop packages — Debian/upstream
+    licenses; this repo ships branding and config, not a fork.

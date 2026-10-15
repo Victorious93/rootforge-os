@@ -5,6 +5,8 @@
 
 ```
 rootforge-os/
+├── LICENSE              GNU GPL v3 (project is GPL-3.0-or-later; see NOTICE)
+├── NOTICE               split-license applying notices and third-party attribution
 ├── auto/config          lb config invocation — edit to change distro/arch/desktop
 ├── auto/build           build wrapper — run with sudo
 ├── Makefile             convenience targets (build / checksum / list-usb / flash / clean / distclean)

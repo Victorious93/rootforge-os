@@ -15,11 +15,14 @@ installed in every environment; if it is missing say so rather than claiming lin
 
 ## Layout
 
+- `LICENSE`, `NOTICE` — GPL-3.0-or-later for original work; Apache-2.0 for
+  `android-app/core/` (`:core`). Do not relicense third-party/Termux/Debian/SDK code.
 - `config/includes.chroot/usr/local/lib/rootforge/core/` — Python CLI package (`rootforge`).
 - `config/includes.chroot/usr/local/lib/rootforge/sh/common.sh` — shared shell helpers.
 - `config/includes.chroot/usr/local/bin/*.sh` — device-facing scripts.
 - `config/hooks/*.hook.chroot` — ISO build hooks (flat dir, POSIX `sh`, `set -e`).
 - `termux/` — Termux/PRoot rootfs build, launcher, release-metadata generator.
+- `android-app/core/` — shared Kotlin module (`:core`), Apache-2.0.
 - `tests/` — `run-tests.sh`, `test_*.py`, `check-*.sh`, `verify-release-assets.sh`, `stubs/`.
 - Docs: `docs/ARCHITECTURE.md`, `docs/PLATFORM_SUPPORT.md`, `docs/SECURITY_MODEL.md`,
   `docs/IMPLEMENTATION_PLAN.md`, `CHANGELOG.md`; history in `docs/archive/`.

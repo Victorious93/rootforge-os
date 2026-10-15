@@ -11,12 +11,17 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-**Last updated:** 2026-10-14 · **Branch:** `cursor/droidcommand-bridge-47b8` (from `main` at
-`a7ff073`, which includes merged PRs #47–#51) · **Phase:** active development; ISO/VM/hardware
+**Last updated:** 2026-10-14 · **Branch:** `cursor/droidcommand-bridge-47b8` (with `main` merged in,
+incl. #47–#51 and #53 license lock) · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK is on `main`; this branch
-deepens the DroidCommand Messenger bridge. Not run on a device.
+deepens the DroidCommand Messenger bridge. Not run on a device. License lock (#53): original
+work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
+(`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (each verified by running it this session unless marked):
+- License lock is in-tree (from #53): `LICENSE` (GPL v3 text), `android-app/core/LICENSE`
+  (Apache-2.0), `NOTICE`. Gradle results below predate the merge of `main` (#53 only
+  touched docs/license files plus one comment line in `:core`).
 - `bash tests/run-tests.sh` → 1016 passed, 0 failed. `bash tests/lint.sh` → clean with
   shellcheck 0.9.0 (installed this session; was missing on the image).
 - `cd android-app && ./gradlew :core:test :app:assembleDebug :app:testDebugUnitTest :desktop:compileKotlin`
@@ -43,9 +48,8 @@ deepens the DroidCommand Messenger bridge. Not run on a device.
   first boot, real devices, a phone, a desktop USB session, `docker build -f docker/Dockerfile`,
   `release.yml` (it only runs on `v*` tags or manual dispatch; merging did not trigger it).
   PR #49 Toolkit CI (run 38523858203) after the `packages: platform-tools` fix: Lint,
-  linux-desktop, windows-desktop, and docker all green. `android-apk.yml` still does
-  not produce jobs on this repo's PRs (0-second empty runs even on the #48 merge to
-  main); APK was built locally, not by that workflow.
+  linux-desktop, windows-desktop, and docker all green. PR #50 changed
+  `android-apk.yml`; this session did not re-check that workflow's jobs.
 - **Known unpinned:** Ollama installer (hook 0020). Claude Code's native npm dependency.
   Nothing is signed.
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
@@ -71,7 +75,7 @@ the check.**
 The Android GUI APK landed in PR #48. Linux/Windows/Docker toolkit clients landed in
 PR #49. The DroidCommand Messenger path is this branch (PR #52): all 11 documented
 operations, pairing UI, executor gates. ISO Stage 5 is still blocked and is still the
-next hardware task. A live DCA bind on a phone has not been run.
+next hardware task. A live DCA bind on a phone has not been run. Licensing landed in PR #53.
 
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed
 from `docs/ARCHITECTURE_AUDIT.md`; the "governing directive" it cites was never found in the
