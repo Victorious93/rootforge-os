@@ -11,8 +11,8 @@ rootforge-os/
 ├── auto/build           build wrapper — run with sudo
 ├── Makefile             convenience targets (build / checksum / list-usb / flash / clean / distclean)
 ├── BUILD.md             host prerequisites and build instructions
-├── .github/workflows/release.yml   gated on lint.yml; builds the ISO and Termux rootfs, generates
-│                                   install metadata, verifies the asset set, drafts a release
+├── .github/workflows/release.yml   gated on lint.yml; debug APK attached on v* tags;
+│                                   ISO/Termux still generate metadata, verify, draft a release
 ├── termux/              Termux/PRoot variant — see README (CLI from a git clone; Termux rootfs)
 │   ├── build-rootfs.sh          debootstrap-based rootfs builder (reuses config/hooks/*)
 │   ├── package-lists/           pruned, PRoot-safe package list
