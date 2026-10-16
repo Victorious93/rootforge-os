@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,10 @@ from urllib.parse import urlparse
 
 PROTOCOL_MAJOR = 1
 MAX_BODY = 64 * 1024
+# Same shape the CLI accepts for adb/fastboot serials (including host:port).
+SERIAL_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
+PARTITION_RE = re.compile(r"^[A-Za-z0-9_.-]{1,40}$")
+ADB_REBOOT_TARGETS = {"", "bootloader", "recovery", "sideload", "fastboot", "edl"}
 
 # Destructive phrases match the desktop/Android GUI.
 PHRASE = {
@@ -165,6 +170,42 @@ class Toolkit:
             "error": None,
         }
 
+    def _serials(self, mode: str) -> List[str]:
+        found: List[str] = []
+        for device in self.devices():
+            serial = device.get("serial")
+            if device.get("mode") == mode and isinstance(serial, str) and serial not in found:
+                found.append(serial)
+        return found
+
+    def _select_serial(self, params: dict, mode: str) -> str:
+        """Pin a write to one device.
+
+        An explicit serial that is not actually in that mode must not fall
+        through to whichever device `adb`/`fastboot` would otherwise pick.
+        Omitting serial is allowed only when exactly one device is in that mode.
+        """
+        present = self._serials(mode)
+        if "serial" in params:
+            requested = params.get("serial")
+            if not isinstance(requested, str) or not SERIAL_RE.fullmatch(requested):
+                raise RuntimeError("serial is not a plausible device serial")
+            if requested not in present:
+                raise RuntimeError(
+                    f"serial {requested} is not in {mode} mode; refusing to target a different device"
+                )
+            return requested
+        if len(present) != 1:
+            if not present:
+                raise RuntimeError(f"no device in {mode} mode")
+            raise RuntimeError(f"more than one device is in {mode} mode; pass serial")
+        return present[0]
+
+    def _fastboot(self, params: dict, args: List[str], timeout: float) -> Tuple[int, str, str]:
+        serial = self._select_serial(params, "fastboot")
+        argv = [self._bin("fastboot", self.fastboot), "-s", serial, *args]
+        return self.runner.run(argv, timeout=timeout)
+
     def _run_op(self, op: str, params: dict) -> dict:
         if op == "rootforge.capabilities.get":
             return self.capabilities()
@@ -193,9 +234,12 @@ class Toolkit:
             return {"exit_code": code, "output": output, "truncated": False}
         if op == "rootforge.adb.reboot":
             target = params.get("target") or ""
-            argv = [self._bin("adb", self.adb), "reboot"] + ([target] if target else [])
+            if not isinstance(target, str) or target not in ADB_REBOOT_TARGETS:
+                raise RuntimeError("target must be one of bootloader, recovery, sideload, fastboot, edl")
+            serial = self._select_serial(params, "adb")
+            argv = [self._bin("adb", self.adb), "-s", serial, "reboot"] + ([target] if target else [])
             self.runner.run(argv, timeout=30)
-            return {"requested": target or "system"}
+            return {"requested": target or "system", "serial": serial}
         if op == "rootforge.fastboot.reboot":
             target = params.get("target") or "system"
             mapping = {
@@ -207,7 +251,7 @@ class Toolkit:
             args = mapping.get(target)
             if args is None:
                 raise RuntimeError("unknown reboot target")
-            self.runner.run([self._bin("fastboot", self.fastboot)] + args, timeout=30)
+            self._fastboot(params, args, 30)
             return {"requested": target}
         if op == "rootforge.module.build":
             # The Docker image has the CLI; the zip builder lives in Kotlin too.
@@ -219,38 +263,32 @@ class Toolkit:
         if op == "rootforge.fastboot.flash":
             part = params.get("partition")
             image = params.get("image")
-            if not part or not image:
+            if not isinstance(part, str) or not isinstance(image, str) or not part or not image:
                 raise RuntimeError("partition and image are required")
-            if not Path(image).is_file():
+            if not PARTITION_RE.fullmatch(part):
+                raise RuntimeError("partition is not a plausible name")
+            image_path = Path(image)
+            if not image_path.is_file():
                 raise RuntimeError("image is not a readable file (pass a path inside the container)")
-            code, stdout, stderr = self.runner.run(
-                [self._bin("fastboot", self.fastboot), "flash", str(part), str(image)],
-                timeout=600,
-            )
+            code, stdout, stderr = self._fastboot(params, ["flash", part, str(image_path)], 600)
             if code != 0:
                 raise RuntimeError((stdout + stderr).strip() or "fastboot flash failed")
-            return {"flashed": part, "image": Path(image).name}
+            return {"flashed": part, "image": image_path.name}
         if op == "rootforge.fastboot.slot.set":
             slot = params.get("slot")
             if slot not in ("a", "b"):
                 raise RuntimeError("slot must be a or b")
-            code, stdout, stderr = self.runner.run(
-                [self._bin("fastboot", self.fastboot), "set_active", slot], timeout=30
-            )
+            code, stdout, stderr = self._fastboot(params, ["set_active", slot], 30)
             if code != 0:
                 raise RuntimeError((stdout + stderr).strip() or "set_active failed")
             return {"active_slot": slot}
         if op == "rootforge.fastboot.unlock":
-            code, stdout, stderr = self.runner.run(
-                [self._bin("fastboot", self.fastboot), "flashing", "unlock"], timeout=60
-            )
+            code, stdout, stderr = self._fastboot(params, ["flashing", "unlock"], 60)
             if code != 0:
                 raise RuntimeError((stdout + stderr).strip() or "unlock failed")
             return {"requested": "unlock"}
         if op == "rootforge.fastboot.lock":
-            code, stdout, stderr = self.runner.run(
-                [self._bin("fastboot", self.fastboot), "flashing", "lock"], timeout=60
-            )
+            code, stdout, stderr = self._fastboot(params, ["flashing", "lock"], 60)
             if code != 0:
                 raise RuntimeError((stdout + stderr).strip() or "lock failed")
             return {"requested": "lock"}
