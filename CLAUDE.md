@@ -11,36 +11,44 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-16 (merge main into #58):** branch `cursor/release-apk-assets-bb13`
-> merged `origin/main` at `658fe75` (#60 toolkit API serial pin + #54 7-day
-> artifacts). First published GitHub Release is **v0.2.0** on `e1f84ea` with the
-> debug host-phone APK (`rootforge-os-android-debug.apk`, `ai.rootforge.os.debug`,
-> debug-keystore signed). This branch still adds `build-apk` / `attach-apk` and
-> the `bash` + `+x` metadata-script fix. EDL-Commander JNI is still plan-only.
-> No ISO/Termux assets on the Release. Not run on a device.
+> **Update 2026-10-16 (module quoting, merged main):** branch
+> `cursor/critical-bug-management-932c` (PR #59) merged `origin/main` at `00b12f6`
+> (#58 APK on tags, #60 toolkit serial pin, v0.2.0 notes). It adds shell-quoting of
+> module display names in `customize.sh` (`new_module_scaffold.sh` and Kotlin
+> `ModuleBuilder`): Magisk/KernelSU/APatch source that file, and a name with `$(...)`,
+> backticks, or a `"` used to run as root at install time. First published Release
+> is **v0.2.0** (debug APK only). EDL-Commander JNI is still plan-only. Not run on a
+> device.
 
-**Last updated:** 2026-10-16 · **Branch:** `cursor/release-apk-assets-bb13` (merged
-`origin/main` at `658fe75`) · **Phase:** active development; ISO/VM/hardware
+**Last updated:** 2026-10-16 · **Branch:** `cursor/critical-bug-management-932c`
+(merged `origin/main` at `00b12f6`) · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
-desktop/Docker toolkit, DroidCommand bridge, license lock, and toolkit API
-serial pin (#60) are on `main`. This branch is the `release.yml` APK-attach
-fix plus changelog/docs for v0.2.0, rebased onto that main. Not run on a
-device. License lock (#53): original work GPL-3.0-or-later (`LICENSE`); shared
-Kotlin `:core` Apache-2.0 (`android-app/core/LICENSE`); third-party/Termux/
-Debian/SDK code not relicensed (`NOTICE`).
+desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60)
+and APK-on-tag release (#58) are on `main`. This branch is the `customize.sh` quoting
+fix. Not run on a device. License lock (#53): original work GPL-3.0-or-later
+(`LICENSE`); shared Kotlin `:core` Apache-2.0 (`android-app/core/LICENSE`);
+third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (each verified by running it this session unless marked):
 - License lock is in-tree from #53: `LICENSE` (GNU GPL v3 text; applying notice is
   GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
   (split + third-party not relicensed). Not re-audited this session.
+- Module display names are shell-quoted in generated `customize.sh` (scaffold
+  script and `:core` `ModuleBuilder`). Newlines are still rejected. Verified earlier
+  on this branch by sourcing a generated script whose name contained `$(touch …)`
+  and a `"` breakout: the payload did not run, and `ui_print` received the name as
+  text. `:core:test --tests ai.rootforge.os.module.ModuleBuilderTest` → 6 tests, 0
+  failures at that time (not re-run after the merge). The generated module was not
+  installed in Magisk.
 - `android-apk.yml` on `e1f84ea` (run 38680669216) uploaded the debug APK
   published as v0.2.0 (SHA-256
   `faf743faba1b14aa5288f69883a0a1e2c284e43a77d7b32575ea3aaed8045e2f`). No
   release-signed APK (keystore secrets absent). **Not installed on a phone.**
-- Hermetic suite / lint after merging `origin/main` at `658fe75`:
-  `bash tests/run-tests.sh` → **1016 passed, 0 failed** (379 Python tests,
-  including #60's three toolkit-API cases). `bash tests/lint.sh` → **lint
-  clean** with shellcheck 0.9.0. Gradle was **not** re-run. The Flash Tools
+- Hermetic suite / lint after merging `origin/main` at `00b12f6`:
+  `bash tests/run-tests.sh` → **1023 passed, 0 failed** (379 Python tests; a first run without
+  shellcheck on `PATH` counted 1024). `bash tests/lint.sh` → **lint
+  clean** with shellcheck 0.11.0 (pip `shellcheck-py`). Gradle was **not** re-run after
+  the merge. The Flash Tools
   PR (#56) recorded `:core:test` 98/0, `:app:testDebugUnitTest` 25/0,
   `assembleDebug`, and `:desktop:compileKotlin`.
 - Flash Tools is in-tree: `docs/FLASH_TOOLS_PLAN.md`, `:core` device-match / SHA-256 /
@@ -76,7 +84,7 @@ Debian/SDK code not relicensed (`NOTICE`).
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
   administration. EDL-Commander JNI/NDK (Phase 4 of `docs/FLASH_TOOLS_PLAN.md` only).
   Android host-phone GUI APK, Flash Tools, Linux/Windows desktop, and Docker toolkit
-  are on `main` (USB Host, not Termux). Toolkit API writes pin `-s` (#60, on
+  are on `main` (USB Host, not Termux). This branch is the customize.sh quoting fix. Toolkit API writes pin `-s` (#60, on
   `main`). Published Release **v0.2.0** has the debug APK only. The Termux
   *rootfs* install path still needs a locally generated or future ISO/rootfs
   release; the Python CLI can run from a git clone.
@@ -98,8 +106,8 @@ the check.**
 The Android GUI APK landed in PR #48; Linux/Windows/Docker toolkit in PR #49.
 Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`).
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
-Toolkit API serial pin is #60 (on `main`). This branch is `release.yml` APK
-attach for future tags, merged onto that main. ISO Stage 5 is still blocked
+Toolkit API serial pin is #60 (on `main`). This branch quotes module display names in
+`customize.sh`, merged onto that main. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 

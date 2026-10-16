@@ -110,11 +110,21 @@ object ModuleBuilder {
         return built
     }
 
-    private fun customize(spec: ModuleSpec) = """
-        # ${spec.name}: install-time hook, sourced by the root manager's installer.
-        ui_print "- Installing ${spec.name.replace("\"", "'")}"
-        # set_perm_recursive ${'$'}MODPATH/system 0 0 0755 0644
-    """.trimIndent() + "\n"
+    /**
+     * customize.sh is sourced by the root manager. The display name has to be
+     * one shell word: turning `"` into `'` still leaves `$(...)` and backticks
+     * inside double quotes, and those run as root at install time.
+     */
+    private fun shellSingleQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
+    private fun customize(spec: ModuleSpec): String {
+        val line = shellSingleQuote("- Installing ${spec.name}")
+        return """
+            # ${spec.id}: install-time hook, sourced by the root manager's installer.
+            ui_print $line
+            # set_perm_recursive ${'$'}MODPATH/system 0 0 0755 0644
+        """.trimIndent() + "\n"
+    }
 
     private fun script(title: String) = "#!/system/bin/sh\n# $title\nMODDIR=\${0%/*}\n"
 

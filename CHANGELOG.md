@@ -22,6 +22,9 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 ### Docker toolkit API (2026-10-16, #60)
 - `rootforge.fastboot.flash`, `unlock`, `lock`, `slot.set`, and `fastboot.reboot`, plus `adb.reboot`, now pass `-s` for one selected device. An explicit `serial` that is not in that mode is refused instead of flashing or rebooting a different phone. Omitting `serial` is allowed only when exactly one device is in that mode. **Not run against a phone.**
 
+### Modules (2026-10-15, #59)
+- A module display name is shell-quoted before it is written into `customize.sh` (`new_module_scaffold.sh` and the Kotlin `ModuleBuilder`). That file is sourced by Magisk, KernelSU, and APatch. A name containing `$(...)`, backticks, or a `"` used to be spliced into double quotes and ran as root at install time. Newlines in the name are still rejected so `module.prop` cannot gain extra keys.
+
 ## v0.2.0 — 2026-10-15
 
 First published GitHub Release, tagged at `e1f84ea` on `main`. Attaches the
