@@ -37,10 +37,12 @@ Debian/SDK code not relicensed (`NOTICE`).
   published as v0.2.0 (SHA-256
   `faf743faba1b14aa5288f69883a0a1e2c284e43a77d7b32575ea3aaed8045e2f`). No
   release-signed APK (keystore secrets absent). **Not installed on a phone.**
-- Hermetic suite / lint after merging `origin/main`: **not re-run yet this
-  merge**; #60 recorded 1016 passed / 379 Python / lint clean. Gradle was
-  **not** re-run. The Flash Tools PR (#56) recorded `:core:test` 98/0,
-  `:app:testDebugUnitTest` 25/0, `assembleDebug`, and `:desktop:compileKotlin`.
+- Hermetic suite / lint after merging `origin/main` at `658fe75`:
+  `bash tests/run-tests.sh` → **1016 passed, 0 failed** (379 Python tests,
+  including #60's three toolkit-API cases). `bash tests/lint.sh` → **lint
+  clean** with shellcheck 0.9.0. Gradle was **not** re-run. The Flash Tools
+  PR (#56) recorded `:core:test` 98/0, `:app:testDebugUnitTest` 25/0,
+  `assembleDebug`, and `:desktop:compileKotlin`.
 - Flash Tools is in-tree: `docs/FLASH_TOOLS_PLAN.md`, `:core` device-match / SHA-256 /
   persisted `OutputLog` / `UsbScanFilter`, Flash Tools Compose hub, same gate on
   desktop `HostController.fastbootFlash`. EDL-Commander JNI is plan-only.
