@@ -41,6 +41,9 @@ Patching is **not** reimplemented: the app pushes a boot image to `/sdcard/Downl
 
 ## Build and install
 
+Published debug APK (v0.2.0, debug-keystore signed, **not** release-signed):
+https://github.com/Victorious93/rootforge-os/releases/download/v0.2.0/rootforge-os-android-debug.apk
+
 ```bash
 cd android-app
 # SDK: ANDROID_HOME or a local.properties sdk.dir

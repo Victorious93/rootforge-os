@@ -11,9 +11,9 @@
 #   sudo make clean           remove live-build output (keeps cache)
 #   sudo make distclean       remove everything including the package cache
 #
-# .github/workflows/release.yml is meant to attach the ISO and Termux rootfs
-# tarballs to a draft GitHub Release on tagged pushes. No published Release
-# exists yet (tags v0.1.0 and v0.1.1 only), so you still have to build locally.
+# .github/workflows/release.yml attaches the debug APK on v* tags and still
+# drafts the ISO / Termux rootfs after live-build. v0.2.0 published the APK;
+# there is still no prebuilt ISO or rootfs, so those are local builds.
 
 ISO     := rootforge-os-amd64.hybrid.iso
 
