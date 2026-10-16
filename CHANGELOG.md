@@ -5,6 +5,11 @@ published GitHub Release; entries below are under **Unreleased** until one is cu
 Nothing here has been validated on real hardware, a booted ISO, a VM or a phone; see
 `docs/PLATFORM_SUPPORT.md`.
 
+## Unreleased — 2026-10-16 (toolkit API device pin)
+
+### Docker toolkit API
+- `rootforge.fastboot.flash`, `unlock`, `lock`, `slot.set`, and `fastboot.reboot`, plus `adb.reboot`, now pass `-s` for one selected device. An explicit `serial` that is not in that mode is refused instead of flashing or rebooting a different phone. Omitting `serial` is allowed only when exactly one device is in that mode. **Not run against a phone.**
+
 ## Unreleased — 2026-10-15 (README)
 
 ### Docs

@@ -62,7 +62,10 @@ Typical path is `usbipd-win` (Windows) or a Linux VM. That combination is
 `POST /v1/bridge` with the same JSON envelope as
 `docs/DROIDCOMMAND_INTEGRATION.md`. Destructive operations need
 `"confirmation": "FLASH boot"` (or `UNLOCK` / `LOCK` / `SLOT a`) in the
-request object. Module zip building is **not** reimplemented in Python;
+request object. Fastboot writes and `adb reboot` are pinned with `-s`:
+pass `serial` for that device, or omit it only when exactly one device
+is in that mode. A serial that is not connected in that mode is refused.
+Module zip building is **not** reimplemented in Python;
 use the desktop/Android library builder or `rootforge module scaffold`.
 
 ## License
