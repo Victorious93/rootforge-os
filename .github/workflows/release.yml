@@ -11,7 +11,7 @@
 # Independently of the ISO path, a debug host-phone APK is built and attached
 # to a published (non-draft) GitHub Release for the same tag. The APK artifact
 # is not named rootforge-* so the ISO verifier never sees it. Desktop/Docker
-# stay on toolkit.yml (14-day CI artifacts). A release-signed APK is produced
+# stay on toolkit.yml (7-day CI artifacts). A release-signed APK is produced
 # only when ROOTFORGE_KEYSTORE_* secrets exist (android-apk.yml); this job
 # always attaches the debug APK so a tag has a permanent download link.
 #
@@ -96,12 +96,13 @@ jobs:
         # diagnosable without re-running the whole build.
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           # Not named rootforge-*: the release job downloads rootforge-* only,
           # so a build log can never be published as a release asset.
           name: build-log-iso
           path: rootforge-build-*.log
-          retention-days: 14
+          retention-days: 7
           if-no-files-found: ignore
 
   # Debug APK is attached even when live-build / rootfs fails. Artifact name
@@ -134,11 +135,12 @@ jobs:
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: android-host-debug-apk
           path: android-app/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
   attach-apk:
     needs: build-apk

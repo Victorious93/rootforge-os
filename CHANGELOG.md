@@ -12,11 +12,15 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
   `rootforge-os-android-debug.apk` (plus SHA-256) to a published GitHub Release
   without waiting for the ISO / Termux draft job. The APK artifact is not named
   `rootforge-*`, so `tests/verify-release-assets.sh` still sees only the ISO
-  set. Desktop/Docker stay on `toolkit.yml` CI artifacts. Not release-signed
-  unless `ROOTFORGE_KEYSTORE_*` secrets exist (`android-apk.yml`).
+  set. Desktop/Docker stay on `toolkit.yml` CI artifacts (7-day retention after
+  #54). Not release-signed unless `ROOTFORGE_KEYSTORE_*` secrets exist
+  (`android-apk.yml`).
 - `release.yml` now runs `bash termux/make-release-metadata.sh` (the file was
   `100644`; v0.2.0's `release` job died with Permission denied after ISO +
   four rootfs builds succeeded). The script is also marked executable.
+
+### Docker toolkit API (2026-10-16, #60)
+- `rootforge.fastboot.flash`, `unlock`, `lock`, `slot.set`, and `fastboot.reboot`, plus `adb.reboot`, now pass `-s` for one selected device. An explicit `serial` that is not in that mode is refused instead of flashing or rebooting a different phone. Omitting `serial` is allowed only when exactly one device is in that mode. **Not run against a phone.**
 
 ## v0.2.0 — 2026-10-15
 
@@ -28,7 +32,8 @@ not a release key. No `ROOTFORGE_KEYSTORE_*` secrets were present, so no
 release-signed APK exists. ISO and Termux rootfs are **not** attached:
 `release.yml` still drafts those only after live-build +
 `tests/verify-release-assets.sh`, and that path was not used for this tag.
-Desktop/Docker remain 14-day `toolkit.yml` artifacts.
+Desktop/Docker were 14-day `toolkit.yml` artifacts at tag time (#54 later
+capped CI artifacts at 7 days).
 
 Direct APK:
 https://github.com/Victorious93/rootforge-os/releases/download/v0.2.0/rootforge-os-android-debug.apk

@@ -11,42 +11,36 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-15 (v0.2.0 release):** branch `cursor/release-apk-assets-bb13` off
-> `origin/main` at `e1f84ea`. First published GitHub Release is **v0.2.0** on that
-> commit, with the debug host-phone APK attached (`rootforge-os-android-debug.apk`,
-> `ai.rootforge.os.debug`, debug-keystore signed). `release.yml` on that commit
-> does not attach an APK (ISO/Termux draft only), so the APK was taken from
-> `android-apk.yml` run 38680669216 and published with `gh release create`. This
-> branch adds `build-apk` / `attach-apk` jobs so later `v*` tags attach the APK
-> without waiting for live-build. Do not merge until asked. EDL-Commander JNI is
-> still plan-only. No ISO/Termux assets. Not run on a device.
+> **Update 2026-10-16 (merge main into #58):** branch `cursor/release-apk-assets-bb13`
+> merged `origin/main` at `658fe75` (#60 toolkit API serial pin + #54 7-day
+> artifacts). First published GitHub Release is **v0.2.0** on `e1f84ea` with the
+> debug host-phone APK (`rootforge-os-android-debug.apk`, `ai.rootforge.os.debug`,
+> debug-keystore signed). This branch still adds `build-apk` / `attach-apk` and
+> the `bash` + `+x` metadata-script fix. EDL-Commander JNI is still plan-only.
+> No ISO/Termux assets on the Release. Not run on a device.
 
-**Last updated:** 2026-10-15 · **Branch:** `cursor/release-apk-assets-bb13` (from
-`origin/main` at `e1f84ea`) · **Phase:** active development; ISO/VM/hardware validation
-**blocked** on infrastructure. Android host-phone APK, Flash Tools, desktop/Docker
-toolkit, DroidCommand bridge, and license lock are on `main`. This branch is the
-`release.yml` APK-attach fix plus changelog/docs for v0.2.0. Not run on a device.
-License lock (#53): original work GPL-3.0-or-later (`LICENSE`); shared Kotlin
-`:core` Apache-2.0 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK
-code not relicensed (`NOTICE`).
+**Last updated:** 2026-10-16 · **Branch:** `cursor/release-apk-assets-bb13` (merged
+`origin/main` at `658fe75`) · **Phase:** active development; ISO/VM/hardware
+validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
+desktop/Docker toolkit, DroidCommand bridge, license lock, and toolkit API
+serial pin (#60) are on `main`. This branch is the `release.yml` APK-attach
+fix plus changelog/docs for v0.2.0, rebased onto that main. Not run on a
+device. License lock (#53): original work GPL-3.0-or-later (`LICENSE`); shared
+Kotlin `:core` Apache-2.0 (`android-app/core/LICENSE`); third-party/Termux/
+Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (each verified by running it this session unless marked):
 - License lock is in-tree from #53: `LICENSE` (GNU GPL v3 text; applying notice is
   GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
-  (split + third-party not relicensed). README License section still matches that
-  split; this session added Flash Tools / DroidCommand / git-clone CLI / Victorious
-  Framework context on the same landing page.
-- `android-apk.yml` on `main` at `e1f84ea` (run 38680669216) succeeded and
-  uploaded `rootforge-os-android-debug` (`app-debug.apk`, 17306765 bytes,
-  SHA-256 `faf743faba1b14aa5288f69883a0a1e2c284e43a77d7b32575ea3aaed8045e2f`).
-  No `rootforge-os-android-release` artifact — keystore secrets absent. This
-  session did not re-run Gradle; the published APK is that CI debug artifact.
-  **Not installed on a phone, not bound from a live DCA, not exercised over USB,
-  not used to unlock or flash a device.**
-- Hermetic suite / lint this session (workflow + docs): `bash tests/run-tests.sh`
-  → **1016 passed, 0 failed** (376 Python tests). `bash tests/lint.sh` → **lint
-  clean** with shellcheck 0.9.0. Gradle was **not** re-run; the published APK is
-  the CI debug artifact from run 38680669216.
+  (split + third-party not relicensed). Not re-audited this session.
+- `android-apk.yml` on `e1f84ea` (run 38680669216) uploaded the debug APK
+  published as v0.2.0 (SHA-256
+  `faf743faba1b14aa5288f69883a0a1e2c284e43a77d7b32575ea3aaed8045e2f`). No
+  release-signed APK (keystore secrets absent). **Not installed on a phone.**
+- Hermetic suite / lint after merging `origin/main`: **not re-run yet this
+  merge**; #60 recorded 1016 passed / 379 Python / lint clean. Gradle was
+  **not** re-run. The Flash Tools PR (#56) recorded `:core:test` 98/0,
+  `:app:testDebugUnitTest` 25/0, `assembleDebug`, and `:desktop:compileKotlin`.
 - Flash Tools is in-tree: `docs/FLASH_TOOLS_PLAN.md`, `:core` device-match / SHA-256 /
   persisted `OutputLog` / `UsbScanFilter`, Flash Tools Compose hub, same gate on
   desktop `HostController.fastbootFlash`. EDL-Commander JNI is plan-only.
@@ -80,9 +74,10 @@ code not relicensed (`NOTICE`).
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
   administration. EDL-Commander JNI/NDK (Phase 4 of `docs/FLASH_TOOLS_PLAN.md` only).
   Android host-phone GUI APK, Flash Tools, Linux/Windows desktop, and Docker toolkit
-  are on `main` (USB Host, not Termux). Published Release **v0.2.0** has the
-  debug APK only. The Termux *rootfs* install path still needs a locally
-  generated or future ISO/rootfs release; the Python CLI can run from a git clone.
+  are on `main` (USB Host, not Termux). Toolkit API writes pin `-s` (#60, on
+  `main`). Published Release **v0.2.0** has the debug APK only. The Termux
+  *rootfs* install path still needs a locally generated or future ISO/rootfs
+  release; the Python CLI can run from a git clone.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`. Flash Tools: `docs/FLASH_TOOLS_PLAN.md`.
 
@@ -101,8 +96,9 @@ the check.**
 The Android GUI APK landed in PR #48; Linux/Windows/Docker toolkit in PR #49.
 Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`).
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
-This branch is `release.yml` APK attach for future tags. ISO Stage 5 is still
-blocked and is still the next hardware task. A live host/target USB session
+Toolkit API serial pin is #60 (on `main`). This branch is `release.yml` APK
+attach for future tags, merged onto that main. ISO Stage 5 is still blocked
+and is still the next hardware task. A live host/target USB session
 has not been run.
 
 **Open questions:** the `refusal_message()` wording in `core/device.py` was reconstructed

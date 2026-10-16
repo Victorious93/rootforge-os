@@ -44,22 +44,24 @@ jobs:
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: rootforge-os-android-debug
           path: android-app/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
       - name: Upload Paparazzi screenshots
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: rootforge-os-android-screenshots
           path: |
             android-app/screenshots/*.png
             android-app/app/src/test/snapshots/images/*.png
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 7
 
       - name: Decode the release keystore
         id: keystore
@@ -82,8 +84,9 @@ jobs:
       - name: Upload release APK
         if: steps.keystore.outputs.file != ''
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: rootforge-os-android-release
           path: android-app/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7

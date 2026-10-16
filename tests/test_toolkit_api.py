@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -74,10 +75,64 @@ class ToolkitApiTests(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertEqual(self.runner.calls, [])
 
-    def test_unlock_runs_only_with_phrase(self):
+    def queue_fastboot(self, listing="FB1\tfastboot\n", follow=None):
+        """adb devices, fastboot devices, then an optional command result."""
+        script = [(0, "", ""), (0, listing, "")]
+        if follow is not None:
+            script.append(follow)
+        self.runner.script = script
+
+    def test_unlock_pins_the_only_fastboot_device(self):
+        self.queue_fastboot(follow=(0, "", ""))
         r = self.handle("rootforge.fastboot.unlock", confirmation="UNLOCK")
-        self.assertTrue(r["ok"])
-        self.assertEqual(self.runner.calls[0][:3], ["/stub/fastboot", "flashing", "unlock"])
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(
+            self.runner.calls[-1],
+            ["/stub/fastboot", "-s", "FB1", "flashing", "unlock"],
+        )
+
+    def test_unlock_refuses_a_serial_that_is_not_in_fastboot(self):
+        self.queue_fastboot()
+        r = self.handle("rootforge.fastboot.unlock", {"serial": "OTHER"}, confirmation="UNLOCK")
+        self.assertFalse(r["ok"])
+        self.assertIn("refusing to target a different device", r["error"]["message"])
+        self.assertFalse(any("flashing" in call for call in self.runner.calls))
+
+    def test_flash_uses_the_requested_serial_not_the_other_device(self):
+        with tempfile.NamedTemporaryFile() as image:
+            image.write(b"ANDROID!")
+            image.flush()
+            self.queue_fastboot("KEEP\tfastboot\nOTHER\tfastboot\n", follow=(0, "OKAY\n", ""))
+            missed = self.handle(
+                "rootforge.fastboot.flash",
+                {"partition": "boot", "image": image.name},
+                confirmation="FLASH boot",
+            )
+            self.assertFalse(missed["ok"])
+            self.assertIn("more than one device", missed["error"]["message"])
+            self.assertFalse(any("flash" in call for call in self.runner.calls))
+
+            self.queue_fastboot("KEEP\tfastboot\nOTHER\tfastboot\n", follow=(0, "OKAY\n", ""))
+            hit = self.handle(
+                "rootforge.fastboot.flash",
+                {"partition": "boot", "image": image.name, "serial": "OTHER"},
+                confirmation="FLASH boot",
+            )
+            self.assertTrue(hit["ok"], hit)
+            self.assertEqual(
+                self.runner.calls[-1],
+                ["/stub/fastboot", "-s", "OTHER", "flash", "boot", image.name],
+            )
+
+    def test_adb_reboot_pins_serial(self):
+        self.runner.script = [
+            (0, "PHONE\tdevice\n", ""),
+            (0, "", ""),
+            (0, "", ""),
+        ]
+        r = self.handle("rootforge.adb.reboot", {"target": "bootloader", "serial": "PHONE"})
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(self.runner.calls[-1][:4], ["/stub/adb", "-s", "PHONE", "reboot"])
 
     def test_wrong_node(self):
         r = self.handle("rootforge.devices.list")
