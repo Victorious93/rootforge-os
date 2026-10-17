@@ -10,6 +10,9 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 ### Android sideload
 - The host-phone `sideload-host` client seeks the package and serves whatever block recovery asks for, including a re-read. It used to walk the file only forward and abort when recovery read the zip central directory (or read the package a second time to install it), so an OTA sideload from the Android app stopped before the update finished. `FAILFAIL` from the device is reported as a failure. **Not run against a phone in recovery.**
 
+### Android debug signing
+- The debug build type is signed with a committed, app-specific debug keystore (`android-app/app/debug.keystore`, SHA-256 `77:7A:C7:00:87:05:A8:B4:B8:93:AC:EF:0E:03:E9:1C:7F:49:52:C9:52:FE:B2:6E:06:D7:90:B9:14:86:64:6F`), so CI and local debug APKs share one certificate and update in place. Debug only; release signing is unchanged. Users of the v0.2.0 debug APK must uninstall once. See `docs/ANDROID_APP.md`.
+
 ### Build and release
 - `release.yml` builds the debug host-phone APK on `v*` tags and attaches
   `rootforge-os-android-debug.apk` (plus SHA-256) to a published GitHub Release

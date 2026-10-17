@@ -11,6 +11,15 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-17 (debug signing key):** branch
+> `cursor/stable-debug-signing-key-4b63`. The debug build type is signed with a
+> committed app-specific keystore `android-app/app/debug.keystore` (SHA-256
+> `77:7A:C7:00:87:05:A8:B4:B8:93:AC:EF:0E:03:E9:1C:7F:49:52:C9:52:FE:B2:6E:06:D7:90:B9:14:86:64:6F`).
+> Verified: `:core:test :app:testDebugUnitTest :app:assembleDebug` built (126 tests, 0
+> failures), `apksigner verify --print-certs` cert SHA-256 equals the keystore's;
+> `tests/run-tests.sh` 1023/0, `tests/lint.sh` clean. Not installed on a phone; the
+> v0.2.0 debug APK needs a one-time uninstall. Release signing untouched.
+
 > **Update 2026-10-17 (sideload block seeks):** branch
 > `cursor/critical-bug-scan-854e`. The Android USB `sideload-host` client
 > (`AdbConnection.sideload`) used to read the package only forward and abort
