@@ -41,7 +41,7 @@ Patching is **not** reimplemented: the app pushes a boot image to `/sdcard/Downl
 
 ## Build and install
 
-Published debug APK (v0.2.0, debug-keystore signed, **not** release-signed):
+Published debug APK (v0.2.0, signed with a per-machine auto-generated Android debug key, **not** release-signed; see "Debug signing key" below before updating from it):
 https://github.com/Victorious93/rootforge-os/releases/download/v0.2.0/rootforge-os-android-debug.apk
 
 ```bash
@@ -58,6 +58,18 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The debug APK uses applicationId `ai.rootforge.os.debug`. A release APK is built in CI when `ROOTFORGE_KEYSTORE_BASE64` (and the matching password/alias secrets) are set; otherwise only debug.
+
+### Debug signing key
+
+Debug builds (local and CI) are signed with the committed debug keystore `android-app/app/debug.keystore` (alias `androiddebugkey`, store and key password `android`). It is **for debug builds only**, is not a secret, and must never sign a release; release signing is separate (`ROOTFORGE_KEYSTORE_*`). No CI secret is needed. Certificate SHA-256:
+
+```
+77:7A:C7:00:87:05:A8:B4:B8:93:AC:EF:0E:03:E9:1C:7F:49:52:C9:52:FE:B2:6E:06:D7:90:B9:14:86:64:6F
+```
+
+Every debug build now carries the same signing certificate, so a new debug APK installs over an older one with `adb install -r`. **The earlier v0.2.0 debug APK was signed with a different (auto-generated, per-machine) debug key: uninstall it once (`adb uninstall ai.rootforge.os.debug`) before installing a build signed with this key.** App data is lost by that uninstall.
+
+Check an APK: `apksigner verify --print-certs app-debug.apk` (SHA-256 digest) against `keytool -list -v -keystore app/debug.keystore -storepass android`.
 
 Paparazzi goldens: `android-app/app/src/test/snapshots/`. Human-facing copies: `android-app/screenshots/`.
 

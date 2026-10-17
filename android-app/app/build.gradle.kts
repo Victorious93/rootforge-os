@@ -24,6 +24,15 @@ android {
     }
 
     signingConfigs {
+        // Debug-only key committed at app/debug.keystore so every local and CI
+        // debug build has the same signing certificate. Not a secret; never
+        // use it for release.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (releaseKeystore != null) {
             create("release") {
                 storeFile = file(releaseKeystore)
@@ -37,6 +46,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debug")
             versionNameSuffix = "-debug"
         }
         release {

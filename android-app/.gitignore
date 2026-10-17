@@ -6,3 +6,5 @@ local.properties
 captures/
 *.jks
 *.keystore
+# Committed on purpose: debug-only key shared by local and CI debug builds (not a secret).
+!app/debug.keystore
