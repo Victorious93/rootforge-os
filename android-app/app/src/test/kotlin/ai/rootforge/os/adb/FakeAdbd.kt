@@ -15,6 +15,15 @@ class FakeAdbd(
 ) : Thread("fake-adbd") {
     val files = HashMap<String, ByteArray>()
     val receivedSideload = ByteArrayOutputStream()
+    /** Payloads the host sent, one per block request, in the order they arrived. */
+    val sideloadChunks = mutableListOf<ByteArray>()
+    /**
+     * When set, these block indexes are requested in this order and then
+     * `DONEDONE`. Null keeps the sequential 0,1,2,… plan.
+     */
+    var sideloadPlan: List<Int>? = null
+    /** Sent when [sideloadPlan] is exhausted. Recovery uses `FAILFAIL` when the install failed. */
+    var sideloadTerminal: String = "DONEDONE"
     var sideloadSource: ByteArray? = null
     var lastRebootTarget: String? = null
     var authSignatureValid: Boolean? = null
@@ -32,6 +41,7 @@ class FakeAdbd(
     private var sideloadSize = 0L
     private var sideloadBlock = 0
     private var sideloadNext = 0
+    private var sideloadPlanPos = 0
 
     init { isDaemon = true }
 
@@ -117,6 +127,16 @@ class FakeAdbd(
     }
 
     private fun requestBlock() {
+        val plan = sideloadPlan
+        if (plan != null) {
+            if (sideloadPlanPos >= plan.size) {
+                reply(AdbProtocol.A_WRTE, localId, remoteId, sideloadTerminal.toByteArray())
+            } else {
+                val block = plan[sideloadPlanPos++]
+                reply(AdbProtocol.A_WRTE, localId, remoteId, "%08d".format(block).toByteArray())
+            }
+            return
+        }
         val blocks = (sideloadSize + sideloadBlock - 1) / sideloadBlock
         if (sideloadNext >= blocks) {
             reply(AdbProtocol.A_WRTE, localId, remoteId, "DONEDONE".toByteArray())
@@ -130,6 +150,7 @@ class FakeAdbd(
     private fun onData(payload: ByteArray) {
         if (service.startsWith("sideload-host:")) {
             receivedSideload.write(payload)
+            sideloadChunks.add(payload.copyOf())
             sideloadNext++
             requestBlock()
             return

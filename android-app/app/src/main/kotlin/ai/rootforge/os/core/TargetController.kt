@@ -317,7 +317,7 @@ class TargetController(
             throw IOException("The target is not in sideload mode (banner '${conn.banner.take(24)}'). In recovery choose Apply update, then Apply from ADB.")
         }
         log.command("adb sideload ${zip.name}")
-        zip.file.inputStream().buffered().use { conn.sideload(it, zip.size, { d, t -> setProgress("Sideloading", d, t) }) }
+        conn.sideload(zip.file, progress = { done, total -> setProgress("Sideloading", done, total) })
         clearProgress()
         log.info("Sideload finished; check the target screen for the result.")
     }

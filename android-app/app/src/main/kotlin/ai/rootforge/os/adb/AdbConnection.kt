@@ -12,9 +12,11 @@ import ai.rootforge.os.usb.BulkTransport
 import ai.rootforge.os.usb.UsbTimeoutException
 import ai.rootforge.os.usb.readFully
 import java.io.Closeable
+import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.io.RandomAccessFile
 
 data class ShellResult(val output: String, val exitCode: Int?)
 
@@ -208,37 +210,49 @@ class AdbConnection(
 
     // ----- sideload (recovery "apply update from ADB") -----------------------------------------------
 
-    fun sideload(input: InputStream, size: Long, progress: (Long, Long) -> Unit = { _, _ -> }, shouldStop: () -> Boolean = { false }) =
+    /**
+     * Serves `sideload-host`. Recovery's FUSE reader asks for blocks by
+     * number, not in file order: it reads the zip central directory at the
+     * end, then the payload, and it reads the package again to install it.
+     * A forward-only stream aborts that second read, so the update never
+     * finishes. [file] is seeked for every request.
+     */
+    fun sideload(file: File, progress: (Long, Long) -> Unit = { _, _ -> }, shouldStop: () -> Boolean = { false }) =
         synchronized(lock) {
             requireConnected()
-            val stream = open("sideload-host:$size:$SIDELOAD_BLOCK")
-            try {
-                val block = ByteArray(SIDELOAD_BLOCK)
-                var position = 0L // the input is read forward only; blocks are requested in order in practice
-                while (!shouldStop()) {
-                    val req = stream.readExactly(8, System.currentTimeMillis() + 120_000)
-                    val text = String(req, Charsets.US_ASCII)
-                    if (text == "DONEDONE") return@synchronized
-                    val index = text.trim().toLongOrNull() ?: throw AdbException("Bad sideload block request '$text'")
-                    val offset = index * SIDELOAD_BLOCK
-                    if (offset >= size) throw AdbException("Target asked for block $index beyond the end of the file")
-                    if (offset < position) throw AdbException("Target re-requested an earlier block; use a seekable source")
-                    skipFully(input, offset - position)
-                    position = offset
-                    val want = minOf(SIDELOAD_BLOCK.toLong(), size - offset).toInt()
-                    var got = 0
-                    while (got < want) {
-                        val n = input.read(block, got, want - got)
-                        if (n < 0) throw AdbException("File ended early while sideloading")
-                        got += n
+            RandomAccessFile(file, "r").use { raf ->
+                val size = raf.length()
+                if (size <= 0L) throw AdbException("Sideload package is empty")
+                val stream = open("sideload-host:$size:$SIDELOAD_BLOCK")
+                try {
+                    val block = ByteArray(SIDELOAD_BLOCK)
+                    val lastIndex = (size - 1) / SIDELOAD_BLOCK
+                    while (!shouldStop()) {
+                        val req = stream.readExactly(8, System.currentTimeMillis() + 120_000)
+                        val text = String(req, Charsets.US_ASCII)
+                        when (text) {
+                            "DONEDONE" -> {
+                                progress(size, size)
+                                return@synchronized
+                            }
+                            "FAILFAIL" -> throw AdbException("The target reported that sideload failed")
+                        }
+                        val index = text.trim().toLongOrNull()
+                            ?: throw AdbException("Bad sideload block request '$text'")
+                        if (index < 0 || index > lastIndex) {
+                            throw AdbException("Target asked for block $index beyond the end of the file")
+                        }
+                        val offset = index * SIDELOAD_BLOCK
+                        raf.seek(offset)
+                        val want = minOf(SIDELOAD_BLOCK.toLong(), size - offset).toInt()
+                        raf.readFully(block, 0, want)
+                        stream.write(block, 0, want)
+                        progress(offset + want, size)
                     }
-                    position += want
-                    stream.write(block, 0, want)
-                    progress(offset + want, size)
+                    throw AdbException("Sideload cancelled")
+                } finally {
+                    stream.close()
                 }
-                throw AdbException("Sideload cancelled")
-            } finally {
-                stream.close()
             }
         }
 
@@ -346,16 +360,6 @@ class AdbConnection(
 
     private fun syncHeader(stream: Stream, id: String, length: Int, data: ByteArray, dataLen: Int) {
         stream.write(syncFrame(id, length) + data.copyOf(dataLen))
-    }
-
-    private fun skipFully(input: InputStream, count: Long) {
-        var left = count
-        val scratch = ByteArray(8192)
-        while (left > 0) {
-            val n = input.read(scratch, 0, minOf(left, scratch.size.toLong()).toInt())
-            if (n < 0) throw AdbException("File ended early while sideloading")
-            left -= n
-        }
     }
 
     // ----- raw messages ------------------------------------------------------------------------------

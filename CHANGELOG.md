@@ -7,6 +7,9 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Android sideload
+- The host-phone `sideload-host` client seeks the package and serves whatever block recovery asks for, including a re-read. It used to walk the file only forward and abort when recovery read the zip central directory (or read the package a second time to install it), so an OTA sideload from the Android app stopped before the update finished. `FAILFAIL` from the device is reported as a failure. **Not run against a phone in recovery.**
+
 ### Build and release
 - `release.yml` builds the debug host-phone APK on `v*` tags and attaches
   `rootforge-os-android-debug.apk` (plus SHA-256) to a published GitHub Release
