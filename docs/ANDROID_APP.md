@@ -67,7 +67,7 @@ Paparazzi goldens: `android-app/app/src/test/snapshots/`. Human-facing copies: `
 - **EDL / Firehose is experimental.** Sahara identity and programmer upload are implemented and tested against a fake device. No 9008 hardware was available. Retail phones accept only the OEM-signed programmer for that exact model; this app ships none and cannot bypass Secure Boot. A later JNI path that reuses EDL-Commander Rust is planned only (`docs/FLASH_TOOLS_PLAN.md` Phase 4); it is not implemented.
 - Sparse images that fit in one `download:` are flashed; a **raw** image larger than `max-download-size` is refused (use `img2simg` or a desktop fastboot).
 - ADB uses classic `shell:` (exit status via an echo marker), not shell_v2. No `adb forward`.
-- Sideload (`sideload-host`) expects the file to be read forward; a target that re-requests an earlier block is refused.
+- Sideload (`sideload-host`) seeks the library file so recovery can read the zip central directory, then the payload, then the package again. `DONEDONE` finishes the transfer; `FAILFAIL` is reported as a failure. **Not run against a phone in recovery.**
 - Logcat holds the USB connection; other actions are blocked until you stop it.
 - No internet permission. Opening TWRP/OrangeFox/LineageOS links uses the system browser.
 

@@ -11,45 +11,49 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-16 (module quoting, merged main):** branch
-> `cursor/critical-bug-management-932c` (PR #59) merged `origin/main` at `00b12f6`
-> (#58 APK on tags, #60 toolkit serial pin, v0.2.0 notes). It adds shell-quoting of
-> module display names in `customize.sh` (`new_module_scaffold.sh` and Kotlin
-> `ModuleBuilder`): Magisk/KernelSU/APatch source that file, and a name with `$(...)`,
-> backticks, or a `"` used to run as root at install time. First published Release
-> is **v0.2.0** (debug APK only). EDL-Commander JNI is still plan-only. Not run on a
-> device.
+> **Update 2026-10-17 (sideload block seeks):** branch
+> `cursor/critical-bug-scan-854e`. The Android USB `sideload-host` client
+> (`AdbConnection.sideload`) used to read the package only forward and abort
+> when recovery asked for an earlier block. Recovery reads the zip central
+> directory at the end, then the payload, then the package again to install,
+> so an OTA sideload from the host-phone app stopped before the update
+> finished. The client now seeks the library file for every requested block
+> and treats `FAILFAIL` as failure. Not run on a phone in recovery.
+> Module quoting (#59) and the toolkit serial pin (#60) are merged on `main`.
+> First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
+> is still plan-only.
 
-**Last updated:** 2026-10-16 · **Branch:** `cursor/critical-bug-management-932c`
-(merged `origin/main` at `00b12f6`) · **Phase:** active development; ISO/VM/hardware
+**Last updated:** 2026-10-17 · **Branch:** `cursor/critical-bug-scan-854e`
+· **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60)
-and APK-on-tag release (#58) are on `main`. This branch is the `customize.sh` quoting
+and APK-on-tag release (#58) are on `main`. This branch is the sideload seek
 fix. Not run on a device. License lock (#53): original work GPL-3.0-or-later
 (`LICENSE`); shared Kotlin `:core` Apache-2.0 (`android-app/core/LICENSE`);
 third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
-**What is true now** (each verified by running it this session unless marked):
+**What is true now** (sideload and the suite below were run this session; older bullets were not re-audited unless noted):
+- Android `AdbConnection.sideload` seeks the package. `:app:testDebugUnitTest --tests ai.rootforge.os.adb.AdbConnectionTest` → 3 tests, 0 failures (handshake/push/pull, out-of-order block re-read, `FAILFAIL`). Not run against a phone in recovery. Desktop sideload still shells out to host `adb sideload`.
 - License lock is in-tree from #53: `LICENSE` (GNU GPL v3 text; applying notice is
   GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
   (split + third-party not relicensed). Not re-audited this session.
 - Module display names are shell-quoted in generated `customize.sh` (scaffold
-  script and `:core` `ModuleBuilder`). Newlines are still rejected. Verified earlier
-  on this branch by sourcing a generated script whose name contained `$(touch …)`
+  script and `:core` `ModuleBuilder`). Newlines are still rejected. Verified on the
+  quoting branch by sourcing a generated script whose name contained `$(touch …)`
   and a `"` breakout: the payload did not run, and `ui_print` received the name as
   text. `:core:test --tests ai.rootforge.os.module.ModuleBuilderTest` → 6 tests, 0
-  failures at that time (not re-run after the merge). The generated module was not
+  failures at that time (not re-run this session). The generated module was not
   installed in Magisk.
 - `android-apk.yml` on `e1f84ea` (run 38680669216) uploaded the debug APK
   published as v0.2.0 (SHA-256
   `faf743faba1b14aa5288f69883a0a1e2c284e43a77d7b32575ea3aaed8045e2f`). No
   release-signed APK (keystore secrets absent). **Not installed on a phone.**
-- Hermetic suite / lint after merging `origin/main` at `00b12f6`:
-  `bash tests/run-tests.sh` → **1023 passed, 0 failed** (379 Python tests; a first run without
-  shellcheck on `PATH` counted 1024). `bash tests/lint.sh` → **lint
-  clean** with shellcheck 0.11.0 (pip `shellcheck-py`). Gradle was **not** re-run after
-  the merge. The Flash Tools
-  PR (#56) recorded `:core:test` 98/0, `:app:testDebugUnitTest` 25/0,
+- Hermetic suite / lint on 2026-10-17 (this branch, after the sideload seek change):
+  `bash tests/run-tests.sh` → **1023 passed, 0 failed**. `bash tests/lint.sh` → **lint
+  clean** with shellcheck 0.11.0 (pip `shellcheck-py`). `:app:testDebugUnitTest` was
+  limited to `AdbConnectionTest` (3/0); the rest of `:app:testDebugUnitTest`,
+  `:core:test`, `assembleDebug`, and `:desktop:compileKotlin` were not re-run.
+  The Flash Tools PR (#56) recorded `:core:test` 98/0, `:app:testDebugUnitTest` 25/0,
   `assembleDebug`, and `:desktop:compileKotlin`.
 - Flash Tools is in-tree: `docs/FLASH_TOOLS_PLAN.md`, `:core` device-match / SHA-256 /
   persisted `OutputLog` / `UsbScanFilter`, Flash Tools Compose hub, same gate on
@@ -75,7 +79,7 @@ third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
   **succeeded**; the `release` job failed (`termux/make-release-metadata.sh`
   Permission denied — file was `100644`). Cancel was 403. v0.2.0 stayed
   published with the debug APK (`gh release create`). ISO/rootfs were not
-  attached. This branch invokes the generator with `bash` and marks it +x.
+  attached. The tree invokes the generator with `bash` (`release.yml`) and the script is mode `755`.
   PR #49 Toolkit CI (run 38523858203) after the `packages: platform-tools` fix: Lint,
   linux-desktop, windows-desktop, and docker all green. PR #50 changed
   `android-apk.yml`; this session did not re-check that workflow's jobs.
@@ -84,7 +88,7 @@ third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
   administration. EDL-Commander JNI/NDK (Phase 4 of `docs/FLASH_TOOLS_PLAN.md` only).
   Android host-phone GUI APK, Flash Tools, Linux/Windows desktop, and Docker toolkit
-  are on `main` (USB Host, not Termux). This branch is the customize.sh quoting fix. Toolkit API writes pin `-s` (#60, on
+  are on `main` (USB Host, not Termux). This branch seeks sideload blocks. Toolkit API writes pin `-s` (#60, on
   `main`). Published Release **v0.2.0** has the debug APK only. The Termux
   *rootfs* install path still needs a locally generated or future ISO/rootfs
   release; the Python CLI can run from a git clone.
