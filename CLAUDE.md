@@ -11,6 +11,19 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-18 (README refresh):** branch `cursor/refresh-readme-249a`,
+> docs only (`README.md`, `CHANGELOG.md`, this file). README re-organised in plain
+> language: what it is, fleet placement, host-phone app / Flash Tools, install and
+> build per client, Signing. Fleet claims were checked against this repo's code and
+> against droidcommand-AI `main` read through the GitHub API on 2026-10-18: DCA's
+> `core-security/FleetCatalog.kt` lists RootForge as `EXTERNAL_NODE`; DCA's
+> `core-rootforge` mirrors `BRIDGE_PROTOCOL_MAJOR = 1` and has only an SSH transport,
+> so no Android Messenger client exists on the DCA side yet. A live DCA ↔ RootForge
+> pairing on a phone is still unrun (README marks it [Likely]). The v0.2.0 APK SHA-256
+> in the README matches the digest GitHub reports for that asset. Local run:
+> `bash tests/run-tests.sh` 1023/0, `bash tests/lint.sh` clean (shellcheck 0.11.0).
+> Gradle, ISO, Docker and device paths were not run (no code changed).
+
 > **Update 2026-10-17 (debug signing key):** branch
 > `cursor/stable-debug-signing-key-4b63`. The debug build type is signed with a
 > committed app-specific keystore `android-app/app/debug.keystore` (SHA-256
@@ -32,16 +45,21 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-17 · **Branch:** `cursor/critical-bug-scan-854e`
+**Last updated:** 2026-10-18 · **Branch:** `cursor/refresh-readme-249a`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
-desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60)
-and APK-on-tag release (#58) are on `main`. This branch is the sideload seek
-fix. Not run on a device. License lock (#53): original work GPL-3.0-or-later
-(`LICENSE`); shared Kotlin `:core` Apache-2.0 (`android-app/core/LICENSE`);
-third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
+desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
+APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
+This branch is a docs-only README refresh. Not run on a device. License lock (#53):
+original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
+(`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
-**What is true now** (sideload and the suite below were run this session; older bullets were not re-audited unless noted):
+**What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- README landing page rewritten 2026-10-18 (docs only). Fleet claims checked against this
+  repo's Messenger/pairing code and against droidcommand-AI `main` via the GitHub API:
+  `FleetCatalog.kt` lists RootForge as `EXTERNAL_NODE`; `core-rootforge` has
+  `BRIDGE_PROTOCOL_MAJOR = 1` and only an SSH transport. Live pairing on a phone is still
+  unrun. v0.2.0 APK SHA-256 in the README matches the GitHub asset digest.
 - Android `AdbConnection.sideload` seeks the package. `:app:testDebugUnitTest --tests ai.rootforge.os.adb.AdbConnectionTest` → 3 tests, 0 failures (handshake/push/pull, out-of-order block re-read, `FAILFAIL`). Not run against a phone in recovery. Desktop sideload still shells out to host `adb sideload`.
 - License lock is in-tree from #53: `LICENSE` (GNU GPL v3 text; applying notice is
   GPL-3.0-or-later in `NOTICE`), `android-app/core/LICENSE` (Apache-2.0), `NOTICE`
@@ -57,13 +75,13 @@ third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
   published as v0.2.0 (SHA-256
   `faf743faba1b14aa5288f69883a0a1e2c284e43a77d7b32575ea3aaed8045e2f`). No
   release-signed APK (keystore secrets absent). **Not installed on a phone.**
-- Hermetic suite / lint on 2026-10-17 (this branch, after the sideload seek change):
+- Hermetic suite / lint on 2026-10-18 (this README-refresh branch, docs only):
   `bash tests/run-tests.sh` → **1023 passed, 0 failed**. `bash tests/lint.sh` → **lint
-  clean** with shellcheck 0.11.0 (pip `shellcheck-py`). `:app:testDebugUnitTest` was
-  limited to `AdbConnectionTest` (3/0); the rest of `:app:testDebugUnitTest`,
-  `:core:test`, `assembleDebug`, and `:desktop:compileKotlin` were not re-run.
+  clean** with shellcheck 0.11.0 (pip `shellcheck-py`). Gradle (`:core:test`,
+  `:app:testDebugUnitTest`, `assembleDebug`, `:desktop:compileKotlin`) was not run.
   The Flash Tools PR (#56) recorded `:core:test` 98/0, `:app:testDebugUnitTest` 25/0,
-  `assembleDebug`, and `:desktop:compileKotlin`.
+  `assembleDebug`, and `:desktop:compileKotlin`. The debug-key branch recorded
+  `:core:test :app:testDebugUnitTest :app:assembleDebug` 126/0.
 - Flash Tools is in-tree: `docs/FLASH_TOOLS_PLAN.md`, `:core` device-match / SHA-256 /
   persisted `OutputLog` / `UsbScanFilter`, Flash Tools Compose hub, same gate on
   desktop `HostController.fastbootFlash`. EDL-Commander JNI is plan-only.
@@ -97,7 +115,7 @@ third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
   administration. EDL-Commander JNI/NDK (Phase 4 of `docs/FLASH_TOOLS_PLAN.md` only).
   Android host-phone GUI APK, Flash Tools, Linux/Windows desktop, and Docker toolkit
-  are on `main` (USB Host, not Termux). This branch seeks sideload blocks. Toolkit API writes pin `-s` (#60, on
+  are on `main` (USB Host, not Termux). This branch is docs-only. Toolkit API writes pin `-s` (#60, on
   `main`). Published Release **v0.2.0** has the debug APK only. The Termux
   *rootfs* install path still needs a locally generated or future ISO/rootfs
   release; the Python CLI can run from a git clone.
@@ -119,8 +137,9 @@ the check.**
 The Android GUI APK landed in PR #48; Linux/Windows/Docker toolkit in PR #49.
 Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`).
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
-Toolkit API serial pin is #60 (on `main`). This branch quotes module display names in
-`customize.sh`, merged onto that main. ISO Stage 5 is still blocked
+Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
+Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
+This branch is a docs-only README refresh. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 
