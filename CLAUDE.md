@@ -16,8 +16,9 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `ModuleRepos` link-out list (checked 2026-10-19: Alt-Repo, Magisk-Modules-Repo, Xposed-Modules-Repo, MMRL
 > exist; KernelSU/LSPosed sites unreachable here, flagged "not checked"). **Installing any module now needs
 > typed `INSTALL MODULE`** (SHA-256 shown) on Android and desktop. `:core:test` 138/0 (+13); desktop compiles.
-> **Not run:** `:app` compile (CI `apk`), a phone, a real manager. Modules Paparazzi golden stale. Branch
-> `ccr-76f54fed-xf2wxr` is stacked on open PR #69 (Kitsune).
+> **Not run:** `:app` compile (CI `apk`), a phone, a real manager. Modules Paparazzi golden stale. Landed with
+> Kitsune in #69 (head `f27a9e5`, all 9 CI checks green, including the `apk` Android compile). A split
+> attempt (#70) was closed as redundant: merging it would have removed Kitsune.
 
 > **Update 2026-10-19 (Kitsune manager):** `RootManager.KITSUNE` added, [UNSUPPORTED], package supplied
 > by the owner (`io.github.huskydg.magisk`) and unverified; `homepage` now nullable (none), new `caveat`
@@ -105,7 +106,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-This branch adds the Root Guide (not run on a device). README refresh is #63 and the desktop API token file mode is #64 (both on `main`). License lock (#53):
+On `main` from this work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69); none run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
@@ -198,7 +199,7 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-This branch adds the Root Guide (see Update 2026-10-19). ISO Stage 5 is still blocked
+The Root Guide, terminal hand-off, Kitsune and module work are on `main` (see Updates 2026-10-19). ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 
