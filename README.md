@@ -136,8 +136,14 @@ The app requests the internet permission for one thing only: the **Download** bu
 "Builds for this device" card, which fetches the Custom RR catalog over https
 ([docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md)). Device work never uses the network.
 
-Screens: Dashboard, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching, Module Builder,
-Recovery, Logs / Terminal, Settings.
+Screens: Dashboard, **Root Guide**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
+Module Builder, Recovery, Logs / Terminal, Settings.
+
+**Root Guide** is offline rooting documentation inside the app (bootloader unlock, Magisk / KernelSU / APatch,
+device guides, FAQ, troubleshooting) with search. Most pages are adapted from
+[Awesome Android Root](https://github.com/awesome-android-root/awesome-android-root) (MIT); one page maps the
+guides' steps onto this app's screens. It is reference text only and has not been checked on hardware here.
+See [docs/ROOT_GUIDE.md](docs/ROOT_GUIDE.md).
 
 ### Flash Tools
 
@@ -413,6 +419,7 @@ Makefile · BUILD.md · HACKING.md · AGENTS.md · CLAUDE.md
 | [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md) | BIOS-only live ISO; architecture caveats |
 | [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | Trust boundaries, logging, flashing gates |
 | [docs/ANDROID_APP.md](docs/ANDROID_APP.md) | Host-phone APK: USB Host, screens, install, debug key, limits |
+| [docs/ROOT_GUIDE.md](docs/ROOT_GUIDE.md) | Root Guide: bundled pages, importer, parser, refresh procedure, limits |
 | [docs/FLASH_TOOLS_PLAN.md](docs/FLASH_TOOLS_PLAN.md) | Flash Tools hub, device-match check, manifest format, EDL-Commander plan |
 | [docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md) | "Builds for this device" card: Custom RR ROM/recovery catalog by codename, download or import |
 | [docs/DESKTOP.md](docs/DESKTOP.md) | Linux/Windows desktop, Windows USB drivers, Docker |

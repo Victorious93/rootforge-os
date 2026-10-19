@@ -23,6 +23,26 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `:app:assembleDebug` (aapt2 shows `INTERNET`). Throwaway tests: real bundled catalog parse;
 > live `download()` from this JVM (37 entries, 35 freshness). `tests/run-tests.sh`
 > 1023/0, `tests/lint.sh` clean (shellcheck 0.11.0). Not run: APK on a phone, desktop window.
+> After merging `main` (#65 Root Guide): `:core:test` 138/0, `:desktop:test` 2/0,
+> `:app:verifyPaparazziDebug` 28/0 and `:app:assembleDebug` all pass, so the Root Guide's `:app`
+> build is now verified too (not on a phone). Its two "no INTERNET permission" lines were corrected.
+
+> **Update 2026-10-19 (Root Guide):** PR #65 (on `main`). New **Root Guide**
+> drawer entry in the Android app and desktop client (`docs/ROOT_GUIDE.md`). 26 pages adapted
+> from Awesome Android Root (MIT, source commit pinned in `manifest.json`) plus three RootForge-written
+> pages (screen mapping, Kitsune status, PitchBlack); `:core` `ai.rootforge.os.guide` (parser, search, link
+> allow-list); shared Compose `GuideScreen`; importer `android-app/tools/import_root_guide.py`;
+> `NOTICE` carries the MIT attribution. The apps-and-modules catalogue was not imported.
+> Verified: `:core:test` 118/0 (19 new, incl. every internal link/anchor resolving),
+> `:desktop:compileKotlin` builds, `tests/test_guide_import.py` 14 OK inside `bash tests/run-tests.sh`
+> 1023/0, `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). Layout was checked by
+> rendering the real screen off-screen with Compose desktop (temporary harness, removed).
+> Follow-up on the same branch: guide pages for Kitsune (guide-only, unmaintained [Likely]) and
+> PitchBlack, a Recovery-screen PBRP link, and shells/VictorSuite notes in the workflow page. No new
+> interactive shell and no VictorSuite launch (package/hand-off unknown); see `docs/ROOT_GUIDE.md`.
+> **Not run:** `:app` build/tests/Paparazzi (no Android SDK here; no golden recorded), any phone,
+> the desktop window. Android loading pages via `getResourceAsStream` on a library jar is [Likely]
+> but unverified. The guide text is community reference, not tested on hardware by RootForge.
 
 > **Update 2026-10-19 (desktop API token mode):** PR #64 (on `main`). `DesktopSettings` wrote
 > `~/.rootforge/desktop.properties` (the headless `api_token`) with
@@ -75,7 +95,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-README refresh is #63 and desktop token mode is #64 (both on `main`). This branch adds the Custom RR build catalog (lookup, download/import, Dashboard card). Not run on a device. License lock (#53):
+README refresh is #63, desktop token mode is #64 and the Root Guide is #65 (all on `main`). This branch adds the Custom RR build catalog (lookup, download/import, Dashboard card). Not run on a device. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
@@ -172,7 +192,7 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-README refresh is #63 (on `main`). Desktop token mode is #64 (on `main`). This branch (PR #66): Custom RR catalog lookup, download + import, Dashboard card;
+README refresh is #63 (on `main`). Desktop token mode is #64 (on `main`). Root Guide is #65 (on `main`). This branch (PR #66): Custom RR catalog lookup, download + import, Dashboard card;
 APK now requests `INTERNET` for the Download button only. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.

@@ -107,3 +107,9 @@ fun PreviewModules() {
 fun PreviewSettings() {
     RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Settings) }
 }
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Root Guide")
+@Composable
+fun PreviewRootGuide() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.RootGuide) }
+}
