@@ -9,13 +9,13 @@ package ai.rootforge.os.shizuku
 class NullPrivilegedShell : PrivilegedShell {
     override fun isAvailable(): Boolean = false
 
-    override fun exec(argv: List<String>, timeoutMs: Long) =
+    override fun exec(argv: List<String>, timeoutMs: Long): PrivilegedResult =
         unavailable(argv.firstOrNull() ?: "(empty)")
 
-    override fun readDeviceState() =
+    override fun readDeviceState(): PrivilegedResult =
         PrivilegedResult.Failure("${ShizukuCopy.UNAVAILABLE_FAILURE} (NullPrivilegedShell)")
 
-    override fun pmGrant(packageName: String, permission: String) =
+    override fun pmGrant(packageName: String, permission: String): PrivilegedResult =
         unavailable("pm grant")
 
     private fun unavailable(what: String) = PrivilegedResult.Failure(

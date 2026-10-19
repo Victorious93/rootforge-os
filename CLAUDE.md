@@ -25,8 +25,14 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > queries for Shizuku + Sui. Every privileged op goes through `ApprovalCenter`;
 > `pmGrant` is interop-only (typed `GRANT PERMISSION`, no UI). No applicationId /
 > signing / versioning change. No flatDir AAR fetch (comment documents the CI
-> gotcha). **Local results and CI recorded after this rewrite.** **Not run:** a
-> phone.
+> gotcha). Verified: `:core:test` **194/0** (`ShizukuStateResolverTest` 8,
+> `ShizukuManagerTest` 5, `PrivilegedShellTest` 7, `PrivilegedCommandsTest` 6),
+> `:desktop:test` 2/0, `:desktop:compileKotlin`, `:app:testDebugUnitTest` 28/0,
+> `:app:assembleDebug` (applicationId still `ai.rootforge.os.debug`; `aapt2`
+> lists `moe.shizuku.manager.permission.API_V23`). `tests/run-tests.sh` 1023/0,
+> `tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run:** a
+> phone, the desktop window, Paparazzi re-record (settings golden unchanged:
+> Shizuku card is hidden when `shizuku == null`).
 
 > **Update 2026-10-19 (catalog model-number fallback):** branch `ccr-b45e98d7-7wsvwf` (#66 was
 > squash-merged; the branch was brought up to `main` with a normal merge, tree identical to `main`,
@@ -162,7 +168,8 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
 - Shizuku/Sui (PR #75): fleet four-state manager + `PrivilegedShell` sole API, bound
   `IPrivilegedShell` UserService after `GRANTED`, approval-gated read-only Settings
-  lookups; `pmGrant` hidden + typed confirm. Deps 13.1.5. **Not run on a phone.**
+  lookups; `pmGrant` hidden + typed confirm. Deps 13.1.5. `:core:test` 194/0,
+  `:app:assembleDebug` applicationId `ai.rootforge.os.debug`. **Not run on a phone.**
 - Custom RR catalog: Dashboard "Builds for this device" card (Android + desktop), Download over
   https (APK requests `INTERNET` for this only) or Import file; `:core` `catalog/` tests 20/0
   (2026-10-19). Never affects flash gating. Not run on a phone. Doc: `docs/CUSTOM_RR_CATALOG.md`.
