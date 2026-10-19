@@ -105,6 +105,32 @@ class GuideLibrary(private val read: (String) -> String? = ::readResource) {
         return scored.sortedWith(compareByDescending<Scored> { it.score }.thenBy { it.order }).take(limit).map { it.hit }
     }
 
+    /**
+     * Looser search for natural-language questions: sections matching at least half of [words] (and
+     * never fewer than one), ranked by how many matched, headings and page titles counting extra.
+     */
+    fun searchAny(words: List<String>, limit: Int = 5): List<GuideHit> {
+        val terms = words.map { it.lowercase() }.filter { it.length >= 2 }.distinct()
+        if (terms.isEmpty()) return emptyList()
+        val needed = maxOf(1, (terms.size + 1) / 2)
+        data class Scored(val score: Int, val order: Int, val hit: GuideHit)
+        val scored = ArrayList<Scored>()
+        var order = 0
+        for (entry in manifest.entries) {
+            val doc = document(entry.id) ?: continue
+            val title = entry.title.lowercase()
+            for (section in sections(doc)) {
+                val heading = section.heading.lowercase()
+                val body = section.text.lowercase()
+                val matched = terms.count { it in heading || it in title || it in body }
+                if (matched < needed) continue
+                val score = matched * 4 + terms.count { it in heading } * 3 + terms.count { it in title }
+                scored += Scored(score, order++, GuideHit(entry, section.heading, section.anchor, snippet(section.text, terms)))
+            }
+        }
+        return scored.sortedWith(compareByDescending<Scored> { it.score }.thenBy { it.order }).take(limit).map { it.hit }
+    }
+
     private class Section(val heading: String, val anchor: String?, val text: String)
 
     private fun sections(doc: GuideDocument): List<Section> {

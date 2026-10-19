@@ -11,6 +11,13 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-19 (Ask):** branch `ccr-b10b0495-thfmfs`. New **Ask** drawer entry: `:core`
+> `ai.rootforge.os.ask` (`AskTopics` 20 curated ADB/fastboot/root answers, `AskEngine` keyword
+> match + `GuideLibrary.searchAny`) and shared Compose `AskScreen`. Offline keyword matching, **not an
+> LLM**; no network, cannot see the phone. `:core:test` `AskEngineTest` 6/0, `:desktop:test` and
+> `:desktop:compileKotlin` pass. **Not run:** `:app` compile/Paparazzi (no SDK here; no golden), a phone.
+> Also: merged `main` into PR #66's branch (docs-only conflicts) and pushed it.
+
 > **Update 2026-10-19 (Custom RR catalog lookup):** branch `ccr-b45e98d7-7wsvwf`.
 > New `:core` package `ai.rootforge.os.catalog`: parser + exact-codename `BuildLookup`,
 > `BuildCatalogFetcher` (https only, 8 MiB cap) and `BuildCatalogStore` (parse-then-atomic
