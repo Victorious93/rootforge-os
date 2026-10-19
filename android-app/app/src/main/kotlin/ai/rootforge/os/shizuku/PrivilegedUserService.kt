@@ -2,78 +2,50 @@ package ai.rootforge.os.shizuku
 
 import android.content.Context
 import androidx.annotation.Keep
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
- * Runs as shell (Shizuku via adb) or root (Sui / Shizuku via root) in a
- * process Shizuku starts. Only the argv lists from [PrivilegedCommands]
- * are executed — never a shell string, never a write.
+ * Shizuku/Sui UserService — runs as the privileged user (ADB shell or Sui
+ * root) in a separate process. Fleet AIDL: destroy=16777114, exec=1,
+ * readDeviceState=2, pmGrant=3. All work is on a background executor.
  *
- * A future destructive operation must not be added here without a typed
- * confirmation in the UI on every call.
+ * Does not log command output. Does not confirm: the app process must have
+ * already passed `ApprovalCenter` before binding and calling into this
+ * service. `pmGrant` exists for fleet interop only; RootForge does not
+ * expose it in the UI and still requires a typed confirmation in the
+ * app process.
  */
-class PrivilegedUserService : IPrivilegedOps.Stub {
-    @Keep
-    constructor()
+class PrivilegedUserService @Keep constructor() : IPrivilegedShell.Stub() {
+    private val worker = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "rootforge-privileged").apply { isDaemon = true }
+    }
 
     @Keep
-    constructor(@Suppress("UNUSED_PARAMETER") context: Context)
+    constructor(@Suppress("UNUSED_PARAMETER") context: Context) : this()
 
     override fun destroy() {
+        worker.shutdownNow()
         System.exit(0)
     }
 
-    override fun listPackages(thirdPartyOnly: Boolean): String =
-        run(PrivilegedCommands.listPackages(thirdPartyOnly))
-
-    override fun packageInfo(packageName: String): String {
-        val argv = PrivilegedCommands.packageInfo(packageName)
-            ?: return "Refused: not a plausible package name."
-        return run(argv)
+    override fun exec(argv: Array<String>, timeoutMs: Long): String = onWorker(timeoutMs) {
+        PrivilegedResultCodec.encode(PrivilegedProcessRunner.run(argv.toList(), timeoutMs))
     }
 
-    override fun settingsGet(namespace: String, key: String): String {
-        val argv = PrivilegedCommands.settingsGet(namespace, key)
-            ?: return "Refused: namespace must be system, secure or global, and the key must be a simple token."
-        return run(argv)
+    override fun readDeviceState(): String = onWorker(30_000) {
+        PrivilegedResultCodec.encode(PrivilegedProcessRunner.readDeviceState())
     }
 
-    override fun getprop(key: String): String {
-        val argv = PrivilegedCommands.getprop(key)
-            ?: return "Refused: not a plausible property name."
-        return run(argv)
+    override fun pmGrant(packageName: String, permission: String): String = onWorker(20_000) {
+        PrivilegedResultCodec.encode(PrivilegedProcessRunner.pmGrant(packageName, permission))
     }
 
-    override fun listBlockDevices(): String = PrivilegedCommands.blockDeviceCommands().joinToString("\n\n") { argv ->
-        val header = argv.joinToString(" ")
-        "$header\n${run(argv)}"
-    }
-
-    override fun deviceInfo(): String = PrivilegedCommands.DEVICE_INFO_KEYS.joinToString("\n") { key ->
-        val argv = PrivilegedCommands.getprop(key) ?: return@joinToString "$key="
-        "$key=${run(argv).trim()}"
-    }
-
-    private fun run(argv: List<String>): String {
-        val proc = ProcessBuilder(argv).redirectErrorStream(true).apply {
-            val path = environment()["PATH"].orEmpty()
-            environment()["PATH"] = "$SYSTEM_PATH:$path"
-        }.start()
-        val out = try {
-            proc.inputStream.bufferedReader().use { it.readText() }
-        } finally {
-            if (!proc.waitFor(15, TimeUnit.SECONDS)) {
-                proc.destroyForcibly()
-                return "timed out"
-            }
+    private fun onWorker(timeoutMs: Long, block: () -> String): String {
+        return try {
+            worker.submit(block).get(timeoutMs.coerceAtLeast(1_000L) + 5_000L, TimeUnit.MILLISECONDS)
+        } catch (t: Throwable) {
+            PrivilegedResultCodec.encode(PrivilegedResult.Failure("Privileged user service failed", t))
         }
-        val trimmed = out.take(MAX_OUTPUT)
-        val code = proc.exitValue()
-        return if (code != 0 && trimmed.isBlank()) "exit $code" else trimmed
-    }
-
-    private companion object {
-        const val MAX_OUTPUT = 64 * 1024
-        const val SYSTEM_PATH = "/system/bin:/system/xbin:/product/bin:/apex/com.android.runtime/bin"
     }
 }

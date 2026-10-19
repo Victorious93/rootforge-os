@@ -11,21 +11,22 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-19 (Shizuku / Sui):** branch `feat/shizuku` (PR #75). Optional
-> host-phone Shizuku (and Sui) support in `:app`: API/provider 13.1.5, official
-> `ShizukuProvider`, `ShizukuManager` StateFlow of NotInstalled / NotRunning /
-> PermissionDenied / Granted, bound UserService AIDL behind `PrivilegedOps` on
-> `Dispatchers.IO`. Wired **read-only** ops on this phone: `pm list packages` /
-> package info, `settings get`, `getprop`, block-device listing, curated device
-> info. No flash/unlock/wipe/write. Settings card with the four states; app works
-> without Shizuku. `aapt2 dump permissions` on the debug APK lists
-> `moe.shizuku.manager.permission.API_V23` (applicationId still
-> `ai.rootforge.os.debug`). Verified: `:core:test` **184/0** (+16:
-> `ShizukuStateMapperTest` 10, `PrivilegedCommandsTest` 6), `:desktop:test` 2/0,
-> `:desktop:compileKotlin`, `:app:testDebugUnitTest` 28/0, `:app:assembleDebug`,
-> `tests/run-tests.sh` 1023/0, `tests/lint.sh` clean (shellcheck 0.11.0 via the
-> repo wheel). **Not run:** a phone, the desktop window, Paparazzi re-record
-> (settings golden unchanged: Shizuku card is hidden when `shizuku == null`).
+> **Update 2026-10-19 (Shizuku fleet alignment):** branch `feat/shizuku` (PR #75).
+> Aligned with droidcommand-AI PR #231 under RootForge packages. Four states
+> `GRANTED`/`DENIED`/`NOT_INSTALLED`/`NOT_RUNNING`; Sui present when
+> `managerInstalled || binderAlive`. Sole API `PrivilegedShell` /
+> `PrivilegedResult` / `PrivilegedResultCodec`; `NullPrivilegedShell` fallback;
+> `PrivilegedProcessRunner` argv `ProcessBuilder`, no stdout/stderr logging,
+> 64 KiB cap. `ShizukuManager.requestPermission()` no-op except from `DENIED`;
+> `onCreate` only starts listeners. Bind UserService lazily after `GRANTED`,
+> off main thread (`daemon false`, `processNameSuffix privileged`,
+> `debuggable false`). `IPrivilegedShell.aidl` destroy=16777114, exec=1,
+> readDeviceState=2, pmGrant=3. Deps 13.1.5, `ShizukuProvider`, `API_V23`,
+> queries for Shizuku + Sui. Every privileged op goes through `ApprovalCenter`;
+> `pmGrant` is interop-only (typed `GRANT PERMISSION`, no UI). No applicationId /
+> signing / versioning change. No flatDir AAR fetch (comment documents the CI
+> gotcha). **Local results and CI recorded after this rewrite.** **Not run:** a
+> phone.
 
 > **Update 2026-10-19 (catalog model-number fallback):** branch `ccr-b45e98d7-7wsvwf` (#66 was
 > squash-merged; the branch was brought up to `main` with a normal merge, tree identical to `main`,
@@ -159,6 +160,9 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Shizuku/Sui (PR #75): fleet four-state manager + `PrivilegedShell` sole API, bound
+  `IPrivilegedShell` UserService after `GRANTED`, approval-gated read-only Settings
+  lookups; `pmGrant` hidden + typed confirm. Deps 13.1.5. **Not run on a phone.**
 - Custom RR catalog: Dashboard "Builds for this device" card (Android + desktop), Download over
   https (APK requests `INTERNET` for this only) or Import file; `:core` `catalog/` tests 20/0
   (2026-10-19). Never affects flash gating. Not run on a phone. Doc: `docs/CUSTOM_RR_CATALOG.md`.

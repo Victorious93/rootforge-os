@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
         val app = application as RootForgeApp
         app.uiVisible = true
         app.usb.refresh()
-        runCatching { app.shizuku.refresh() }
+        app.shizukuManager.refresh()
     }
 
     override fun onStop() {
@@ -78,9 +78,9 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
     val paired = app.pairing.paired.collectAsStateWithLifecycle().value
     val pending = app.pairing.pending.collectAsStateWithLifecycle().value
     val fingerprint = app.adbFingerprint.collectAsStateWithLifecycle().value
-    val shizuku = app.shizuku.status.collectAsStateWithLifecycle().value
-    val shizukuBusy = app.shizuku.busy.collectAsStateWithLifecycle().value
-    val shizukuResult = app.shizuku.result.collectAsStateWithLifecycle().value
+    val shizuku = app.shizukuState.collectAsStateWithLifecycle().value
+    val shizukuBusy = app.shizukuBusy.collectAsStateWithLifecycle().value
+    val shizukuResult = app.shizukuResult.collectAsStateWithLifecycle().value
     val nodeId = remember { app.settings.nodeId }
     return AppUiState(
         targets = targets, link = link, info = info, busy = busy, progress = progress, library = library, buildCatalog = buildCatalog,

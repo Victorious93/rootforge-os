@@ -3,8 +3,8 @@ package ai.rootforge.os.ui.screens
 import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.bridge.PairedController
 import ai.rootforge.os.core.TerminalApp
-import ai.rootforge.os.shizuku.ShizukuLinks
-import ai.rootforge.os.shizuku.ShizukuStatus
+import ai.rootforge.os.shizuku.ShizukuCopy
+import ai.rootforge.os.shizuku.ShizukuState
 import ai.rootforge.os.ui.ActionButton
 import ai.rootforge.os.ui.ActionKind
 import ai.rootforge.os.ui.AppActions
@@ -94,7 +94,7 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
             KeyValueRow("Network", "Only the build-catalog Download button (https, raw.githubusercontent.com)")
             KeyValueRow("USB", state.transportCaption)
             if (state.shizuku != null) {
-                KeyValueRow("Shizuku", "${state.shizuku.label()} — optional, this phone only, read-only")
+                KeyValueRow("Shizuku", "${ShizukuCopy.statusTitle(state.shizuku)} — optional, this phone only, read-only")
             }
             Text(
                 "Known limits: EDL is experimental and unverified on hardware; oversized non-sparse images are refused; " +
@@ -109,28 +109,28 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
 @Composable
 private fun ShizukuCard(state: AppUiState, actions: AppActions) {
     val status = state.shizuku ?: return
-    ForgeCard("Shizuku", "Optional privileged reads on this phone (Sui counts as the same thing)", Icons.Filled.AdminPanelSettings) {
-        StatusPill(status.label(), shizukuColor(status))
-        Text(status.explanation(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    ForgeCard(ShizukuCopy.SECTION_TITLE, "Optional privileged reads on this phone (Sui counts as the same thing)", Icons.Filled.AdminPanelSettings) {
+        StatusPill(ShizukuCopy.statusTitle(status), shizukuColor(status))
+        Text(ShizukuCopy.statusBody(status), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionButton("Refresh", kind = ActionKind.Outline, enabled = !state.shizukuBusy) { actions.refreshShizuku() }
             when (status) {
-                ShizukuStatus.NotInstalled -> {
-                    ActionButton("How to install Shizuku", kind = ActionKind.Primary) { actions.openUrl(ShizukuLinks.DOWNLOAD) }
-                    ActionButton("Sui (rooted)", kind = ActionKind.Outline) { actions.openUrl(ShizukuLinks.SUI) }
+                ShizukuState.NOT_INSTALLED -> {
+                    ActionButton("How to install Shizuku", kind = ActionKind.Primary) { actions.openUrl(ShizukuCopy.DOWNLOAD) }
+                    ActionButton("Sui (rooted)", kind = ActionKind.Outline) { actions.openUrl(ShizukuCopy.SUI) }
                 }
-                ShizukuStatus.NotRunning -> {
+                ShizukuState.NOT_RUNNING -> {
                     ActionButton("Open Shizuku", kind = ActionKind.Primary) { actions.openShizukuApp() }
-                    ActionButton("How to start it", kind = ActionKind.Outline) { actions.openUrl(ShizukuLinks.DOWNLOAD) }
+                    ActionButton("How to start it", kind = ActionKind.Outline) { actions.openUrl(ShizukuCopy.DOWNLOAD) }
                 }
-                ShizukuStatus.PermissionDenied -> {
-                    ActionButton("Grant", kind = ActionKind.Primary, enabled = !state.shizukuBusy) { actions.requestShizukuPermission() }
+                ShizukuState.DENIED -> {
+                    ActionButton(ShizukuCopy.REQUEST_BUTTON, kind = ActionKind.Primary, enabled = !state.shizukuBusy) { actions.requestShizukuPermission() }
                 }
-                ShizukuStatus.Granted -> Unit
+                ShizukuState.GRANTED -> Unit
             }
         }
-        if (status == ShizukuStatus.Granted) {
-            Text("Read-only lookups on this phone", style = MaterialTheme.typography.titleSmall)
+        if (status == ShizukuState.GRANTED) {
+            Text("Read-only lookups on this phone — each one asks for confirmation", style = MaterialTheme.typography.titleSmall)
             HostLookupRow(state, actions)
         }
         if (state.shizukuResult.isNotBlank()) {
@@ -144,7 +144,7 @@ private fun ShizukuCard(state: AppUiState, actions: AppActions) {
                     .verticalScroll(rememberScrollState()),
             )
         }
-        NoticeCard("This path never flashes, unlocks, wipes or writes. Any future destructive Shizuku action would still need a typed confirmation. Output stays on this screen and is not copied into the shared command log.")
+        NoticeCard("This path never flashes, unlocks, wipes or writes. Every privileged lookup asks for confirmation first. Output stays on this screen and is not copied into the shared command log.")
     }
 }
 
@@ -174,11 +174,11 @@ private fun HostLookupRow(state: AppUiState, actions: AppActions) {
 }
 
 @Composable
-private fun shizukuColor(status: ShizukuStatus) = when (status) {
-    ShizukuStatus.NotInstalled -> MaterialTheme.colorScheme.outline
-    ShizukuStatus.NotRunning -> ForgeColors.Warn
-    ShizukuStatus.PermissionDenied -> ForgeColors.Ember
-    ShizukuStatus.Granted -> ForgeColors.Ok
+private fun shizukuColor(status: ShizukuState) = when (status) {
+    ShizukuState.NOT_INSTALLED -> MaterialTheme.colorScheme.outline
+    ShizukuState.NOT_RUNNING -> ForgeColors.Warn
+    ShizukuState.DENIED -> ForgeColors.Ember
+    ShizukuState.GRANTED -> ForgeColors.Ok
 }
 
 @Composable

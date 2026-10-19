@@ -6,7 +6,10 @@ import ai.rootforge.os.core.FileInspection
 import ai.rootforge.os.core.LibraryFile
 import ai.rootforge.os.core.TerminalApp
 import ai.rootforge.os.core.importUri
-import ai.rootforge.os.shizuku.ShizukuLinks
+import ai.rootforge.os.shizuku.PrivilegedCommands
+import ai.rootforge.os.shizuku.PrivilegedResult
+import ai.rootforge.os.shizuku.ShizukuCopy
+import ai.rootforge.os.shizuku.ShizukuPackages
 import ai.rootforge.os.core.TerminalCommand
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.module.BuiltModule
@@ -21,6 +24,7 @@ import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Binds the UI's action surface to the real controller. Each action runs in the app scope, off the main thread. */
 class AppActionsImpl(
@@ -219,14 +223,14 @@ class AppActionsImpl(
         }
     }
 
-    override fun requestShizukuPermission() = app.shizuku.requestPermission()
-    override fun refreshShizuku() = app.shizuku.refresh()
+    override fun requestShizukuPermission() = app.shizukuManager.requestPermission()
+    override fun refreshShizuku() = app.shizukuManager.refresh()
 
     override fun openShizukuApp() {
-        val launch = app.packageManager.getLaunchIntentForPackage(ShizukuLinks.PACKAGE)
+        val launch = app.packageManager.getLaunchIntentForPackage(ShizukuPackages.SHIZUKU)
         if (launch == null) {
             log.warn("Shizuku is not installed. Opening the download page.")
-            openUrl(ShizukuLinks.DOWNLOAD)
+            openUrl(ShizukuCopy.DOWNLOAD)
             return
         }
         try {
@@ -236,32 +240,137 @@ class AppActionsImpl(
         }
     }
 
-    override fun shizukuListPackages(thirdPartyOnly: Boolean) =
-        runShizuku(if (thirdPartyOnly) "list user packages" else "list packages") { app.privilegedOps.listPackages(thirdPartyOnly) }
+    override fun shizukuListPackages(thirdPartyOnly: Boolean) {
+        val argv = PrivilegedCommands.listPackages(thirdPartyOnly)
+        val label = if (thirdPartyOnly) "list user packages" else "list packages"
+        runPrivileged(label, argv) { app.privilegedShell.exec(argv) }
+    }
 
-    override fun shizukuPackageInfo(packageName: String) =
-        runShizuku("package info") { app.privilegedOps.packageInfo(packageName) }
-
-    override fun shizukuSettingsGet(namespace: String, key: String) =
-        runShizuku("settings get") { app.privilegedOps.settingsGet(namespace, key) }
-
-    override fun shizukuGetprop(key: String) =
-        runShizuku("getprop") { app.privilegedOps.getprop(key) }
-
-    override fun shizukuListBlockDevices() =
-        runShizuku("list block devices") { app.privilegedOps.listBlockDevices() }
-
-    override fun shizukuDeviceInfo() =
-        runShizuku("device info") { app.privilegedOps.deviceInfo() }
-
-    private fun runShizuku(label: String, block: suspend () -> Result<String>) {
-        scope.launch {
-            log.info("Shizuku: $label (this phone)")
-            val result = app.shizuku.run(label, block)
-            result.fold(
-                onSuccess = { log.info("Shizuku: $label finished") },
-                onFailure = { log.warn("Shizuku: $label failed") },
-            )
+    override fun shizukuPackageInfo(packageName: String) {
+        val argv = PrivilegedCommands.packageInfo(packageName)
+        if (argv == null) {
+            app.shizukuResult.value = "Refused: not a plausible package name."
+            return
         }
+        runPrivileged("package info", argv) { app.privilegedShell.exec(argv) }
+    }
+
+    override fun shizukuSettingsGet(namespace: String, key: String) {
+        val argv = PrivilegedCommands.settingsGet(namespace, key)
+        if (argv == null) {
+            app.shizukuResult.value = "Refused: namespace must be system, secure or global, and the key must be a simple token."
+            return
+        }
+        runPrivileged("settings get", argv) { app.privilegedShell.exec(argv) }
+    }
+
+    override fun shizukuGetprop(key: String) {
+        val argv = PrivilegedCommands.getprop(key)
+        if (argv == null) {
+            app.shizukuResult.value = "Refused: not a plausible property name."
+            return
+        }
+        runPrivileged("getprop", argv) { app.privilegedShell.exec(argv) }
+    }
+
+    override fun shizukuListBlockDevices() {
+        val commands = PrivilegedCommands.blockDeviceCommands()
+        runPrivileged("list block devices", commands.first(), extraLines = commands.drop(1).map { it.joinToString(" ") }) {
+            val chunks = commands.map { argv ->
+                val header = argv.joinToString(" ")
+                when (val result = app.privilegedShell.exec(argv)) {
+                    is PrivilegedResult.Failure -> "$header\nERROR ${result.reason}"
+                    is PrivilegedResult.Success -> "$header\n${display(result)}"
+                }
+            }
+            PrivilegedResult.Success(0, chunks.joinToString("\n\n"), "", timedOut = false)
+        }
+    }
+
+    override fun shizukuDeviceInfo() {
+        runPrivileged("device info", listOf("readDeviceState"), extraLines = listOf("Fixed snapshot: id + a few build properties. No caller-supplied command.")) {
+            app.privilegedShell.readDeviceState()
+        }
+    }
+
+    /**
+     * Fleet interop: `pm grant`. Not on [ai.rootforge.os.ui.AppActions] and
+     * not shown in Settings. Requires a typed `GRANT PERMISSION`.
+     */
+    fun shizukuPmGrant(packageName: String, permission: String) {
+        runPrivileged(
+            title = "pm grant",
+            argv = listOf("pm", "grant", packageName, permission),
+            extraLines = listOf("This writes a runtime permission on this phone."),
+            phrase = "GRANT PERMISSION",
+        ) {
+            app.privilegedShell.pmGrant(packageName, permission)
+        }
+    }
+
+    private val shizukuRunning = AtomicBoolean(false)
+
+    private fun runPrivileged(
+        title: String,
+        argv: List<String>,
+        extraLines: List<String> = emptyList(),
+        phrase: String? = null,
+        op: () -> PrivilegedResult,
+    ) {
+        scope.launch {
+            if (!shizukuRunning.compareAndSet(false, true)) {
+                log.warn("A Shizuku lookup is already running.")
+                return@launch
+            }
+            app.shizukuBusy.value = true
+            try {
+                val lines = listOf(
+                    "This runs a privileged command on this phone via Shizuku/Sui.",
+                    "Command: ${argv.joinToString(" ")}",
+                ) + extraLines + listOf("Output stays on the Settings card and is not copied into the command log.")
+                val ok = app.approvals.request(
+                    title = "Shizuku: $title",
+                    lines = lines,
+                    source = "Shizuku",
+                    phrase = phrase,
+                )
+                if (!ok) {
+                    app.shizukuResult.value = "Not confirmed; nothing ran."
+                    log.info("Shizuku: $title was not confirmed")
+                    return@launch
+                }
+                if (!app.privilegedShell.isAvailable()) {
+                    app.shizukuResult.value = ShizukuCopy.UNAVAILABLE_FAILURE
+                    log.warn("Shizuku: $title skipped (not connected)")
+                    return@launch
+                }
+                log.info("Shizuku: $title (this phone)")
+                val result = withContext(Dispatchers.IO) { op() }
+                app.shizukuResult.value = display(result)
+                when (result) {
+                    is PrivilegedResult.Success -> log.info("Shizuku: $title finished")
+                    is PrivilegedResult.Failure -> log.warn("Shizuku: $title failed")
+                }
+            } finally {
+                shizukuRunning.set(false)
+                app.shizukuBusy.value = false
+            }
+        }
+    }
+
+    private fun display(result: PrivilegedResult): String = when (result) {
+        is PrivilegedResult.Success -> buildString {
+            append(result.stdout)
+            if (result.stderr.isNotBlank()) {
+                if (isNotEmpty()) append('\n')
+                append(result.stderr)
+            }
+            if (result.timedOut) {
+                if (isNotEmpty()) append('\n')
+                append("(timed out)")
+            }
+            if (isBlank()) append(if (result.exitCode == 0) "(no output)" else "exit ${result.exitCode}")
+        }
+        is PrivilegedResult.Failure -> result.reason
     }
 }

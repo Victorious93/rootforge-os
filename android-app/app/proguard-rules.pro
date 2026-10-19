@@ -7,9 +7,9 @@
 -keepclassmembers class ai.rootforge.os.shizuku.PrivilegedUserService {
     public <init>(...);
 }
--keep class ai.rootforge.os.shizuku.IPrivilegedOps { *; }
--keep class ai.rootforge.os.shizuku.IPrivilegedOps$Stub { *; }
--keep class ai.rootforge.os.shizuku.IPrivilegedOps$Stub$Proxy { *; }
+-keep class ai.rootforge.os.shizuku.IPrivilegedShell { *; }
+-keep class ai.rootforge.os.shizuku.IPrivilegedShell$Stub { *; }
+-keep class ai.rootforge.os.shizuku.IPrivilegedShell$Stub$Proxy { *; }
 -keep class ai.rootforge.os.bridge.BridgeRequest { *; }
 -keep class ai.rootforge.os.bridge.BridgeResponse { *; }
 -keep class ai.rootforge.os.bridge.BridgeErrorBody { *; }

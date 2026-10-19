@@ -16,7 +16,7 @@ import ai.rootforge.os.module.BuiltModule
 import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.root.BootImageParser
 import ai.rootforge.os.root.RootManager
-import ai.rootforge.os.shizuku.ShizukuStatus
+import ai.rootforge.os.shizuku.ShizukuState
 import ai.rootforge.os.usb.AttachedTarget
 
 /** Everything the screens render. Plain data so screens can be previewed and screenshot-tested. */
@@ -48,7 +48,7 @@ data class AppUiState(
     val transportCaption: String = "Android USB Host API, pure Kotlin ADB, fastboot, Sahara",
     val emptyTargetsHint: String? = null,
     /** Null on desktop: Shizuku is Android-only. */
-    val shizuku: ShizukuStatus? = null,
+    val shizuku: ShizukuState? = null,
     val shizukuBusy: Boolean = false,
     /** Last host-phone Shizuku readout. Never written to the shared command log. */
     val shizukuResult: String = "",
