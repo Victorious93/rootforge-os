@@ -181,7 +181,7 @@ class TargetController(
             "Slot" to (p["ro.boot.slot_suffix"]?.ifBlank { null } ?: "none / unknown"),
             "Root managers" to managers.joinToString { it.label }.ifBlank { "none detected" },
         )
-        infoState.value = TargetInfo(TargetMode.ADB, rows)
+        infoState.value = TargetInfo(TargetMode.ADB, rows, modelNumber = p["ro.product.model"])
     }
 
     private fun fastbootRows(v: Map<String, String>): List<Pair<String, String>> = listOf(

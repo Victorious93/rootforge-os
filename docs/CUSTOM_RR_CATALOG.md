@@ -49,15 +49,30 @@ the catalog is kept separately so it never shows up in flash file lists.
 
 **Matching rules.** The target's product and codename (lower-cased, `unknown`
 dropped, via `TargetIdentity.names()`) are compared exactly against each catalog
-device codename. Combined pages such as `rmx2001/rmx2151` are split on `/`. A
-prefix is not a match. An unknown target shows "Connect a target" instead of a
-list: unknown is not a wildcard. The marketing `models` list is not matched.
+device codename. Combined pages such as `rmx2001/rmx2151`, `X00T, X00TD` and
+`instantnoodle & instantnoodlep` are split on `/`, `,`, `&` and spaces. A prefix
+is not a match.
 
-**Known gap.** Custom RR's own app also tries codename aliases (OnePlus stock
-names such as `oneplus6t` → `fajita`, Xiaomi unified boards such as `olive` →
-`mi439`, Transsion/realme suffixes). RootForge does not; such a phone gets "No
-catalog entry lists …". Adding aliases means writing RootForge's own table, not
-copying Custom RR's code (see [Licensing](#licensing)).
+**Model-number fallback.** When no codename of an entry matches, the target's
+`ro.product.model` (read over ADB, kept on `TargetInfo.modelNumber`, not shown as
+a row) is compared exactly and case-insensitively against the catalog row's
+`models` list. This uses the catalog's own data, not an alias table: 4,578 of the
+5,936 device rows in Custom RR's 2026-09-12 catalog carry model numbers. Example:
+a Redmi 8 reports codename `olive` and model `M1908C3IG`; no entry lists `olive`,
+but the unified `mi439` rows list that model, so 16 ROMs match. The card says
+"matched model M1908C3IG as Mi439" on such rows. A codename match always wins over
+a model match for the same entry. Fastboot reports no model, so the fallback only
+applies over ADB.
+
+An unknown target (no product, codename or model) shows "Connect a target":
+unknown is not a wildcard.
+
+**Known gap.** Rows without model numbers cannot use the fallback. OnePlus stock
+OxygenOS names (`oneplus6t` for `fajita`, reported model `ONEPLUS A6013`) still
+get "No catalog entry lists …", and Transsion/realme vendor prefixes and regional
+suffixes are not stripped. Custom RR's own app handles these with a hand-written
+alias table; RootForge has not copied it (see [Licensing](#licensing)) and has no
+table of its own.
 
 ## Data source
 
@@ -110,5 +125,5 @@ Apache-2.0. So:
 
 ## Possible follow-ups
 
-1. RootForge's own codename-alias table (see Known gap).
+1. RootForge's own alias table for rows without model numbers (see Known gap).
 2. Show the card's catalog age more prominently, or warn when it is old.

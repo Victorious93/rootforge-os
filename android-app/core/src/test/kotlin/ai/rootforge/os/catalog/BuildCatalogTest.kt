@@ -82,6 +82,39 @@ class BuildCatalogTest {
     }
 
     @Test
+    fun commaAndAmpersandListsAreSplit() {
+        val c = BuildCatalogParser.parseCatalog(ALIASES)
+        assertEquals(listOf("asus"), BuildLookup.forTarget(TargetIdentity(codename = "X00TD"), c).map { it.entry.id })
+        assertEquals(listOf("oneplus"), BuildLookup.forTarget(TargetIdentity(codename = "instantnoodlep"), c).map { it.entry.id })
+    }
+
+    @Test
+    fun theModelNumberIsAFallbackWhenNoCodenameMatches() {
+        val c = BuildCatalogParser.parseCatalog(ALIASES)
+        // A Redmi 8 reports its own board name; the build is published under the unified codename.
+        val m = BuildLookup.forTarget(TargetIdentity(codename = "olive"), c, modelNumber = " m1908c3ig ")
+        assertEquals(listOf("unified"), m.map { it.entry.id })
+        assertEquals("m1908c3ig", m.single().viaModelNumber)
+        assertEquals("mi439", m.single().device.codename)
+    }
+
+    @Test
+    fun aCodenameMatchWinsOverTheModelNumber() {
+        val c = BuildCatalogParser.parseCatalog(ALIASES)
+        val m = BuildLookup.forTarget(TargetIdentity(codename = "mi439"), c, modelNumber = "M1908C3IG").single()
+        assertNull(m.viaModelNumber)
+    }
+
+    @Test
+    fun aModelNumberAloneCanMatchButBlankOrUnknownCannot() {
+        val c = BuildCatalogParser.parseCatalog(ALIASES)
+        assertEquals(listOf("unified"), BuildLookup.forTarget(TargetIdentity(), c, modelNumber = "M1908C3IG").map { it.entry.id })
+        assertTrue(BuildLookup.forTarget(TargetIdentity(), c, modelNumber = "  ").isEmpty())
+        assertTrue(BuildLookup.forTarget(TargetIdentity(), c, modelNumber = "unknown").isEmpty())
+        assertTrue(BuildLookup.forTarget(TargetIdentity(codename = "olive"), c, modelNumber = "M1908C3").isEmpty())
+    }
+
+    @Test
     fun malformedInputIsRejected() {
         for (bad in listOf("", "not json", """{"roms": [{"name": "no id"}]}""", """{"roms": {}}""")) {
             try {
@@ -121,6 +154,14 @@ class BuildCatalogTest {
                  "devices": [{"brand": "Google", "model": "Pixel 6", "codename": "oriole"}]}
               ]
             }
+        """.trimIndent()
+
+        val ALIASES = """
+            {"roms": [
+              {"id": "asus", "name": "Asus ROM", "devices": [{"brand": "Asus", "model": "Max Pro M1", "codename": "X00T, X00TD"}]},
+              {"id": "oneplus", "name": "OnePlus ROM", "devices": [{"brand": "OnePlus", "model": "8 / 8 Pro", "codename": "instantnoodle & instantnoodlep"}]},
+              {"id": "unified", "name": "Unified ROM", "devices": [{"brand": "Xiaomi", "model": "Redmi 7A/8/8A", "codename": "mi439", "models": ["M1908C3IG", "M1903C3EG"]}]}
+            ]}
         """.trimIndent()
 
         val FRESHNESS = """
