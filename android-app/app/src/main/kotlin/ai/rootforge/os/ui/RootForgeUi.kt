@@ -69,7 +69,7 @@ enum class Destination(val title: String, val icon: ImageVector) {
     Fastboot("Fastboot", Icons.Filled.FlashOn),
     Edl("EDL", Icons.Filled.Memory),
     Root("Root / Patching", Icons.Filled.Security),
-    Modules("Module Builder", Icons.Filled.Extension),
+    Modules("Modules", Icons.Filled.Extension),
     Recovery("Recovery", Icons.Filled.SettingsBackupRestore),
     Logs("Logs / Terminal", Icons.Filled.Terminal),
     Settings("Settings", Icons.Filled.Settings),

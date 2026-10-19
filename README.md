@@ -135,7 +135,7 @@ feature) and Android 8.0 or newer (`minSdk 26`). It is not a Termux fork and car
 The app asks for no internet permission.
 
 Screens: Dashboard, **Root Guide**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
-Module Builder, Recovery, Logs / Terminal, Settings.
+Modules (creator and repository links), Recovery, Logs / Terminal, Settings.
 
 **Root Guide** is offline rooting documentation inside the app (bootloader unlock, Magisk / KernelSU / APatch,
 device guides, FAQ, troubleshooting) with search. Most pages are adapted from
