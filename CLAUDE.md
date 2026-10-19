@@ -12,7 +12,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 ## PROJECT STATE
 
 > **Update 2026-10-19 (Ask):** branch `ccr-b10b0495-thfmfs`. New **Ask** drawer entry: `:core`
-> `ai.rootforge.os.ask` (`AskTopics` 19 curated ADB/fastboot/root answers, `AskEngine` keyword
+> `ai.rootforge.os.ask` (`AskTopics` 20 curated ADB/fastboot/root answers, `AskEngine` keyword
 > match + `GuideLibrary.searchAny`) and shared Compose `AskScreen`. Offline keyword matching, **not an
 > LLM**; no network, cannot see the phone. `:core:test` `AskEngineTest` 6/0, `:desktop:test` and
 > `:desktop:compileKotlin` pass. **Not run:** `:app` compile/Paparazzi (no SDK here; no golden), a phone.
