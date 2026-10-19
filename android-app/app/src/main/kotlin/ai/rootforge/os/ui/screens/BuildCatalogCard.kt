@@ -47,13 +47,16 @@ fun BuildCatalogCard(catalog: LoadedCatalog?, info: TargetInfo?, busy: Boolean, 
             )
         } else {
             val target = info?.let { TargetIdentity.fromTargetInfo(it) }
-            val matches = remember(catalog, target) { target?.let { BuildLookup.forTarget(it, catalog.catalog, catalog.freshness) }.orEmpty() }
+            val model = info?.modelNumber
+            val matches = remember(catalog, target, model) {
+                target?.let { BuildLookup.forTarget(it, catalog.catalog, catalog.freshness, model) }.orEmpty()
+            }
             when {
-                target == null || target.names().isEmpty() ->
+                target == null || (target.names().isEmpty() && model.isNullOrBlank()) ->
                     Text("Connect a target to see which builds list its codename.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 matches.isEmpty() ->
                     Text(
-                        "No catalog entry lists ${target.names().joinToString(" / ")}. The catalog matches exact codenames only.",
+                        "No catalog entry lists ${(target.names() + listOfNotNull(model?.trim()?.ifBlank { null })).joinToString(" / ")}. Matching uses exact codenames and model numbers.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 else -> matches.forEach { BuildMatchRow(it, actions) }
@@ -85,6 +88,7 @@ private fun BuildMatchRow(match: BuildMatch, actions: AppActions) {
                         match.kind.label,
                         "unofficial".takeIf { entry.unofficial },
                         match.freshness?.lastBuild?.takeIf { it.isNotBlank() }?.let { "last build $it" },
+                        match.viaModelNumber?.let { "matched model $it as ${match.device.codename}" },
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

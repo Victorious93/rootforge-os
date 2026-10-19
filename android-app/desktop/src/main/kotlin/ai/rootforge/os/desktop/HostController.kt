@@ -604,6 +604,7 @@ class HostController(
                 "Slot" to (p["ro.boot.slot_suffix"]?.ifBlank { null } ?: "none / unknown"),
                 "Root managers" to managers.joinToString { it.label }.ifBlank { "none detected" },
             ),
+            modelNumber = p["ro.product.model"],
         )
     }
 

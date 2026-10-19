@@ -11,6 +11,16 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-19 (catalog model-number fallback):** branch `ccr-b45e98d7-7wsvwf` (#66 was
+> squash-merged; the branch was brought up to `main` with a normal merge, tree identical to `main`,
+> no force-push). `BuildLookup` falls back to
+> `ro.product.model` vs the catalog's `models` lists and splits codenames on `/ , &` and spaces;
+> `TargetInfo.modelNumber` (ADB only, not displayed). Verified with the local SDK: `:core:test` 168/0
+> (`BuildCatalogTest` 14), `:desktop:test` 2/0, `:app:testDebugUnitTest` 28/0, `:app:assembleDebug`.
+> `:app:verifyPaparazziDebug` fails only on `modules`, identically on unmodified `main` (stale since
+> #69). Real-catalog throwaway: `olive`+`M1908C3IG` → 16 ROMs via `mi439`. OnePlus stock names still
+> unmatched (no alias table). Not run on a phone.
+
 > **Update 2026-10-19 (Ask):** branch `ccr-b10b0495-thfmfs`. New **Ask** drawer entry: `:core`
 > `ai.rootforge.os.ask` (`AskTopics` 20 curated ADB/fastboot/root answers, `AskEngine` keyword
 > match + `GuideLibrary.searchAny`) and shared Compose `AskScreen`. Offline keyword matching, **not an

@@ -19,12 +19,15 @@ import kotlinx.serialization.json.Json
 data class CatalogDevice(
     val brand: String = "",
     val model: String = "",
-    /** One codename, or several joined by `/` for a combined build page. */
+    /** One codename, or several joined by `/`, `,` or `&` for a combined build page. */
     val codename: String = "",
     val models: List<String> = emptyList(),
 ) {
     fun codenames(): Set<String> =
-        codename.split('/').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+        codename.split('/', ',', '&', ' ').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+
+    /** Model numbers (e.g. `M1908C3IG`) this row covers, lower-cased. */
+    fun modelNumbers(): Set<String> = models.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
 }
 
 @Serializable
@@ -76,6 +79,8 @@ data class BuildMatch(
     val device: CatalogDevice,
     /** Null when the freshness feed has no row for [entry]. */
     val freshness: Freshness?,
+    /** Set when no codename matched and the target's model number did, e.g. a Redmi 8 under `mi439`. */
+    val viaModelNumber: String? = null,
 )
 
 object BuildCatalogParser {
@@ -93,18 +98,29 @@ object BuildLookup {
      * Catalog entries that list the target's product or codename, ROMs first,
      * then recoveries, then root solutions; official before unofficial within
      * each kind, otherwise catalog order. Matching is exact and
-     * case-insensitive against each `/`-separated catalog codename. An
-     * unknown target yields an empty list: unknown is not a wildcard.
+     * case-insensitive against each catalog codename (combined pages are
+     * split on `/`, `,`, `&` and spaces). When an entry has no codename match,
+     * [modelNumber] (`ro.product.model`) is tried against the row's `models`
+     * list. An unknown target yields an empty list: unknown is not a wildcard.
      */
-    fun forTarget(target: TargetIdentity, catalog: BuildCatalog, freshness: FreshnessFeed? = null): List<BuildMatch> {
+    fun forTarget(
+        target: TargetIdentity,
+        catalog: BuildCatalog,
+        freshness: FreshnessFeed? = null,
+        modelNumber: String? = null,
+    ): List<BuildMatch> {
         val names = target.names()
-        if (names.isEmpty()) return emptyList()
+        val model = TargetIdentity.clean(modelNumber)?.lowercase()
+        if (names.isEmpty() && model == null) return emptyList()
 
         fun matches(kind: BuildKind, entries: List<CatalogEntry>): List<BuildMatch> =
             entries.mapNotNull { entry ->
-                val device = entry.devices.firstOrNull { d -> d.codenames().any { it in names } }
-                    ?: return@mapNotNull null
-                BuildMatch(kind, entry, device, freshness?.entries?.get(entry.id))
+                val fresh = freshness?.entries?.get(entry.id)
+                entry.devices.firstOrNull { d -> d.codenames().any { it in names } }
+                    ?.let { return@mapNotNull BuildMatch(kind, entry, it, fresh) }
+                if (model == null) return@mapNotNull null
+                entry.devices.firstOrNull { d -> model in d.modelNumbers() }
+                    ?.let { BuildMatch(kind, entry, it, fresh, viaModelNumber = modelNumber?.trim()) }
             }.sortedBy { it.entry.unofficial }
 
         return matches(BuildKind.ROM, catalog.roms) +
