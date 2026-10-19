@@ -27,8 +27,8 @@ class AppSettings(private val prefs: SharedPreferences) {
             autoState.value = v
         }
 
-    /** Package of the full-terminal app to hand off to; empty until the owner sets it. */
-    private val terminalState = MutableStateFlow(prefs.getString(KEY_TERMINAL, "") ?: "")
+    /** Package of the full-terminal app to hand off to. Defaults to Termux; saving an empty value clears it. */
+    private val terminalState = MutableStateFlow(prefs.getString(KEY_TERMINAL, TerminalApp.DEFAULT_PACKAGE) ?: TerminalApp.DEFAULT_PACKAGE)
     val terminalAppFlow: StateFlow<String> = terminalState.asStateFlow()
     var terminalApp: String
         get() = terminalState.value

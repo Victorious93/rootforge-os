@@ -68,7 +68,7 @@ fun AdbScreen(state: AppUiState, actions: AppActions) {
             if (state.terminalHandoff) {
                 ActionButton("Open full terminal", Icons.Filled.Terminal, ActionKind.Outline, enabled = state.terminalApp.isNotEmpty()) { actions.openTerminalApp() }
                 if (state.terminalApp.isEmpty()) {
-                    Text("Set the terminal app's package in Settings to enable this.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("No terminal app is set. Choose one in Settings (Termux is com.termux).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

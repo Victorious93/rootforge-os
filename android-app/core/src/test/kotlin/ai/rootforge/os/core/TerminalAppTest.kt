@@ -1,5 +1,6 @@
 package ai.rootforge.os.core
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,6 +11,12 @@ class TerminalAppTest {
         assertTrue(TerminalApp.isValidPackage("com.termux"))
         assertTrue(TerminalApp.isValidPackage("ai.victor.suite.debug"))
         assertTrue(TerminalApp.isValidPackage("a.b_c.d1"))
+    }
+
+    @Test
+    fun defaultIsAValidPackage() {
+        assertTrue(TerminalApp.isValidPackage(TerminalApp.DEFAULT_PACKAGE))
+        assertEquals("com.termux", TerminalApp.DEFAULT_PACKAGE)
     }
 
     @Test

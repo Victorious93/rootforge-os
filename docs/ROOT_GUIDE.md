@@ -103,9 +103,10 @@ the same dead link). Fix it upstream, or accept the loss of scroll target and sa
   not resolve from the authoring sandbox. Check it opens before release.
 - **Terminal:** the existing *ADB → Shell* and *Logs / Terminal* run one `adb shell <command>` at a time.
   An interactive shell was not built. A full terminal is a launch-only hand-off: *Settings → Terminal app*
-  stores a user-entered package (validated by `TerminalApp.isValidPackage`, no default), and *ADB → Shell*
-  gets **Open full terminal** (`AppActions.openTerminalApp`, `getLaunchIntentForPackage`). VictorSuite is a
-  Termux-based app per the owner; its package name is still unknown to this repo, so none is hard-coded.
+  stores the package (validated by `TerminalApp.isValidPackage`; default `com.termux`, set at the owner's
+  request, empty value clears it), and *ADB → Shell* gets **Open full terminal** (`AppActions.openTerminalApp`,
+  `getLaunchIntentForPackage`). VictorSuite is a Termux-based app per the owner; whether it uses `com.termux` or
+  its own package is unknown to this repo, so it stays editable.
   The manifest `<queries>` gains a generic MAIN/LAUNCHER intent so any installed launcher app can be found
   (Android 11+ package visibility). No command or serial is passed. Not run on a phone; desktop is a no-op.
 
