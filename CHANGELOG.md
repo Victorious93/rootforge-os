@@ -7,6 +7,12 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Root Guide (2026-10-19)
+- New **Root Guide** drawer entry in the Android host-phone app and the desktop client: 26 offline pages adapted from Awesome Android Root (MIT; guides, device pages, FAQ, troubleshooting, resources) plus one RootForge page, "Rooting with RootForge OS", mapping guide steps to app screens and stating what the app does not do. Search across all pages, nested lists, tables, callouts, collapsible sections, selectable code blocks, in-guide links and a Back stack.
+- `:core` gains `ai.rootforge.os.guide` (`GuideMarkdown` parser, `GuideLibrary` manifest/search, `GuideLink` allow-list: only `guide:`, `#anchor` and `https://`). Pages live in `core/src/main/resources/ai/rootforge/os/guide/`. `android-app/tools/import_root_guide.py` regenerates them from a checkout and records the source commit; the app/module catalogue is not imported.
+- `NOTICE` and `LICENSE-awesome-android-root.txt` carry the upstream MIT attribution. New `docs/ROOT_GUIDE.md`.
+- Tests: `:core:test` 118 tests, 0 failures (19 new, including a check that every internal link and anchor in the shipped pages resolves); `tests/test_guide_import.py` 14 tests; `bash tests/run-tests.sh` 1023/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 from the repo's pip wheel); `:desktop:compileKotlin` builds. The screen was rendered off-screen with Compose desktop to check layout. **Not run:** `:app` build / `testDebugUnitTest` / Paparazzi (no Android SDK in this session), a phone, the desktop app window. No screenshot golden recorded.
+
 ### Docs (2026-10-18, README refresh)
 - `README.md` reorganised and rewritten in plainer language, with terms explained: what RootForge is, where it sits in the Victorious fleet (`EXTERNAL_NODE`, Messenger + JSON `protocol_major` 1, pairing by package + signing certificate, no shared signing key, with each claim marked [Certain] / [Likely] / [Guessing]), the host-phone app and Flash Tools, install and build steps per client, and a Signing section (fixed committed debug key and its SHA-256, v0.2.0 uninstall-once note, release key only in CI secrets). Mentions the Modules screenshot, adds the CI workflow table, and corrects a missing `./` on the `packageExe` command. Docs only; no code, workflow or test changes.
 

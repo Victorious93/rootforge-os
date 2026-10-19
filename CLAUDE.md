@@ -11,6 +11,20 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-19 (Root Guide):** branch `ccr-76f54fed-xf2wxr`. New **Root Guide**
+> drawer entry in the Android app and desktop client (`docs/ROOT_GUIDE.md`). 26 pages adapted
+> from Awesome Android Root (MIT, source commit pinned in `manifest.json`) plus one RootForge-written
+> page mapping guide steps to app screens; `:core` `ai.rootforge.os.guide` (parser, search, link
+> allow-list); shared Compose `GuideScreen`; importer `android-app/tools/import_root_guide.py`;
+> `NOTICE` carries the MIT attribution. The apps-and-modules catalogue was not imported.
+> Verified: `:core:test` 118/0 (19 new, incl. every internal link/anchor resolving),
+> `:desktop:compileKotlin` builds, `tests/test_guide_import.py` 14 OK inside `bash tests/run-tests.sh`
+> 1023/0, `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). Layout was checked by
+> rendering the real screen off-screen with Compose desktop (temporary harness, removed).
+> **Not run:** `:app` build/tests/Paparazzi (no Android SDK here; no golden recorded), any phone,
+> the desktop window. Android loading pages via `getResourceAsStream` on a library jar is [Likely]
+> but unverified. The guide text is community reference, not tested on hardware by RootForge.
+
 > **Update 2026-10-18 (README refresh):** branch `cursor/refresh-readme-249a`,
 > docs only (`README.md`, `CHANGELOG.md`, this file). README re-organised in plain
 > language: what it is, fleet placement, host-phone app / Flash Tools, install and
@@ -45,12 +59,12 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-18 · **Branch:** `cursor/refresh-readme-249a`
+**Last updated:** 2026-10-19 · **Branch:** `ccr-76f54fed-xf2wxr`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-This branch is a docs-only README refresh. Not run on a device. License lock (#53):
+This branch adds the Root Guide (not run on a device). README refresh is #63 (on `main`). License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
@@ -139,7 +153,7 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-This branch is a docs-only README refresh. ISO Stage 5 is still blocked
+This branch adds the Root Guide (see Update 2026-10-19). ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 
