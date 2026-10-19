@@ -96,7 +96,7 @@ class GuideLibraryTest {
     fun rootForgePageOnlyNamesRealScreens() {
         val doc = library.document("rootforge-workflow")!!
         val text = doc.blocks.joinToString("\n") { it.plainText() }
-        for (screen in listOf("Dashboard", "ADB", "Fastboot", "Root / Patching", "Recovery", "Module Builder", "EDL")) {
+        for (screen in listOf("Dashboard", "ADB", "Fastboot", "Root / Patching", "Recovery", "Modules", "EDL")) {
             assertTrue("workflow page does not mention $screen", screen in text)
         }
         assertTrue("UNLOCK" in text)

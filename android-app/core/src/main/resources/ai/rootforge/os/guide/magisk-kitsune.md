@@ -17,7 +17,16 @@ When this page was written (2026-10-19) the checks below came back as follows. T
 
 - A boot image patched by an unmaintained fork can fall behind Android security and Play Integrity changes, and nobody is accountable for fixes.
 - Third-party mirrors are not the author. A modified APK from a mirror can contain anything. Check any download against a digest the author published, and be prepared for there not being one.
-- RootForge OS only opens the manager app already installed on the target. It does not know Kitsune's package name or where to download it safely, so **Root / Patching offers Magisk, KernelSU and APatch only**. That is deliberate, not an omission.
+- RootForge has **no trusted download link** for it and will not point you at a mirror.
+
+## What RootForge does with it [UNSUPPORTED]
+
+Kitsune Mask is listed in **Root / Patching** and in the module installer, marked `[UNSUPPORTED]` with a warning, because you asked for it. The package name (`io.github.huskydg.magisk`) was supplied by the owner of this app, and RootForge cannot verify it.
+
+- It can detect Kitsune on the target, open it, and push a boot image for you to patch in Kitsune's own screen. Patching is done by Kitsune, not by RootForge.
+- It looks for the patched image as `magisk_patched*.img` in Download and installs modules with the `magisk` command. Both are **assumptions** because Kitsune is a Magisk fork; neither is verified for this fork. If no file is found, patch again and check the name Kitsune used.
+- Flashing the result goes through the same device-match manifest and typed confirmation as every other image. Use **Boot once** before any permanent write.
+- Install the Kitsune APK yourself (Root / Patching step 2 can push an APK you import). RootForge does not download it.
 
 ## What to use instead
 
@@ -25,4 +34,4 @@ When this page was written (2026-10-19) the checks below came back as follows. T
 - [KernelSU](guide:kernelsu) or [APatch](guide:apatch) if you want root that does not rely on Magisk.
 - [Magisk vs KernelSU vs APatch](guide:framework-comparison) to choose.
 
-If you still want Kitsune, patch with its own manager on the target, then bring the patched image back with Flash Tools and flash it like any other (the device-match manifest and typed confirmation still apply). RootForge does not vouch for the image.
+RootForge does not vouch for any image produced by Kitsune.

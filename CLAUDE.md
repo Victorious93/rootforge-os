@@ -11,6 +11,19 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-19 (modules):** Modules screen now has Create / Repositories tabs. Creator: `boot-completed.sh`,
+> `action.sh`, custom script text (`ModuleSpec.bodies`), hedged compatibility notes. Repositories:
+> `ModuleRepos` link-out list (checked 2026-10-19: Alt-Repo, Magisk-Modules-Repo, Xposed-Modules-Repo, MMRL
+> exist; KernelSU/LSPosed sites unreachable here, flagged "not checked"). **Installing any module now needs
+> typed `INSTALL MODULE`** (SHA-256 shown) on Android and desktop. `:core:test` 138/0 (+13); desktop compiles.
+> **Not run:** `:app` compile (CI `apk`), a phone, a real manager. Modules Paparazzi golden stale. Branch
+> `ccr-76f54fed-xf2wxr` is stacked on open PR #69 (Kitsune).
+
+> **Update 2026-10-19 (Kitsune manager):** `RootManager.KITSUNE` added, [UNSUPPORTED], package supplied
+> by the owner (`io.github.huskydg.magisk`) and unverified; `homepage` now nullable (none), new `caveat`
+> shown in Root / Patching; patched prefix and module command assumed Magisk-like. `:core:test` 125/0
+> (+4), `:desktop:compileKotlin` builds; `:app` compile and a phone run NOT done (CI `apk` is the check).
+
 > **Update 2026-10-19 (terminal app default):** `TerminalApp.DEFAULT_PACKAGE = "com.termux"` is the
 > default for Settings → Terminal app (owner's request); empty clears it. `:core:test` +1 test. Launch
 > still unverified on a phone; whether VictorSuite is `com.termux` or a separate package is unknown.
