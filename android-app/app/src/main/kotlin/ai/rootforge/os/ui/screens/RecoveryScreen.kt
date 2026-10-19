@@ -77,6 +77,7 @@ fun RecoveryScreen(state: AppUiState, actions: AppActions) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionButton("TWRP devices", kind = ActionKind.Outline) { actions.openUrl("https://twrp.me/Devices/") }
                 ActionButton("OrangeFox", kind = ActionKind.Outline) { actions.openUrl("https://orangefox.download/") }
+                ActionButton("PitchBlack (PBRP)", kind = ActionKind.Outline) { actions.openUrl("https://pitchblackrecovery.com/") }
                 ActionButton("LineageOS", kind = ActionKind.Outline) { actions.openUrl("https://wiki.lineageos.org/devices/") }
             }
         }

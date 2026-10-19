@@ -1,0 +1,274 @@
+{
+  "source": {
+    "name": "Awesome Android Root",
+    "repository": "https://github.com/awesome-android-root/awesome-android-root",
+    "website": "https://awesome-android-root.zhoe.org",
+    "license": "MIT",
+    "importedFrom": "https://github.com/Victorious93/awesome-android-root",
+    "commit": "a8d4a9a280e0c8f55a8976e3ee2ea5f2acc6a3b8"
+  },
+  "sections": [
+    {
+      "title": "Start here",
+      "entries": [
+        {
+          "id": "rootforge-workflow",
+          "title": "Rooting with RootForge OS",
+          "summary": "Which RootForge OS screen does which step of a root.",
+          "file": "rootforge-workflow.md",
+          "origin": "rootforge",
+          "sourcePath": ""
+        },
+        {
+          "id": "rooting-overview",
+          "title": "Android Rooting Guide",
+          "summary": "The whole path: backup, unlock, patch, flash, hide, maintain.",
+          "file": "rooting-overview.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/index.md"
+        },
+        {
+          "id": "framework-comparison",
+          "title": "Magisk vs KernelSU vs APatch",
+          "summary": "Differences, trade-offs and how to choose a root method.",
+          "file": "framework-comparison.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/root-framework-comparison.md"
+        },
+        {
+          "id": "legal-disclaimer",
+          "title": "Legal Disclaimer & Safety Notice",
+          "summary": "Warranty, security and data-loss risks. Read before unlocking.",
+          "file": "legal-disclaimer.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "legal-disclaimer.md"
+        }
+      ]
+    },
+    {
+      "title": "Unlock and recovery",
+      "entries": [
+        {
+          "id": "unlock-bootloader",
+          "title": "Bootloader Unlocking Guide",
+          "summary": "OEM unlocking, fastboot commands, what gets wiped.",
+          "file": "unlock-bootloader.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/how-to-unlock-bootloader.md"
+        },
+        {
+          "id": "custom-recovery",
+          "title": "Custom Recovery Installation Guide",
+          "summary": "TWRP and OrangeFox installation.",
+          "file": "custom-recovery.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/how-to-install-custom-recovery.md"
+        },
+        {
+          "id": "pitchblack-recovery",
+          "title": "PitchBlack Recovery (PBRP)",
+          "summary": "PitchBlack (PBRP): what it is and how to try it with RootForge.",
+          "file": "pitchblack-recovery.md",
+          "origin": "rootforge",
+          "sourcePath": ""
+        },
+        {
+          "id": "custom-rom",
+          "title": "Complete Custom ROM Installation Guide",
+          "summary": "Flashing a custom ROM safely.",
+          "file": "custom-rom.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/custom-rom-installation.md"
+        }
+      ]
+    },
+    {
+      "title": "Root frameworks",
+      "entries": [
+        {
+          "id": "magisk",
+          "title": "Magisk Root Installation Guide",
+          "summary": "Install and configure Magisk.",
+          "file": "magisk.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/magisk-guide.md"
+        },
+        {
+          "id": "magisk-kitsune",
+          "title": "Magisk Kitsune (Kitsune Mask)",
+          "summary": "Kitsune Mask / Magisk Delta: status and why RootForge does not drive it.",
+          "file": "magisk-kitsune.md",
+          "origin": "rootforge",
+          "sourcePath": ""
+        },
+        {
+          "id": "kernelsu",
+          "title": "KernelSU Root Installation Guide",
+          "summary": "Install and configure KernelSU.",
+          "file": "kernelsu.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/kernelsu-guide.md"
+        },
+        {
+          "id": "apatch",
+          "title": "APatch Root Installation Guide",
+          "summary": "Install and configure APatch.",
+          "file": "apatch.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/apatch-guide.md"
+        },
+        {
+          "id": "lsposed",
+          "title": "Complete LSPosed / Vector Framework Guide",
+          "summary": "LSPosed / Vector framework setup.",
+          "file": "lsposed.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/lsposed-guide.md"
+        },
+        {
+          "id": "temporary-root",
+          "title": "Bootloader Modification & Temporary Root Solutions",
+          "summary": "Boot-once and temporary root options.",
+          "file": "temporary-root.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/temporary-root-solutions.md"
+        },
+        {
+          "id": "root-locked-bootloader",
+          "title": "Root Without Unlocking the Bootloader: the GhostLock Temporary Root Guide",
+          "summary": "Temporary root without unlocking the bootloader.",
+          "file": "root-locked-bootloader.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/root-without-unlocking-bootloader.md"
+        }
+      ]
+    },
+    {
+      "title": "Device guides",
+      "entries": [
+        {
+          "id": "pixel",
+          "title": "Google Pixel Root Guide",
+          "summary": "Google Pixel.",
+          "file": "pixel.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/how-to-root-pixel-phone.md"
+        },
+        {
+          "id": "samsung",
+          "title": "Samsung Galaxy Root Guide",
+          "summary": "Samsung Galaxy (Odin, Knox).",
+          "file": "samsung.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/how-to-root-samsung-phone.md"
+        },
+        {
+          "id": "xiaomi",
+          "title": "Complete Xiaomi Rooting Guide",
+          "summary": "Xiaomi, Redmi, POCO.",
+          "file": "xiaomi.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/how-to-root-xiaomi-phone.md"
+        },
+        {
+          "id": "oneplus",
+          "title": "OnePlus Root Guide",
+          "summary": "OnePlus.",
+          "file": "oneplus.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/how-to-root-oneplus-phone.md"
+        },
+        {
+          "id": "motorola",
+          "title": "Motorola Root Guide",
+          "summary": "Motorola.",
+          "file": "motorola.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/how-to-root-motorola-phone.md"
+        },
+        {
+          "id": "nothing",
+          "title": "Nothing & CMF Phone Root Guide",
+          "summary": "Nothing and CMF.",
+          "file": "nothing.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "rooting-guides/how-to-root-nothing-phone.md"
+        }
+      ]
+    },
+    {
+      "title": "Tutorials",
+      "entries": [
+        {
+          "id": "adblocking",
+          "title": "Ultimate Android Ad Blocking Guide for Rooted Devices (2026)",
+          "summary": "System-wide ad blocking on a rooted phone.",
+          "file": "adblocking.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "general-guides/android-adblocking.md"
+        },
+        {
+          "id": "debloating",
+          "title": "How to Remove Bloatware Safely Using App Manager or Canta",
+          "summary": "Remove bloatware with App Manager or Canta.",
+          "file": "debloating.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "general-guides/android-apps-debloating.md"
+        },
+        {
+          "id": "stop-auto-updates",
+          "title": "How to Stop App Updates from Play Store (Detach Apps)",
+          "summary": "Detach apps from Play Store updates.",
+          "file": "stop-auto-updates.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "general-guides/stop-android-app-auto-updates-play-store.md"
+        },
+        {
+          "id": "non-root-alternatives",
+          "title": "Non-Root Alternatives",
+          "summary": "Root-like features without root (Shizuku, ADB).",
+          "file": "non-root-alternatives.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "non-root-alternatives.md"
+        }
+      ]
+    },
+    {
+      "title": "Help",
+      "entries": [
+        {
+          "id": "faq",
+          "title": "Android Rooting FAQ 2026",
+          "summary": "Questions to answer before and after rooting.",
+          "file": "faq.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "faqs.md"
+        },
+        {
+          "id": "troubleshooting",
+          "title": "Root Troubleshooting Guide",
+          "summary": "Bootloops, manager problems, Play Integrity, banking apps.",
+          "file": "troubleshooting.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "troubleshooting.md"
+        },
+        {
+          "id": "resources",
+          "title": "Android Rooting Resources Hub 2026",
+          "summary": "Firmware, tooling, communities, emergency help.",
+          "file": "resources.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "resources.md"
+        },
+        {
+          "id": "about",
+          "title": "About Awesome Android Root",
+          "summary": "About the upstream project and its licence.",
+          "file": "about.md",
+          "origin": "awesome-android-root",
+          "sourcePath": "about.md"
+        }
+      ]
+    }
+  ]
+}

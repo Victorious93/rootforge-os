@@ -47,6 +47,22 @@ sources; those remain Apache-2.0. The combined binaries are
 GPL-3.0-or-later.
 
 ==============================================================================
+Root Guide content (MIT, from Awesome Android Root)
+==============================================================================
+
+The guide pages under
+android-app/core/src/main/resources/ai/rootforge/os/guide/ (other than
+rootforge-workflow.md, which is original RootForge OS text) are adapted
+from Awesome Android Root, https://github.com/awesome-android-root/awesome-android-root,
+Copyright (c) 2024 Awesome Android Root, licensed under the MIT License.
+The conversion (front matter, badges, images and VitePress syntax removed;
+links rewritten) is done by android-app/tools/import_root_guide.py; the
+source commit is recorded in manifest.json. The MIT licence text is kept
+beside the pages in LICENSE-awesome-android-root.txt. Adapting the pages
+does not relicense them. They are documentation, not code, and are shown
+as reference text only.
+
+==============================================================================
 Third-party software (not relicensed)
 ==============================================================================
 

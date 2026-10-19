@@ -31,7 +31,7 @@ The app declares `android.hardware.usb.host` as required. Tablets/phones without
 
 ## Screens
 
-Dashboard (target + props), **Flash Tools** (USB/OTG scan, connection guide, ADB tools, fastboot tools, image/APK inspector, persistent command log), ADB (shell, install, push/pull, sideload, reboot, logcat), Fastboot (getvar, flash, boot-once, lock/unlock, slot, erase), EDL, Root/Patching, Module Builder, Recovery, Logs/Terminal, Settings.
+Dashboard (target + props), **Root Guide** (offline rooting documentation with search; see `docs/ROOT_GUIDE.md`), **Flash Tools** (USB/OTG scan, connection guide, ADB tools, fastboot tools, image/APK inspector, persistent command log), ADB (shell, install, push/pull, sideload, reboot, logcat), Fastboot (getvar, flash, boot-once, lock/unlock, slot, erase), EDL, Root/Patching, Module Builder, Recovery, Logs/Terminal, Settings.
 
 Flash Tools is a hub: buttons call the same `TargetController` methods as the dedicated screens. A flash is **refused** unless a sidecar `<image>.manifest.json` matches the target (product/codename, slot, and fingerprint *or* a declared product/slot claim). A mismatch is logged as `Refused: …` and nothing is written. Plan: `docs/FLASH_TOOLS_PLAN.md`.
 
@@ -82,6 +82,7 @@ Paparazzi goldens: `android-app/app/src/test/snapshots/`. Human-facing copies: `
 - Sideload (`sideload-host`) seeks the library file so recovery can read the zip central directory, then the payload, then the package again. `DONEDONE` finishes the transfer; `FAILFAIL` is reported as a failure. **Not run against a phone in recovery.**
 - Logcat holds the USB connection; other actions are blocked until you stop it.
 - No internet permission. Opening TWRP/OrangeFox/LineageOS links uses the system browser.
+- **Root Guide** is bundled text from `:core` resources, read-only, and never touches the target. Its pages are community-written reference material that RootForge has not verified on hardware. The `:app` build, a Paparazzi golden and a run on a phone have not been done for it (`docs/ROOT_GUIDE.md`).
 
 ## droidcommand-ai
 
