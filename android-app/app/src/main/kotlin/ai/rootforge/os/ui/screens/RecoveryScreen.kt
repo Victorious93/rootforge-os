@@ -73,7 +73,7 @@ fun RecoveryScreen(state: AppUiState, actions: AppActions) {
             Text("Then choose Apply update > Apply from ADB and use the ADB screen's Sideload to install a zip.", style = MaterialTheme.typography.bodySmall)
         }
 
-        ForgeCard("Where to get a recovery", "Opens your browser; this app has no network access of its own", Icons.Filled.OpenInNew) {
+        ForgeCard("Where to get a recovery", "Opens your browser; this app does not download images", Icons.Filled.OpenInNew) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionButton("TWRP devices", kind = ActionKind.Outline) { actions.openUrl("https://twrp.me/Devices/") }
                 ActionButton("OrangeFox", kind = ActionKind.Outline) { actions.openUrl("https://orangefox.download/") }

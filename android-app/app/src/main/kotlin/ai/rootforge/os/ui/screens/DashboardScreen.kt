@@ -80,6 +80,8 @@ fun DashboardScreen(state: AppUiState, actions: AppActions) {
             }
         }
 
+        BuildCatalogCard(state.buildCatalog, state.info, busy = state.busy != null, actions)
+
         val mode = (state.link as? LinkState.Connected)?.mode
         if (mode == TargetMode.ADB || mode == TargetMode.FASTBOOT) {
             ForgeCard("Reboot target", "Switch the target to another mode", Icons.Filled.PowerSettingsNew) {
@@ -147,6 +149,6 @@ fun CableSetupCard() {
             "4. Accept Android's USB access prompt here, then tap Connect. On first ADB connection, accept the RSA key prompt on the target.",
             "5. If the target charges from this phone and drains it, charge this phone first or use a powered USB-C hub with pass-through charging.",
         ).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-        NoticeCard("The app talks USB directly (no adb/fastboot binaries, no network). Another app holding the same USB device, or a cable that only negotiates charging, will block the connection.")
+        NoticeCard("The app talks USB directly (no adb/fastboot binaries; device work never uses the network). Another app holding the same USB device, or a cable that only negotiates charging, will block the connection.")
     }
 }

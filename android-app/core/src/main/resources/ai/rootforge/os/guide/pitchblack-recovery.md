@@ -9,7 +9,7 @@ PBRP is built per device. Official support is a per-device list, and many builds
 ## Where to get it
 
 - The project's site is `pitchblackrecovery.com` (named as its homepage in the project's repository readme). It could not be reached from the sandbox this page was written in, so open it yourself and confirm it is the official site and that your device is listed.
-- The Recovery screen in RootForge has a **PitchBlack (PBRP)** button that opens it in your browser. The app has no network access of its own and does not download or bundle a recovery.
+- The Recovery screen in RootForge has a **PitchBlack (PBRP)** button that opens it in your browser. The app does not download or bundle a recovery; its only network use is the build-catalog Download button.
 
 ## Using it with RootForge OS
 

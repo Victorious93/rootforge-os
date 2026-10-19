@@ -51,6 +51,32 @@ class AppActionsImpl(
         if (app.library.delete(name)) log.info("Removed $name") else log.error("Could not remove $name")
     }
 
+    override fun downloadBuildCatalog() {
+        scope.launch {
+            log.info("Downloading the Custom RR catalog from raw.githubusercontent.com")
+            withContext(Dispatchers.IO) { app.buildCatalog.download() }
+                .onSuccess { log.info(it) }
+                .onFailure { log.error("Catalog download failed: ${it.message}") }
+        }
+    }
+
+    override fun importBuildCatalog() {
+        importFile { picked ->
+            scope.launch {
+                withContext(Dispatchers.IO) { app.buildCatalog.import(picked.file) }
+                    .onSuccess { log.info(it) }
+                    .onFailure { log.error("Not imported as a catalog: ${it.message}") }
+                // The library copy was only a staging step; the catalog is stored separately.
+                app.library.delete(picked.name)
+            }
+        }
+    }
+
+    override fun clearBuildCatalog() {
+        app.buildCatalog.clear()
+        log.info("Removed the stored build catalog")
+    }
+
     override fun adbShell(command: String) { scope.launch { controller.adbShell(command) } }
     override fun adbReboot(target: String) { scope.launch { controller.adbReboot(target) } }
     override fun adbInstall(file: LibraryFile) { scope.launch { controller.adbInstall(file) } }

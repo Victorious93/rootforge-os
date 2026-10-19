@@ -1,6 +1,7 @@
 package ai.rootforge.os.desktop
 
 import ai.rootforge.os.bridge.CallerIdentity
+import ai.rootforge.os.catalog.BuildCatalogStore
 import ai.rootforge.os.core.DigestCheck
 import ai.rootforge.os.core.FileInspection
 import ai.rootforge.os.core.LibraryFile
@@ -27,6 +28,7 @@ import kotlinx.coroutines.withContext
 class DesktopActions(
     private val controller: HostController,
     private val settings: DesktopSettings,
+    private val buildCatalog: BuildCatalogStore,
     private val scope: CoroutineScope,
     private val onFingerprint: () -> String,
 ) : AppActions {
@@ -48,6 +50,29 @@ class DesktopActions(
 
     override fun deleteFile(name: String) {
         if (controller.library.delete(name)) log.info("Removed $name") else log.error("Could not remove $name")
+    }
+
+    override fun downloadBuildCatalog() {
+        scope.launch {
+            log.info("Downloading the Custom RR catalog from raw.githubusercontent.com")
+            withContext(Dispatchers.IO) { buildCatalog.download() }
+                .onSuccess { log.info(it) }
+                .onFailure { log.error("Catalog download failed: ${it.message}") }
+        }
+    }
+
+    override fun importBuildCatalog() {
+        scope.launch {
+            val file = withContext(Dispatchers.IO) { pickFile() } ?: return@launch
+            withContext(Dispatchers.IO) { buildCatalog.import(file) }
+                .onSuccess { log.info(it) }
+                .onFailure { log.error("Not imported as a catalog: ${it.message}") }
+        }
+    }
+
+    override fun clearBuildCatalog() {
+        buildCatalog.clear()
+        log.info("Removed the stored build catalog")
     }
 
     override fun adbShell(command: String) { scope.launch { controller.adbShell(command) } }

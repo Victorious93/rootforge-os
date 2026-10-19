@@ -2,6 +2,7 @@ package ai.rootforge.os.desktop
 
 import ai.rootforge.os.bridge.BridgeExecutor
 import ai.rootforge.os.bridge.PairingStore
+import ai.rootforge.os.catalog.BuildCatalogStore
 import ai.rootforge.os.core.ApprovalCenter
 import ai.rootforge.os.core.Library
 import ai.rootforge.os.core.OutputLog
@@ -32,6 +33,7 @@ fun main(args: Array<String>) {
     val settings = DesktopSettings(File(home, "desktop.properties"))
     val log = OutputLog(persistFile = File(home, "command-log.jsonl"))
     val library = Library(File(home, "library"))
+    val buildCatalog = BuildCatalogStore(File(home, "build-catalog"))
     val approvals = ApprovalCenter()
     val tools = HostToolset.detect()
     val runner = ProcessRunner()
@@ -78,7 +80,7 @@ fun main(args: Array<String>) {
     application {
         val windowState = rememberWindowState(width = 1100.dp, height = 760.dp)
         val actions = remember {
-            DesktopActions(controller, settings, scope) { "host adb (${tools.adb?.absolutePath ?: "missing"})" }
+            DesktopActions(controller, settings, buildCatalog, scope) { "host adb (${tools.adb?.absolutePath ?: "missing"})" }
         }
         Window(
             onCloseRequest = ::exitApplication,
@@ -86,7 +88,7 @@ fun main(args: Array<String>) {
             state = windowState,
         ) {
             RootForgeTheme {
-                val ui = rememberDesktopUiState(controller, settings, log, library, approvals, pairing, tools)
+                val ui = rememberDesktopUiState(controller, settings, log, library, buildCatalog, approvals, pairing, tools)
                 LaunchedEffect(Unit) {
                     while (true) {
                         controller.scan()
@@ -111,6 +113,7 @@ private fun rememberDesktopUiState(
     settings: DesktopSettings,
     log: OutputLog,
     library: Library,
+    buildCatalog: BuildCatalogStore,
     approvals: ApprovalCenter,
     pairing: PairingStore,
     tools: HostToolset,
@@ -124,12 +127,13 @@ private fun rememberDesktopUiState(
     val lines by log.lines.collectAsState()
     val pendingApprovals by approvals.pending.collectAsState()
     val files by library.files.collectAsState()
+    val catalog by buildCatalog.loaded.collectAsState()
     val bridge by settings.bridgeEnabledFlow.collectAsState()
     val auto by settings.autoConnectFlow.collectAsState()
     val paired by pairing.paired.collectAsState()
     val pending by pairing.pending.collectAsState()
     return AppUiState(
-        targets = targets, link = link, info = info, busy = busy, progress = progress, library = files,
+        targets = targets, link = link, info = info, busy = busy, progress = progress, library = files, buildCatalog = catalog,
         logcatRunning = logcat, log = lines, approvals = pendingApprovals, bridgeEnabled = bridge, autoConnect = auto,
         nodeId = settings.nodeId, paired = paired, pending = pending,
         adbFingerprint = tools.adb?.absolutePath ?: "adb not found",
