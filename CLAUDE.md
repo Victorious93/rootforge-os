@@ -11,6 +11,19 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-19 (desktop API token mode):** branch
+> `cursor/critical-bug-management-de6f`. `DesktopSettings` wrote
+> `~/.rootforge/desktop.properties` (the headless `api_token`) with
+> `File.writer()` and the process umask, so umask `022` left the bearer
+> token mode `0644`. Loopback is shared by local accounts. The file is now
+> created mode `0600` before any bytes are written, and an existing
+> group/world-readable copy is tightened before load and before rewrite.
+> The `~/.rootforge` directory is left at the umask default. Verified:
+> `./gradlew :desktop:test --tests ai.rootforge.os.desktop.DesktopSettingsTest`
+> → 2 tests, 0 failures; `bash tests/run-tests.sh` 1023/0; `bash tests/lint.sh`
+> clean (shellcheck 0.11.0). Not run on a phone, and the headless server was
+> not started.
+
 > **Update 2026-10-18 (README refresh):** branch `cursor/refresh-readme-249a`,
 > docs only (`README.md`, `CHANGELOG.md`, this file). README re-organised in plain
 > language: what it is, fleet placement, host-phone app / Flash Tools, install and
@@ -45,16 +58,20 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-18 · **Branch:** `cursor/refresh-readme-249a`
+**Last updated:** 2026-10-19 · **Branch:** `cursor/critical-bug-management-de6f`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-This branch is a docs-only README refresh. Not run on a device. License lock (#53):
+This branch tightens the desktop API token file to owner read/write. Not run on a device. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
-**What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+**What is true now** (desktop token mode + hermetic suite this session; older bullets were not re-audited unless noted):
+- Desktop `~/.rootforge/desktop.properties` is created mode `0600` and an existing
+  world-readable copy is tightened before load (`DesktopSettings`). `:desktop:test
+  --tests ai.rootforge.os.desktop.DesktopSettingsTest` → 2 tests, 0 failures
+  (2026-10-19). The headless API was not started, and this was not run on a phone.
 - README landing page rewritten 2026-10-18 (docs only). Fleet claims checked against this
   repo's Messenger/pairing code and against droidcommand-AI `main` via the GitHub API:
   `FleetCatalog.kt` lists RootForge as `EXTERNAL_NODE`; `core-rootforge` has
@@ -115,7 +132,7 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
   administration. EDL-Commander JNI/NDK (Phase 4 of `docs/FLASH_TOOLS_PLAN.md` only).
   Android host-phone GUI APK, Flash Tools, Linux/Windows desktop, and Docker toolkit
-  are on `main` (USB Host, not Termux). This branch is docs-only. Toolkit API writes pin `-s` (#60, on
+  are on `main` (USB Host, not Termux). This branch changes the desktop settings file mode. Toolkit API writes pin `-s` (#60, on
   `main`). Published Release **v0.2.0** has the debug APK only. The Termux
   *rootfs* install path still needs a locally generated or future ISO/rootfs
   release; the Python CLI can run from a git clone.
@@ -139,7 +156,7 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-This branch is a docs-only README refresh. ISO Stage 5 is still blocked
+This branch fixes the desktop API token file mode. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 
