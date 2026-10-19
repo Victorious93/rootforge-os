@@ -47,7 +47,7 @@ Every flash button in the app refuses an image that has no sidecar file named `<
 
 - **ADB shell:** *ADB → Shell* runs one command on the target and shows the output. The **Logs / Terminal** panel takes the same thing as `adb shell <command>`, plus `adb reboot`, `fastboot getvar`, `devices`, `clear` and `help`. These are one command at a time. There is no interactive shell session, so programs that wait for input (`su`, `vi`, `top`) will not work.
 - **Anything that writes** (flash, erase, unlock, lock, slot) is routed to the same confirmed path as the buttons. Typing a command never skips the typed confirmation.
-- **A full terminal:** Termux and PRoot work belongs to VictorSuite, a separate app in the same fleet. RootForge does not launch it or hand a session to it yet: there is no integration to describe, and none has been tested.
+- **A full terminal:** for anything the one-command shell cannot do, use a Termux-based terminal app such as VictorSuite (a separate app in the same fleet; Termux and PRoot work belongs there). On Android, open *Settings → Terminal app*, enter that app's package name (shown in Android's app info), and save. *ADB → Shell* then offers **Open full terminal**. RootForge only launches the app. It passes no command, serial or file, and it does not guess the package, so you type the commands there yourself. The desktop client has no hand-off. This launch has not been run on a phone.
 
 ## What the app does not do
 

@@ -10,6 +10,11 @@
     <queries>
         <package android:name="ai.droidcommand.app" />
         <package android:name="ai.droidcommand.app.debug" />
+        <!-- Lets the Settings-chosen terminal app be found and launched; its package name is not known in advance. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application
