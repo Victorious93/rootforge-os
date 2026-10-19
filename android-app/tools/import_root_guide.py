@@ -34,10 +34,12 @@ SECTIONS = [
     ("Unlock and recovery", [
         ("unlock-bootloader", "rooting-guides/how-to-unlock-bootloader.md", "OEM unlocking, fastboot commands, what gets wiped."),
         ("custom-recovery", "rooting-guides/how-to-install-custom-recovery.md", "TWRP and OrangeFox installation."),
+        ("pitchblack-recovery", None, "PitchBlack (PBRP): what it is and how to try it with RootForge."),
         ("custom-rom", "rooting-guides/custom-rom-installation.md", "Flashing a custom ROM safely."),
     ]),
     ("Root frameworks", [
         ("magisk", "rooting-guides/magisk-guide.md", "Install and configure Magisk."),
+        ("magisk-kitsune", None, "Kitsune Mask / Magisk Delta: status and why RootForge does not drive it."),
         ("kernelsu", "rooting-guides/kernelsu-guide.md", "Install and configure KernelSU."),
         ("apatch", "rooting-guides/apatch-guide.md", "Install and configure APatch."),
         ("lsposed", "rooting-guides/lsposed-guide.md", "LSPosed / Vector framework setup."),

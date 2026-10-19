@@ -65,6 +65,14 @@
           "sourcePath": "rooting-guides/how-to-install-custom-recovery.md"
         },
         {
+          "id": "pitchblack-recovery",
+          "title": "PitchBlack Recovery (PBRP)",
+          "summary": "PitchBlack (PBRP): what it is and how to try it with RootForge.",
+          "file": "pitchblack-recovery.md",
+          "origin": "rootforge",
+          "sourcePath": ""
+        },
+        {
           "id": "custom-rom",
           "title": "Complete Custom ROM Installation Guide",
           "summary": "Flashing a custom ROM safely.",
@@ -84,6 +92,14 @@
           "file": "magisk.md",
           "origin": "awesome-android-root",
           "sourcePath": "rooting-guides/magisk-guide.md"
+        },
+        {
+          "id": "magisk-kitsune",
+          "title": "Magisk Kitsune (Kitsune Mask)",
+          "summary": "Kitsune Mask / Magisk Delta: status and why RootForge does not drive it.",
+          "file": "magisk-kitsune.md",
+          "origin": "rootforge",
+          "sourcePath": ""
         },
         {
           "id": "kernelsu",

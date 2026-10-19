@@ -9,7 +9,7 @@ This file is the maintenance guide for that feature. Keep it in step with the co
 
 | Item | State |
 |---|---|
-| 26 pages imported from Awesome Android Root + 1 RootForge page | in tree |
+| 26 pages imported from Awesome Android Root + 3 RootForge pages (workflow, Kitsune status, PitchBlack) | in tree |
 | Markdown parser, search, link allow-list (`:core`) | in tree, 19 unit tests |
 | Compose screen (`GuideScreen`, shared by `:app` and `:desktop`) | in tree; `:desktop:compileKotlin` builds |
 | Importer `android-app/tools/import_root_guide.py` | in tree, 14 Python tests |
@@ -22,8 +22,11 @@ Tutorials, Help. Each entry has an `id`, `title`, `summary`, `file`, and `origin
 
 - `origin: "awesome-android-root"` — generated from the upstream docs by the importer. Never hand-edit
   these files; the next import overwrites them.
-- `origin: "rootforge"` — written here. Today only `rootforge-workflow.md` ("Rooting with RootForge OS"),
-  which maps guide steps onto app screens. It must only describe behaviour the app has.
+- `origin: "rootforge"` — written here: `rootforge-workflow.md` ("Rooting with RootForge OS": guide steps
+  to app screens, shells and terminals, limits), `magisk-kitsune.md` (Kitsune Mask status; unmaintained
+  [Likely], so deliberately not a Root / Patching option) and `pitchblack-recovery.md` (PBRP; the Recovery
+  screen has an `openUrl` button, no download or bundled image). They must only describe behaviour the
+  app has and mark unverified claims.
 
 The upstream app/module catalogue (`docs/apps-and-modules/`, ~200 KB of link lists) is **not** imported.
 Links to it open the website. Importing it would be a data-model decision (searchable entries with
@@ -90,6 +93,18 @@ the same dead link). Fix it upstream, or accept the loss of scroll target and sa
 - No paparazzi golden yet: recording one needs the Android SDK. `Previews.kt` has `PreviewRootGuide`.
 - Android loads the pages through `Class.getResourceAsStream` on a Java library jar. That is standard
   and [Likely] to work in the APK, but it has not been run on a device or emulator.
+
+## Open decisions (made by the author, revisit if wrong)
+
+- **Kitsune is guide-only.** Its package name and a trustworthy download source could not be verified, and
+  the upstream repository appears gone. Adding it to `RootManager` needs both, plus a decision to ship an
+  unmaintained fork.
+- **PBRP link** points at `pitchblackrecovery.com`, taken from the project's repository readme; the host did
+  not resolve from the authoring sandbox. Check it opens before release.
+- **Terminal:** the existing *ADB → Shell* and *Logs / Terminal* run one `adb shell <command>` at a time.
+  An interactive shell was not built. VictorSuite owns Termux/PRoot work per `docs/DROIDCOMMAND_INTEGRATION.md`,
+  but its package name and hand-off are unknown, so RootForge does not launch it. If you want it wired,
+  supply the package id and the intended payload (launch only, or serial + command).
 
 ## Remaining work
 

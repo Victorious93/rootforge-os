@@ -24,7 +24,7 @@ Unlocking a bootloader erases the target and can void its warranty. A bad flash 
 | `fastboot boot patched.img` | **Root / Patching** or **Fastboot → Boot once** | Try this before a permanent write. |
 | `fastboot flash boot patched.img` | **Root / Patching** step 4, **Fastboot → Flash partition** | Prints a plan and asks for a typed confirmation. Needs a matching `.manifest.json` beside the image (see below). |
 | Switch A/B slot | **Fastboot → Active slot** | Asks you to type the slot. |
-| Boot or flash TWRP, OrangeFox or another recovery | **Recovery** | Also enters recovery from Android or from the bootloader. |
+| Boot or flash TWRP, OrangeFox, PitchBlack or another recovery | **Recovery** | Also enters recovery from Android or from the bootloader. |
 | `adb sideload update.zip` | **ADB → Sideload** | Target must be in recovery sideload mode. |
 | Build your own Magisk-style module zip | **Module Builder** | Pushes and installs it on the target when ADB is ready. |
 | Qualcomm 9008 (EDL) | **EDL** | Experimental. Retail phones accept only the manufacturer's signed programmer, which this app does not ship. |
@@ -42,6 +42,12 @@ Every flash button in the app refuses an image that has no sidecar file named `<
 5. Install the Magisk APK on the target, push the boot image, open Magisk, and patch it there. Then *Fetch patched image*.
 6. Reboot to the bootloader. Use **Boot once** first. If the target boots and Magisk shows root, flash the same image to the same partition the stock image came from (`init_boot` on most devices launched with Android 13 or newer, `boot` on older ones).
 7. Set up root hiding, Play Integrity and modules with [Troubleshooting](guide:troubleshooting) and the [Magisk guide](guide:magisk).
+
+## Shells and terminals
+
+- **ADB shell:** *ADB → Shell* runs one command on the target and shows the output. The **Logs / Terminal** panel takes the same thing as `adb shell <command>`, plus `adb reboot`, `fastboot getvar`, `devices`, `clear` and `help`. These are one command at a time. There is no interactive shell session, so programs that wait for input (`su`, `vi`, `top`) will not work.
+- **Anything that writes** (flash, erase, unlock, lock, slot) is routed to the same confirmed path as the buttons. Typing a command never skips the typed confirmation.
+- **A full terminal:** Termux and PRoot work belongs to VictorSuite, a separate app in the same fleet. RootForge does not launch it or hand a session to it yet: there is no integration to describe, and none has been tested.
 
 ## What the app does not do
 

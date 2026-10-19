@@ -13,14 +13,17 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 > **Update 2026-10-19 (Root Guide):** branch `ccr-76f54fed-xf2wxr`. New **Root Guide**
 > drawer entry in the Android app and desktop client (`docs/ROOT_GUIDE.md`). 26 pages adapted
-> from Awesome Android Root (MIT, source commit pinned in `manifest.json`) plus one RootForge-written
-> page mapping guide steps to app screens; `:core` `ai.rootforge.os.guide` (parser, search, link
+> from Awesome Android Root (MIT, source commit pinned in `manifest.json`) plus three RootForge-written
+> pages (screen mapping, Kitsune status, PitchBlack); `:core` `ai.rootforge.os.guide` (parser, search, link
 > allow-list); shared Compose `GuideScreen`; importer `android-app/tools/import_root_guide.py`;
 > `NOTICE` carries the MIT attribution. The apps-and-modules catalogue was not imported.
 > Verified: `:core:test` 118/0 (19 new, incl. every internal link/anchor resolving),
 > `:desktop:compileKotlin` builds, `tests/test_guide_import.py` 14 OK inside `bash tests/run-tests.sh`
 > 1023/0, `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). Layout was checked by
 > rendering the real screen off-screen with Compose desktop (temporary harness, removed).
+> Follow-up on the same branch: guide pages for Kitsune (guide-only, unmaintained [Likely]) and
+> PitchBlack, a Recovery-screen PBRP link, and shells/VictorSuite notes in the workflow page. No new
+> interactive shell and no VictorSuite launch (package/hand-off unknown); see `docs/ROOT_GUIDE.md`.
 > **Not run:** `:app` build/tests/Paparazzi (no Android SDK here; no golden recorded), any phone,
 > the desktop window. Android loading pages via `getResourceAsStream` on a library jar is [Likely]
 > but unverified. The guide text is community reference, not tested on hardware by RootForge.
