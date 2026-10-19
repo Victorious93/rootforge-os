@@ -69,7 +69,7 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
 
         ForgeCard("About", icon = Icons.Filled.Info) {
             KeyValueRow("Version", state.appVersion)
-            KeyValueRow("Network", "No internet permission is requested")
+            KeyValueRow("Network", "Only the build-catalog Download button (https, raw.githubusercontent.com)")
             KeyValueRow("USB", state.transportCaption)
             Text(
                 "Known limits: EDL is experimental and unverified on hardware; oversized non-sparse images are refused; " +

@@ -29,6 +29,7 @@ access to the operator's account:
 | Logs readable by other users | CLI JSON logs and all script logs/reports created `0600` from creation; handed to `$SUDO_USER` under sudo | `core/log.py`, `common.sh:rf_private_file`/`rf_log_init` | Tests, incl. under `umask 000` |
 | Secrets in files | API-key file created 0600 from creation (`rf_write_private`); values shell-quoted (`rf_shell_quote`) | `setup_ai_tools.sh` | Stub tests |
 | Desktop API token readable by other local users | `~/.rootforge/desktop.properties` created `0600` before the bearer token is written; an existing group/world-readable file is tightened before load and before rewrite. The directory keeps the umask | `android-app/desktop` `DesktopSettings` | `:desktop:test` `DesktopSettingsTest` (POSIX). Not run on a phone |
+| Remote build catalog treated as authority | Custom RR catalog is display-only: not read by `DeviceMatchGate`/`FlashSafety`; fetched only on a tap, https only, 8 MiB cap, parsed before it replaces the stored copy; links opened only if `https://` | `:core` `catalog/` | `:core:test` `BuildCatalogTest`, `BuildCatalogStoreTest` |
 | Provisioning the wrong account / root | Target user resolved explicitly; refuses rather than defaulting to root; live user removed; live sudo rule deleted; installed name cannot be `root`/`rootforge` | `00_bootstrap_distro.sh`, Calamares configs | Executed in a sandbox; **not** under real Calamares |
 
 ## 2. What it does not protect against
@@ -68,6 +69,11 @@ access to the operator's account:
   redacted. Do not rely on it as a substitute for not printing secrets.
 - **Logs are private only for new files.** An existing log or report keeps the mode it has;
   directories keep the umask default.
+- **The Custom RR catalog is unauthenticated third-party data.** It comes from
+  `monsiu/Custom-RR` on raw.githubusercontent.com over TLS, with no signature or pinned
+  digest, and has no schema version. Whoever controls that repository decides what the
+  "Builds for this device" card lists and which download pages it links. It cannot start
+  or allow a flash. Tapping Download tells GitHub this phone's IP address.
 - **Android-side trust is out of scope**: bootloader unlock wipes data by design; nothing
   here restores a vendor's attestation.
 

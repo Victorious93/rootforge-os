@@ -4,8 +4,14 @@
 
     <uses-feature android:name="android.hardware.usb.host" android:required="true" />
 
-    <!-- Only used to tell you a controller app is waiting for approval. No INTERNET permission is requested. -->
+    <!-- Only used to tell you a controller app is waiting for approval. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      Only used when you tap Download on the "Builds for this device" card: two https GETs to
+      raw.githubusercontent.com for the Custom RR catalog. Device work never uses the network.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <queries>
         <package android:name="ai.droidcommand.app" />

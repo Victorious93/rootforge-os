@@ -1,70 +1,83 @@
-# Custom RR catalog — read-only build lookup
+# Custom RR catalog — builds for the connected device
 
 RootForge can read the ROM / recovery / root-solution catalog that
 [Custom RR](https://github.com/monsiu/Custom-RR) publishes, and answer "which
-community builds officially list this phone?" for the connected target.
-Custom RR stays a separate app; RootForge only parses its published data.
+community builds list this phone?" for the connected target. Custom RR stays a
+separate app; RootForge only parses its published data.
 
-**Status:** `:core` parser and lookup only, with unit tests. **No screen
-uses it yet**, and nothing fetches the catalog. See [Next steps](#next-steps).
+**Status:** the Dashboard has a **Builds for this device** card on the Android
+host-phone app and on the desktop client. The catalog arrives one of two ways:
+
+| Option | What happens | Network |
+|---|---|---|
+| **Download** / **Update** | Two https GETs to raw.githubusercontent.com (catalog, then freshness feed), only when tapped | Yes (`INTERNET` permission on Android) |
+| **Import file** | Pick a `catalog.json` or `freshness.json` you already have; the app tells them apart by their keys | None |
+
+**Remove** deletes the stored copy. Nothing is fetched at startup or on a timer.
 
 ## What it is for (and not for)
 
-- **For:** showing the user, next to a connected target, the ROMs, recoveries
-  and root solutions whose catalog entry lists that phone's codename, with the
-  project's download page and a freshness label (`active`, `stale`,
-  `abandoned`, …).
-- **Not for:** deciding whether a flash is allowed. The lookup does not feed
-  `DeviceMatchGate`, `FlashSafety`, or any typed confirmation. A catalog match
-  is not permission to flash and does not stand in for an image sidecar
-  manifest. No config key changes that.
-- **Not a download source.** The catalog has no image files and no digests,
-  only each project's download page (`downloadUrl`). A file the user downloads
-  from there still needs its own sidecar `<image>.manifest.json` to pass the
-  Flash Tools check ([FLASH_TOOLS_PLAN.md](FLASH_TOOLS_PLAN.md)).
+- **For:** showing, next to a connected target, the ROMs, recoveries and root
+  solutions whose catalog entry lists that phone's product or codename, with
+  the project's download page, its forum, any warning the catalog carries, and a
+  freshness label (`active`, `stale`, `abandoned`).
+- **Not for:** deciding whether a flash is allowed. Nothing in `catalog/` is read
+  by `DeviceMatchGate`, `FlashSafety` or any typed confirmation. A listing is not
+  permission to flash and does not stand in for an image sidecar manifest. No
+  setting changes that.
+- **Not a download source.** The catalog has no image files and no digests, only
+  each project's download page. Those open in the browser. A file the user then
+  downloads still needs its own `<image>.manifest.json` to pass the Flash Tools
+  check ([FLASH_TOOLS_PLAN.md](FLASH_TOOLS_PLAN.md)).
 
 ## Code
 
-`android-app/core/src/main/kotlin/ai/rootforge/os/catalog/BuildCatalog.kt`
-(Apache-2.0, like the rest of `:core`).
+All shared logic is in `:core` (Apache-2.0), package `ai.rootforge.os.catalog`:
 
 | Piece | What it does |
 |---|---|
-| `BuildCatalogParser.parseCatalog(text)` | Parses `catalog.json` (`roms`, `recoveries`, `roots`, `_generatedAt`). Unknown keys are ignored; an entry without `id`/`name`, or a non-JSON body, throws `IllegalArgumentException`. |
-| `BuildCatalogParser.parseFreshness(text)` | Parses `freshness.json` (`entries` keyed by entry id, `_generatedAt`). |
-| `BuildLookup.forTarget(target, catalog, freshness?)` | Returns `BuildMatch` rows for a `TargetIdentity`: ROMs, then recoveries, then root solutions; official before unofficial within each kind; otherwise catalog order. |
-| `CatalogEntry.safeDownloadUrl()` / `safeForumUrl()` | The link if it starts with `https://`, else `null`. The catalog is remote data, so a UI must use these, not the raw fields. |
+| `BuildCatalogParser` | Parses `catalog.json` (`roms`, `recoveries`, `roots`, `_generatedAt`) and `freshness.json` (`entries` by id). Unknown keys are ignored; an entry without `id`/`name`, or a non-JSON body, throws `IllegalArgumentException`. |
+| `BuildLookup.forTarget(target, catalog, freshness?)` | `BuildMatch` rows for a `TargetIdentity`: ROMs, then recoveries, then root solutions; official before unofficial within each kind; otherwise catalog order. |
+| `BuildCatalogFetcher` | `https://` only, 15 s connect / 30 s read timeouts, a non-200 status is an error, 8 MiB cap (the published catalog is about 1.4 MB). |
+| `BuildCatalogStore(dir)` | Holds the last good catalog in app-private storage (`filesDir/build-catalog` on Android, `~/.rootforge/build-catalog` on desktop). Every write is parsed first and written via a temp file + rename, so a bad download, an HTML error page, `{}` or the wrong file never replaces a good catalog. A missing freshness feed still stores the catalog. A stored file that no longer parses loads as "no catalog". |
+| `CatalogEntry.safeDownloadUrl()` / `safeForumUrl()` | The link only if it starts with `https://`. The card uses these, and both apps' `openUrl` also refuse anything else. |
+
+Clients: `ui/screens/BuildCatalogCard.kt` (shared Compose UI), `AppActionsImpl`
+(Android) and `DesktopActions` (desktop). On Android, Import goes through the
+normal file picker into the library and the library copy is deleted afterwards;
+the catalog is kept separately so it never shows up in flash file lists.
 
 **Matching rules.** The target's product and codename (lower-cased, `unknown`
-dropped, via `TargetIdentity.names()`) are compared exactly against each
-catalog device codename. Combined pages such as `rmx2001/rmx2151` are split
-on `/`. A prefix is not a match. An unknown target returns an empty list:
-unknown is not a wildcard. The marketing `models` list is not matched.
+dropped, via `TargetIdentity.names()`) are compared exactly against each catalog
+device codename. Combined pages such as `rmx2001/rmx2151` are split on `/`. A
+prefix is not a match. An unknown target shows "Connect a target" instead of a
+list: unknown is not a wildcard. The marketing `models` list is not matched.
 
 **Known gap.** Custom RR's own app also tries codename aliases (OnePlus stock
 names such as `oneplus6t` → `fajita`, Xiaomi unified boards such as `olive` →
-`mi439`, Transsion/realme suffixes). RootForge does not; a phone that reports
-such a name gets no match. Adding aliases means writing RootForge's own table,
-not copying Custom RR's code (see [Licensing](#licensing)).
+`mi439`, Transsion/realme suffixes). RootForge does not; such a phone gets "No
+catalog entry lists …". Adding aliases means writing RootForge's own table, not
+copying Custom RR's code (see [Licensing](#licensing)).
 
 ## Data source
 
-Custom RR's app reads these URLs (from its `lib/data/catalog_repository.dart`
-and `lib/data/freshness_repository.dart`):
+The same URLs Custom RR's app reads (its `lib/data/catalog_repository.dart` and
+`lib/data/freshness_repository.dart`):
 
 - `https://raw.githubusercontent.com/monsiu/Custom-RR/main/assets/catalog.json`
 - `https://raw.githubusercontent.com/monsiu/Custom-RR/main/assets/freshness.json`
 
-The catalog is regenerated by Custom RR's own tooling and its nightly
-freshness job. It is a third-party, unversioned format with no schema version
-field: a field rename upstream can make the parser drop data (unknown keys are
-ignored) or fail (a required field disappears). A client must treat a parse
-failure as "no catalog", never as "no restrictions".
+These point at the upstream repository, not the `Victorious93/Custom-RR` fork.
+The format is third-party, unversioned and unsigned. A field rename upstream can
+make the parser drop data (unknown keys are ignored) or reject the download (a
+required field disappears); a rejected download keeps the previous catalog.
+Trust implications are in [SECURITY_MODEL.md](SECURITY_MODEL.md).
 
-As of 2026-10-19 the bundled copies in Custom RR's repo held 27 ROMs,
-5 recoveries, 5 root solutions and 35 freshness rows. Some matched entries are
-discontinued projects (freshness `abandoned` / `stale`); a UI should show that
-label rather than hide or promote them.
+On 2026-10-19 a live download from this agent returned 37 entries (catalog
+`_generatedAt` 2026-09-12) and 35 freshness rows. The freshness feed is
+refreshed nightly upstream; the catalog itself less often. Many matches are
+discontinued projects (`abandoned` / `stale`); the card shows that label rather
+than hiding them.
 
 ## Licensing
 
@@ -73,33 +86,29 @@ Apache-2.0. So:
 
 - No Custom RR source code is copied into RootForge. The parser was written
   against the JSON shape only.
-- No Custom RR catalog data is bundled. The unit test uses a small synthetic
-  fixture written for this repo.
-- Fetching the published JSON at runtime and showing it to the user does not
-  copy it into this repository. [Likely] — this is not legal advice; bundling
-  a snapshot in an APK would need a separate look at the data's licence.
+- No Custom RR catalog data is bundled in the APK, the desktop package or the
+  repository. Tests and screenshots use small placeholder entries written here.
+- Fetching the published JSON at the user's request and showing it does not copy
+  it into this repository. [Likely] — this is not legal advice; bundling a
+  snapshot would need a separate look at the data's licence.
 
-## Verification
+## Verification (2026-10-19)
 
-- `./gradlew :core:test` → 109 tests, 0 failures (2026-10-19), including
-  `ai.rootforge.os.catalog.BuildCatalogTest` (10 tests).
-- A throwaway test (not committed) parsed Custom RR's real `assets/catalog.json`
-  and `assets/freshness.json` and looked up `oriole`, `rmx2151` and `fajita`;
-  all returned the expected ROM / recovery entries.
-- Not run in the app, against the live URLs, or with a connected phone.
+- `./gradlew --rerun-tasks :core:test :desktop:test :desktop:compileKotlin
+  :app:verifyPaparazziDebug :app:assembleDebug` → `:core` 119 tests / 0 failures
+  (`BuildCatalogTest` 10, `BuildCatalogStoreTest` 10), `:desktop` 2 / 0,
+  `:app` 28 / 0 including screenshot verification. The Dashboard and Flash Tools
+  goldens were re-recorded and a `buildCatalog` golden added.
+- `aapt2 dump permissions` on the debug APK lists `INTERNET` and
+  `POST_NOTIFICATIONS`.
+- Throwaway tests (not committed): one parsed Custom RR's bundled
+  `catalog.json`/`freshness.json`; one ran `BuildCatalogStore.download()` against
+  the live URLs from this agent's JVM and looked up `shiba` (16 ROM matches).
+- **Not run:** the APK on a phone (so Download over a phone's network, the
+  Android file picker path, and the card with a real target are untested), and
+  the desktop window.
 
-## Next steps
+## Possible follow-ups
 
-1. **Decide how the catalog reaches the app.** The host-phone APK has **no
-   `INTERNET` permission** today (`docs/ANDROID_APP.md`, Limits). Options:
-   - (a) the user imports `catalog.json` / `freshness.json` into the library
-     like any other file — no new permission;
-   - (b) add `INTERNET` and fetch the two URLs over https with a size cap,
-     timeout and cache. This is a privilege-model change and needs the
-     owner's approval first (CLAUDE.md, Ask first).
-   The desktop client and the Python CLI have no such restriction, but should
-   use the same parser rules.
-2. Show the matches on the Dashboard / Flash Tools target card: name, kind,
-   freshness label, official/unofficial, and the https download page opened
-   in the system browser.
-3. Optionally, RootForge's own codename-alias table.
+1. RootForge's own codename-alias table (see Known gap).
+2. Show the card's catalog age more prominently, or warn when it is old.

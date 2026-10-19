@@ -12,16 +12,17 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 ## PROJECT STATE
 
 > **Update 2026-10-19 (Custom RR catalog lookup):** branch `ccr-b45e98d7-7wsvwf`.
-> New `:core` package `ai.rootforge.os.catalog` (`BuildCatalog.kt`): parses Custom RR's
-> published `catalog.json` / `freshness.json` and lists ROMs/recoveries/root solutions for a
-> `TargetIdentity` by exact codename. Informational only; not wired to `DeviceMatchGate`, no
-> screen, no fetch (APK has no `INTERNET` permission — the delivery path is an owner decision,
-> see `docs/CUSTOM_RR_CATALOG.md` Next steps). No Custom RR code/data copied (GPL-3.0-only
-> upstream; `:core` is Apache-2.0). Verified: `./gradlew :core:test` 109/0 (10 new);
-> a throwaway uncommitted test parsed Custom RR's real catalog + freshness files and looked up
-> `oriole`/`rmx2151`/`fajita`. `tests/run-tests.sh` 1023/0, `tests/lint.sh` clean
-> (shellcheck 0.11.0). Not run: `:app:testDebugUnitTest`/`assembleDebug` (no Android SDK on
-> this agent), `:desktop:compileKotlin`, live URLs, any device.
+> New `:core` package `ai.rootforge.os.catalog`: parser + exact-codename `BuildLookup`,
+> `BuildCatalogFetcher` (https only, 8 MiB cap) and `BuildCatalogStore` (parse-then-atomic
+> write, keeps last good copy). Dashboard card "Builds for this device" on Android and desktop
+> with **Download** and **Import file** (owner chose both, 2026-10-19). **The APK now requests
+> `INTERNET`**, used only by that button. Display-only; not read by `DeviceMatchGate`. No Custom
+> RR code/data copied (GPL-3.0-only upstream; `:core` Apache-2.0). Verified with an SDK installed
+> on this agent: `--rerun-tasks :core:test` 119/0, `:desktop:test` 2/0, `:desktop:compileKotlin`,
+> `:app:verifyPaparazziDebug` 28/0 (dashboard + flashTools re-recorded, buildCatalog added),
+> `:app:assembleDebug` (aapt2 shows `INTERNET`). Throwaway tests: real bundled catalog parse;
+> live `download()` from this JVM (37 entries, 35 freshness). `tests/run-tests.sh`
+> 1023/0, `tests/lint.sh` clean (shellcheck 0.11.0). Not run: APK on a phone, desktop window.
 
 > **Update 2026-10-19 (desktop API token mode):** PR #64 (on `main`). `DesktopSettings` wrote
 > `~/.rootforge/desktop.properties` (the headless `api_token`) with
@@ -74,14 +75,14 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-README refresh is #63 and desktop token mode is #64 (both on `main`). This branch adds the read-only Custom RR catalog lookup in `:core`. Not run on a device. License lock (#53):
+README refresh is #63 and desktop token mode is #64 (both on `main`). This branch adds the Custom RR build catalog (lookup, download/import, Dashboard card). Not run on a device. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- `:core` `ai.rootforge.os.catalog` parses Custom RR's catalog/freshness JSON and looks up builds
-  by target codename (2026-10-19, `BuildCatalogTest` 10/0). No UI and no network fetch; never
-  affects flash gating. Doc: `docs/CUSTOM_RR_CATALOG.md`.
+- Custom RR catalog: Dashboard "Builds for this device" card (Android + desktop), Download over
+  https (APK requests `INTERNET` for this only) or Import file; `:core` `catalog/` tests 20/0
+  (2026-10-19). Never affects flash gating. Not run on a phone. Doc: `docs/CUSTOM_RR_CATALOG.md`.
 - Desktop `~/.rootforge/desktop.properties` is created mode `0600` and an existing
   world-readable copy is tightened before load (`DesktopSettings`, #64). `:desktop:test
   --tests ai.rootforge.os.desktop.DesktopSettingsTest` → 2 tests, 0 failures
@@ -171,8 +172,8 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-README refresh is #63 (on `main`). Desktop token mode is #64 (on `main`). This branch: Custom RR catalog lookup in `:core`;
-next for it is the owner's choice of delivery (file import vs. `INTERNET`) and a UI card. ISO Stage 5 is still blocked
+README refresh is #63 (on `main`). Desktop token mode is #64 (on `main`). This branch (PR #66): Custom RR catalog lookup, download + import, Dashboard card;
+APK now requests `INTERNET` for the Download button only. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 

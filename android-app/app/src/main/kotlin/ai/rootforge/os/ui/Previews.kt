@@ -1,5 +1,11 @@
 package ai.rootforge.os.ui
 
+import ai.rootforge.os.catalog.BuildCatalog
+import ai.rootforge.os.catalog.CatalogDevice
+import ai.rootforge.os.catalog.CatalogEntry
+import ai.rootforge.os.catalog.Freshness
+import ai.rootforge.os.catalog.FreshnessFeed
+import ai.rootforge.os.catalog.LoadedCatalog
 import ai.rootforge.os.core.LinkState
 import ai.rootforge.os.core.LogLevel
 import ai.rootforge.os.core.LogLine
@@ -44,7 +50,27 @@ internal fun previewState(): AppUiState = AppUiState(
     nodeId = "rf-00112233445566778899aabbccddeeff",
     appVersion = "0.1.0-debug",
     adbFingerprint = "A1:B2:C3:D4:E5:F6:00:11:22:33:44:55:66:77:88:99",
+    buildCatalog = previewCatalog(),
 )
+
+/** Placeholder entries for previews and screenshots; not real catalog data. */
+private fun previewCatalog(): LoadedCatalog {
+    val shiba = listOf(CatalogDevice(brand = "Google", model = "Pixel 8", codename = "shiba"))
+    return LoadedCatalog(
+        catalog = BuildCatalog(
+            roms = listOf(CatalogEntry("example-rom", "Example ROM", downloadUrl = "https://example.org/rom", devices = shiba)),
+            recoveries = listOf(CatalogEntry("example-recovery", "Example Recovery", downloadUrl = "https://example.org/recovery", devices = shiba)),
+            generatedAt = "2026-10-19T00:00:00Z",
+        ),
+        freshness = FreshnessFeed(
+            mapOf(
+                "example-rom" to Freshness(status = "active", lastBuild = "2026-10-18"),
+                "example-recovery" to Freshness(status = "stale", lastBuild = "2026-03-02"),
+            ),
+        ),
+        source = "Downloaded from Custom RR",
+    )
+}
 
 @Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Dashboard")
 @Composable

@@ -31,7 +31,7 @@ The app declares `android.hardware.usb.host` as required. Tablets/phones without
 
 ## Screens
 
-Dashboard (target + props), **Flash Tools** (USB/OTG scan, connection guide, ADB tools, fastboot tools, image/APK inspector, persistent command log), ADB (shell, install, push/pull, sideload, reboot, logcat), Fastboot (getvar, flash, boot-once, lock/unlock, slot, erase), EDL, Root/Patching, Module Builder, Recovery, Logs/Terminal, Settings.
+Dashboard (target + props, Custom RR builds for the target), **Flash Tools** (USB/OTG scan, connection guide, ADB tools, fastboot tools, image/APK inspector, persistent command log), ADB (shell, install, push/pull, sideload, reboot, logcat), Fastboot (getvar, flash, boot-once, lock/unlock, slot, erase), EDL, Root/Patching, Module Builder, Recovery, Logs/Terminal, Settings.
 
 Flash Tools is a hub: buttons call the same `TargetController` methods as the dedicated screens. A flash is **refused** unless a sidecar `<image>.manifest.json` matches the target (product/codename, slot, and fingerprint *or* a declared product/slot claim). A mismatch is logged as `Refused: …` and nothing is written. Plan: `docs/FLASH_TOOLS_PLAN.md`.
 
@@ -81,8 +81,7 @@ Paparazzi goldens: `android-app/app/src/test/snapshots/`. Human-facing copies: `
 - ADB uses classic `shell:` (exit status via an echo marker), not shell_v2. No `adb forward`.
 - Sideload (`sideload-host`) seeks the library file so recovery can read the zip central directory, then the payload, then the package again. `DONEDONE` finishes the transfer; `FAILFAIL` is reported as a failure. **Not run against a phone in recovery.**
 - Logcat holds the USB connection; other actions are blocked until you stop it.
-- No internet permission. Opening TWRP/OrangeFox/LineageOS links uses the system browser.
-- `:core` can parse the Custom RR ROM/recovery catalog and list builds for the target's codename (`docs/CUSTOM_RR_CATALOG.md`). **No screen uses it yet**; because of the missing internet permission, how the catalog reaches the app is still undecided. It is informational only and never affects the flash check.
+- The `INTERNET` permission is used only by **Download** on the Dashboard's "Builds for this device" card (two https GETs to raw.githubusercontent.com, only when tapped). **Import file** loads a `catalog.json` / `freshness.json` instead, with no network. The card is informational only and never affects the flash check (`docs/CUSTOM_RR_CATALOG.md`). Opening TWRP/OrangeFox/LineageOS links uses the system browser; the app does not download images.
 
 ## droidcommand-ai
 
