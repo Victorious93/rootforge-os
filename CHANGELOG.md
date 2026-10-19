@@ -7,6 +7,9 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Desktop API token file (2026-10-19)
+- `~/.rootforge/desktop.properties`, which stores the headless API bearer token (`api_token`), is created mode `0600` and an existing group- or world-readable copy is tightened to owner read/write before it is loaded or rewritten. `DesktopSettings` used `File.writer()` with the process umask, so under umask `022` the token was `0644`. Loopback is shared by every local account, and a home directory is often traversable, so another user on the machine could read the token and POST `rootforge.fastboot.unlock` / `flash` with the matching confirmation phrase. The parent directory is left at the umask default. **Not run on a phone.**
+
 ### Docs (2026-10-18, README refresh)
 - `README.md` reorganised and rewritten in plainer language, with terms explained: what RootForge is, where it sits in the Victorious fleet (`EXTERNAL_NODE`, Messenger + JSON `protocol_major` 1, pairing by package + signing certificate, no shared signing key, with each claim marked [Certain] / [Likely] / [Guessing]), the host-phone app and Flash Tools, install and build steps per client, and a Signing section (fixed committed debug key and its SHA-256, v0.2.0 uninstall-once note, release key only in CI secrets). Mentions the Modules screenshot, adds the CI workflow table, and corrects a missing `./` on the `packageExe` command. Docs only; no code, workflow or test changes.
 
