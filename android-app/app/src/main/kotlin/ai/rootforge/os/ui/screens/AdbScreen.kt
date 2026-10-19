@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -64,6 +65,12 @@ fun AdbScreen(state: AppUiState, actions: AppActions) {
         ForgeCard("Shell", "Run a command on the target", Icons.Filled.Terminal) {
             OutlinedTextField(command, { command = it }, Modifier.fillMaxWidth(), label = { Text("Command") }, singleLine = true)
             ActionButton("Run", Icons.Filled.PlayArrow, ActionKind.Primary, enabled = ready && command.isNotBlank()) { actions.adbShell(command.trim()) }
+            if (state.terminalHandoff) {
+                ActionButton("Open full terminal", Icons.Filled.Terminal, ActionKind.Outline, enabled = state.terminalApp.isNotEmpty()) { actions.openTerminalApp() }
+                if (state.terminalApp.isEmpty()) {
+                    Text("No terminal app is set. Choose one in Settings (Termux is com.termux).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 QUICK_COMMANDS.forEach { (cmd, label) ->
                     AssistChip(onClick = { command = cmd; if (ready) actions.adbShell(cmd) }, label = { Text(label) })

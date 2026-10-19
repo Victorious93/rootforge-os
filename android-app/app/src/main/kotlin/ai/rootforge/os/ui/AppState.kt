@@ -33,6 +33,10 @@ data class AppUiState(
     val approvals: List<ApprovalRequest> = emptyList(),
     val bridgeEnabled: Boolean = false,
     val autoConnect: Boolean = true,
+    /** Package of the terminal app RootForge hands off to; blank when not set. */
+    val terminalApp: String = "",
+    /** True where RootForge can launch another app (Android). Desktop has no hand-off. */
+    val terminalHandoff: Boolean = false,
     val nodeId: String = "",
     val paired: List<PairedController> = emptyList(),
     val pending: List<CallerIdentity> = emptyList(),
@@ -110,6 +114,12 @@ interface AppActions {
 
     fun setBridgeEnabled(enabled: Boolean)
     fun setAutoConnect(enabled: Boolean)
+
+    /** Saves the terminal app package. Callers validate with `TerminalApp.isValidPackage` first. */
+    fun setTerminalApp(packageName: String)
+
+    /** Opens the configured terminal app. Launch only: no command, serial or file is passed. */
+    fun openTerminalApp()
     fun resetAdbKey()
     fun approveController(caller: CallerIdentity)
     fun dismissController(caller: CallerIdentity)
@@ -168,6 +178,8 @@ object NoopActions : AppActions {
     override fun shareLog() = Unit
     override fun setBridgeEnabled(enabled: Boolean) = Unit
     override fun setAutoConnect(enabled: Boolean) = Unit
+    override fun setTerminalApp(packageName: String) = Unit
+    override fun openTerminalApp() = Unit
     override fun resetAdbKey() = Unit
     override fun approveController(caller: CallerIdentity) = Unit
     override fun dismissController(caller: CallerIdentity) = Unit

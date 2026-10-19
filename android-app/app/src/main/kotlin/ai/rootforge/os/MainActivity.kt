@@ -72,6 +72,7 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
     val buildCatalog = app.buildCatalog.loaded.collectAsStateWithLifecycle().value
     val bridge = app.settings.bridgeEnabledFlow.collectAsStateWithLifecycle().value
     val auto = app.settings.autoConnectFlow.collectAsStateWithLifecycle().value
+    val terminalApp = app.settings.terminalAppFlow.collectAsStateWithLifecycle().value
     val paired = app.pairing.paired.collectAsStateWithLifecycle().value
     val pending = app.pairing.pending.collectAsStateWithLifecycle().value
     val fingerprint = app.adbFingerprint.collectAsStateWithLifecycle().value
@@ -79,6 +80,7 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
     return AppUiState(
         targets = targets, link = link, info = info, busy = busy, progress = progress, library = library, buildCatalog = buildCatalog,
         logcatRunning = logcat, log = log, approvals = approvals, bridgeEnabled = bridge, autoConnect = auto,
+        terminalApp = terminalApp, terminalHandoff = true,
         nodeId = nodeId, paired = paired, pending = pending, adbFingerprint = fingerprint, appVersion = BuildConfig.VERSION_NAME,
     )
 }

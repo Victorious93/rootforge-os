@@ -13,6 +13,12 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 - **The Android app now requests `INTERNET`**, used only by that Download button. Settings → About and the connection notice say so.
 - `:core:test` 119/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 28/0 with `verifyPaparazziDebug` (Dashboard and Flash Tools goldens re-recorded, `buildCatalog` added), `assembleDebug`. Not run on a phone.
 
+### Terminal app default (2026-10-19)
+- *Settings → Terminal app* now defaults to `com.termux` (the owner asked for it), so **Open full terminal** works without visiting Settings. Saving an empty value turns the button off; any other valid package overrides it. `TerminalApp.DEFAULT_PACKAGE`, +1 test. Still launch-only and **not run on a phone**.
+
+### Terminal app hand-off (2026-10-19)
+- Android: *Settings → Terminal app* stores the package name of a full terminal app (for example the Termux-based VictorSuite); *ADB → Shell* gets **Open full terminal**. Launch only: no command, serial or file is passed, and no package name is hard-coded (its VictorSuite id is not known here). The name is validated as an Android application id (`TerminalApp.isValidPackage`, 2 new tests). `AndroidManifest.xml` `<queries>` gains a MAIN/LAUNCHER intent so the chosen app can be resolved. Desktop has no hand-off (no-op). **Not run on a phone.** Magisk Kitsune is still guide-only: its package name and a safe download could not be verified.
+
 ### Root Guide (2026-10-19)
 - New **Root Guide** drawer entry in the Android host-phone app and the desktop client: 26 offline pages adapted from Awesome Android Root (MIT; guides, device pages, FAQ, troubleshooting, resources) plus one RootForge page, "Rooting with RootForge OS", mapping guide steps to app screens and stating what the app does not do. Search across all pages, nested lists, tables, callouts, collapsible sections, selectable code blocks, in-guide links and a Back stack.
 - `:core` gains `ai.rootforge.os.guide` (`GuideMarkdown` parser, `GuideLibrary` manifest/search, `GuideLink` allow-list: only `guide:`, `#anchor` and `https://`). Pages live in `core/src/main/resources/ai/rootforge/os/guide/`. `android-app/tools/import_root_guide.py` regenerates them from a checkout and records the source commit; the app/module catalogue is not imported.

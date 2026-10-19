@@ -165,6 +165,8 @@ class DesktopActions(
 
     override fun setBridgeEnabled(enabled: Boolean) { settings.bridgeEnabled = enabled }
     override fun setAutoConnect(enabled: Boolean) { settings.autoConnect = enabled }
+    override fun setTerminalApp(packageName: String) = Unit
+    override fun openTerminalApp() = log.info("Opening another app is an Android-only feature.")
 
     override fun resetAdbKey() {
         log.warn("Desktop uses the host adb key (~/.android/adbkey). Remove that file yourself if you want a new identity; this app will not delete it.")

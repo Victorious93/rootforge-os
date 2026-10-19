@@ -103,9 +103,13 @@ the same dead link). Fix it upstream, or accept the loss of scroll target and sa
 - **PBRP link** points at `pitchblackrecovery.com`, taken from the project's repository readme; the host did
   not resolve from the authoring sandbox. Check it opens before release.
 - **Terminal:** the existing *ADB → Shell* and *Logs / Terminal* run one `adb shell <command>` at a time.
-  An interactive shell was not built. VictorSuite owns Termux/PRoot work per `docs/DROIDCOMMAND_INTEGRATION.md`,
-  but its package name and hand-off are unknown, so RootForge does not launch it. If you want it wired,
-  supply the package id and the intended payload (launch only, or serial + command).
+  An interactive shell was not built. A full terminal is a launch-only hand-off: *Settings → Terminal app*
+  stores the package (validated by `TerminalApp.isValidPackage`; default `com.termux`, set at the owner's
+  request, empty value clears it), and *ADB → Shell* gets **Open full terminal** (`AppActions.openTerminalApp`,
+  `getLaunchIntentForPackage`). VictorSuite is a Termux-based app per the owner; whether it uses `com.termux` or
+  its own package is unknown to this repo, so it stays editable.
+  The manifest `<queries>` gains a generic MAIN/LAUNCHER intent so any installed launcher app can be found
+  (Android 11+ package visibility). No command or serial is passed. Not run on a phone; desktop is a no-op.
 
 ## Remaining work
 

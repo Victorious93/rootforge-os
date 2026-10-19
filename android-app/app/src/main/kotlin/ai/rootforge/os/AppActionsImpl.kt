@@ -4,6 +4,7 @@ import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.core.DigestCheck
 import ai.rootforge.os.core.FileInspection
 import ai.rootforge.os.core.LibraryFile
+import ai.rootforge.os.core.TerminalApp
 import ai.rootforge.os.core.importUri
 import ai.rootforge.os.core.TerminalCommand
 import ai.rootforge.os.fastboot.RebootTarget
@@ -165,6 +166,29 @@ class AppActionsImpl(
 
     override fun setBridgeEnabled(enabled: Boolean) { app.settings.bridgeEnabled = enabled }
     override fun setAutoConnect(enabled: Boolean) { app.settings.autoConnect = enabled }
+
+    override fun setTerminalApp(packageName: String) {
+        val name = packageName.trim()
+        if (name.isNotEmpty() && !TerminalApp.isValidPackage(name)) {
+            log.warn("'$name' is not a valid Android package name; terminal app not changed.")
+            return
+        }
+        app.settings.terminalApp = name
+    }
+
+    override fun openTerminalApp() {
+        val name = app.settings.terminalApp
+        if (!TerminalApp.isValidPackage(name)) {
+            log.warn("Set the terminal app package in Settings first.")
+            return
+        }
+        val launch = app.packageManager.getLaunchIntentForPackage(name)
+        if (launch == null) {
+            log.warn("$name is not installed or has no launcher screen.")
+            return
+        }
+        startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 
     override fun resetAdbKey() {
         scope.launch(Dispatchers.IO) {
