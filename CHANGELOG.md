@@ -7,6 +7,11 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Modules: creator upgrades and repository links (2026-10-19)
+- The drawer entry "Module Builder" is now **Modules** with two tabs. **Create**: new optional `boot-completed.sh` and `action.sh`; your own text for any generated file (`ModuleSpec.bodies`; CRLF converted, shebang added to boot scripts, 64 KiB cap, text for a disabled file is a validation error, NUL rejected); hedged per-manager notes (`ModuleBuilder.compatibilityNotes`: webroot on Magisk, action/boot-completed need recent managers, sepolicy and post-fs-data can bootloop). **Repositories**: `ModuleRepos` links to Magisk-Modules-Alt-Repo, Magisk-Modules-Repo, the KernelSU module site, the LSPosed module site, Xposed-Modules-Repo and the MMRL app, each marked with what was checked on 2026-10-19 or "not checked" (the KernelSU and LSPosed sites could not be reached from the authoring sandbox); plus an import-and-install card. Link-out only: nothing is fetched or vetted.
+- **Security:** installing any module (built or downloaded) through `installModuleOnTarget` now needs a typed `INSTALL MODULE` confirmation showing the zip's SHA-256, on Android and desktop. New row in `docs/SECURITY_MODEL.md`.
+- Tests: `:core:test` 134 (+13: `ModuleBuilderBodiesTest` 9, `ModuleReposTest` 4); screen rendered off-screen with Compose desktop. **Not run:** `:app` compile here (CI `apk`), a phone, a real manager. The Modules Paparazzi golden is stale (new tab row) and needs re-recording with the Android SDK. Not added: extra files from the library (builder's `files` map exists in core; the UI cannot read library bytes yet), an in-app module browser (needs a verified repository JSON format).
+
 ### Terminal app default (2026-10-19)
 - *Settings → Terminal app* now defaults to `com.termux` (the owner asked for it), so **Open full terminal** works without visiting Settings. Saving an empty value turns the button off; any other valid package overrides it. `TerminalApp.DEFAULT_PACKAGE`, +1 test. Still launch-only and **not run on a phone**.
 
