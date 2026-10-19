@@ -7,6 +7,9 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Custom RR catalog lookup (2026-10-19)
+- New `:core` package `ai.rootforge.os.catalog`: parses the `catalog.json` / `freshness.json` format that Custom RR publishes and lists the ROMs, recoveries and root solutions whose entry names the target's product or codename (exact, case-insensitive, `/`-combined codenames split; unknown target → no matches). Links are exposed only if `https://`. Read-only and informational: it does not feed `DeviceMatchGate` or any flash path. No Custom RR code or data is copied in; tests use a synthetic fixture. No screen and no fetch yet (the APK has no `INTERNET` permission). See `docs/CUSTOM_RR_CATALOG.md`. `:core:test` 109/0.
+
 ### Docs (2026-10-18, README refresh)
 - `README.md` reorganised and rewritten in plainer language, with terms explained: what RootForge is, where it sits in the Victorious fleet (`EXTERNAL_NODE`, Messenger + JSON `protocol_major` 1, pairing by package + signing certificate, no shared signing key, with each claim marked [Certain] / [Likely] / [Guessing]), the host-phone app and Flash Tools, install and build steps per client, and a Signing section (fixed committed debug key and its SHA-256, v0.2.0 uninstall-once note, release key only in CI secrets). Mentions the Modules screenshot, adds the CI workflow table, and corrects a missing `./` on the `packageExe` command. Docs only; no code, workflow or test changes.
 

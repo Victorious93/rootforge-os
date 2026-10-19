@@ -11,6 +11,18 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-19 (Custom RR catalog lookup):** branch `ccr-b45e98d7-7wsvwf`.
+> New `:core` package `ai.rootforge.os.catalog` (`BuildCatalog.kt`): parses Custom RR's
+> published `catalog.json` / `freshness.json` and lists ROMs/recoveries/root solutions for a
+> `TargetIdentity` by exact codename. Informational only; not wired to `DeviceMatchGate`, no
+> screen, no fetch (APK has no `INTERNET` permission — the delivery path is an owner decision,
+> see `docs/CUSTOM_RR_CATALOG.md` Next steps). No Custom RR code/data copied (GPL-3.0-only
+> upstream; `:core` is Apache-2.0). Verified: `./gradlew :core:test` 109/0 (10 new);
+> a throwaway uncommitted test parsed Custom RR's real catalog + freshness files and looked up
+> `oriole`/`rmx2151`/`fajita`. `tests/run-tests.sh` 1023/0, `tests/lint.sh` clean
+> (shellcheck 0.11.0). Not run: `:app:testDebugUnitTest`/`assembleDebug` (no Android SDK on
+> this agent), `:desktop:compileKotlin`, live URLs, any device.
+
 > **Update 2026-10-18 (README refresh):** branch `cursor/refresh-readme-249a`,
 > docs only (`README.md`, `CHANGELOG.md`, this file). README re-organised in plain
 > language: what it is, fleet placement, host-phone app / Flash Tools, install and
@@ -45,16 +57,19 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-18 · **Branch:** `cursor/refresh-readme-249a`
+**Last updated:** 2026-10-19 · **Branch:** `ccr-b45e98d7-7wsvwf`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-This branch is a docs-only README refresh. Not run on a device. License lock (#53):
+README refresh is #63 (on `main`). This branch adds the read-only Custom RR catalog lookup in `:core`. Not run on a device. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- `:core` `ai.rootforge.os.catalog` parses Custom RR's catalog/freshness JSON and looks up builds
+  by target codename (2026-10-19, `BuildCatalogTest` 10/0). No UI and no network fetch; never
+  affects flash gating. Doc: `docs/CUSTOM_RR_CATALOG.md`.
 - README landing page rewritten 2026-10-18 (docs only). Fleet claims checked against this
   repo's Messenger/pairing code and against droidcommand-AI `main` via the GitHub API:
   `FleetCatalog.kt` lists RootForge as `EXTERNAL_NODE`; `core-rootforge` has
@@ -115,12 +130,13 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
   administration. EDL-Commander JNI/NDK (Phase 4 of `docs/FLASH_TOOLS_PLAN.md` only).
   Android host-phone GUI APK, Flash Tools, Linux/Windows desktop, and Docker toolkit
-  are on `main` (USB Host, not Termux). This branch is docs-only. Toolkit API writes pin `-s` (#60, on
+  are on `main` (USB Host, not Termux). Toolkit API writes pin `-s` (#60, on
   `main`). Published Release **v0.2.0** has the debug APK only. The Termux
   *rootfs* install path still needs a locally generated or future ISO/rootfs
   release; the Python CLI can run from a git clone.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`. Flash Tools: `docs/FLASH_TOOLS_PLAN.md`.
+  Custom RR catalog: `docs/CUSTOM_RR_CATALOG.md`.
 
 **Incident worth remembering:** merge `b02e7c4` silently reverted six build hooks to a flavour
 that defined SHA-256 pins and never compared them (one also used an undefined variable),
@@ -139,7 +155,8 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-This branch is a docs-only README refresh. ISO Stage 5 is still blocked
+README refresh is #63 (on `main`). This branch: Custom RR catalog lookup in `:core`;
+next for it is the owner's choice of delivery (file import vs. `INTERNET`) and a UI card. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 

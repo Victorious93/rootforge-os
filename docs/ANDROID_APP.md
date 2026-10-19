@@ -82,6 +82,7 @@ Paparazzi goldens: `android-app/app/src/test/snapshots/`. Human-facing copies: `
 - Sideload (`sideload-host`) seeks the library file so recovery can read the zip central directory, then the payload, then the package again. `DONEDONE` finishes the transfer; `FAILFAIL` is reported as a failure. **Not run against a phone in recovery.**
 - Logcat holds the USB connection; other actions are blocked until you stop it.
 - No internet permission. Opening TWRP/OrangeFox/LineageOS links uses the system browser.
+- `:core` can parse the Custom RR ROM/recovery catalog and list builds for the target's codename (`docs/CUSTOM_RR_CATALOG.md`). **No screen uses it yet**; because of the missing internet permission, how the catalog reaches the app is still undecided. It is informational only and never affects the flash check.
 
 ## droidcommand-ai
 

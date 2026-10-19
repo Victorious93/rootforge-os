@@ -412,6 +412,7 @@ Makefile · BUILD.md · HACKING.md · AGENTS.md · CLAUDE.md
 | [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | Trust boundaries, logging, flashing gates |
 | [docs/ANDROID_APP.md](docs/ANDROID_APP.md) | Host-phone APK: USB Host, screens, install, debug key, limits |
 | [docs/FLASH_TOOLS_PLAN.md](docs/FLASH_TOOLS_PLAN.md) | Flash Tools hub, device-match check, manifest format, EDL-Commander plan |
+| [docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md) | Read-only lookup of Custom RR's ROM/recovery catalog by codename (`:core` only, no screen yet) |
 | [docs/DESKTOP.md](docs/DESKTOP.md) | Linux/Windows desktop, Windows USB drivers, Docker |
 | [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) | Bridge protocol for droidcommand-AI (Messenger, JSON envelope, pairing) |
 | [tests/README.md](tests/README.md) | Test and release-verifier notes |
