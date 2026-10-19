@@ -6,6 +6,7 @@ import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.bridge.ControllerBackend
 import ai.rootforge.os.bridge.PairingPersistence
 import ai.rootforge.os.bridge.PairingStore
+import ai.rootforge.os.catalog.BuildCatalogStore
 import ai.rootforge.os.core.AppSettings
 import ai.rootforge.os.core.ApprovalCenter
 import ai.rootforge.os.core.ApprovalRequest
@@ -37,6 +38,7 @@ class RootForgeApp : Application() {
     val log by lazy { OutputLog(persistFile = File(filesDir, "command-log.jsonl")) }
     val settings by lazy { AppSettings(getSharedPreferences("settings", MODE_PRIVATE)) }
     val library by lazy { Library(File(filesDir, "library")) }
+    val buildCatalog by lazy { BuildCatalogStore(File(filesDir, "build-catalog")) }
     val usb by lazy { UsbHost(this) }
     val keyStore by lazy { AdbKeyStore(File(noBackupFilesDir, "adb")) }
     val approvals = ApprovalCenter(onNewRequest = { notifyApproval(it) })

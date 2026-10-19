@@ -15,6 +15,12 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 ### Kitsune Mask as an [UNSUPPORTED] root manager (2026-10-19)
 - `RootManager.KITSUNE` (package `io.github.huskydg.magisk`, supplied by the owner, unverified) is selectable in Root / Patching and the module installer. `RootManager.homepage` is now nullable (Kitsune has none: the upstream repo appears gone) and a new `caveat` is shown as a warning. The patched-file prefix (`magisk_patched`) and module command (`magisk --install-module`) are assumptions copied from Magisk and are **unverified** for this fork. No download link and no bundled binary. Guide page updated. +4 `RootManagersTest` tests. `:app` compile and a phone run not done here.
 
+### Custom RR catalog lookup (2026-10-19)
+- New `:core` package `ai.rootforge.os.catalog`: parses the `catalog.json` / `freshness.json` format that Custom RR publishes and lists the ROMs, recoveries and root solutions whose entry names the target's product or codename (exact, case-insensitive, `/`-combined codenames split; unknown target → no matches). Links are exposed only if `https://`. Read-only and informational: it does not feed `DeviceMatchGate` or any flash path. No Custom RR code or data is copied in; tests use a synthetic fixture. See `docs/CUSTOM_RR_CATALOG.md`.
+- Dashboard card **Builds for this device** (Android and desktop): lists those builds with freshness, warning, and https download/forum links. **Download** fetches the catalog and freshness feed from Custom RR on raw.githubusercontent.com (https only, 8 MiB cap, only on a tap); **Import file** accepts a `catalog.json` or `freshness.json` instead. `BuildCatalogStore` keeps the last good copy and never replaces it with a file that does not parse.
+- **The Android app now requests `INTERNET`**, used only by that Download button. Settings → About and the connection notice say so.
+- `:core:test` 119/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 28/0 with `verifyPaparazziDebug` (Dashboard and Flash Tools goldens re-recorded, `buildCatalog` added), `assembleDebug`. Not run on a phone.
+
 ### Terminal app default (2026-10-19)
 - *Settings → Terminal app* now defaults to `com.termux` (the owner asked for it), so **Open full terminal** works without visiting Settings. Saving an empty value turns the button off; any other valid package overrides it. `TerminalApp.DEFAULT_PACKAGE`, +1 test. Still launch-only and **not run on a phone**.
 
