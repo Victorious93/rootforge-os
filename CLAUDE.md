@@ -11,15 +11,21 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-19 (Shizuku / Sui):** branch `feat/shizuku`. Optional host-phone
-> Shizuku (and Sui) support in `:app`: API/provider 13.1.5, official `ShizukuProvider`,
-> `ShizukuManager` StateFlow of NotInstalled / NotRunning / PermissionDenied / Granted,
-> bound UserService AIDL behind `PrivilegedOps` on `Dispatchers.IO`. Wired **read-only**
-> ops on this phone: `pm list packages` / package info, `settings get`, `getprop`,
-> block-device listing, curated device info. No flash/unlock/wipe/write. Settings card
-> with the four states; app works without Shizuku. State mapping tested in `:core`.
-> **Not yet recorded here:** assembleDebug / unit tests / CI / a phone (see the end of
-> this session).
+> **Update 2026-10-19 (Shizuku / Sui):** branch `feat/shizuku` (PR #75). Optional
+> host-phone Shizuku (and Sui) support in `:app`: API/provider 13.1.5, official
+> `ShizukuProvider`, `ShizukuManager` StateFlow of NotInstalled / NotRunning /
+> PermissionDenied / Granted, bound UserService AIDL behind `PrivilegedOps` on
+> `Dispatchers.IO`. Wired **read-only** ops on this phone: `pm list packages` /
+> package info, `settings get`, `getprop`, block-device listing, curated device
+> info. No flash/unlock/wipe/write. Settings card with the four states; app works
+> without Shizuku. `aapt2 dump permissions` on the debug APK lists
+> `moe.shizuku.manager.permission.API_V23` (applicationId still
+> `ai.rootforge.os.debug`). Verified: `:core:test` **184/0** (+16:
+> `ShizukuStateMapperTest` 10, `PrivilegedCommandsTest` 6), `:desktop:test` 2/0,
+> `:desktop:compileKotlin`, `:app:testDebugUnitTest` 28/0, `:app:assembleDebug`,
+> `tests/run-tests.sh` 1023/0, `tests/lint.sh` clean (shellcheck 0.11.0 via the
+> repo wheel). **Not run:** a phone, the desktop window, Paparazzi re-record
+> (settings golden unchanged: Shizuku card is hidden when `shizuku == null`).
 
 > **Update 2026-10-19 (catalog model-number fallback):** branch `ccr-b45e98d7-7wsvwf` (#66 was
 > squash-merged; the branch was brought up to `main` with a normal merge, tree identical to `main`,
