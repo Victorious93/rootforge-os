@@ -11,6 +11,10 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-19 (terminal app default):** `TerminalApp.DEFAULT_PACKAGE = "com.termux"` is the
+> default for Settings → Terminal app (owner's request); empty clears it. `:core:test` +1 test. Launch
+> still unverified on a phone; whether VictorSuite is `com.termux` or a separate package is unknown.
+
 > **Update 2026-10-19 (terminal app hand-off):** branch `ccr-76f54fed-xf2wxr` restarted from `main`
 > after #65 merged. Android *Settings → Terminal app* (user-entered package, validated, no default) and
 > *ADB → Shell* **Open full terminal**: launch only via `getLaunchIntentForPackage`; manifest `<queries>`

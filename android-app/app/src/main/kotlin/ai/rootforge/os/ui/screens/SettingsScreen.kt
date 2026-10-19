@@ -140,14 +140,14 @@ private fun TerminalAppCard(state: AppUiState, actions: AppActions) {
         OutlinedTextField(
             value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
             label = { Text("Package name") }, isError = !valid,
-            supportingText = { Text(if (valid) "For example the package of VictorSuite, as shown in Android's app info." else "Not a valid Android package name.") },
+            supportingText = { Text(if (valid) "Default com.termux (Termux). Use VictorSuite's package if it has its own, shown in Android's app info." else "Not a valid Android package name.") },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionButton("Save", kind = ActionKind.Outline, enabled = valid && trimmed != state.terminalApp) { actions.setTerminalApp(trimmed) }
             ActionButton("Open it", enabled = state.terminalApp.isNotEmpty()) { actions.openTerminalApp() }
         }
         Text(
-            "RootForge only launches the app. It passes no command, serial or file, and it never guesses the package.",
+            "RootForge only launches the app. It passes no command, serial or file, and the default is only Termux's package; clear the field to turn the button off.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
