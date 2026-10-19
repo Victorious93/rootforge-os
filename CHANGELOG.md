@@ -7,6 +7,9 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Android launcher icon from the repo logo (2026-10-19)
+- The host-phone APK launcher icon is now the RootForge emblem (fist + anvil + rings, no wordmark) cropped from `assets/logo/rootforge-os-logo.jpg`. Adaptive icon: foreground scaled into the 66% (72/108 dp) safe zone, background `#0C1D36` sampled from the logo field, monochrome stencil for Android 13+ themed icons. Legacy `ic_launcher` / `ic_launcher_round` PNGs at mdpi–xxxhdpi. Regenerator: `android-app/tools/generate_launcher_icons.py`. Signing, `applicationId` and versioning were not changed. **Not run on a phone.**
+
 ### Custom RR catalog: model-number fallback (2026-10-19)
 - "Builds for this device" now also matches by model number: when no catalog codename fits, the target's `ro.product.model` is compared with the catalog row's `models` list (exact, case-insensitive). A Redmi 8 (`olive`, `M1908C3IG`) now finds the 16 ROMs published under `mi439`; such rows say "matched model … as …". Combined codenames are also split on `,`, `&` and spaces (`X00T, X00TD`, `instantnoodle & instantnoodlep`), not just `/`. `TargetInfo` gains an undisplayed `modelNumber` (ADB only). OnePlus stock names (`oneplus6t`) still do not match: those rows have no model numbers and RootForge has no alias table. Display-only as before.
 - Tests: `BuildCatalogTest` 14/0 (4 new); `:core:test` 168/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 28/0, `:app:assembleDebug`. `verifyPaparazziDebug` fails only on `modules`, which fails identically on `main` (golden left stale by #69). A throwaway test against Custom RR's real catalog matched `olive`/`M1908C3IG`, `X00TD` and `instantnoodlep`. Not run on a phone.
