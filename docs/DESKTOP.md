@@ -87,7 +87,13 @@ The API is the same bridge JSON as the apps; destructive calls need a
 `rootforge.capabilities.get` reports `node_kind=desktop-host` and
 `usb_host=false` (host `adb`/`fastboot`, not the phone USB-Host stack).
 The desktop Settings switch gates the GUI executor; `--headless` is
-authenticated by the bearer token instead.
+authenticated by the bearer token instead. That token is read from
+`ROOTFORGE_API_TOKEN` or from `api_token` in `~/.rootforge/desktop.properties`.
+The properties file is created mode `0600` and an existing copy is tightened
+to owner read/write before it is loaded. The `~/.rootforge` directory itself
+keeps the process umask. Loopback (`127.0.0.1`) is shared by every account
+on the machine, so a group- or world-readable token is enough for another
+local user to call unlock or flash with the confirmation phrase.
 
 ## Shared core
 
