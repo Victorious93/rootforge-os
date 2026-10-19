@@ -11,6 +11,22 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-19 (Custom RR catalog lookup):** branch `ccr-b45e98d7-7wsvwf`.
+> New `:core` package `ai.rootforge.os.catalog`: parser + exact-codename `BuildLookup`,
+> `BuildCatalogFetcher` (https only, 8 MiB cap) and `BuildCatalogStore` (parse-then-atomic
+> write, keeps last good copy). Dashboard card "Builds for this device" on Android and desktop
+> with **Download** and **Import file** (owner chose both, 2026-10-19). **The APK now requests
+> `INTERNET`**, used only by that button. Display-only; not read by `DeviceMatchGate`. No Custom
+> RR code/data copied (GPL-3.0-only upstream; `:core` Apache-2.0). Verified with an SDK installed
+> on this agent: `--rerun-tasks :core:test` 119/0, `:desktop:test` 2/0, `:desktop:compileKotlin`,
+> `:app:verifyPaparazziDebug` 28/0 (dashboard + flashTools re-recorded, buildCatalog added),
+> `:app:assembleDebug` (aapt2 shows `INTERNET`). Throwaway tests: real bundled catalog parse;
+> live `download()` from this JVM (37 entries, 35 freshness). `tests/run-tests.sh`
+> 1023/0, `tests/lint.sh` clean (shellcheck 0.11.0). Not run: APK on a phone, desktop window.
+> After merging `main` (#65 Root Guide): `:core:test` 138/0, `:desktop:test` 2/0,
+> `:app:verifyPaparazziDebug` 28/0 and `:app:assembleDebug` all pass, so the Root Guide's `:app`
+> build is now verified too (not on a phone). Its two "no INTERNET permission" lines were corrected.
+
 > **Update 2026-10-19 (modules):** Modules screen now has Create / Repositories tabs. Creator: `boot-completed.sh`,
 > `action.sh`, custom script text (`ModuleSpec.bodies`), hedged compatibility notes. Repositories:
 > `ModuleRepos` link-out list (checked 2026-10-19: Alt-Repo, Magisk-Modules-Repo, Xposed-Modules-Repo, MMRL
@@ -53,8 +69,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > the desktop window. Android loading pages via `getResourceAsStream` on a library jar is [Likely]
 > but unverified. The guide text is community reference, not tested on hardware by RootForge.
 
-> **Update 2026-10-19 (desktop API token mode):** branch
-> `cursor/critical-bug-management-de6f`. `DesktopSettings` wrote
+> **Update 2026-10-19 (desktop API token mode):** PR #64 (on `main`). `DesktopSettings` wrote
 > `~/.rootforge/desktop.properties` (the headless `api_token`) with
 > `File.writer()` and the process umask, so umask `022` left the bearer
 > token mode `0644`. Loopback is shared by local accounts. The file is now
@@ -100,18 +115,21 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-19 · **Branch:** `ccr-76f54fed-xf2wxr`
+**Last updated:** 2026-10-19 · **Branch:** `ccr-b45e98d7-7wsvwf`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-This branch adds the Root Guide (not run on a device). README refresh is #63 and the desktop API token file mode is #64 (both on `main`). License lock (#53):
+README refresh is #63, desktop token mode is #64 and the Root Guide is #65 (all on `main`). This branch adds the Custom RR build catalog (lookup, download/import, Dashboard card). Not run on a device. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
-**What is true now** (desktop token mode + hermetic suite this session; older bullets were not re-audited unless noted):
+**What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Custom RR catalog: Dashboard "Builds for this device" card (Android + desktop), Download over
+  https (APK requests `INTERNET` for this only) or Import file; `:core` `catalog/` tests 20/0
+  (2026-10-19). Never affects flash gating. Not run on a phone. Doc: `docs/CUSTOM_RR_CATALOG.md`.
 - Desktop `~/.rootforge/desktop.properties` is created mode `0600` and an existing
-  world-readable copy is tightened before load (`DesktopSettings`). `:desktop:test
+  world-readable copy is tightened before load (`DesktopSettings`, #64). `:desktop:test
   --tests ai.rootforge.os.desktop.DesktopSettingsTest` → 2 tests, 0 failures
   (2026-10-19). The headless API was not started, and this was not run on a phone.
 - README landing page rewritten 2026-10-18 (docs only). Fleet claims checked against this
@@ -174,12 +192,13 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 - **Unsupported/not started:** UEFI/Secure Boot for the live ISO (BIOS only), remote
   administration. EDL-Commander JNI/NDK (Phase 4 of `docs/FLASH_TOOLS_PLAN.md` only).
   Android host-phone GUI APK, Flash Tools, Linux/Windows desktop, and Docker toolkit
-  are on `main` (USB Host, not Termux). This branch changes the desktop settings file mode. Toolkit API writes pin `-s` (#60, on
+  are on `main` (USB Host, not Termux). Toolkit API writes pin `-s` (#60, on
   `main`). Published Release **v0.2.0** has the debug APK only. The Termux
   *rootfs* install path still needs a locally generated or future ISO/rootfs
   release; the Python CLI can run from a git clone.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`. Flash Tools: `docs/FLASH_TOOLS_PLAN.md`.
+  Custom RR catalog: `docs/CUSTOM_RR_CATALOG.md`.
 
 **Incident worth remembering:** merge `b02e7c4` silently reverted six build hooks to a flavour
 that defined SHA-256 pins and never compared them (one also used an undefined variable),
@@ -198,7 +217,8 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-This branch adds the Root Guide (see Update 2026-10-19). ISO Stage 5 is still blocked
+README refresh is #63 (on `main`). Desktop token mode is #64 (on `main`). Root Guide is #65 (on `main`). This branch (PR #66): Custom RR catalog lookup, download + import, Dashboard card;
+APK now requests `INTERNET` for the Download button only. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 

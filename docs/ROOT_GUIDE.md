@@ -48,7 +48,8 @@ android-app/app/src/main/kotlin/ai/rootforge/os/ui/screens/GuideScreen.kt   ← 
 
 Decisions:
 
-- **Bundled, offline.** The app has no INTERNET permission and the guide must be readable with a
+- **Bundled, offline.** The guide never uses the network (the app's only network use is the
+  build-catalog Download button, `docs/CUSTOM_RR_CATALOG.md`) and must be readable with a
   bricked target and no network. Pages are classpath resources in `:core`, so Android and desktop share one copy.
 - **Own small parser instead of a markdown library.** The pages use a small subset; a dependency would
   have to be added to Android and desktop, and Android has no stock markdown renderer. The parser is

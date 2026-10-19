@@ -2,6 +2,7 @@ package ai.rootforge.os.ui
 
 import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.bridge.PairedController
+import ai.rootforge.os.catalog.LoadedCatalog
 import ai.rootforge.os.core.ApprovalRequest
 import ai.rootforge.os.core.DigestCheck
 import ai.rootforge.os.core.FileInspection
@@ -25,6 +26,8 @@ data class AppUiState(
     val busy: String? = null,
     val progress: Progress? = null,
     val library: List<LibraryFile> = emptyList(),
+    /** Custom RR build catalog, if the user downloaded or imported one. */
+    val buildCatalog: LoadedCatalog? = null,
     val logcatRunning: Boolean = false,
     val log: List<LogLine> = emptyList(),
     val approvals: List<ApprovalRequest> = emptyList(),
@@ -55,6 +58,12 @@ interface AppActions {
     /** Opens the system file picker and copies the choice into the app library. */
     fun importFile(then: (LibraryFile) -> Unit = {})
     fun deleteFile(name: String)
+
+    /** Fetches the Custom RR catalog over https. Only on an explicit tap. */
+    fun downloadBuildCatalog()
+    /** Picks a catalog.json / freshness.json and stores it as the build catalog. */
+    fun importBuildCatalog()
+    fun clearBuildCatalog()
 
     fun adbShell(command: String)
     fun adbReboot(target: String)
@@ -125,6 +134,9 @@ object NoopActions : AppActions {
     override fun refreshInfo() = Unit
     override fun importFile(then: (LibraryFile) -> Unit) = Unit
     override fun deleteFile(name: String) = Unit
+    override fun downloadBuildCatalog() = Unit
+    override fun importBuildCatalog() = Unit
+    override fun clearBuildCatalog() = Unit
     override fun adbShell(command: String) = Unit
     override fun adbReboot(target: String) = Unit
     override fun adbInstall(file: LibraryFile) = Unit

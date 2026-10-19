@@ -1,6 +1,7 @@
 package ai.rootforge.os.ui
 
 import ai.rootforge.os.core.LinkState
+import ai.rootforge.os.ui.screens.BuildCatalogCard
 import ai.rootforge.os.ui.theme.RootForgeTheme
 import ai.rootforge.os.usb.TargetMode
 import app.cash.paparazzi.DeviceConfig
@@ -32,6 +33,15 @@ class ScreenshotTest {
             NoopActions,
             startAt = Destination.Fastboot,
         )
+    }
+
+    @Test
+    fun buildCatalog() = snap {
+        val state = previewState()
+        ScreenColumn {
+            BuildCatalogCard(state.buildCatalog, state.info, busy = false, actions = NoopActions)
+            BuildCatalogCard(null, state.info, busy = false, actions = NoopActions)
+        }
     }
 
     @Test
