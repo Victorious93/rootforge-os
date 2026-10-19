@@ -11,6 +11,21 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-19 (launcher icon from logo):** branch `feat/app-icon-from-logo`
+> (PR #74). Replaced the orange anvil vector (`drawable/ic_launcher_foreground.xml`)
+> with the emblem cropped from `assets/logo/rootforge-os-logo.jpg` (fist + anvil +
+> rings, no wordmark). Adaptive: foreground in the 66% (72/108 dp) safe zone,
+> background `#0C1D36` (logo field), monochrome stencil for API 33+ themed icons;
+> legacy `ic_launcher` / `ic_launcher_round` PNGs mdpi–xxxhdpi. Regenerator
+> `android-app/tools/generate_launcher_icons.py`. Signing, `applicationId` and
+> versioning unchanged (`aapt dump badging` on the debug APK: `ai.rootforge.os.debug`
+> / `versionCode=1` / `versionName=0.1.0-debug`). Verified: `tests/test_launcher_icons.py`
+> 7/0; `./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug` → `:core` 168/0,
+> `:app` 28/0 (Paparazzi included), assembleDebug; `bash tests/run-tests.sh` 1023/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). APK contains the
+> new mipmaps and adaptive layers. **Not run:** a phone, the desktop window,
+> `:desktop:test`.
+
 > **Update 2026-10-19 (catalog model-number fallback):** branch `ccr-b45e98d7-7wsvwf` (#66 was
 > squash-merged; the branch was brought up to `main` with a normal merge, tree identical to `main`,
 > no force-push). `BuildLookup` falls back to
@@ -133,7 +148,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-19 · **Branch:** `ccr-b45e98d7-7wsvwf`
+**Last updated:** 2026-10-19 · **Branch:** `feat/app-icon-from-logo`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
@@ -143,6 +158,9 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Android launcher icon is the repo-logo emblem (adaptive + legacy mipmaps, navy
+  `#0C1D36`). `tests/test_launcher_icons.py` 7/0; `:app:assembleDebug` packaged the
+  new mipmaps (2026-10-19). Not installed on a phone.
 - Custom RR catalog: Dashboard "Builds for this device" card (Android + desktop), Download over
   https (APK requests `INTERNET` for this only) or Import file; `:core` `catalog/` tests 20/0
   (2026-10-19). Never affects flash gating. Not run on a phone. Doc: `docs/CUSTOM_RR_CATALOG.md`.

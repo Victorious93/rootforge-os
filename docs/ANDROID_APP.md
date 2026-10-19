@@ -73,6 +73,8 @@ Check an APK: `apksigner verify --print-certs app-debug.apk` (SHA-256 digest) ag
 
 Paparazzi goldens: `android-app/app/src/test/snapshots/`. Human-facing copies: `android-app/screenshots/`.
 
+The launcher icon is the emblem from `assets/logo/rootforge-os-logo.jpg` (fist, anvil and rings; no text). Adaptive layers live under `app/src/main/res/` (`drawable-xxxhdpi/ic_launcher_foreground.png`, `ic_launcher_monochrome.png`, `@color/ic_launcher_background` = `#0C1D36`); legacy mipmaps are `ic_launcher` and `ic_launcher_round` at mdpi–xxxhdpi. Regenerate with `python3 android-app/tools/generate_launcher_icons.py` (needs Pillow). The previous orange anvil vector is gone.
+
 ## Limits (honest)
 
 - **Flash Tools** (and every other flash button) now requires a sidecar device claim. An image with no `<name>.manifest.json` is refused, including from the dedicated Fastboot / Recovery / Root screens. **Not run against a real host/target pair.**
