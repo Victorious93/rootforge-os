@@ -6,6 +6,7 @@ import ai.rootforge.os.ui.screens.DashboardScreen
 import ai.rootforge.os.ui.screens.EdlScreen
 import ai.rootforge.os.ui.screens.FastbootScreen
 import ai.rootforge.os.ui.screens.FlashToolsScreen
+import ai.rootforge.os.ui.screens.AskScreen
 import ai.rootforge.os.ui.screens.GuideScreen
 import ai.rootforge.os.ui.screens.LogsScreen
 import ai.rootforge.os.ui.screens.ModulesScreen
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
@@ -63,6 +65,7 @@ import kotlinx.coroutines.launch
 
 enum class Destination(val title: String, val icon: ImageVector) {
     Dashboard("Dashboard", Icons.Filled.Dashboard),
+    Ask("Ask", Icons.Filled.QuestionAnswer),
     RootGuide("Root Guide", Icons.AutoMirrored.Filled.MenuBook),
     FlashTools("Flash Tools", Icons.Filled.Build),
     Adb("ADB", Icons.Filled.Android),
@@ -79,6 +82,8 @@ enum class Destination(val title: String, val icon: ImageVector) {
 @Composable
 fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = Destination.Dashboard, startExpanded: Boolean = false) {
     var current by rememberSaveable { mutableStateOf(startAt) }
+    // Guide page opened from Ask ("id" or "id#anchor"); cleared when the guide is opened from the drawer.
+    var guideTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var terminalOpen by rememberSaveable { mutableStateOf(startExpanded) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -98,7 +103,7 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
                         label = { Text(d.title) },
                         icon = { Icon(d.icon, null) },
                         selected = d == current,
-                        onClick = { current = d; scope.launch { drawer.close() } },
+                        onClick = { guideTarget = null; current = d; scope.launch { drawer.close() } },
                         modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
                     )
                 }
@@ -121,7 +126,7 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
             bottomBar = {
                 Column(Modifier.fillMaxWidth()) {
                     ProgressBanner(state.progress, state.busy)
-                    if (current != Destination.Logs && current != Destination.RootGuide) {
+                    if (current != Destination.Logs && current != Destination.RootGuide && current != Destination.Ask) {
                         TerminalPanel(state.log, terminalOpen, { terminalOpen = !terminalOpen }, actions)
                     }
                 }
@@ -131,7 +136,11 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
             Column(Modifier.padding(padding).fillMaxSize()) {
                 when (current) {
                     Destination.Dashboard -> DashboardScreen(state, actions)
-                    Destination.RootGuide -> GuideScreen(state, actions)
+                    Destination.Ask -> AskScreen(onOpenGuide = { id, anchor ->
+                        guideTarget = if (anchor != null) "$id#$anchor" else id
+                        current = Destination.RootGuide
+                    })
+                    Destination.RootGuide -> androidx.compose.runtime.key(guideTarget) { GuideScreen(state, actions, initialPage = guideTarget) }
                     Destination.FlashTools -> FlashToolsScreen(state, actions)
                     Destination.Adb -> AdbScreen(state, actions)
                     Destination.Fastboot -> FastbootScreen(state, actions)
