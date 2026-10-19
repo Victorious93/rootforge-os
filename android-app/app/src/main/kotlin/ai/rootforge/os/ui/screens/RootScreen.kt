@@ -68,7 +68,10 @@ fun RootScreen(state: AppUiState, actions: AppActions) {
                     "target so you can patch with the official manager, then flashes the result.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            ActionButton("${manager.label} releases", Icons.Filled.OpenInNew, ActionKind.Outline) { actions.openUrl(manager.homepage) }
+            manager.homepage?.let { url ->
+                ActionButton("${manager.label} releases", Icons.Filled.OpenInNew, ActionKind.Outline) { actions.openUrl(url) }
+            }
+            manager.caveat?.let { NoticeCard(it) }
         }
 
         ForgeCard("1. Boot image", "Stock boot.img or init_boot.img for the target's exact build", Icons.Filled.PhoneAndroid) {

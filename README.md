@@ -137,7 +137,7 @@ The app requests the internet permission for one thing only: the **Download** bu
 ([docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md)). Device work never uses the network.
 
 Screens: Dashboard, **Root Guide**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
-Module Builder, Recovery, Logs / Terminal, Settings.
+Modules (creator and repository links), Recovery, Logs / Terminal, Settings.
 
 **Root Guide** is offline rooting documentation inside the app (bootloader unlock, Magisk / KernelSU / APatch,
 device guides, FAQ, troubleshooting) with search. Most pages are adapted from

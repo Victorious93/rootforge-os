@@ -96,7 +96,7 @@
         {
           "id": "magisk-kitsune",
           "title": "Magisk Kitsune (Kitsune Mask)",
-          "summary": "Kitsune Mask / Magisk Delta: status and why RootForge does not drive it.",
+          "summary": "Kitsune Mask / Magisk Delta: unmaintained; what RootForge does and does not do with it.",
           "file": "magisk-kitsune.md",
           "origin": "rootforge",
           "sourcePath": ""

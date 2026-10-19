@@ -97,9 +97,10 @@ the same dead link). Fix it upstream, or accept the loss of scroll target and sa
 
 ## Open decisions (made by the author, revisit if wrong)
 
-- **Kitsune is guide-only.** Its package name and a trustworthy download source could not be verified, and
-  the upstream repository appears gone. Adding it to `RootManager` needs both, plus a decision to ship an
-  unmaintained fork.
+- **Kitsune is `RootManager.KITSUNE`, marked [UNSUPPORTED].** The package (`io.github.huskydg.magisk`) was
+  supplied by the owner and is unverified; there is no homepage (the upstream repo appears gone, so
+  `homepage` is null and the UI shows no link), and the patched-file prefix (`magisk_patched`) and module
+  command (`magisk --install-module`) are assumed to match Magisk. The Root screen shows the `caveat`.
 - **PBRP link** points at `pitchblackrecovery.com`, taken from the project's repository readme; the host did
   not resolve from the authoring sandbox. Check it opens before release.
 - **Terminal:** the existing *ADB → Shell* and *Logs / Terminal* run one `adb shell <command>` at a time.
