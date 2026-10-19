@@ -14,6 +14,8 @@ import ai.rootforge.os.core.Library
 import ai.rootforge.os.core.LinkState
 import ai.rootforge.os.core.OutputLog
 import ai.rootforge.os.core.TargetController
+import ai.rootforge.os.shizuku.ShizukuManager
+import ai.rootforge.os.shizuku.ShizukuPrivilegedOps
 import ai.rootforge.os.usb.TargetMode
 import ai.rootforge.os.usb.UsbHost
 import android.Manifest
@@ -60,6 +62,9 @@ class RootForgeApp : Application() {
         )
     }
 
+    val shizuku by lazy { ShizukuManager(this) }
+    val privilegedOps by lazy { ShizukuPrivilegedOps(this) }
+
     val adbFingerprint = kotlinx.coroutines.flow.MutableStateFlow("")
 
     @Volatile var uiVisible = false
@@ -69,6 +74,7 @@ class RootForgeApp : Application() {
         super.onCreate()
         createChannel()
         usb.start()
+        runCatching { shizuku.start() }
         refreshFingerprint()
         watchPendingPairing()
         appScope.launch {

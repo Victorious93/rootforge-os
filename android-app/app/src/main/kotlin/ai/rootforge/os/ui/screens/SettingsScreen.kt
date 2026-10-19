@@ -3,6 +3,8 @@ package ai.rootforge.os.ui.screens
 import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.bridge.PairedController
 import ai.rootforge.os.core.TerminalApp
+import ai.rootforge.os.shizuku.ShizukuLinks
+import ai.rootforge.os.shizuku.ShizukuStatus
 import ai.rootforge.os.ui.ActionButton
 import ai.rootforge.os.ui.ActionKind
 import ai.rootforge.os.ui.AppActions
@@ -11,12 +13,20 @@ import ai.rootforge.os.ui.ForgeCard
 import ai.rootforge.os.ui.KeyValueRow
 import ai.rootforge.os.ui.NoticeCard
 import ai.rootforge.os.ui.ScreenColumn
+import ai.rootforge.os.ui.StatusPill
+import ai.rootforge.os.ui.theme.ForgeColors
 import ai.rootforge.os.ui.theme.MonoStyle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
@@ -30,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +52,8 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
         ForgeCard("Connection", icon = Icons.Filled.Usb) {
             SwitchRow("Connect automatically", "Connect when a recognised device appears and USB access is already granted", state.autoConnect, actions::setAutoConnect)
         }
+
+        if (state.shizuku != null) ShizukuCard(state, actions)
 
         if (state.terminalHandoff) TerminalAppCard(state, actions)
 
@@ -80,6 +93,9 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
             KeyValueRow("Version", state.appVersion)
             KeyValueRow("Network", "Only the build-catalog Download button (https, raw.githubusercontent.com)")
             KeyValueRow("USB", state.transportCaption)
+            if (state.shizuku != null) {
+                KeyValueRow("Shizuku", "${state.shizuku.label()} — optional, this phone only, read-only")
+            }
             Text(
                 "Known limits: EDL is experimental and unverified on hardware; oversized non-sparse images are refused; " +
                     "ADB uses classic shell (no exit status framing); sideload needs a seekable file. See docs/ANDROID_APP.md.",
@@ -87,6 +103,82 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
             )
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ShizukuCard(state: AppUiState, actions: AppActions) {
+    val status = state.shizuku ?: return
+    ForgeCard("Shizuku", "Optional privileged reads on this phone (Sui counts as the same thing)", Icons.Filled.AdminPanelSettings) {
+        StatusPill(status.label(), shizukuColor(status))
+        Text(status.explanation(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionButton("Refresh", kind = ActionKind.Outline, enabled = !state.shizukuBusy) { actions.refreshShizuku() }
+            when (status) {
+                ShizukuStatus.NotInstalled -> {
+                    ActionButton("How to install Shizuku", kind = ActionKind.Primary) { actions.openUrl(ShizukuLinks.DOWNLOAD) }
+                    ActionButton("Sui (rooted)", kind = ActionKind.Outline) { actions.openUrl(ShizukuLinks.SUI) }
+                }
+                ShizukuStatus.NotRunning -> {
+                    ActionButton("Open Shizuku", kind = ActionKind.Primary) { actions.openShizukuApp() }
+                    ActionButton("How to start it", kind = ActionKind.Outline) { actions.openUrl(ShizukuLinks.DOWNLOAD) }
+                }
+                ShizukuStatus.PermissionDenied -> {
+                    ActionButton("Grant", kind = ActionKind.Primary, enabled = !state.shizukuBusy) { actions.requestShizukuPermission() }
+                }
+                ShizukuStatus.Granted -> Unit
+            }
+        }
+        if (status == ShizukuStatus.Granted) {
+            Text("Read-only lookups on this phone", style = MaterialTheme.typography.titleSmall)
+            HostLookupRow(state, actions)
+        }
+        if (state.shizukuResult.isNotBlank()) {
+            Text(
+                state.shizukuResult,
+                style = MonoStyle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 220.dp)
+                    .verticalScroll(rememberScrollState()),
+            )
+        }
+        NoticeCard("This path never flashes, unlocks, wipes or writes. Any future destructive Shizuku action would still need a typed confirmation. Output stays on this screen and is not copied into the shared command log.")
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HostLookupRow(state: AppUiState, actions: AppActions) {
+    var pkg by rememberSaveable { mutableStateOf("") }
+    var namespace by rememberSaveable { mutableStateOf("secure") }
+    var settingKey by rememberSaveable { mutableStateOf("") }
+    var prop by rememberSaveable { mutableStateOf("ro.product.model") }
+    val ready = !state.shizukuBusy
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ActionButton("Device info", enabled = ready) { actions.shizukuDeviceInfo() }
+        ActionButton("List packages", enabled = ready) { actions.shizukuListPackages(false) }
+        ActionButton("User apps", enabled = ready) { actions.shizukuListPackages(true) }
+        ActionButton("Block devices", enabled = ready) { actions.shizukuListBlockDevices() }
+    }
+    OutlinedTextField(pkg, { pkg = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Package name") })
+    ActionButton("Package info", enabled = ready && pkg.isNotBlank()) { actions.shizukuPackageInfo(pkg.trim()) }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(namespace, { namespace = it }, Modifier.weight(0.35f), singleLine = true, label = { Text("settings ns") })
+        OutlinedTextField(settingKey, { settingKey = it }, Modifier.weight(0.65f), singleLine = true, label = { Text("settings key") })
+    }
+    ActionButton("settings get", enabled = ready && settingKey.isNotBlank()) { actions.shizukuSettingsGet(namespace.trim(), settingKey.trim()) }
+    OutlinedTextField(prop, { prop = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("getprop key") })
+    ActionButton("getprop", enabled = ready && prop.isNotBlank()) { actions.shizukuGetprop(prop.trim()) }
+}
+
+@Composable
+private fun shizukuColor(status: ShizukuStatus) = when (status) {
+    ShizukuStatus.NotInstalled -> MaterialTheme.colorScheme.outline
+    ShizukuStatus.NotRunning -> ForgeColors.Warn
+    ShizukuStatus.PermissionDenied -> ForgeColors.Ember
+    ShizukuStatus.Granted -> ForgeColors.Ok
 }
 
 @Composable

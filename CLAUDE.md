@@ -11,6 +11,16 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-19 (Shizuku / Sui):** branch `feat/shizuku`. Optional host-phone
+> Shizuku (and Sui) support in `:app`: API/provider 13.1.5, official `ShizukuProvider`,
+> `ShizukuManager` StateFlow of NotInstalled / NotRunning / PermissionDenied / Granted,
+> bound UserService AIDL behind `PrivilegedOps` on `Dispatchers.IO`. Wired **read-only**
+> ops on this phone: `pm list packages` / package info, `settings get`, `getprop`,
+> block-device listing, curated device info. No flash/unlock/wipe/write. Settings card
+> with the four states; app works without Shizuku. State mapping tested in `:core`.
+> **Not yet recorded here:** assembleDebug / unit tests / CI / a phone (see the end of
+> this session).
+
 > **Update 2026-10-19 (catalog model-number fallback):** branch `ccr-b45e98d7-7wsvwf` (#66 was
 > squash-merged; the branch was brought up to `main` with a normal merge, tree identical to `main`,
 > no force-push). `BuildLookup` falls back to
@@ -133,7 +143,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-19 · **Branch:** `ccr-b45e98d7-7wsvwf`
+**Last updated:** 2026-10-19 · **Branch:** `feat/shizuku`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),

@@ -185,6 +185,16 @@ class DesktopActions(
             .onFailure { log.warn("Could not open $url: ${it.message}") }
     }
 
+    override fun requestShizukuPermission() = Unit
+    override fun refreshShizuku() = Unit
+    override fun openShizukuApp() = log.info("Shizuku is an Android-only feature.")
+    override fun shizukuListPackages(thirdPartyOnly: Boolean) = Unit
+    override fun shizukuPackageInfo(packageName: String) = Unit
+    override fun shizukuSettingsGet(namespace: String, key: String) = Unit
+    override fun shizukuGetprop(key: String) = Unit
+    override fun shizukuListBlockDevices() = Unit
+    override fun shizukuDeviceInfo() = Unit
+
     private fun pickFile(): File? {
         val dlg = FileDialog(null as Frame?, "Import into RootForge library", FileDialog.LOAD)
         dlg.isVisible = true

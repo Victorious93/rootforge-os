@@ -6,6 +6,7 @@ import ai.rootforge.os.core.FileInspection
 import ai.rootforge.os.core.LibraryFile
 import ai.rootforge.os.core.TerminalApp
 import ai.rootforge.os.core.importUri
+import ai.rootforge.os.shizuku.ShizukuLinks
 import ai.rootforge.os.core.TerminalCommand
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.module.BuiltModule
@@ -215,6 +216,52 @@ class AppActionsImpl(
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (_: ActivityNotFoundException) {
             log.warn("No browser available to open $url")
+        }
+    }
+
+    override fun requestShizukuPermission() = app.shizuku.requestPermission()
+    override fun refreshShizuku() = app.shizuku.refresh()
+
+    override fun openShizukuApp() {
+        val launch = app.packageManager.getLaunchIntentForPackage(ShizukuLinks.PACKAGE)
+        if (launch == null) {
+            log.warn("Shizuku is not installed. Opening the download page.")
+            openUrl(ShizukuLinks.DOWNLOAD)
+            return
+        }
+        try {
+            startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: ActivityNotFoundException) {
+            log.warn("Could not open Shizuku.")
+        }
+    }
+
+    override fun shizukuListPackages(thirdPartyOnly: Boolean) =
+        runShizuku(if (thirdPartyOnly) "list user packages" else "list packages") { app.privilegedOps.listPackages(thirdPartyOnly) }
+
+    override fun shizukuPackageInfo(packageName: String) =
+        runShizuku("package info") { app.privilegedOps.packageInfo(packageName) }
+
+    override fun shizukuSettingsGet(namespace: String, key: String) =
+        runShizuku("settings get") { app.privilegedOps.settingsGet(namespace, key) }
+
+    override fun shizukuGetprop(key: String) =
+        runShizuku("getprop") { app.privilegedOps.getprop(key) }
+
+    override fun shizukuListBlockDevices() =
+        runShizuku("list block devices") { app.privilegedOps.listBlockDevices() }
+
+    override fun shizukuDeviceInfo() =
+        runShizuku("device info") { app.privilegedOps.deviceInfo() }
+
+    private fun runShizuku(label: String, block: suspend () -> Result<String>) {
+        scope.launch {
+            log.info("Shizuku: $label (this phone)")
+            val result = app.shizuku.run(label, block)
+            result.fold(
+                onSuccess = { log.info("Shizuku: $label finished") },
+                onFailure = { log.warn("Shizuku: $label failed") },
+            )
         }
     }
 }
