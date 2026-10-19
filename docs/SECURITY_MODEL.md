@@ -13,7 +13,6 @@ access to the operator's account:
 
 | Threat | Control | Where | Verified by |
 |---|---|---|---|
-| Installing an untrusted module as root | Typed `INSTALL MODULE` approval that shows the zip's name, size, SHA-256 and the manager, before anything is pushed. RootForge cannot inspect a module's scripts; the creator's custom text is the author's own. | `TargetController.installModuleOnTarget`, `HostController.installModuleOnTarget` | Compiles (desktop); not run on a device |
 | Flashing the wrong device | Exactly one device selected explicitly; plan shows serial, product, slot; typed `FLASH <serial>` / `RESTORE <serial>` on `/dev/tty` | `flash_patched_boot.sh`, `restore_partitions.sh`, `common.sh:rf_confirm` | Stub tests |
 | Writing to an unknown or locked device | `device check` blocks: probe failed, vendor refused, bootloader locked/unknown (`unlocked` variable only), partition unreported, image too large, slot layout unknown | `core/device.py` | `tests/test_device.py` |
 | Writing the wrong slot | Explicit `--slot`; `--both-slots` needs `--slots-same-build` | flash script | Stub tests |

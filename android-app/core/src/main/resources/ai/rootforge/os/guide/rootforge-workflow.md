@@ -26,8 +26,7 @@ Unlocking a bootloader erases the target and can void its warranty. A bad flash 
 | Switch A/B slot | **Fastboot → Active slot** | Asks you to type the slot. |
 | Boot or flash TWRP, OrangeFox, PitchBlack or another recovery | **Recovery** | Also enters recovery from Android or from the bootloader. |
 | `adb sideload update.zip` | **ADB → Sideload** | Target must be in recovery sideload mode. |
-| Build your own Magisk-style module zip | **Modules → Create** | Optional lifecycle files, your own script text, hedged per-manager notes. Pushes and installs it on the target when ADB is ready. |
-| Find and install a module from a repository | **Modules → Repositories** | Links only: you download in your browser, import the zip, and install it. Installing any module needs a typed `INSTALL MODULE` confirmation that shows the zip's SHA-256. |
+| Build your own Magisk-style module zip | **Module Builder** | Pushes and installs it on the target when ADB is ready. |
 | Qualcomm 9008 (EDL) | **EDL** | Experimental. Retail phones accept only the manufacturer's signed programmer, which this app does not ship. |
 
 ## The flash safety gate

@@ -614,18 +614,6 @@ class TargetController(
 
     suspend fun installModuleOnTarget(zip: LibraryFile, manager: RootManager): Result<String> = operation("Install ${zip.name} via ${manager.label}") {
         val conn = requireAdb()
-        val approved = approvals.request(
-            title = "Install ${zip.name} as root",
-            lines = listOf(
-                "Module zip: ${zip.name} (${humanSize(zip.size)})",
-                "SHA-256: ${FileDigest.sha256Hex(zip.file)}",
-                "Installed through: ${manager.label}",
-                "A module runs scripts as root on the target at install and at every boot. RootForge cannot check what is inside it.",
-                "Only continue for a module you built or trust. A bad module can cause a bootloop.",
-            ),
-            phrase = "INSTALL MODULE",
-        )
-        if (!approved) throw IOException("Install was not confirmed; nothing was pushed to the target.")
         val remote = "/data/local/tmp/rf-module.zip"
         zip.file.inputStream().use { conn.push(it, zip.size, remote) { d, t -> setProgress("Pushing module", d, t) } }
         clearProgress()

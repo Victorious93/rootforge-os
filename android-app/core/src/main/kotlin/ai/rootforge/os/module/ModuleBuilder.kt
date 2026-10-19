@@ -23,17 +23,7 @@ data class ModuleSpec(
     val sepolicyRule: Boolean = false,
     val uninstallSh: Boolean = false,
     val webroot: Boolean = false,
-    /** action.sh: runs when you tap Action on the module in the manager. */
-    val actionSh: Boolean = false,
-    /** boot-completed.sh: runs once Android has finished booting. */
-    val bootCompletedSh: Boolean = false,
     val updateJson: String = "",
-    /**
-     * Your own text for a generated file, keyed by its name (see [ModuleBuilder.EDITABLE]). Absent or
-     * blank keeps the starter stub. A key for a file that is not enabled is a validation error, so
-     * text is never silently dropped.
-     */
-    val bodies: Map<String, String> = emptyMap(),
     /** Extra files keyed by their path inside the zip (for example system/bin/tool). */
     val files: Map<String, ByteArray> = emptyMap(),
 )
@@ -48,39 +38,6 @@ class BuiltModule(val zip: ByteArray, val fileName: String, val sha256: String, 
  */
 object ModuleBuilder {
     private val ID = Regex("^[a-zA-Z][a-zA-Z0-9_.-]*$")
-
-    /** Files whose contents the author may supply. */
-    val EDITABLE = listOf(
-        "customize.sh", "post-fs-data.sh", "service.sh", "boot-completed.sh", "action.sh",
-        "uninstall.sh", "system.prop", "sepolicy.rule",
-    )
-    const val MAX_BODY_BYTES = 64 * 1024
-    private val STARTS_WITH_SHEBANG_REQUIRED = setOf("post-fs-data.sh", "service.sh", "boot-completed.sh", "action.sh", "uninstall.sh")
-
-    /** Whether [file] is generated for [spec]. */
-    fun enabled(spec: ModuleSpec, file: String): Boolean = when (file) {
-        "customize.sh" -> spec.customizeSh
-        "post-fs-data.sh" -> spec.postFsDataSh
-        "service.sh" -> spec.serviceSh
-        "boot-completed.sh" -> spec.bootCompletedSh
-        "action.sh" -> spec.actionSh
-        "uninstall.sh" -> spec.uninstallSh
-        "system.prop" -> spec.systemProp
-        "sepolicy.rule" -> spec.sepolicyRule
-        else -> false
-    }
-
-    /**
-     * Cautions that depend on the chosen manager. Hedged on purpose: they come from the managers'
-     * documentation as remembered, not from running each one.
-     */
-    fun compatibilityNotes(spec: ModuleSpec): List<String> = buildList {
-        if (spec.webroot && spec.target == ModuleTarget.MAGISK) add("webroot/ is a WebUI for KernelSU and APatch; Magisk ignores it [Likely].")
-        if (spec.actionSh) add("action.sh needs a recent manager (Magisk 28 or newer, or a current KernelSU/APatch) [Likely]; older ones ignore it.")
-        if (spec.bootCompletedSh) add("boot-completed.sh needs a recent manager [Likely]; older ones ignore it.")
-        if (spec.sepolicyRule) add("sepolicy.rule changes SELinux policy as root; a wrong rule can stop the device booting.")
-        if (spec.postFsDataSh) add("post-fs-data.sh blocks early boot; a hang or crash here can cause a bootloop. Keep it short.")
-    }
 
     fun validate(spec: ModuleSpec): List<String> {
         val problems = mutableListOf<String>()
@@ -97,14 +54,6 @@ object ModuleBuilder {
         clean("updateJson", spec.updateJson, false)
         if (spec.versionCode < 1) problems += "versionCode must be a positive integer."
         if (spec.updateJson.isNotBlank() && !spec.updateJson.startsWith("https://")) problems += "updateJson must be an https:// URL."
-        for ((file, body) in spec.bodies) {
-            when {
-                file !in EDITABLE -> problems += "'$file' cannot have custom contents."
-                !enabled(spec, file) -> problems += "$file has custom contents but is not enabled."
-                body.toByteArray().size > MAX_BODY_BYTES -> problems += "$file is larger than ${MAX_BODY_BYTES / 1024} KiB."
-                body.contains('\u0000') -> problems += "$file contains a NUL character."
-            }
-        }
         for (path in spec.files.keys) {
             if (path.startsWith("/") || path.split('/').any { it == ".." || it.isEmpty() }) problems += "file path '$path' is not a safe relative path."
             if (path.startsWith("META-INF/")) problems += "file path '$path' would overwrite the installer."
@@ -141,17 +90,12 @@ object ModuleBuilder {
             put("META-INF/com/google/android/update-binary", UPDATE_BINARY.toByteArray())
             put("META-INF/com/google/android/updater-script", "#MAGISK\n".toByteArray())
             put("module.prop", modulePropText(spec).toByteArray())
-            fun file(name: String, stub: String) {
-                if (enabled(spec, name)) put(name, (custom(spec, name) ?: stub).toByteArray())
-            }
-            file("customize.sh", customize(spec))
-            file("post-fs-data.sh", script("post-fs-data.sh (runs early in boot, before /data is fully available)"))
-            file("service.sh", script("service.sh (runs late in boot as a service)"))
-            file("boot-completed.sh", script("boot-completed.sh (runs once Android has finished booting)"))
-            file("action.sh", script("action.sh (runs when you tap Action on the module in the manager)"))
-            file("uninstall.sh", script("uninstall.sh (runs when the module is removed)"))
-            file("system.prop", "# Properties set via resetprop at boot\n")
-            file("sepolicy.rule", "# Extra SELinux rules, one per line\n")
+            if (spec.customizeSh) put("customize.sh", customize(spec).toByteArray())
+            if (spec.postFsDataSh) put("post-fs-data.sh", script("post-fs-data.sh (runs early in boot, before /data is fully available)").toByteArray())
+            if (spec.serviceSh) put("service.sh", script("service.sh (runs late in boot as a service)").toByteArray())
+            if (spec.uninstallSh) put("uninstall.sh", script("uninstall.sh (runs when the module is removed)").toByteArray())
+            if (spec.systemProp) put("system.prop", "# Properties set via resetprop at boot\n".toByteArray())
+            if (spec.sepolicyRule) put("sepolicy.rule", "# Extra SELinux rules, one per line\n".toByteArray())
             if (spec.webroot) put("webroot/index.html", WEBROOT.toByteArray())
             for ((path, bytes) in spec.files.toSortedMap()) put(path, bytes)
         }
@@ -180,18 +124,6 @@ object ModuleBuilder {
             ui_print $line
             # set_perm_recursive ${'$'}MODPATH/system 0 0 0755 0644
         """.trimIndent() + "\n"
-    }
-
-    /**
-     * The author's own text for [name], or null to keep the stub. Windows line endings are converted
-     * because `\r` after a command breaks sh scripts on the device; boot scripts get a shebang if
-     * missing; the file always ends with a newline.
-     */
-    private fun custom(spec: ModuleSpec, name: String): String? {
-        val raw = spec.bodies[name]?.takeIf { it.isNotBlank() } ?: return null
-        var text = raw.replace("\r\n", "\n").replace('\r', '\n')
-        if (name in STARTS_WITH_SHEBANG_REQUIRED && !text.startsWith("#!")) text = "#!/system/bin/sh\n$text"
-        return if (text.endsWith("\n")) text else text + "\n"
     }
 
     private fun script(title: String) = "#!/system/bin/sh\n# $title\nMODDIR=\${0%/*}\n"
