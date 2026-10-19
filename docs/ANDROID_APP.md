@@ -82,6 +82,7 @@ Paparazzi goldens: `android-app/app/src/test/snapshots/`. Human-facing copies: `
 - Sideload (`sideload-host`) seeks the library file so recovery can read the zip central directory, then the payload, then the package again. `DONEDONE` finishes the transfer; `FAILFAIL` is reported as a failure. **Not run against a phone in recovery.**
 - Logcat holds the USB connection; other actions are blocked until you stop it.
 - No internet permission. Opening TWRP/OrangeFox/LineageOS links uses the system browser.
+- **Terminal app hand-off:** Settings → Terminal app stores a package name you enter (no default); ADB → Shell → Open full terminal launches that app. Launch only, nothing is passed to it. Not run on a phone. Desktop has no hand-off.
 - **Root Guide** is bundled text from `:core` resources, read-only, and never touches the target. Its pages are community-written reference material that RootForge has not verified on hardware. The `:app` build, a Paparazzi golden and a run on a phone have not been done for it (`docs/ROOT_GUIDE.md`).
 
 ## droidcommand-ai

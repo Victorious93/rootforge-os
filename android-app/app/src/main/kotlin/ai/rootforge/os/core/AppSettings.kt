@@ -27,6 +27,16 @@ class AppSettings(private val prefs: SharedPreferences) {
             autoState.value = v
         }
 
+    /** Package of the full-terminal app to hand off to; empty until the owner sets it. */
+    private val terminalState = MutableStateFlow(prefs.getString(KEY_TERMINAL, "") ?: "")
+    val terminalAppFlow: StateFlow<String> = terminalState.asStateFlow()
+    var terminalApp: String
+        get() = terminalState.value
+        set(v) {
+            prefs.edit().putString(KEY_TERMINAL, v).apply()
+            terminalState.value = v
+        }
+
     val nodeId: String
         get() = prefs.getString(KEY_NODE, null) ?: generateNodeId().also { prefs.edit().putString(KEY_NODE, it).apply() }
 
@@ -34,6 +44,7 @@ class AppSettings(private val prefs: SharedPreferences) {
         const val KEY_BRIDGE = "bridge_enabled"
         const val KEY_AUTO = "auto_connect"
         const val KEY_NODE = "node_id"
+        const val KEY_TERMINAL = "terminal_app"
 
         fun generateNodeId(): String {
             val bytes = ByteArray(16).also { SecureRandom().nextBytes(it) }

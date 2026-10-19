@@ -2,6 +2,7 @@ package ai.rootforge.os.ui.screens
 
 import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.bridge.PairedController
+import ai.rootforge.os.core.TerminalApp
 import ai.rootforge.os.ui.ActionButton
 import ai.rootforge.os.ui.ActionKind
 import ai.rootforge.os.ui.AppActions
@@ -19,11 +20,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -34,6 +41,8 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
         ForgeCard("Connection", icon = Icons.Filled.Usb) {
             SwitchRow("Connect automatically", "Connect when a recognised device appears and USB access is already granted", state.autoConnect, actions::setAutoConnect)
         }
+
+        if (state.terminalHandoff) TerminalAppCard(state, actions)
 
         ForgeCard("ADB identity", "This phone's RSA key, shown on the target when you allow USB debugging", Icons.Filled.Key) {
             KeyValueRow("Fingerprint", state.adbFingerprint.ifBlank { "not generated yet" })
@@ -119,5 +128,27 @@ private fun PairedRow(c: PairedController, actions: AppActions) {
             Text("sha256 ${c.certSha256.take(24)}...", style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         ActionButton("Revoke", kind = ActionKind.Danger) { actions.revokeController(c.packageName) }
+    }
+}
+
+@Composable
+private fun TerminalAppCard(state: AppUiState, actions: AppActions) {
+    var text by remember(state.terminalApp) { mutableStateOf(state.terminalApp) }
+    val trimmed = text.trim()
+    val valid = trimmed.isEmpty() || TerminalApp.isValidPackage(trimmed)
+    ForgeCard("Terminal app", "A full terminal for tasks the one-command shell cannot do", Icons.Filled.Terminal) {
+        OutlinedTextField(
+            value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+            label = { Text("Package name") }, isError = !valid,
+            supportingText = { Text(if (valid) "For example the package of VictorSuite, as shown in Android's app info." else "Not a valid Android package name.") },
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionButton("Save", kind = ActionKind.Outline, enabled = valid && trimmed != state.terminalApp) { actions.setTerminalApp(trimmed) }
+            ActionButton("Open it", enabled = state.terminalApp.isNotEmpty()) { actions.openTerminalApp() }
+        }
+        Text(
+            "RootForge only launches the app. It passes no command, serial or file, and it never guesses the package.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
