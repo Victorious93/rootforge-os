@@ -1,6 +1,7 @@
 # RootForge OS — Security model
 
-Status as of 2026-10-07. This document says what the code enforces, what it does not,
+Status as of 2026-10-07. The desktop API-token row was added 2026-10-19; the rest of
+this document was not re-audited then. This document says what the code enforces, what it does not,
 and what depends on the operator. It does not describe a security posture the project
 does not have.
 
@@ -27,6 +28,7 @@ access to the operator's account:
 | Unrecorded state-changing commands | `flash`/`backup`/`module`/`avd` and `boot patch`/`flash-last` write start/finish events with exit status and script links | `core/audit.py` | `tests/test_audit.py`, shell audit section |
 | Logs readable by other users | CLI JSON logs and all script logs/reports created `0600` from creation; handed to `$SUDO_USER` under sudo | `core/log.py`, `common.sh:rf_private_file`/`rf_log_init` | Tests, incl. under `umask 000` |
 | Secrets in files | API-key file created 0600 from creation (`rf_write_private`); values shell-quoted (`rf_shell_quote`) | `setup_ai_tools.sh` | Stub tests |
+| Desktop API token readable by other local users | `~/.rootforge/desktop.properties` created `0600` before the bearer token is written; an existing group/world-readable file is tightened before load and before rewrite. The directory keeps the umask | `android-app/desktop` `DesktopSettings` | `:desktop:test` `DesktopSettingsTest` (POSIX). Not run on a phone |
 | Provisioning the wrong account / root | Target user resolved explicitly; refuses rather than defaulting to root; live user removed; live sudo rule deleted; installed name cannot be `root`/`rootforge` | `00_bootstrap_distro.sh`, Calamares configs | Executed in a sandbox; **not** under real Calamares |
 
 ## 2. What it does not protect against

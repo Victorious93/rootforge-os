@@ -23,6 +23,18 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > (shellcheck 0.11.0). Not run: `:app:testDebugUnitTest`/`assembleDebug` (no Android SDK on
 > this agent), `:desktop:compileKotlin`, live URLs, any device.
 
+> **Update 2026-10-19 (desktop API token mode):** PR #64 (on `main`). `DesktopSettings` wrote
+> `~/.rootforge/desktop.properties` (the headless `api_token`) with
+> `File.writer()` and the process umask, so umask `022` left the bearer
+> token mode `0644`. Loopback is shared by local accounts. The file is now
+> created mode `0600` before any bytes are written, and an existing
+> group/world-readable copy is tightened before load and before rewrite.
+> The `~/.rootforge` directory is left at the umask default. Verified:
+> `./gradlew :desktop:test --tests ai.rootforge.os.desktop.DesktopSettingsTest`
+> → 2 tests, 0 failures; `bash tests/run-tests.sh` 1023/0; `bash tests/lint.sh`
+> clean (shellcheck 0.11.0). Not run on a phone, and the headless server was
+> not started.
+
 > **Update 2026-10-18 (README refresh):** branch `cursor/refresh-readme-249a`,
 > docs only (`README.md`, `CHANGELOG.md`, this file). README re-organised in plain
 > language: what it is, fleet placement, host-phone app / Flash Tools, install and
@@ -62,7 +74,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-README refresh is #63 (on `main`). This branch adds the read-only Custom RR catalog lookup in `:core`. Not run on a device. License lock (#53):
+README refresh is #63 and desktop token mode is #64 (both on `main`). This branch adds the read-only Custom RR catalog lookup in `:core`. Not run on a device. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
@@ -70,6 +82,10 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 - `:core` `ai.rootforge.os.catalog` parses Custom RR's catalog/freshness JSON and looks up builds
   by target codename (2026-10-19, `BuildCatalogTest` 10/0). No UI and no network fetch; never
   affects flash gating. Doc: `docs/CUSTOM_RR_CATALOG.md`.
+- Desktop `~/.rootforge/desktop.properties` is created mode `0600` and an existing
+  world-readable copy is tightened before load (`DesktopSettings`, #64). `:desktop:test
+  --tests ai.rootforge.os.desktop.DesktopSettingsTest` → 2 tests, 0 failures
+  (2026-10-19). The headless API was not started, and this was not run on a phone.
 - README landing page rewritten 2026-10-18 (docs only). Fleet claims checked against this
   repo's Messenger/pairing code and against droidcommand-AI `main` via the GitHub API:
   `FleetCatalog.kt` lists RootForge as `EXTERNAL_NODE`; `core-rootforge` has
@@ -155,7 +171,7 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-README refresh is #63 (on `main`). This branch: Custom RR catalog lookup in `:core`;
+README refresh is #63 (on `main`). Desktop token mode is #64 (on `main`). This branch: Custom RR catalog lookup in `:core`;
 next for it is the owner's choice of delivery (file import vs. `INTERNET`) and a UI card. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.

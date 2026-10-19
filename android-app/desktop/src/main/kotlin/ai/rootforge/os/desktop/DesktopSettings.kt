@@ -1,6 +1,9 @@
 package ai.rootforge.os.desktop
 
 import java.io.File
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermissions
 import java.security.SecureRandom
 import java.util.Properties
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +20,9 @@ class DesktopSettings(private val file: File) {
         }
 
     init {
+        // An older build stored api_token with the process umask (typically 0644).
+        // Tighten before reading so a leftover bearer token is not left readable.
+        if (file.isFile) restrictToOwner(file)
         if (file.isFile) file.reader().use { props.load(it) }
         if (nodeId.isBlank()) {
             nodeId = generateNodeId()
@@ -61,8 +67,49 @@ class DesktopSettings(private val file: File) {
 
     private fun save() {
         file.parentFile?.mkdirs()
+        // Create as owner-read/write before any bytes land. FileWriter on a new
+        // path uses 0666 & ~umask, which is world-readable under umask 022, and
+        // this file holds the headless API bearer token.
+        preparePrivateFile(file)
         file.writer().use { props.store(it, "RootForge OS desktop") }
+        restrictToOwner(file)
     }
+
+    private fun preparePrivateFile(target: File) {
+        if (target.exists()) {
+            restrictToOwner(target)
+            return
+        }
+        val path = target.toPath()
+        if (supportsPosix(target)) {
+            try {
+                Files.createFile(
+                    path,
+                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")),
+                )
+            } catch (_: FileAlreadyExistsException) {
+                restrictToOwner(target)
+            }
+        } else if (target.createNewFile() || target.isFile) {
+            restrictToOwner(target)
+        }
+    }
+
+    private fun restrictToOwner(target: File) {
+        val path = target.toPath()
+        if (supportsPosix(target)) {
+            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-------"))
+            return
+        }
+        target.setReadable(false, false)
+        target.setWritable(false, false)
+        target.setExecutable(false, false)
+        target.setReadable(true, true)
+        target.setWritable(true, true)
+    }
+
+    private fun supportsPosix(target: File): Boolean =
+        target.toPath().fileSystem.supportedFileAttributeViews().contains("posix")
 
     private companion object {
         const val KEY_BRIDGE = "bridge_enabled"
