@@ -548,7 +548,7 @@ class HostController(
             val remote = "/data/local/tmp/rf-module.zip"
             adb(listOf("push", zip.file.absolutePath, remote), 120_000)
             val bin = when (manager) {
-                RootManager.MAGISK -> "magisk"
+                RootManager.MAGISK, RootManager.KITSUNE -> "magisk"
                 RootManager.KERNELSU -> "/data/adb/ksud"
                 RootManager.APATCH -> "/data/adb/apd"
             }

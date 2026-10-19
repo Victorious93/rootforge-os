@@ -39,7 +39,7 @@ SECTIONS = [
     ]),
     ("Root frameworks", [
         ("magisk", "rooting-guides/magisk-guide.md", "Install and configure Magisk."),
-        ("magisk-kitsune", None, "Kitsune Mask / Magisk Delta: status and why RootForge does not drive it."),
+        ("magisk-kitsune", None, "Kitsune Mask / Magisk Delta: unmaintained; what RootForge does and does not do with it."),
         ("kernelsu", "rooting-guides/kernelsu-guide.md", "Install and configure KernelSU."),
         ("apatch", "rooting-guides/apatch-guide.md", "Install and configure APatch."),
         ("lsposed", "rooting-guides/lsposed-guide.md", "LSPosed / Vector framework setup."),

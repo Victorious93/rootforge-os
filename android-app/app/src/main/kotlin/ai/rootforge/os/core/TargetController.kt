@@ -617,7 +617,7 @@ class TargetController(
         val remote = "/data/local/tmp/rf-module.zip"
         zip.file.inputStream().use { conn.push(it, zip.size, remote) { d, t -> setProgress("Pushing module", d, t) } }
         clearProgress()
-        val bin = when (manager) { RootManager.MAGISK -> "magisk"; RootManager.KERNELSU -> "/data/adb/ksud"; RootManager.APATCH -> "/data/adb/apd" }
+        val bin = when (manager) { RootManager.MAGISK, RootManager.KITSUNE -> "magisk"; RootManager.KERNELSU -> "/data/adb/ksud"; RootManager.APATCH -> "/data/adb/apd" }
         val cmd = "su -c '$bin ${manager.moduleInstallCommand.substringAfter(' ')} $remote'"
         log.warn("The target may show a Superuser prompt for the shell; allow it once.")
         log.command("adb shell $cmd")

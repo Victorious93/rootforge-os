@@ -11,6 +11,11 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-19 (Kitsune manager):** `RootManager.KITSUNE` added, [UNSUPPORTED], package supplied
+> by the owner (`io.github.huskydg.magisk`) and unverified; `homepage` now nullable (none), new `caveat`
+> shown in Root / Patching; patched prefix and module command assumed Magisk-like. `:core:test` 125/0
+> (+4), `:desktop:compileKotlin` builds; `:app` compile and a phone run NOT done (CI `apk` is the check).
+
 > **Update 2026-10-19 (terminal app default):** `TerminalApp.DEFAULT_PACKAGE = "com.termux"` is the
 > default for Settings → Terminal app (owner's request); empty clears it. `:core:test` +1 test. Launch
 > still unverified on a phone; whether VictorSuite is `com.termux` or a separate package is unknown.

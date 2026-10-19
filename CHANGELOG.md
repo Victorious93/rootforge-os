@@ -7,6 +7,9 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Kitsune Mask as an [UNSUPPORTED] root manager (2026-10-19)
+- `RootManager.KITSUNE` (package `io.github.huskydg.magisk`, supplied by the owner, unverified) is selectable in Root / Patching and the module installer. `RootManager.homepage` is now nullable (Kitsune has none: the upstream repo appears gone) and a new `caveat` is shown as a warning. The patched-file prefix (`magisk_patched`) and module command (`magisk --install-module`) are assumptions copied from Magisk and are **unverified** for this fork. No download link and no bundled binary. Guide page updated. +4 `RootManagersTest` tests. `:app` compile and a phone run not done here.
+
 ### Terminal app default (2026-10-19)
 - *Settings → Terminal app* now defaults to `com.termux` (the owner asked for it), so **Open full terminal** works without visiting Settings. Saving an empty value turns the button off; any other valid package overrides it. `TerminalApp.DEFAULT_PACKAGE`, +1 test. Still launch-only and **not run on a phone**.
 
