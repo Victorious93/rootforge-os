@@ -1,6 +1,8 @@
 package ai.rootforge.os.desktop
 
 import ai.rootforge.os.bridge.BridgeExecutor
+import ai.rootforge.os.bridge.BridgeIngress
+import ai.rootforge.os.bridge.FleetExecutor
 import ai.rootforge.os.bridge.PairingStore
 import ai.rootforge.os.catalog.BuildCatalogStore
 import ai.rootforge.os.core.ApprovalCenter
@@ -47,13 +49,22 @@ fun main(args: Array<String>) {
     val headless = args.contains("--headless") || args.contains("--api")
     // Headless auth is the bearer token (HeadlessApi auto-pairs that caller).
     // The Settings switch gates the GUI / Messenger-shaped path only.
-    val executor = BridgeExecutor(
+    val enabled = { headless || settings.bridgeEnabled }
+    val legacy = BridgeExecutor(
         settings.nodeId,
         backend,
         approvals,
         pairing,
-        bridgeEnabled = { headless || settings.bridgeEnabled },
+        bridgeEnabled = enabled,
     )
+    val fleet = FleetExecutor(
+        settings.nodeId,
+        backend,
+        approvals,
+        pairing,
+        bridgeEnabled = enabled,
+    )
+    val executor = BridgeIngress(legacy, fleet)
 
     if (headless) {
         val port = args.portArg() ?: 8787

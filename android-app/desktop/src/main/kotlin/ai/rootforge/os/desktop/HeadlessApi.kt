@@ -1,7 +1,7 @@
 package ai.rootforge.os.desktop
 
 import ai.rootforge.os.bridge.BRIDGE_PROTOCOL_MAJOR
-import ai.rootforge.os.bridge.BridgeExecutor
+import ai.rootforge.os.bridge.BridgeIngress
 import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.bridge.PairingPersistence
 import ai.rootforge.os.bridge.PairingStore
@@ -19,13 +19,13 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * Tiny HTTP front for [BridgeExecutor]. Auth is a bearer token stored next to
+ * Tiny HTTP front for [BridgeIngress]. Auth is a bearer token stored next to
  * desktop settings (or ROOTFORGE_API_TOKEN). Destructive ops still go through
  * ApprovalCenter — in headless mode the confirmation phrase must be supplied
  * as `confirmation` in the JSON body and is applied automatically.
  */
 class HeadlessApi(
-    private val executor: BridgeExecutor,
+    private val executor: BridgeIngress,
     private val pairing: PairingStore,
     private val token: String,
     private val approvals: ai.rootforge.os.core.ApprovalCenter,

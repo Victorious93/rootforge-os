@@ -95,7 +95,7 @@ The launcher icon is the emblem from `assets/logo/rootforge-os-logo.jpg` (fist, 
 
 RootForge is an **independent node**, not a companion APK. See `docs/DROIDCOMMAND_INTEGRATION.md`.
 
-The debug APK (`ai.rootforge.os.debug`) exports `ai.rootforge.os.action.BRIDGE`. Pairing is Settings → External control: copy the node id, let DCA send `rootforge.capabilities.get`, then Pair the pending package+cert. The switch defaults off. EDL, sideload-zip and raw `fastboot oem` are GUI-only.
+The debug APK (`ai.rootforge.os.debug`) exports `ai.rootforge.os.action.BRIDGE`. Pairing is Settings → External control: copy the node id, let DCA send `rootforge.capabilities.get` (legacy) or `capabilities.get` (protocol 1.1 fleet envelope), then Pair the pending package+cert. The switch defaults off. EDL, sideload-zip and raw `fastboot oem` are GUI-only. Fleet 1.1: `docs/MANUAL.md`.
 
 ## License
 

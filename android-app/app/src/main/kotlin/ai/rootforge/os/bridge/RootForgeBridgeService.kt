@@ -4,6 +4,7 @@ import ai.rootforge.os.RootForgeApp
 import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Binder
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -39,7 +40,11 @@ class RootForgeBridgeService : Service() {
                 if (msg.what != BRIDGE_MSG_REQUEST) return super.handleMessage(msg)
                 val replyTo = msg.replyTo ?: return
                 val line = msg.data?.getString(BRIDGE_KEY_REQUEST)
-                val uid = msg.sendingUid
+                // Messenger Handler runs after the binder transaction, so
+                // sendingUid is the kernel-attested sender. getCallingUid()
+                // is the same UID on the binder thread and is the fallback
+                // when sendingUid was not filled in.
+                val uid = if (msg.sendingUid >= 0) msg.sendingUid else Binder.getCallingUid()
                 scope.launch { reply(replyTo, respond(line, uid)) }
             }
         })

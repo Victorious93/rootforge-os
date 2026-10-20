@@ -141,7 +141,7 @@ Do this only if you want DCA (or another controller) to send commands. You can s
 
 1. Open RootForge → **Settings** → **External control**.
 2. Copy the **Node id** (`rf-` plus 32 hex characters).
-3. In the controller, bind `ai.rootforge.os.action.BRIDGE` on package `ai.rootforge.os.debug` (debug build) and send `rootforge.capabilities.get` with that node id. The first reply is `not_paired` or `bridge_disabled`. That is expected. The caller now appears under **Waiting for approval**.
+3. In the controller, bind `ai.rootforge.os.action.BRIDGE` on package `ai.rootforge.os.debug` (debug build) and send `capabilities.get` (protocol 1.1) or `rootforge.capabilities.get` (legacy) with that node id. The first reply is `not_paired`, `external_control_disabled` (1.1), or `bridge_disabled` (legacy). That is expected. The caller now appears under **Waiting for approval**.
 4. Turn **Allow external controllers** **on**.
 5. Tap **Pair** on that package and certificate.
 
@@ -543,51 +543,133 @@ Backup of app data is **off** (`allowBackup="false"`) so the ADB key is not copi
 
 ## Fleet integration
 
-### What the controller can drive
+RootForge is an **EXTERNAL_NODE**. This section is the frozen **protocol 1.1** remote-control contract (`BRIDGE_PROTOCOL_MAJOR = 1`, `BRIDGE_PROTOCOL_MINOR = 1`). The older snake_case envelope (`protocol_major: 1`, `operation: rootforge.devices.list`, …) still works on the same Messenger service. Pairing steps are in [Install](#install-and-first-run-setup). Technical notes: [docs/DROIDCOMMAND_INTEGRATION.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DROIDCOMMAND_INTEGRATION.md).
 
-After the switch is on **and** the caller is paired, these operations exist (JSON protocol major 1):
+### Transport
 
-| Operation | Kind | What happens |
+JSON over Android Messenger. The host-phone app exports a bound service for action `ai.rootforge.os.action.BRIDGE` (debug package `ai.rootforge.os.debug`; the action string does not change).
+
+| Direction | `Message.what` | Bundle key |
 |---|---|---|
-| `rootforge.capabilities.get` | read | Protocol version, node id, app version, allowed operations |
-| `rootforge.devices.list` | read | USB targets RootForge can see |
-| `rootforge.device.info` | read | Properties of the connected target |
-| `rootforge.adb.shell` | control | Run one shell command — you tap **Allow** on the host |
-| `rootforge.adb.reboot` | control | Reboot the target to a mode — you tap **Allow** |
-| `rootforge.fastboot.reboot` | control | Reboot from fastboot — you tap **Allow** |
-| `rootforge.module.build` | control | Build a module zip into the library (does not install it) |
-| `rootforge.fastboot.flash` | destructive | Same sidecar + typed `FLASH <partition>` as the GUI |
-| `rootforge.fastboot.slot.set` | destructive | Typed `SLOT a` or `SLOT b` |
-| `rootforge.fastboot.unlock` | destructive | Typed `UNLOCK` |
-| `rootforge.fastboot.lock` | destructive | Typed `LOCK` |
+| Request | 1 | `request` (JSON string) |
+| Reply | 2 | `response` (JSON string) |
 
-**Not** on the bridge (the controller gets `unknown_operation`): EDL, sideload of a zip, erase, boot-once, raw `fastboot oem`, APK install, push/pull, logcat, recovery install, Firehose.
+Desktop / Docker reuse the same JSON on `POST /v1/bridge` (loopback bearer token). That is not the Messenger path.
 
-Images named in a flash request are **library file names**, not paths. A request cannot raise its own privilege or skip a prompt.
+### Envelope (flat fields)
 
-Desktop and Docker use the same JSON over local HTTP with a Bearer token, not Messenger. That is a separate pipe.
+```json
+{
+  "op": "capabilities.get",
+  "requestId": "dca-…",
+  "targetNodeRef": "rf-…32 hex…",
+  "actionRef": "rootforge.devices.list",
+  "params": {},
+  "nonce": "0123456789abcdef0123456789abcdef",
+  "timestampMs": 1700000000000,
+  "ttlMs": 120000,
+  "destructive": false,
+  "trigger": {}
+}
+```
+
+| Field | Rule |
+|---|---|
+| `op` | `capabilities.get` \| `remote.command` \| `macro.step` \| `macro.run` |
+| `requestId` | Echoed on the reply |
+| `targetNodeRef` | This install's node id (Settings). Mismatch → `not_found` |
+| `actionRef` | Required for `remote.command` and `macro.step` |
+| `params` | Object, default `{}` |
+| `nonce` | Unique 128-bit value, 32 hex characters |
+| `timestampMs` | Epoch milliseconds |
+| `ttlMs` | Default 120000, max 300000 |
+| `destructive` | Advisory boolean only. Never lowers a tier or skips a confirm |
+| `trigger` | Optional object. **Informational only** — never used to authorize, pair, or auto-approve |
+
+`macro.step` also requires `macroId`, `stepIndex` (≥ 0), `onError` (`abort` \| `continue`).
+
+`macro.run` also requires `macroId`, `steps` (array of `{actionRef, params?, onError?}`), and optional `dryRun` (boolean, default false). A dry run returns the plan and does not execute or prompt.
+
+Optional `protocolMajor` / `protocolMinor` / `sourceNodeRef` may be present. `sourceNodeRef` is ignored for auth and for the replay cache.
+
+### Authorization
+
+Authorize **only** by the calling app's package name plus the SHA-256 of its signing certificate, taken from `Message.sendingUid` (fallback `Binder.getCallingUid`) and `PackageManager` signing info. Nothing in the JSON — including `trigger.*` and `sourceNodeRef` — can pair a caller or skip a gate.
+
+Pairing is an allow-list the owner manages in **Settings → External control**. The first request from an unknown caller is recorded as pending and refused (`not_paired`). A re-signed package shows as pending again.
 
 ### Remote-control switch: off by default
 
-**Settings → External control → Allow external controllers** starts **off**.
+**Settings → External control → Allow external controllers** starts **off**. Off → `external_control_disabled` (protocol 1.1) or `bridge_disabled` (legacy). Pending callers are still recorded so you can pair them after turning the switch on.
 
-A request while the switch is off still appears as pending, so you can see who asked, but the reply is `bridge_disabled`. Pairing does nothing useful until the switch is on.
+### Replay and expiry
+
+A request is `expired` when `now > timestampMs + ttlMs` **or** `|now - timestampMs| > 120000` (clock skew). A nonce already seen for the same authenticated source (`package:certSha256`) is `replay_detected`. The seen-nonce cache is kept **at least 10 minutes**. An expired nonce is still remembered so a later replay with a fresh timestamp is refused.
+
+### `capabilities.get`
+
+Returns `protocolMajor`, `protocolMinor`, `fleetClass: external_node`, node identity, then:
+
+- `ops[]` — the four envelope ops
+- `actions[]` — `remote.command` action refs that are remotely allowed
+
+Each entry is `{name, kind, remoteAllowed, requiresConfirm}` where `kind` is `read` \| `action` \| `destructive`.
+
+### What a remote caller may run
+
+Only actions that already exist on this node:
+
+| `actionRef` | kind | Confirm |
+|---|---|---|
+| `rootforge.devices.list` | read | no |
+| `rootforge.device.info` | read | no |
+| `rootforge.adb.shell` | action | on-device prompt |
+| `rootforge.adb.reboot` | action | on-device prompt |
+| `rootforge.fastboot.reboot` | action | on-device prompt |
+| `rootforge.module.build` | action | on-device prompt |
+| `rootforge.fastboot.flash` | destructive | typed phrase on the device (`ApprovalCenter`) |
+| `rootforge.fastboot.slot.set` | destructive | typed phrase |
+| `rootforge.fastboot.unlock` | destructive | typed phrase |
+| `rootforge.fastboot.lock` | destructive | typed phrase |
+| `shizuku.readDeviceState` | action | on-device prompt |
+| `shizuku.pmGrant` | destructive | typed `GRANT PERMISSION` |
+
+`shizuku.exec` exists on the host but is **not** remotely allowed (`capability_off`). EDL, recovery writes (including Custom Recovery `su`/`dd` / `FLASH RECOVERY`), sideload, `fastboot oem` / erase / boot-once, APK install and push/pull are **not** fleet actions; naming them returns `confirmation_required` and nothing is written. A remote `trigger` never auto-approves a destructive op.
+
+The legacy snake_case envelope (`protocol_major: 1`, `operation: rootforge.*`) still lists the same USB actions (without the Shizuku names). Unknown legacy ops return `unknown_operation`. Images named in a flash request are **library file names**, not paths.
+
+### Error codes
+
+Exactly these `error.code` values on protocol 1.1 (message is for humans):
+
+`invalid_parameters`, `not_paired`, `not_found`, `internal`, `unauthorized`, `replay_detected`, `expired`, `external_control_disabled`, `confirmation_required`, `unsupported_op`, `capability_off`.
+
+Success:
+
+```json
+{"ok":true,"protocolMajor":1,"protocolMinor":1,"requestId":"dca-…","nodeRef":"rf-…","result":{}}
+```
+
+Failure:
+
+```json
+{"ok":false,"protocolMajor":1,"protocolMinor":1,"requestId":"dca-…","nodeRef":"rf-…","error":{"code":"not_paired","message":"…"}}
+```
 
 ### Safety gates and confirms
 
-In this order, for every bridge request:
+In this order, for every protocol 1.1 request:
 
-1. Well-formed JSON, size-capped.
-2. `protocol_major` must be **1**.
-3. `target_node_id` must be this install's node id.
-4. Unknown callers are recorded as pending.
-5. The switch must be on.
-6. Caller package **and** certificate must match a paired row.
-7. The operation must exist.
-8. Only listed parameters are accepted.
-9. **Read** runs. **Control** shows Allow / Cancel on the host. **Destructive** uses the same typed phrase as the on-screen button (`FLASH boot`, `UNLOCK`, …). Timeout or Cancel is `denied_by_user`.
+1. Well-formed JSON with the required envelope fields.
+2. Caller identity from Binder / `Message.sendingUid` (never from the JSON).
+3. Unknown callers are recorded as pending (`not_paired`).
+4. The switch must be on (`external_control_disabled` if not).
+5. `targetNodeRef` must be this install's node id (`not_found` if not).
+6. Nonce / timestamp replay checks.
+7. The `op` and `actionRef` must exist.
+8. **Read** runs. **Action** shows Allow / Cancel on the host. **Destructive** uses the same typed phrase as the on-screen button (`FLASH boot`, `UNLOCK`, `GRANT PERMISSION`, …). Timeout or Cancel is `confirmation_required`. Nothing is auto-approved from a remote trigger.
 
-The GUI uses the same gates for its own writes:
+The GUI uses the same typed phrases for its own writes:
 
 | Phrase | Used for |
 |---|---|
@@ -599,10 +681,30 @@ The GUI uses the same gates for its own writes:
 | `EDL` | Upload an EDL programmer |
 | `WRITE LUN n SECTOR n` | Firehose raw write |
 | `INSTALL MODULE` | Install a module zip (SHA-256 shown) |
+| `GRANT PERMISSION` | Shizuku `pmGrant` (fleet only; no Settings button) |
 
 **Boot once** and sideload do not use a typed phrase. Flash of a permanent image always does.
 
 The sidecar / device-match check runs before a flash and again after you confirm. Unknown product, slot or lock state blocks the write.
+
+### Pairing on a phone (unverified here)
+
+1. Install RootForge `app-debug.apk` (`ai.rootforge.os.debug`). Open Settings → External control; copy **Node id**.
+2. Install a debug droidcommand-AI build. Bind `ai.rootforge.os.action.BRIDGE` and send `capabilities.get` with that `targetNodeRef`, a unique 32-hex `nonce`, and `timestampMs` = now.
+3. The first reply is `not_paired` or `external_control_disabled`. RootForge Settings shows the pending package + cert prefix.
+4. Turn **Allow external controllers** on, then **Pair**.
+5. Repeat `capabilities.get`. Reads run; action ops prompt on the phone; destructive ops need the same typed phrase the GUI uses.
+
+This path has **not** been run on a phone in this repository.
+
+### Code
+
+- Envelope: `android-app/core/.../bridge/FleetProtocol.kt`, `FleetEnvelope.kt`
+- Replay: `ReplayGuard.kt`
+- Executor: `FleetExecutor.kt`, `RemoteActionCatalog.kt`
+- Ingress (fleet vs legacy): `BridgeIngress.kt`
+- Messenger: `android-app/app/.../bridge/RootForgeBridgeService.kt`
+- Tests: `FleetEnvelopeTest`, `ReplayGuardTest`, `FleetAuthTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`
 
 ---
 

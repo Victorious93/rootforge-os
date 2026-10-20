@@ -120,10 +120,11 @@ A re-signed DCA (new debug keystore) shows as pending again with a "different si
 
 ## Protocol sync
 
-- App: `android-app/core/src/main/kotlin/ai/rootforge/os/bridge/Protocol.kt` (`BRIDGE_PROTOCOL_MAJOR`, Messenger constants, `BridgeOp`).
+- App: `android-app/core/src/main/kotlin/ai/rootforge/os/bridge/Protocol.kt` (`BRIDGE_PROTOCOL_MAJOR`, `BRIDGE_PROTOCOL_MINOR = 1`, Messenger constants, `BridgeOp`).
 - Executor + pairing: `BridgeExecutor.kt`, `PairingStore.kt`.
-- Messenger service: `android-app/app/.../bridge/RootForgeBridgeService.kt` (exported, no signature permission).
-- Tests: `BridgeExecutorTest.kt`, `PairingStoreTest.kt`.
+- Fleet remote-control envelope (minor 1: `op` / `requestId` / nonce): `FleetExecutor.kt`, `docs/MANUAL.md` (Fleet integration). Same Messenger service; `BridgeIngress` routes on a top-level `op` field.
+- Messenger service: `android-app/app/.../bridge/RootForgeBridgeService.kt` (exported, no signature permission). Caller UID is `Message.sendingUid`, with `Binder.getCallingUid()` as fallback.
+- Tests: `BridgeExecutorTest.kt`, `PairingStoreTest.kt`, `FleetEnvelopeTest.kt`, `ReplayGuardTest.kt`, `FleetAuthTest.kt`, `FleetCapabilitiesTest.kt`, `FleetExecutorTest.kt`.
 - DCA: `core-rootforge/.../Protocol.kt`. A vendored schema/fixture set (blueprint §10) is still not done.
 
 ## Honest status
