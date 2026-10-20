@@ -11,6 +11,21 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (catalog aliases):** branch `feat/catalog-aliases`.
+> `:core` `CodenameAliases` (48 OnePlus stock names -> catalog codenames,
+> RootForge-written from Google's Play supported-devices list + the
+> catalog's model numbers; nothing copied from GPL Custom RR; display-only).
+> The `modules` Paparazzi golden was NOT stale on current `main`: record
+> produced no diff and `:app:verifyPaparazziDebug` passes (the earlier
+> "fails on plain main" note is obsolete since #81/#85). Phone checklist for
+> the owner is in `docs/CUSTOM_RR_CATALOG.md`. Local suite: `:core:test`
+> **424/0**, `:desktop:test` 4/0, `:app:testDebugUnitTest` 36/0,
+> `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`),
+> `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean (shellcheck via the repo
+> wheel). Android SDK installed at `/opt/android-sdk` on this agent only
+> (Maven Central rate-limits with 429; retry with `--max-workers=1`).
+> **Not run on a phone or a desktop window.**
+
 > **Update 2026-10-20 (brands + MSM/EDL + infographics):** branch
 > `feat/multi-device-identify` (same PR #85). `:core` `BrandCatalog`
 > identity table (24 makers), matching Root wizards / unlock portals,

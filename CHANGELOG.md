@@ -7,6 +7,12 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Custom RR catalog: OnePlus alias table, phone checklist (2026-10-20)
+- `:core` `CodenameAliases`: 48 stock-name aliases (OnePlus 3T–9R, Nord / N10 / N200, newer `OP…L1` names) so e.g. `OnePlus6T` finds the catalog's `fajita` rows. RootForge-written from Google's Play supported-devices list joined to the catalog's own model numbers; Custom RR's GPL `codename_aliases.dart` was not copied. Aliases only add lookup names; display-only, never feeds `DeviceMatchGate`. OnePlus 5/5T/6/6T/One match by marketing name (weaker, [Likely]).
+- `docs/CUSTOM_RR_CATALOG.md`: alias section and an 8-step owner phone checklist (Download, Import file, real target, fallbacks). Not run on a phone.
+- The `modules` Paparazzi golden: `recordPaparazziDebug` produced no diff on current `main`, so the golden was already refreshed by #81/#85; `verifyPaparazziDebug` passes.
+- Tests: `:core:test` 424/0 (`CodenameAliasesTest` 5), `:desktop:test` 4/0, `:app:testDebugUnitTest` 36/0, `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`), `bash tests/run-tests.sh` 1055/0, `bash tests/lint.sh` clean. **Not run on a phone or a desktop window.**
+
 ### Broad brand coverage, MSM / EDL guide, infographics (2026-10-20)
 - Device-identity table (`:core` `BrandCatalog`) covers Pixel, Samsung, Xiaomi/Redmi/POCO, OnePlus, Oppo, realme, Motorola, Sony, HTC, Fairphone, Nothing/CMF, ASUS, LG, Huawei/Honor, vivo/iQOO, HMD/Nokia, Lenovo, Meizu, ZTE/nubia/REDMAGIC, TECNO, Infinix, itel, TCL/Alcatel, SHIFT. Matching is whole-word tokens (`lg` does not match `google`).
 - Brand **Root wizards** and **bootloader unlock portals** follow that table. Live official unlock pages stay Motorola / Sony / Xiaomi / HTCdev / OnePlus / Fairphone. Pixel has no token page. Nothing, Oppo, realme, HMD, Lenovo, Transsion, TCL and SHIFT have no token webpage (in-phone Deep Testing or OEM unlocking). Samsung, ASUS, LG, Huawei, vivo, Meizu and ZTE are noted as no longer offering official unlocking — no invented URL.
