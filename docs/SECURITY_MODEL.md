@@ -30,7 +30,7 @@ access to the operator's account:
 | Logs readable by other users | CLI JSON logs and all script logs/reports created `0600` from creation; handed to `$SUDO_USER` under sudo | `core/log.py`, `common.sh:rf_private_file`/`rf_log_init` | Tests, incl. under `umask 000` |
 | Secrets in files | API-key file created 0600 from creation (`rf_write_private`); values shell-quoted (`rf_shell_quote`) | `setup_ai_tools.sh` | Stub tests |
 | Desktop API token readable by other local users | `~/.rootforge/desktop.properties` created `0600` before the bearer token is written; an existing group/world-readable file is tightened before load and before rewrite. The directory keeps the umask | `android-app/desktop` `DesktopSettings` | `:desktop:test` `DesktopSettingsTest` (POSIX). Not run on a phone |
-| Remote build catalog treated as authority | Custom RR catalog is display-only: not read by `DeviceMatchGate`/`FlashSafety`; fetched only on a tap, https only, 8 MiB cap, parsed before it replaces the stored copy; links opened only if `https://` | `:core` `catalog/` | `:core:test` `BuildCatalogTest`, `BuildCatalogStoreTest` |
+| Remote build catalog treated as authority | Custom RR catalog is not read by `DeviceMatchGate`/`FlashSafety`; fetched only on a tap, https only, 8 MiB cap, parsed before it replaces the stored copy; links opened only if `https://`. A matching TWRP/PitchBlack row can open Custom Recovery; that path still uses the probed phone, the installer host allow-list, dry-run, SHA-256, published checksums, backup, and typed `FLASH RECOVERY`. ROMs and other recoveries stay links | `:core` `catalog/` | `:core:test` `BuildCatalogTest`, `BuildCatalogStoreTest`, `CatalogRecoveryBridgeTest` |
 | Writing the wrong recovery (or boot) with su | Dedicated `recovery`/`recovery_a`/`recovery_b` only; unknown slot and recovery-in-boot refuse the write; dry-run default; backup to app storage; typed `FLASH RECOVERY`; official hosts only; MD5 when TWRP publishes one, SHA-256 always shown | `:core` `recovery/`, Custom Recovery screen | `:core:test` `RecoveryLayoutTest`, `RecoveryCommandsTest`, `RecoveryPlanTest`, `RecoveryInstallerTest`, `RecoveryCatalogTest`. Not run on a phone |
 | A different app pretending to be VictorSuite | Desktop mode pins VictorSuite by package name **and** signing-certificate SHA-256 before any intent is sent. A cert change needs a new pin. The intent is either the dedicated Desktop-mode action or Termux RUN_COMMAND with a fixed `rootforge-desktop-mode <op>` line; the UI never interpolates a shell. No shared signing key. | `:core` `desktopmode/`, Android Dashboard card | `:core:test` `DesktopModeTest`. Not run on a phone |
 | Privileged host-phone reads via Shizuku | Sole API is `PrivilegedShell` (argv `ProcessBuilder`, 64 KiB cap, never logs stdout/stderr). UI ops are read-only (`exec` / `readDeviceState`) and each one goes through `ApprovalCenter`. `pmGrant` exists for fleet interop only: typed `GRANT PERMISSION`, not shown in Settings. No flash/unlock/wipe. Output stays on the Settings card. | `:core` `shizuku/`, `:app` `BoundPrivilegedShell` / `IPrivilegedShell.aidl` | `:core:test` `ShizukuStateResolverTest`, `ShizukuManagerTest`, `PrivilegedShellTest`, `PrivilegedCommandsTest`. Not run on a phone |
@@ -77,8 +77,10 @@ access to the operator's account:
 - **The Custom RR catalog is unauthenticated third-party data.** It comes from
   `monsiu/Custom-RR` on raw.githubusercontent.com over TLS, with no signature or pinned
   digest, and has no schema version. Whoever controls that repository decides what the
-  "Builds for this device" card lists and which download pages it links. It cannot start
-  or allow a flash. Tapping Download tells GitHub this phone's IP address.
+  "Builds for this device" card lists and which download pages it links. It cannot skip
+  `FLASH RECOVERY` or choose a write target. A TWRP/PitchBlack row can only open
+  Custom Recovery; official files are looked up from the probed phone and must still
+  pass the installer host allow-list. Tapping Download tells GitHub this phone's IP address.
 - **Android-side trust is out of scope**: bootloader unlock wipes data by design; nothing
   here restores a vendor's attestation.
 

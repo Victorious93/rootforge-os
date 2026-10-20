@@ -107,6 +107,32 @@ class RecoveryCatalogTest {
         assertTrue(RecoveryHosts.allowed("https://dl.twrp.me/olive/x.img", RecoveryProject.TWRP))
         assertTrue(RecoveryHosts.allowed("https://github.com/PitchBlackRecoveryProject/x/a.zip", RecoveryProject.PITCHBLACK))
         assertFalse(RecoveryHosts.allowed("https://github.com/PitchBlackRecoveryProject/x/a.zip", RecoveryProject.TWRP))
+        assertTrue(RecoveryHosts.allowed("https://pitchblack.tech/", RecoveryProject.PITCHBLACK))
+        assertTrue(RecoveryHosts.allowed("https://www.pitchblack.tech/PBRP-olive.img", RecoveryProject.PITCHBLACK))
+        assertFalse(RecoveryHosts.allowed("https://pitchblack.tech/", RecoveryProject.TWRP))
+        assertFalse(RecoveryHosts.allowed("http://pitchblack.tech/", RecoveryProject.PITCHBLACK))
+        assertFalse(RecoveryHosts.allowed("https://orangefox.download/", RecoveryProject.PITCHBLACK))
+        assertFalse(RecoveryHosts.allowed("https://shrp.github.io/", RecoveryProject.PITCHBLACK))
+        assertFalse(RecoveryHosts.allowed("https://forum.xda-developers.com/c/redwolf-recovery.10018/", RecoveryProject.TWRP))
+    }
+
+    @Test
+    fun lookupCanBeLimitedToOneProject() {
+        val fetched = mutableListOf<String>()
+        val client = RecoveryCatalogClient { url, _ ->
+            fetched += url
+            when {
+                url.endsWith("search.json") -> "[]"
+                else -> error("unexpected $url")
+            }
+        }
+        assertTrue(client.lookup(listOf("olive"), RecoveryProject.TWRP).isEmpty())
+        assertTrue(fetched.any { it.contains("twrp.me") })
+        assertTrue(fetched.none { it.contains("pitchblack") || it.contains("sourceforge") || it.contains("github.com") })
+        fetched.clear()
+        assertTrue(client.lookup(listOf("olive"), RecoveryProject.PITCHBLACK).isEmpty())
+        assertTrue(fetched.any { it.contains("pitchblack") || it.contains("sourceforge") || it.contains("github.com") })
+        assertTrue(fetched.none { it.contains("twrp.me") })
     }
 
     @Test

@@ -12,7 +12,8 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 ## PROJECT STATE
 
 > **Update 2026-10-20 (local module install on this phone):** branch
-> `feat/local-module-install` (PR #81). Modules gains a **This phone** tab on the
+> `feat/local-module-install` (PR #81). Merged `origin/main` `ef088d3` (#80
+> Custom RR → Custom Recovery). Modules gains a **This phone** tab on the
 > Android APK: when this phone is rooted, a library zip is installed with
 > Magisk (`magisk --install-module`), KernelSU (`ksud module install`) or
 > APatch (`apd module install`). `RootManager.detect` auto-picks from
@@ -25,13 +26,25 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > directory (`DirectoryLinks`) of official https pages (managers, module
 > repos, Shizuku apps); browser only; from Modules, Settings, Help and the
 > drawer. `applicationId`, signing
-> and versioning unchanged. After merging `origin/main` (#79 / `988a941`):
-> `:core:test` 313/0 (`LocalModulesTest`, `RootManagersTest` detect,
-> `DirectoryLinksTest`, plus fleet 1.1); `:desktop:test` 2/0;
-> `:app:testDebugUnitTest` 33/0 (Paparazzi `links` added); `:app:assembleDebug`
-> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
-> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
-> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> and versioning unchanged. Post-merge suite counts are in the
+> "What is true now" bullet below. **Not run:** a phone, the desktop window.
+
+> **Update 2026-10-20 (Custom RR → Custom Recovery):** PR #80, on `main` as
+> `ef088d3`. Dashboard **Builds for this device** now has **Install with
+> Custom Recovery** on a matching Custom RR TWRP or PitchBlack RECOVERY row.
+> That opens the Custom Recovery screen pre-filled with that project
+> (`CatalogRecoveryBridge`). Official files are looked up from the **probed**
+> phone, not the catalog row. Downloads still pass the installer https host
+> allow-list; `pitchblack.tech` / `www.pitchblack.tech` were added because
+> that is the host Custom RR publishes for PitchBlack (2026-09-12 catalog).
+> ROMs, root solutions, OrangeFox, SHRP and RedWolf stay link-only. Dry-run
+> stays the default; SHA-256 is shown; a published checksum is verified when
+> present; a write still needs typed `FLASH RECOVERY`, backs up first, writes
+> only `recovery` / `recovery_a` / `recovery_b`, never `boot`/`vendor_boot`,
+> never `dd`s a zip, never auto-reboots. The catalog still does not feed
+> `DeviceMatchGate`. `applicationId`, signing and versioning unchanged.
+> On that PR: `:core:test` 304/0; `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 31/0; `:app:assembleDebug`.
 > **Not run:** a phone, the desktop window.
 
 > **Update 2026-10-20 (fleet bridge v1):** PR #79, on `main` as `988a941`. Protocol 1.1
@@ -54,18 +67,21 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > run on a phone.**
 
 > **Update 2026-10-20 (how-to manual + in-app Help):** branch `docs/manual`
-> (PR #78, on `main` as `44716de`). Added `docs/MANUAL.md` (plain-language
-> how-to: what it is / EXTERNAL_NODE fleet role, install and v0.2.0 debug-key
-> uninstall, every screen, every manifest permission, fleet pairing +
-> default-off switch, troubleshooting, privacy). Header art: emblem + neon
-> cyan-to-magenta ring (`docs/images/manual/header.png`;
-> `android-app/tools/generate_manual_header.py`). Same markdown is bundled at
-> `ai/rootforge/os/manual/MANUAL.md` and rendered by a **Help** drawer screen
-> (also Settings → Open the manual) with a GitHub link. `applicationId`,
-> signing and versioning unchanged. Verified on that PR: `:core:test` 252/0
-> (`ManualLibraryTest` 4); `:desktop:test` 2/0; `:app:testDebugUnitTest` 31/0;
-> `:app:assembleDebug`; `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh`
-> clean (shellcheck 0.11.0). **Not run:** a phone, the desktop window.
+> (PR #78, on `main` as `44716de`). Added `docs/MANUAL.md` (plain-language how-to:
+> what it is / EXTERNAL_NODE fleet role, install and v0.2.0 debug-key uninstall,
+> every screen, every manifest permission, fleet pairing + default-off switch,
+> troubleshooting, privacy). Header art: emblem + neon cyan-to-magenta ring
+> (`docs/images/manual/header.png`; `android-app/tools/generate_manual_header.py`).
+> Same markdown is bundled at `ai/rootforge/os/manual/MANUAL.md` and rendered
+> by a **Help** drawer screen (also Settings → Open the manual) with a GitHub
+> link. Merged `origin/main` (`b8e7708` #76, then `fabc649` #77): Desktop mode
+> and the Custom Recovery installer are documented as landed. `applicationId`,
+> signing and versioning unchanged (`aapt dump badging`: `ai.rootforge.os.debug`
+> / `versionCode=1` / `versionName=0.1.0-debug`). Verified on that head:
+> `:core:test` 252/0 (`ManualLibraryTest` 4, `recovery/` 41, `DesktopModeTest`
+> 12); `:desktop:test` 2/0; `:app:testDebugUnitTest` 31/0; `:app:assembleDebug`;
+> `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean
+> (shellcheck 0.11.0). **Not run:** a phone, the desktop window.
 
 > **Update 2026-10-20 (Custom Recovery installer):** branch `feat/recovery-installer`
 > (PR #77, on `main` as `fabc649`). New drawer screen **Custom Recovery**
@@ -262,20 +278,25 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), and fleet protocol 1.1 (#79 / `988a941`). Local module install on this phone is this branch (PR #81). The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), and Custom RR → Custom Recovery (#80 / `ef088d3`). Local module install on this phone is this branch (PR #81). The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Local module install on this phone (PR #81, this branch): Modules **This phone** tab
-  installs a library zip via `su` (`magisk --install-module` / `ksud module
-  install` / `apd module install`), auto-detects the manager, lists
-  `/data/adb/modules` read-only, dry-run default, typed `INSTALL MODULE`,
-  never reboots. LSPosed APKs unchanged. Desktop no-op. Same PR: **Links**
-  directory of official https pages, browser only. After merging #79 plus Links:
-  `:core:test` 313/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 33/0,
-  `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`),
-  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a phone.**
+- Local module install on this phone (PR #81, this branch, after merging
+  `origin/main` `ef088d3` / #80): Modules **This phone** tab installs a
+  library zip via `su` (`magisk --install-module` / `ksud module install` /
+  `apd module install`), auto-detects the manager, lists `/data/adb/modules`
+  read-only, dry-run default, typed `INSTALL MODULE`, never reboots. LSPosed
+  APKs unchanged. Desktop no-op. Same PR: **Links** directory of official
+  https pages, browser only. Post-merge suite counts: see the session
+  that recorded them after this merge. **Not run on a phone.**
+- Custom RR → Custom Recovery (PR #80, on `main` as `ef088d3`): matching
+  TWRP/PitchBlack catalog rows open Custom Recovery pre-filled; official
+  lookup uses the probed phone; `pitchblack.tech` added to the https host
+  allow-list. ROMs and other recoveries stay links. Documented in
+  `docs/MANUAL.md` / Help. On that PR: `:core:test` 304/0; `:desktop:test`
+  2/0; `:app:testDebugUnitTest` 31/0; `:app:assembleDebug`. **Not run on a phone.**
 - Fleet protocol 1.1 (PR #79, on `main` as `988a941`): Messenger JSON `op` envelope with
   nonce replay/expiry, package+cert pairing, default-off external control, and
   `ApprovalCenter` for destructive remote actions (including Custom Recovery writes).

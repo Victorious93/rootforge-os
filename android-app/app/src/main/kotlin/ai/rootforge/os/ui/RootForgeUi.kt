@@ -1,5 +1,6 @@
 package ai.rootforge.os.ui
 
+import ai.rootforge.os.catalog.CatalogRecoveryPrefill
 import ai.rootforge.os.core.LinkState
 import ai.rootforge.os.ui.screens.AdbScreen
 import ai.rootforge.os.ui.screens.DashboardScreen
@@ -93,6 +94,8 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
     var current by rememberSaveable { mutableStateOf(startAt) }
     // Guide page opened from Ask ("id" or "id#anchor"); cleared when the guide is opened from the drawer.
     var guideTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    // Custom RR recovery row → Custom Recovery screen; cleared when that screen is opened from the drawer.
+    var recoveryPrefillRaw by rememberSaveable { mutableStateOf<String?>(null) }
     var terminalOpen by rememberSaveable { mutableStateOf(startExpanded) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -112,7 +115,12 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
                         label = { Text(d.title) },
                         icon = { Icon(d.icon, null) },
                         selected = d == current,
-                        onClick = { guideTarget = null; current = d; scope.launch { drawer.close() } },
+                        onClick = {
+                            guideTarget = null
+                            recoveryPrefillRaw = null
+                            current = d
+                            scope.launch { drawer.close() }
+                        },
                         modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
                     )
                 }
@@ -144,7 +152,10 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
         ) { padding ->
             Column(Modifier.padding(padding).fillMaxSize()) {
                 when (current) {
-                    Destination.Dashboard -> DashboardScreen(state, actions)
+                    Destination.Dashboard -> DashboardScreen(state, actions, onInstallRecovery = { prefill ->
+                        recoveryPrefillRaw = prefill.encode()
+                        current = Destination.CustomRecovery
+                    })
                     Destination.Ask -> AskScreen(onOpenGuide = { id, anchor ->
                         guideTarget = if (anchor != null) "$id#$anchor" else id
                         current = Destination.RootGuide
@@ -157,7 +168,11 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
                     Destination.Root -> RootScreen(state, actions)
                     Destination.Modules -> ModulesScreen(state, actions, onOpenLinks = { current = Destination.Links })
                     Destination.Recovery -> RecoveryScreen(state, actions)
-                    Destination.CustomRecovery -> CustomRecoveryScreen(state, actions)
+                    Destination.CustomRecovery -> CustomRecoveryScreen(
+                        state,
+                        actions,
+                        prefill = recoveryPrefillRaw?.let { CatalogRecoveryPrefill.decode(it) },
+                    )
                     Destination.Logs -> LogsScreen(state, actions)
                     Destination.Settings -> SettingsScreen(
                         state, actions,

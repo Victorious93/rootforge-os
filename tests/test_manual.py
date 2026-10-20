@@ -65,6 +65,8 @@ class ManualDocTests(unittest.TestCase):
         self.assertNotIn("feat/recovery-installer", text)
         self.assertIn("FLASH RECOVERY", text)
         self.assertIn("docs/CUSTOM_RECOVERY_INSTALLER.md", text)
+        self.assertIn("Install with Custom Recovery", text)
+        self.assertIn("pitchblack.tech", text)
         self.assertIn("Look up TWRP", text)
         self.assertIn("Pin this VictorSuite", text)
         self.assertIn("rootforge-desktop-mode", text)

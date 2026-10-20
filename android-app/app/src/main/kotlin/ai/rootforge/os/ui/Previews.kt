@@ -73,7 +73,10 @@ private fun previewCatalog(): LoadedCatalog {
     return LoadedCatalog(
         catalog = BuildCatalog(
             roms = listOf(CatalogEntry("example-rom", "Example ROM", downloadUrl = "https://example.org/rom", devices = shiba)),
-            recoveries = listOf(CatalogEntry("example-recovery", "Example Recovery", downloadUrl = "https://example.org/recovery", devices = shiba)),
+            recoveries = listOf(
+                CatalogEntry("twrp", "TWRP", downloadUrl = "https://twrp.me/Devices/", devices = shiba),
+                CatalogEntry("example-recovery", "Example Recovery", downloadUrl = "https://example.org/recovery", devices = shiba),
+            ),
             generatedAt = "2026-10-19T00:00:00Z",
         ),
         freshness = FreshnessFeed(

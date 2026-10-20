@@ -18,6 +18,7 @@ import ai.rootforge.os.recovery.RecoveryOffer
 import ai.rootforge.os.recovery.RecoveryPlanner
 import ai.rootforge.os.recovery.RecoveryPayload
 import ai.rootforge.os.recovery.RecoveryProbe
+import ai.rootforge.os.recovery.RecoveryProject
 import ai.rootforge.os.root.BootImageParser
 import ai.rootforge.os.root.RootManager
 import ai.rootforge.os.ui.AppActions
@@ -142,11 +143,12 @@ class DesktopActions(
         }
     }
 
-    override fun lookupOfficialRecoveries(codenames: List<String>, then: (List<RecoveryOffer>) -> Unit) {
+    override fun lookupOfficialRecoveries(codenames: List<String>, project: RecoveryProject?, then: (List<RecoveryOffer>) -> Unit) {
         scope.launch {
-            log.info("Looking up TWRP (twrp.me / dl.twrp.me) and PitchBlack (pitchblackrecovery.com / GitHub) for ${codenames.joinToString()}")
+            val which = project?.name ?: "TWRP and PitchBlack"
+            log.info("Looking up $which for ${codenames.joinToString()}")
             runCatching {
-                withContext(Dispatchers.IO) { RecoveryCatalogClient().lookup(codenames) }
+                withContext(Dispatchers.IO) { RecoveryCatalogClient().lookup(codenames, project) }
             }.onSuccess {
                 log.info("Found ${it.size} official recovery file(s).")
                 then(it)

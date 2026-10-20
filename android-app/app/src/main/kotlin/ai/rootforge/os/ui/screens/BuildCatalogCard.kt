@@ -3,6 +3,8 @@ package ai.rootforge.os.ui.screens
 import ai.rootforge.os.catalog.BuildKind
 import ai.rootforge.os.catalog.BuildLookup
 import ai.rootforge.os.catalog.BuildMatch
+import ai.rootforge.os.catalog.CatalogRecoveryBridge
+import ai.rootforge.os.catalog.CatalogRecoveryPrefill
 import ai.rootforge.os.catalog.LoadedCatalog
 import ai.rootforge.os.core.TargetInfo
 import ai.rootforge.os.fastboot.TargetIdentity
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,11 +37,19 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Community builds that list the connected target, from the Custom RR catalog.
- * Informational only: nothing on this card can start or allow a flash.
+ * ROMs and root solutions stay links. A matching TWRP or PitchBlack recovery
+ * can open Custom Recovery; that screen still defaults to dry-run and needs
+ * typed FLASH RECOVERY. Nothing here feeds DeviceMatchGate.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun BuildCatalogCard(catalog: LoadedCatalog?, info: TargetInfo?, busy: Boolean, actions: AppActions) {
+fun BuildCatalogCard(
+    catalog: LoadedCatalog?,
+    info: TargetInfo?,
+    busy: Boolean,
+    actions: AppActions,
+    onInstallRecovery: (CatalogRecoveryPrefill) -> Unit = {},
+) {
     ForgeCard("Builds for this device", "ROMs, recoveries and root tools that Custom RR lists for this codename", Icons.Filled.Storefront) {
         if (catalog == null) {
             Text(
@@ -59,7 +70,7 @@ fun BuildCatalogCard(catalog: LoadedCatalog?, info: TargetInfo?, busy: Boolean, 
                         "No catalog entry lists ${(target.names() + listOfNotNull(model?.trim()?.ifBlank { null })).joinToString(" / ")}. Matching uses exact codenames and model numbers.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                else -> matches.forEach { BuildMatchRow(it, actions) }
+                else -> matches.forEach { BuildMatchRow(it, actions, onInstallRecovery) }
             }
             Text(
                 listOfNotNull(catalog.source, catalog.catalog.generatedAt?.let { "catalog generated $it" }).joinToString(" · "),
@@ -71,14 +82,15 @@ fun BuildCatalogCard(catalog: LoadedCatalog?, info: TargetInfo?, busy: Boolean, 
             ActionButton("Import file", Icons.Filled.FileOpen, ActionKind.Outline, enabled = !busy) { actions.importBuildCatalog() }
             if (catalog != null) ActionButton("Remove", kind = ActionKind.Outline, enabled = !busy) { actions.clearBuildCatalog() }
         }
-        NoticeCard("Information only. A listing here does not allow a flash: every image still needs a matching manifest. Download contacts raw.githubusercontent.com only when you tap it.")
+        NoticeCard("A listing here does not allow a flash and is not read by DeviceMatchGate. ROMs and root solutions stay links. A matching TWRP or PitchBlack row can open Custom Recovery, which still defaults to dry-run, shows SHA-256, and needs typed FLASH RECOVERY. Download of the catalog contacts raw.githubusercontent.com only when you tap it.")
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BuildMatchRow(match: BuildMatch, actions: AppActions) {
+private fun BuildMatchRow(match: BuildMatch, actions: AppActions, onInstallRecovery: (CatalogRecoveryPrefill) -> Unit) {
     val entry = match.entry
+    val prefill = CatalogRecoveryBridge.prefill(match)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f)) {
@@ -99,6 +111,9 @@ private fun BuildMatchRow(match: BuildMatch, actions: AppActions) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             entry.safeDownloadUrl()?.let { url -> ActionButton("Download page", Icons.Filled.OpenInBrowser, ActionKind.Outline) { actions.openUrl(url) } }
             entry.safeForumUrl()?.let { url -> ActionButton("Forum", kind = ActionKind.Outline) { actions.openUrl(url) } }
+            if (prefill != null) {
+                ActionButton("Install with Custom Recovery", Icons.Filled.SystemUpdateAlt) { onInstallRecovery(prefill) }
+            }
         }
     }
 }
