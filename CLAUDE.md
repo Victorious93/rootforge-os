@@ -11,6 +11,29 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (bug sweep):** branch `fix/bug-sweep-2026-10-20`
+> (PR #84). Four confirmed bugs on `main` `3f7661d` (#76–#83): (1)
+> fleet `ReplayGuard` evicted the oldest live nonce after 4,096
+> distinct `(source, nonce)` pairs, so a reused envelope inside the
+> 10-minute retain window could return `OK` — the cap now refuses
+> the new request (`internal`) and never evicts a live nonce; (2)
+> Custom Recovery allowed a `dd` write when `blockdev --getsize64`
+> failed or was unreadable — unknown size is now a blocker; (3)
+> `config.import` accepted any `terminalApp` / `autoConnect` string
+> — import now requires `true`/`false` and a valid package name
+> (empty terminal app still clears it); (4) Android
+> `FileInputStream.readNBytes` (API 33) was used on minSdk 26 for
+> image-header reads and would crash on API 26–32 — now `:core`
+> `readPrefix`. External control stays off; `applicationId` /
+> signing / versioning unchanged. Local suite: `:core:test` 363/0;
+> `:desktop:test` 2/0; `:app:testDebugUnitTest` 34/0;
+> `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug`
+> / `versionCode=1` / `versionName=0.1.0-debug`); `:app:lintDebug`
+> 0 errors (24 pre-existing warnings); `bash tests/run-tests.sh`
+> 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the
+> repo wheel). **Not run on a phone.** This VM has KVM but no
+> emulator system image.
+
 > **Update 2026-10-20 (fleet config.export / config.import):** branch
 > `feat/config-backup`. Protocol 1.1 standalone Bridge ops `config.export` and
 > `config.import` (droidcommand-AI `UNIFIED_BACKUP.md` / DCA #236) on the
@@ -343,17 +366,26 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-20 · **Branch:** `feat/config-backup`
+**Last updated:** 2026-10-20 · **Branch:** `fix/bug-sweep-2026-10-20`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), and local module install + Links + Glossary (#81 / `b72d214`). On `main`: #82 `node.status.get`. This branch adds fleet `config.export` / `config.import`. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), and `config.export` / `config.import` (#83 / `3f7661d`). This branch is a bug sweep of that head. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Fleet config backup (this branch, after merging `origin/main` `3737c12` #82):
+- Bug sweep on `main` `3f7661d` (this branch, PR #84): replay cache
+  never evicts a live nonce; Custom Recovery refuses unknown
+  partition size; config import validates `autoConnect` /
+  `terminalApp`; Android header reads use `readPrefix` (minSdk 26).
+  External control stays off. `:core:test` 363/0, `:desktop:test` 2/0,
+  `:app:testDebugUnitTest` 34/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `:app:lintDebug` 0
+  errors, `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not
+  run on a phone.** No emulator system image here.
+- Fleet config backup (`main` `3f7661d` #83):
   `config.export` / `config.import` advertised with `remoteAllowed=false`;
   remote callers `capability_off`; export omits secrets; import dry-run /
   skip / overwrite / merge-by-id; confirm required; never enables

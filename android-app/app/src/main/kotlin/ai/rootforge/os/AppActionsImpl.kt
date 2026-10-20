@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.core.FileDigest
 import ai.rootforge.os.core.Library
+import ai.rootforge.os.core.readPrefix
 import ai.rootforge.os.module.BuiltModule
 import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.recovery.RecoveryCatalogClient
@@ -187,7 +188,7 @@ class AppActionsImpl(
                 withContext(Dispatchers.IO) {
                     val dest = app.library.fileFor(Library.sanitize(offer.filename))
                     RecoveryFetcher.fetchToFile(url, dest, referer = offer.referer)
-                    val head = dest.inputStream().use { it.readNBytes(8) }
+                    val head = dest.readPrefix(8)
                     val payload = RecoveryPlanner.payloadOf(dest.name, head)
                     if (payload == RecoveryPayload.OTHER) {
                         dest.delete()

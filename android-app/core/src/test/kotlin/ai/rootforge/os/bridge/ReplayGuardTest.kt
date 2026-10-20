@@ -71,4 +71,15 @@ class ReplayGuardTest {
         now += 1
         assertEquals(ReplayVerdict.OK, guard.check("pkg:aa", nonce(6), now, FLEET_DEFAULT_TTL_MS))
     }
+
+    @Test
+    fun fillingTheCacheDoesNotEvictALiveNonce() {
+        val now = 1_000_000L
+        val guard = ReplayGuard(clock = { now }, maxEntries = 2)
+        assertEquals(ReplayVerdict.OK, guard.check("pkg:aa", nonce(1), now, FLEET_DEFAULT_TTL_MS))
+        assertEquals(ReplayVerdict.OK, guard.check("pkg:aa", nonce(2), now, FLEET_DEFAULT_TTL_MS))
+        assertEquals(ReplayVerdict.BUSY, guard.check("pkg:aa", nonce(3), now, FLEET_DEFAULT_TTL_MS))
+        assertEquals(ReplayVerdict.REPLAY, guard.check("pkg:aa", nonce(1), now, FLEET_DEFAULT_TTL_MS))
+        assertEquals(2, guard.size())
+    }
 }
