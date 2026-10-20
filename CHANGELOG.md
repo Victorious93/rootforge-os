@@ -7,6 +7,12 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Fleet remote-control bridge v1 (2026-10-20)
+- Protocol **1.1** fleet envelope on the existing exported Messenger service (`ai.rootforge.os.action.BRIDGE`): `op` is `capabilities.get` | `remote.command` | `macro.step` | `macro.run`, with `requestId`, `targetNodeRef`, `actionRef`, `params`, 128-bit hex `nonce`, `timestampMs`, `ttlMs` (default 120 s, max 300 s), advisory `destructive`, and optional informational `trigger`. The legacy snake_case `rootforge.*` envelope is unchanged (`BridgeIngress` routes on a top-level `op` field).
+- Authorize only by caller package + signing-cert SHA-256 (`Message.sendingUid` / `Binder.getCallingUid` + PackageManager). Envelope fields never pair, grant, or skip a confirm. External control stays **off by default**. Replay: expired if `now > timestampMs+ttlMs` or clock skew > 120 s; duplicate nonces keyed `(sourceNodeRef, nonce)` with a ≥ 10 minute cache.
+- Destructive actions (flash / slot / lock / unlock, recovery writes, `shizuku.pmGrant`) go through `ApprovalCenter` with an on-device typed phrase and never auto-approve from a remote trigger. `shizuku.exec` is `capability_off`. Error codes are the frozen 1.1 set.
+- Tests: `:core` `FleetEnvelopeTest`, `ReplayGuardTest`, `FleetAuthTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`. Docs: `docs/MANUAL.md` (Fleet integration). `applicationId`, signing and versioning unchanged.
+
 ### Desktop mode (VictorSuite X11) (2026-10-20)
 - Android Dashboard **Desktop mode** card. VictorSuite’s package is `com.termux` (read from Victorious93/VictorSuite on 2026-10-20). RootForge detects it with PackageManager + `<queries>`, pins it by package + signing-certificate SHA-256 (no shared key), and then sends either the dedicated `ai.victorsuite.action.DESKTOP_MODE` intent (specified, not implemented in VictorSuite yet) or Termux `RUN_COMMAND` with only `rootforge-desktop-mode <start|stop|setup|status>`. Missing VictorSuite is a hint, not a crash. Desktop JVM client hides the card. `applicationId`, signing and versioning unchanged.
 - Toolkit: `setup_desktop_mode.sh` (idempotent XFCE + tigervnc + VS Code-if-present + launchers), `rootforge_desktop_mode.sh` (X11 or VNC fallback), `termux/desktop-mode-entry.sh`. Unpinned code-server downloads are refused. Spec: `docs/DESKTOP_MODE.md`.

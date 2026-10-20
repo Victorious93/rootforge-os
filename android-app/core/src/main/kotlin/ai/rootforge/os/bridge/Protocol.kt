@@ -11,8 +11,13 @@ import kotlinx.serialization.json.JsonObject
  * `core-rootforge` module already speaks to a RootForge node over SSH
  * (`BridgeRequest` / `BridgeResponse`), so DCA needs only a different
  * transport, not a different protocol. See docs/DROIDCOMMAND_INTEGRATION.md.
+ *
+ * Minor 1 adds the fleet remote-control envelope (`op` / `requestId` / nonce)
+ * documented in `docs/MANUAL.md` (Fleet integration). Major 1 snake_case
+ * requests (`operation`, `rootforge.*`) stay valid.
  */
 const val BRIDGE_PROTOCOL_MAJOR = 1
+const val BRIDGE_PROTOCOL_MINOR = 1
 
 /** Bound-service action. Debug APKs keep this action; only the package name changes. */
 const val BRIDGE_ACTION = "ai.rootforge.os.action.BRIDGE"

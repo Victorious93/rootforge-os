@@ -11,6 +11,18 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (fleet bridge v1):** branch `feat/fleet-bridge-v1`. Protocol 1.1
+> fleet remote-control envelope on the existing exported Messenger service
+> (`ai.rootforge.os.action.BRIDGE`): `op` `capabilities.get` | `remote.command` |
+> `macro.step` | `macro.run`, nonce/ttl/skew replay cache, pairing by package +
+> cert SHA-256 only (never `trigger.*`). External control still off by default.
+> Destructive ops (flash, recovery names, `shizuku.pmGrant`) go through
+> `ApprovalCenter` and never auto-approve. Legacy snake_case `rootforge.*`
+> envelope unchanged (`BridgeIngress`). Docs: `docs/MANUAL.md` Fleet integration.
+> `applicationId` / signing / versioning unchanged. Tests this session: pending
+> when this note was first written; see the verification line after the local
+> suite.
+
 > **Update 2026-10-20 (Desktop mode):** branch `feat/desktop-mode-x11`. Android Dashboard
 > card talks to VictorSuite (`com.termux`, confirmed in that repo) by package + cert pin,
 > then `RUN_COMMAND` with only `rootforge-desktop-mode <op>` (dedicated
@@ -184,7 +196,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-20 · **Branch:** `feat/desktop-mode-x11`
+**Last updated:** 2026-10-20 · **Branch:** `feat/fleet-bridge-v1`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
@@ -194,6 +206,10 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Fleet protocol 1.1 (`BRIDGE_PROTOCOL_MINOR = 1`): Messenger JSON `op` envelope with
+  nonce replay/expiry, package+cert pairing, default-off external control, and
+  `ApprovalCenter` for destructive remote actions. Legacy `rootforge.*` envelope still
+  accepted. Documented in `docs/MANUAL.md`. Not run on a phone.
 - Desktop mode: Android Dashboard card for VictorSuite (`com.termux`). Pin by package+cert, then
   RUN_COMMAND with a fixed `rootforge-desktop-mode` command, or a dedicated action VictorSuite
   does not export yet (`docs/DESKTOP_MODE.md`). Missing companion is a hint. Not run on a phone.

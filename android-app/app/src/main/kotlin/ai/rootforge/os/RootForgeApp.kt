@@ -2,8 +2,10 @@ package ai.rootforge.os
 
 import ai.rootforge.os.adb.AdbKeyStore
 import ai.rootforge.os.bridge.BridgeExecutor
+import ai.rootforge.os.bridge.BridgeIngress
 import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.bridge.ControllerBackend
+import ai.rootforge.os.bridge.FleetExecutor
 import ai.rootforge.os.bridge.PairingPersistence
 import ai.rootforge.os.bridge.PairingStore
 import ai.rootforge.os.catalog.BuildCatalogStore
@@ -57,19 +59,24 @@ class RootForgeApp : Application() {
             override fun write(json: String) = prefs.edit().putString("paired_controllers", json).apply()
         })
     }
-    val bridge by lazy {
-        BridgeExecutor(
-            settings.nodeId,
-            ControllerBackend(controller, BuildConfig.VERSION_NAME),
-            approvals,
-            pairing,
-            bridgeEnabled = { settings.bridgeEnabled },
-        )
-    }
-
     val shizukuHost by lazy { AndroidShizukuHost(this) }
     val shizukuManager by lazy { ShizukuManager(shizukuHost) }
     val privilegedShell: PrivilegedShell by lazy { BoundPrivilegedShell(this, shizukuManager) }
+    val bridge by lazy {
+        val backend = ControllerBackend(controller, BuildConfig.VERSION_NAME)
+        val enabled = { settings.bridgeEnabled }
+        BridgeIngress(
+            BridgeExecutor(settings.nodeId, backend, approvals, pairing, bridgeEnabled = enabled),
+            FleetExecutor(
+                settings.nodeId,
+                backend,
+                approvals,
+                pairing,
+                bridgeEnabled = enabled,
+                privileged = privilegedShell,
+            ),
+        )
+    }
     val shizukuState = kotlinx.coroutines.flow.MutableStateFlow(ShizukuState.NOT_INSTALLED)
     val shizukuBusy = kotlinx.coroutines.flow.MutableStateFlow(false)
     val shizukuResult = kotlinx.coroutines.flow.MutableStateFlow("")
