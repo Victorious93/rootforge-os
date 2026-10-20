@@ -31,14 +31,18 @@ class HostBridgeBackend(private val controller: HostController, override val app
         return Result.success(info.rows.toMap())
     }
 
-    override suspend fun adbShell(command: String) = controller.adbShell(command)
+    override fun activeSerial(): String? = controller.activeSerial()
 
-    override suspend fun adbReboot(target: String) = controller.adbReboot(target)
+    override fun transportEpoch(): Long = controller.transportEpoch()
 
-    override suspend fun fastbootReboot(target: String): Result<Unit> {
+    override suspend fun adbShell(command: String, boundEpoch: Long?) = controller.adbShell(command, boundEpoch)
+
+    override suspend fun adbReboot(target: String, boundEpoch: Long?) = controller.adbReboot(target, boundEpoch)
+
+    override suspend fun fastbootReboot(target: String, boundEpoch: Long?): Result<Unit> {
         val t = RebootTarget.entries.firstOrNull { it.name.equals(target, true) || (target == "fastbootd" && it == RebootTarget.FASTBOOTD) }
             ?: return Result.failure(IllegalArgumentException("unknown reboot target"))
-        return controller.fastbootReboot(t)
+        return controller.fastbootReboot(t, boundEpoch)
     }
 
     override suspend fun moduleBuild(spec: ModuleSpec) =

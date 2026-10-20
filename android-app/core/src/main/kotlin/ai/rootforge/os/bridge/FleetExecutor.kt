@@ -259,6 +259,16 @@ class FleetExecutor(
         })
     }
 
+    /** Every parameter is shown in full. A line past this cap is refused instead of clipped. */
+    private fun approvalParamLines(params: JsonObject): List<String> =
+        params.entries.map { (key, value) ->
+            val rendered = "$key = $value"
+            if (rendered.length > MAX_APPROVAL_LINE) {
+                throw FleetBadParameters("$key is too long to show in full on the approval screen")
+            }
+            rendered
+        }
+
     private suspend fun runAction(actionRef: String, params: JsonObject, caller: CallerIdentity): JsonObject {
         if (RemoteActionCatalog.isForbiddenDestructive(actionRef)) {
             throw FleetOpFailed(
@@ -276,15 +286,23 @@ class FleetExecutor(
             throw FleetBadParameters("unknown parameter(s): ${extra.sorted().joinToString()}")
         }
 
+        val deviceBound = BridgeOp.bindsUsbTarget(actionRef)
+        val deviceEpoch = if (deviceBound) backend.transportEpoch() else null
+        val deviceSerial = if (deviceBound) backend.activeSerial() else null
         if (cap.kind == FleetKind.ACTION) {
             val ok = approvals.request(
                 title = "Allow $actionRef?",
-                lines = listOf("Requested by ${caller.packageName}", cap.description) +
-                    params.entries.map { "${it.key} = ${it.value.toString().take(300)}" },
+                lines = listOf("Requested by ${caller.packageName}", cap.description) + approvalParamLines(params),
                 source = caller.packageName,
             )
             if (!ok) {
                 throw FleetOpFailed(FleetError.CONFIRMATION_REQUIRED, "the person at the host phone did not approve $actionRef")
+            }
+            if (deviceEpoch != null && (backend.transportEpoch() != deviceEpoch || backend.activeSerial() != deviceSerial)) {
+                throw FleetOpFailed(
+                    FleetError.NOT_FOUND,
+                    "The connected device changed while you were confirming; nothing was run.",
+                )
             }
         }
 
@@ -297,7 +315,7 @@ class FleetExecutor(
             BridgeOp.ADB_SHELL -> {
                 val cmd = params.string("command", max = 2000)
                 if (cmd.contains('\u0000')) throw FleetBadParameters("command contains a NUL byte")
-                val (out, code) = backend.adbShell(cmd).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "shell failed") }
+                val (out, code) = backend.adbShell(cmd, deviceEpoch).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "shell failed") }
                 buildJsonObject {
                     put("exit_code", code?.let { JsonPrimitive(it) } ?: JsonNull)
                     put("output", out.take(MAX_OUTPUT))
@@ -307,13 +325,13 @@ class FleetExecutor(
             BridgeOp.ADB_REBOOT -> {
                 val t = params.stringOrNull("target") ?: ""
                 if (t !in ADB_REBOOT_TARGETS) throw FleetBadParameters("target must be one of ${ADB_REBOOT_TARGETS.filter { it.isNotEmpty() }}")
-                backend.adbReboot(t).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "reboot failed") }
+                backend.adbReboot(t, deviceEpoch).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "reboot failed") }
                 buildJsonObject { put("requested", t.ifEmpty { "system" }) }
             }
             BridgeOp.FASTBOOT_REBOOT -> {
                 val t = params.stringOrNull("target") ?: "system"
                 if (t !in FASTBOOT_REBOOT_TARGETS) throw FleetBadParameters("target must be one of $FASTBOOT_REBOOT_TARGETS")
-                backend.fastbootReboot(t).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "reboot failed") }
+                backend.fastbootReboot(t, deviceEpoch).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "reboot failed") }
                 buildJsonObject { put("requested", t) }
             }
             BridgeOp.MODULE_BUILD -> {
@@ -450,6 +468,7 @@ class FleetExecutor(
 
     companion object {
         private const val MAX_OUTPUT = 64 * 1024
+        private const val MAX_APPROVAL_LINE = 4_096
         private val NODE_STATUS_KEYS = setOf("nodeId", "snapshot")
         private val ADB_REBOOT_TARGETS = listOf("", "bootloader", "recovery", "sideload", "fastboot", "edl")
         private val FASTBOOT_REBOOT_TARGETS = listOf("system", "bootloader", "recovery", "fastbootd")

@@ -230,7 +230,7 @@ Each card is a read-only identity, a **Root plan**, and a brand **Root wizard** 
 
 **EDL is identify only.** Qualcomm `05c6:9008` is recognised so you can see the chip. Devices never starts a Firehose write. When a phone is in EDL, the card opens the **MSM / EDL** guide: what MSM Download Tool is, what an EDL restore does, and official https firmware/support links for that brand. RootForge **never ships** the MSM tool or any firmware, and the guide **never writes**.
 
-Safety is unchanged: dry-run stays the default where it already was, typed confirm still gates writes, a recovery write still backs up first, nothing reboots by itself, and each serial has its own lock so two phones can work at the same time without sharing one queue.
+Safety stays the same in the usual ways: dry-run stays the default where it already was, typed confirm still gates writes, a recovery write still backs up first, and nothing reboots by itself. Each serial still has its own lock, so identify can run on every phone at once. Connecting a different phone is refused while a write, shell, reboot, or other non-identify action is confirming or running, so that action stays on the phone it started on. If that phone is unplugged while the dialog is open, the action is cancelled.
 
 1. Open **Devices**.
 2. Plug the phones in. Grant USB access if a row asks. On a PC, unlock the phone and allow this computer if adb says unauthorized.

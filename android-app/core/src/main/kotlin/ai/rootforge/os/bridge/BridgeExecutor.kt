@@ -4,7 +4,10 @@ import ai.rootforge.os.core.ApprovalCenter
 import ai.rootforge.os.core.Library
 import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.module.ModuleTarget
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonElement
@@ -25,10 +28,20 @@ interface BridgeBackend {
     val nodeKind: String
     val usbHost: Boolean
     fun devices(): List<BridgeDevice>
+
+    /** Serial (or roster key) of the phone a following shell/reboot would hit. Null when none is connected. */
+    fun activeSerial(): String?
+
+    /**
+     * Bumps whenever the connected phone changes. A confirm dialog captures this
+     * and refuses to run if it moved, so Allow cannot land on a different device.
+     */
+    fun transportEpoch(): Long
+
     suspend fun deviceInfo(): Result<Map<String, String>>
-    suspend fun adbShell(command: String): Result<Pair<String, Int?>>
-    suspend fun adbReboot(target: String): Result<Unit>
-    suspend fun fastbootReboot(target: String): Result<Unit>
+    suspend fun adbShell(command: String, boundEpoch: Long? = null): Result<Pair<String, Int?>>
+    suspend fun adbReboot(target: String, boundEpoch: Long? = null): Result<Unit>
+    suspend fun fastbootReboot(target: String, boundEpoch: Long? = null): Result<Unit>
     suspend fun moduleBuild(spec: ModuleSpec): Result<Pair<String, String>>
     suspend fun fastbootFlash(partition: String, imageName: String, source: String): Result<Unit>
     suspend fun fastbootUnlock(source: String): Result<Unit>
@@ -75,19 +88,19 @@ class BridgeExecutor(
         Operation(BridgeOp.ADB_SHELL, Tier.CONTROL, "Run one shell command on the target over ADB.", "command: string", setOf("command")) { p, _ ->
             val cmd = p.string("command", max = 2000)
             if (cmd.contains('\u0000')) throw BadParameters("command contains a NUL byte")
-            val (out, code) = backend.adbShell(cmd).getOrElse { throw OperationFailed(ErrorCategory.FAILED, it.message) }
+            val (out, code) = backend.adbShell(cmd, boundEpoch()).getOrElse { throw OperationFailed(ErrorCategory.FAILED, it.message) }
             buildJsonObject { put("exit_code", code?.let { JsonPrimitive(it) } ?: JsonNull); put("output", out.take(MAX_OUTPUT)); put("truncated", out.length > MAX_OUTPUT) }
         },
         Operation(BridgeOp.ADB_REBOOT, Tier.CONTROL, "Reboot the target (system, bootloader, recovery, sideload, fastboot, edl).", "target?: string", setOf("target")) { p, _ ->
             val t = p.stringOrNull("target") ?: ""
             if (t !in ADB_REBOOT_TARGETS) throw BadParameters("target must be one of ${ADB_REBOOT_TARGETS.filter { it.isNotEmpty() }}")
-            backend.adbReboot(t).getOrElse { throw OperationFailed(ErrorCategory.FAILED, it.message) }
+            backend.adbReboot(t, boundEpoch()).getOrElse { throw OperationFailed(ErrorCategory.FAILED, it.message) }
             buildJsonObject { put("requested", t.ifEmpty { "system" }) }
         },
         Operation(BridgeOp.FASTBOOT_REBOOT, Tier.CONTROL, "Reboot a target that is in fastboot (system, bootloader, recovery, fastbootd).", "target?: string", setOf("target")) { p, _ ->
             val t = p.stringOrNull("target") ?: "system"
             if (t !in FASTBOOT_REBOOT_TARGETS) throw BadParameters("target must be one of $FASTBOOT_REBOOT_TARGETS")
-            backend.fastbootReboot(t).getOrElse { throw OperationFailed(ErrorCategory.FAILED, it.message) }
+            backend.fastbootReboot(t, boundEpoch()).getOrElse { throw OperationFailed(ErrorCategory.FAILED, it.message) }
             buildJsonObject { put("requested", t) }
         },
         Operation(BridgeOp.MODULE_BUILD, Tier.CONTROL, "Build a Magisk/KernelSU/APatch module zip into the app library (no device is touched).", "id, name, version?, version_code?, author?, description?, target?", setOf("id", "name", "version", "version_code", "author", "description", "target")) { p, _ ->
@@ -159,18 +172,33 @@ class BridgeExecutor(
             return error(id, ErrorCategory.BAD_PARAMETERS, "unknown parameter(s): ${extra.sorted().joinToString()}")
         }
 
+        val deviceBound = op.tier == Tier.CONTROL && BridgeOp.bindsUsbTarget(op.name)
+        val deviceEpoch = if (deviceBound) backend.transportEpoch() else null
+        val deviceSerial = if (deviceBound) backend.activeSerial() else null
         if (op.tier == Tier.CONTROL) {
+            val paramLines = try {
+                approvalParamLines(request.parameters)
+            } catch (e: BadParameters) {
+                return error(id, ErrorCategory.BAD_PARAMETERS, e.message ?: "bad parameters")
+            }
             val ok = approvals.request(
                 title = "Allow ${op.name}?",
-                lines = listOf("Requested by ${caller.packageName}", op.description) + request.parameters.entries.map { "${it.key} = ${it.value.toString().take(300)}" },
+                lines = listOf("Requested by ${caller.packageName}", op.description) + paramLines,
                 source = caller.packageName,
             )
             if (!ok) return error(id, ErrorCategory.DENIED, "the person at the host phone did not approve ${op.name}")
+            if (deviceEpoch != null && (backend.transportEpoch() != deviceEpoch || backend.activeSerial() != deviceSerial)) {
+                return error(id, ErrorCategory.NO_TARGET, "The connected device changed while you were confirming; nothing was run.")
+            }
         }
 
         val budget = request.timeoutMs.toLong().coerceIn(1_000, MAX_TIMEOUT).let { if (op.tier == Tier.READ) it else maxOf(it, MIN_ACTION_TIMEOUT) }
         return try {
-            val result = withTimeout(budget) { op.run(request.parameters, caller) }
+            val result = withTimeout(budget) {
+                val epoch = deviceEpoch
+                if (epoch == null) op.run(request.parameters, caller)
+                else withContext(BoundTransport(epoch)) { op.run(request.parameters, caller) }
+            }
             BridgeResponse(BRIDGE_PROTOCOL_MAJOR, id, nodeId, true, result)
         } catch (e: BadParameters) {
             error(id, ErrorCategory.BAD_PARAMETERS, e.message ?: "bad parameters")
@@ -215,6 +243,22 @@ class BridgeExecutor(
         })
     }
 
+    private suspend fun boundEpoch(): Long? = currentCoroutineContext()[BoundTransport]?.epoch
+
+    /** Every parameter is shown in full. A line past this cap is refused instead of clipped. */
+    private fun approvalParamLines(params: JsonObject): List<String> =
+        params.entries.map { (key, value) ->
+            val rendered = "$key = $value"
+            if (rendered.length > MAX_APPROVAL_LINE) {
+                throw BadParameters("$key is too long to show in full on the approval screen")
+            }
+            rendered
+        }
+
+    private class BoundTransport(val epoch: Long) : kotlin.coroutines.AbstractCoroutineContextElement(Key) {
+        companion object Key : CoroutineContext.Key<BoundTransport>
+    }
+
     private fun error(requestId: String?, category: String, message: String) =
         BridgeResponse(BRIDGE_PROTOCOL_MAJOR, requestId, nodeId, false, null, BridgeErrorBody(category, message))
 
@@ -236,6 +280,7 @@ class BridgeExecutor(
     companion object {
         private const val MAX_REQUEST = 64 * 1024
         private const val MAX_OUTPUT = 64 * 1024
+        private const val MAX_APPROVAL_LINE = 4_096
         private const val MAX_TIMEOUT = 15 * 60_000L
         private const val MIN_ACTION_TIMEOUT = 120_000L
         private val ADB_REBOOT_TARGETS = listOf("", "bootloader", "recovery", "sideload", "fastboot", "edl")

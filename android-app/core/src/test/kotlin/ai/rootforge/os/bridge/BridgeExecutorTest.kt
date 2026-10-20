@@ -360,6 +360,42 @@ class BridgeExecutorTest {
     }
 
     @Test
+    fun shellAllowDoesNotRunAfterTheConnectedPhoneChanges() = runTest(UnconfinedTestDispatcher()) {
+        val approvals = ApprovalCenter()
+        val backend = RecordingBackend()
+        val (ex, _, _) = exec(approvals = approvals, backend = backend)
+        val pending = async {
+            parse(ex.handle(req(BridgeOp.ADB_SHELL, buildJsonObject { put("command", JsonPrimitive("id")) }), caller))
+        }
+        val req = approvals.pending.value.single()
+        backend.serial = "OTHER"
+        backend.epoch = 2
+        approvals.answer(req.id, true)
+        val r = pending.await()
+        assertFalse(r.ok)
+        assertEquals(ErrorCategory.NO_TARGET, r.error?.category)
+        assertTrue(r.error!!.message.contains("changed"))
+        assertTrue(backend.shells.isEmpty())
+    }
+
+    @Test
+    fun shellApprovalShowsTheEntireCommand() = runTest(UnconfinedTestDispatcher()) {
+        val approvals = ApprovalCenter()
+        val backend = RecordingBackend()
+        val (ex, _, _) = exec(approvals = approvals, backend = backend)
+        val cmd = "echo " + "A".repeat(400)
+        val pending = async {
+            parse(ex.handle(req(BridgeOp.ADB_SHELL, buildJsonObject { put("command", JsonPrimitive(cmd)) }), caller))
+        }
+        val line = approvals.pending.value.single().lines.first { it.startsWith("command") }
+        assertTrue(line.contains("A".repeat(400)))
+        approvals.answer(approvals.pending.value.single().id, true)
+        val r = pending.await()
+        assertTrue(r.toString(), r.ok)
+        assertEquals(listOf(cmd), backend.shells)
+    }
+
+    @Test
     fun messengerContractConstantsMatchTheDoc() {
         assertEquals(1, BRIDGE_PROTOCOL_MAJOR)
         assertEquals(1, BRIDGE_PROTOCOL_MINOR)
@@ -387,17 +423,30 @@ class RecordingBackend : BridgeBackend {
     var infoDelayMs: Long = 0
     var flashResult: Result<Unit> = Result.success(Unit)
 
+    var serial: String? = "ABC"
+    var epoch: Long = 1
+    override fun activeSerial(): String? = serial
+    override fun transportEpoch(): Long = epoch
     override fun devices() = listOf(BridgeDevice("ABC", "adb", "device", true, "test"))
     override suspend fun deviceInfo(): Result<Map<String, String>> {
         if (infoDelayMs > 0) delay(infoDelayMs)
         return info
     }
-    override suspend fun adbShell(command: String): Result<Pair<String, Int?>> {
+    override suspend fun adbShell(command: String, boundEpoch: Long?): Result<Pair<String, Int?>> {
+        if (boundEpoch != null && boundEpoch != epoch) {
+            return Result.failure(IllegalStateException("The connected device changed while you were confirming; nothing was run."))
+        }
         shells += command
         return Result.success("uid=0(root)" to 0)
     }
-    override suspend fun adbReboot(target: String) = Result.success(Unit).also { reboots += target }
-    override suspend fun fastbootReboot(target: String) = Result.success(Unit).also { fbReboots += target }
+    override suspend fun adbReboot(target: String, boundEpoch: Long?) = Result.success(Unit).also {
+        if (boundEpoch != null && boundEpoch != epoch) error("epoch moved")
+        reboots += target
+    }
+    override suspend fun fastbootReboot(target: String, boundEpoch: Long?) = Result.success(Unit).also {
+        if (boundEpoch != null && boundEpoch != epoch) error("epoch moved")
+        fbReboots += target
+    }
     override suspend fun moduleBuild(spec: ModuleSpec) = Result.success("x.zip" to "abc").also { modules += spec }
     override suspend fun fastbootFlash(partition: String, imageName: String, source: String): Result<Unit> {
         flashes += partition to imageName
