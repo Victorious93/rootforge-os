@@ -195,7 +195,7 @@ The home screen. You see attached USB devices, the connected target, a short dev
 
 This card lists community ROMs and recoveries whose catalog name matches the connected phone. It is **display only**. It never decides whether a flash is allowed.
 
-1. Tap **Download** to fetch the catalog over https (this is the only reason the app asks for Internet). Or tap **Import file** and pick a `catalog.json` / `freshness.json` you already have.
+1. Tap **Download** to fetch the catalog over https (one of two tap-only Internet uses; the other is Custom Recovery lookup/download). Or tap **Import file** and pick a `catalog.json` / `freshness.json` you already have.
 2. Open a download or forum link in the system browser if you want the file. RootForge does not download the ROM itself.
 3. **Remove** forgets the stored catalog. The last good copy is kept if a new download does not parse.
 
@@ -377,19 +377,31 @@ This screen writes a recovery **image** to a target that is already in the bootl
 4. **Flash** writes it (`FLASH <partition>`) and still needs a sidecar.
 5. Browser buttons open TWRP, OrangeFox, PitchBlack and LineageOS device lists. The app does **not** download those images.
 
-### Custom Recovery installer — coming in the next update
+### Custom Recovery installer
 
-A separate **Custom Recovery** drawer screen (open pull request #77, branch `feat/recovery-installer`) will install official **TWRP** or **PitchBlack** on a phone that **already has root**, using `su` and `dd`.
+![Custom Recovery](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_customRecovery.png)
 
-Planned behaviour, so you know what to expect:
+A separate **Custom Recovery** drawer screen (landed in #77 / `fabc649`) installs official **TWRP** or **PitchBlack** on a phone that **already has root**, using `su` and `dd`. It does **not** replace **Recovery**, which is still the USB fastboot path (`fastboot boot` / `fastboot flash`) to a target in the bootloader.
 
-- Detect this phone and/or the USB ADB target (codename, whether `su` works, A/B vs A-only, whether a real `recovery` partition exists).
-- **Look up** and **Download** only when you tap. No images are bundled.
-- Or import a local `.img` / `.zip`.
-- **Dry-run is on by default.** A real write needs typed `FLASH RECOVERY`, backs up the current recovery into app storage, then writes only `recovery` / `recovery_a` / `recovery_b`. It never writes `boot` or `vendor_boot`. A zip is never written with `dd`.
-- **Reboot to recovery** is a separate button. A write never reboots by itself.
+This has **not** been run on a phone. No recovery images are bundled. The full contract is [docs/CUSTOM_RECOVERY_INSTALLER.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/CUSTOM_RECOVERY_INSTALLER.md).
 
-Until that update lands, use **Recovery** (fastboot) and the Root Guide pages for TWRP / PitchBlack.
+**Steps**
+
+1. Open **Custom Recovery**. The screen detects **this phone** (Android app) and, if connected, the **USB ADB target**. Tap **Detect** to read `ro.product.device` / `ro.build.product`, whether `su -c id` reports `uid=0`, A/B vs A-only, and whether `/dev/block/by-name` has `recovery` / `recovery_a` / `recovery_b`.
+2. Pick **This phone** or **USB target**.
+3. Tap **Look up TWRP & PitchBlack** to list official files for that codename (https only, official hosts only). Or pick a local `.img` / `.zip` from the library.
+4. **Download** copies a listed file into the library. The SHA-256 is always shown. When TWRP published a `.img.md5`, a mismatch refuses the write/download. PGP is **not** verified (the app does not ship a keyring).
+5. **Dry-run is on by default.** **Run dry-run** prints the `dd` commands and stats the partition. It does not write.
+6. Turn dry-run off and tap **Write recovery**. Type `FLASH RECOVERY`. RootForge backs up the current recovery partition into app storage first, then writes only `recovery` / `recovery_a` / `recovery_b`.
+7. **Reboot to recovery now** is a separate button (`su reboot recovery` or `adb reboot recovery`). A write never reboots by itself.
+
+**What it will not do**
+
+- Write `boot`, `vendor_boot`, or any other partition. Devices whose recovery lives in boot or vendor_boot get the official installer zip path and a pointer to **Recovery → Boot once**.
+- Guess an A/B slot. If `recovery_a` / `recovery_b` exist and the current slot is unknown, it refuses to write.
+- `dd` a zip. Sideload the zip from ADB once the phone is in recovery, or install it from the recovery UI.
+- Follow `http://`, or download from hosts outside TWRP's `dl.twrp.me` / `twrp.me` and PitchBlack's site / GitHub / SourceForge.
+- Skip the typed phrase. There is no setting that turns it off.
 
 ### Desktop mode via VictorSuite
 
@@ -508,7 +520,7 @@ Read from the app's `AndroidManifest.xml`. Android may also show a USB-access pr
 |---|---|
 | **USB Host** (`android.hardware.usb.host`, required) | The host phone must be able to talk to another USB device. Phones without this hardware cannot install the app |
 | **Notifications** (`POST_NOTIFICATIONS`) | Only to tell you a controller is waiting for pairing, or that a remote command needs approval, and only when the app is not on screen. Android 13+ asks once at first launch |
-| **Internet** (`INTERNET`) | **Only** the Dashboard **Download** button on "Builds for this device": two https reads of the Custom RR catalog. Device work never uses the network. Import file is offline |
+| **Internet** (`INTERNET`) | Two tap-only uses: Dashboard **Download** on "Builds for this device" (two https reads of the Custom RR catalog), and **Custom Recovery** **Look up** / **Download** of official TWRP (`twrp.me` / `dl.twrp.me`) and PitchBlack (`pitchblackrecovery.com`, GitHub, SourceForge) files. Device work never uses the network. Import file is offline |
 | **Shizuku API** (`moe.shizuku.manager.permission.API_V23`) | Optional. Requested through Shizuku's own dialog, not the usual Android permission screen. Lets read-only lookups run when you have granted Shizuku |
 | **Run commands in Termux** (`com.termux.permission.RUN_COMMAND`) | Desktop mode: after you pin VictorSuite, Start / Set up / Status / Stop send one documented `rootforge-desktop-mode` command. Android may ask once |
 | **Desktop mode** (`ai.victorsuite.permission.DESKTOP_MODE`) | Declared for the dedicated VictorSuite action. VictorSuite does not define this permission yet, so Android will not prompt for it today |
@@ -580,7 +592,7 @@ The GUI uses the same gates for its own writes:
 | Phrase | Used for |
 |---|---|
 | `FLASH <partition>` | Fastboot / Recovery / Root flash |
-| `FLASH RECOVERY` | Custom Recovery installer (next update) |
+| `FLASH RECOVERY` | Custom Recovery installer (`su` / `dd`) |
 | `SLOT a` / `SLOT b` | Active slot |
 | `ERASE <partition>` | Fastboot erase |
 | `UNLOCK` / `LOCK` | Bootloader |
@@ -624,11 +636,11 @@ The sidecar / device-match check runs before a flash and again after you confirm
 
 **Desktop mode does nothing.** The card is in the current app (Dashboard, Android only). It has **not** been run on a phone. Install VictorSuite (`com.termux`), pin it, grant `RUN_COMMAND`, set `allow-external-apps=true`, and install the rootfs wrapper. The dedicated Desktop-mode action is not in VictorSuite yet; `RUN_COMMAND` is the only live path. Missing VictorSuite is a hint, not a crash. See [docs/DESKTOP_MODE.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DESKTOP_MODE.md).
 
-**Will the TWRP / PitchBlack installer work today?** Not on the current main app. It is coming in the next update (PR #77, branch `feat/recovery-installer`). Use **Recovery** (fastboot) until then.
+**Custom Recovery will not write.** The phone must already have root (`su`). Dry-run is on by default. A real write needs typed `FLASH RECOVERY`. Recovery-in-boot devices are refused (use **Recovery → Boot once** or an installer zip). An unknown A/B slot is refused. A zip is never written with `dd`. This has **not** been run on a phone. See [docs/CUSTOM_RECOVERY_INSTALLER.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/CUSTOM_RECOVERY_INSTALLER.md).
 
 **Is anything signed for release?** Only debug APKs. The v0.2.0 asset is debug. ISO and Termux rootfs were not attached to that release.
 
-**Where is a more technical write-up?** [docs/ANDROID_APP.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/ANDROID_APP.md), [docs/DESKTOP_MODE.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DESKTOP_MODE.md), [docs/DROIDCOMMAND_INTEGRATION.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DROIDCOMMAND_INTEGRATION.md), [docs/SECURITY_MODEL.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/SECURITY_MODEL.md), [docs/FLASH_TOOLS_PLAN.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/FLASH_TOOLS_PLAN.md).
+**Where is a more technical write-up?** [docs/ANDROID_APP.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/ANDROID_APP.md), [docs/DESKTOP_MODE.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DESKTOP_MODE.md), [docs/CUSTOM_RECOVERY_INSTALLER.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/CUSTOM_RECOVERY_INSTALLER.md), [docs/DROIDCOMMAND_INTEGRATION.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DROIDCOMMAND_INTEGRATION.md), [docs/SECURITY_MODEL.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/SECURITY_MODEL.md), [docs/FLASH_TOOLS_PLAN.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/FLASH_TOOLS_PLAN.md).
 
 ---
 
@@ -646,7 +658,7 @@ RootForge does **not** ship analytics, crash reporters or advertising SDKs.
 | Pending pairing list | Memory only | Lost if the app process dies |
 | ADB host key | Private no-backup folder | Not included in Android backup |
 | Command log | `command-log.jsonl` in app files (desktop: `~/.rootforge/command-log.jsonl`) | Redacted; desktop API token is **not** this file |
-| Library images / zips / APKs | App files `library/` (desktop: `~/.rootforge/library`) | Copies you imported |
+| Library images / zips / APKs | App files `library/` (desktop: `~/.rootforge/library`) | Copies you imported, plus Custom Recovery backups before a real `dd` |
 | Build catalog | App files `build-catalog/` | Last good copy only |
 | Desktop API token | `~/.rootforge/desktop.properties` | Created mode `0600`; a world-readable copy is tightened before it is read |
 
@@ -655,11 +667,10 @@ Shizuku lookup output is shown on the Settings card only and is **not** written 
 ### Network
 
 - **Catalog Download:** two https GETs to raw.githubusercontent.com, only when you tap Download. 8 MiB cap. http is refused.
-- **Browser links:** TWRP / OrangeFox / PitchBlack / LineageOS / module repos / Shizuku / Root Guide external links open the system browser. The app does not download those files.
+- **Custom Recovery lookup/download:** https GETs to official TWRP (`twrp.me`, `dl.twrp.me`) and PitchBlack (`pitchblackrecovery.com`, GitHub, SourceForge) hosts, only when you tap **Look up** or **Download**.
+- **Browser links:** TWRP / OrangeFox / PitchBlack / LineageOS / module repos / Shizuku / Root Guide external links open the system browser. Those buttons do not download the files.
 - **Ask** and **Root Guide** and **Help** are offline.
 - Device/USB work never uses the network.
-
-Coming in the next update, Custom Recovery lookup will also use https (TWRP / PitchBlack hosts only) and only when you tap **Look up** or **Download**.
 
 ### What the controller can see
 
@@ -671,4 +682,4 @@ No accounts. No cloud. No phone-home. Uninstalling the app (or the one-time v0.2
 
 ---
 
-*This manual matches the code on the `docs/manual` branch, including Desktop mode from #76 (`b8e7708`). The rooted TWRP / PitchBlack installer is marked coming next because PR #77 is still open. If a line here disagrees with the running app, the app is right — please file an issue.*
+*This manual matches the code on the `docs/manual` branch, including Desktop mode from #76 (`b8e7708`) and the Custom Recovery installer from #77 (`fabc649`). If a line here disagrees with the running app, the app is right — please file an issue.*

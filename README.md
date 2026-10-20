@@ -424,6 +424,7 @@ Makefile · BUILD.md · HACKING.md · AGENTS.md · CLAUDE.md
 | [docs/ROOT_GUIDE.md](docs/ROOT_GUIDE.md) | Root Guide: bundled pages, importer, parser, refresh procedure, limits |
 | [docs/FLASH_TOOLS_PLAN.md](docs/FLASH_TOOLS_PLAN.md) | Flash Tools hub, device-match check, manifest format, EDL-Commander plan |
 | [docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md) | "Builds for this device" card: Custom RR ROM/recovery catalog by codename, download or import |
+| [docs/CUSTOM_RECOVERY_INSTALLER.md](docs/CUSTOM_RECOVERY_INSTALLER.md) | Rooted TWRP / PitchBlack installer (`su` / `dd`, dry-run default) |
 | [docs/DESKTOP.md](docs/DESKTOP.md) | Linux/Windows desktop, Windows USB drivers, Docker |
 | [docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md) | Host-phone Desktop mode via VictorSuite (X11 / RUN_COMMAND) |
 | [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) | Bridge protocol for droidcommand-AI (Messenger, JSON envelope, pairing) |

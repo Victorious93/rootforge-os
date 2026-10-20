@@ -29,7 +29,8 @@ class ManualLibraryTest {
         assertTrue("Shizuku missing", "Shizuku" in text)
         assertTrue("Desktop mode pin missing", "Pin this VictorSuite" in text)
         assertTrue("Desktop mode RUN_COMMAND missing", "RUN_COMMAND" in text && "VictorSuite" in text)
-        assertTrue("coming-soon recovery installer missing", "coming in the next update" in text.lowercase() && "PitchBlack" in text && "TWRP" in text)
+        assertTrue("Custom Recovery installer missing", "FLASH RECOVERY" in text && "PitchBlack" in text && "TWRP" in text)
+        assertTrue("Custom Recovery spec missing", "CUSTOM_RECOVERY_INSTALLER" in text)
         assertTrue("typed FLASH missing", "FLASH" in text)
         assertTrue("privacy: no analytics missing", "analytics" in text.lowercase())
     }
