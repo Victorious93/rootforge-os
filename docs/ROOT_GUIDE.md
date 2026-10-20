@@ -25,7 +25,7 @@ Tutorials, Help. Each entry has an `id`, `title`, `summary`, `file`, and `origin
 - `origin: "rootforge"` — written here: `rootforge-workflow.md` ("Rooting with RootForge OS": guide steps
   to app screens, shells and terminals, limits), `magisk-kitsune.md` (Kitsune Mask status; unmaintained
   [Likely], so deliberately not a Root / Patching option) and `pitchblack-recovery.md` (PBRP; the Recovery
-  screen has an `openUrl` button, no download or bundled image). They must only describe behaviour the
+  screen has an `openUrl` button; **Custom Recovery** can download an official build on tap). They must only describe behaviour the
   app has and mark unverified claims.
 
 The upstream app/module catalogue (`docs/apps-and-modules/`, ~200 KB of link lists) is **not** imported.

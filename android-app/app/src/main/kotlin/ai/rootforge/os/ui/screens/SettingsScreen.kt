@@ -91,7 +91,7 @@ fun SettingsScreen(state: AppUiState, actions: AppActions, onOpenHelp: () -> Uni
 
         ForgeCard("About", icon = Icons.Filled.Info) {
             KeyValueRow("Version", state.appVersion)
-            KeyValueRow("Network", "Only the build-catalog Download button (https, raw.githubusercontent.com)")
+            KeyValueRow("Network", "Catalog Download, plus Custom Recovery lookup/download (https, only when tapped)")
             KeyValueRow("USB", state.transportCaption)
             ActionButton("Open the manual", kind = ActionKind.Primary) { onOpenHelp() }
             if (state.shizuku != null) {

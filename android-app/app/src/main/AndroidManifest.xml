@@ -8,8 +8,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
-      Only used when you tap Download on the "Builds for this device" card: two https GETs to
-      raw.githubusercontent.com for the Custom RR catalog. Device work never uses the network.
+      Used only when you tap a Download / Look up button: Custom RR catalog (raw.githubusercontent.com)
+      and Custom Recovery official indexes/images (twrp.me, dl.twrp.me, pitchblackrecovery.com, GitHub).
+      Device work never uses the network.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
 

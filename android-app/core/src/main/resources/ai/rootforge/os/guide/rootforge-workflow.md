@@ -24,7 +24,8 @@ Unlocking a bootloader erases the target and can void its warranty. A bad flash 
 | `fastboot boot patched.img` | **Root / Patching** or **Fastboot → Boot once** | Try this before a permanent write. |
 | `fastboot flash boot patched.img` | **Root / Patching** step 4, **Fastboot → Flash partition** | Prints a plan and asks for a typed confirmation. Needs a matching `.manifest.json` beside the image (see below). |
 | Switch A/B slot | **Fastboot → Active slot** | Asks you to type the slot. |
-| Boot or flash TWRP, OrangeFox, PitchBlack or another recovery | **Recovery** | Also enters recovery from Android or from the bootloader. |
+| Boot or flash TWRP, OrangeFox, PitchBlack or another recovery over USB fastboot | **Recovery** | Also enters recovery from Android or from the bootloader. |
+| Install TWRP or PitchBlack on a **rooted** phone with `su` | **Custom Recovery** | Official download on tap, dry-run default, backup, typed `FLASH RECOVERY`. Will not write `boot`. |
 | `adb sideload update.zip` | **ADB → Sideload** | Target must be in recovery sideload mode. |
 | Build your own Magisk-style module zip | **Modules → Create** | Optional lifecycle files, your own script text, hedged per-manager notes. Pushes and installs it on the target when ADB is ready. |
 | Find and install a module from a repository | **Modules → Repositories** | Links only: you download in your browser, import the zip, and install it. Installing any module needs a typed `INSTALL MODULE` confirmation that shows the zip's SHA-256. |

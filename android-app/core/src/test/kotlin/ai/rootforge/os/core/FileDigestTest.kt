@@ -30,4 +30,14 @@ class FileDigestTest {
         assertFalse(bad.ok)
         assertEquals(FileDigest.MISMATCH, bad.message)
     }
+
+    @Test
+    fun md5KnownVectorAndVerify() {
+        // MD5("abc") from RFC 1321.
+        val hex = FileDigest.md5Hex("abc".toByteArray())
+        assertEquals("900150983cd24fb0d6963f7d28e17f72", hex)
+        assertTrue(FileDigest.verifyMd5(hex.uppercase(), hex).ok)
+        assertFalse(FileDigest.verifyMd5("00".repeat(16), hex).ok)
+        assertEquals(FileDigest.MD5_BAD_EXPECTED, FileDigest.verifyMd5("deadbeef", hex).message)
+    }
 }
