@@ -69,6 +69,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        aidl = true
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -93,6 +94,12 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    // Current stable Shizuku API (Maven Central, 13.1.5). Provider also auto-inits Sui.
+    // RootForge does not fetch any AAR to a flatDir. If a later change does,
+    // :app preBuild, compile*Aidl and *AarMetadata must dependOn that fetch
+    // so a fresh CI runner can compile AIDL before the AAR is present.
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")

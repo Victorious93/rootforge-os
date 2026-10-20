@@ -20,7 +20,32 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > hint, never a crash. Signing / `applicationId` / versioning unchanged. Verified:
 > `:core:test` 180/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` + `assembleDebug`
 > (`aapt`: `ai.rootforge.os.debug` / `0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
-> `bash tests/lint.sh` clean. **Not run on a phone.**
+> `bash tests/lint.sh` clean. **Not run on a phone.** Merged `origin/main` (#75 Shizuku)
+> into this branch.
+
+> **Update 2026-10-19 (Shizuku fleet alignment):** branch `feat/shizuku` (PR #75).
+> Aligned with droidcommand-AI PR #231 under RootForge packages. Four states
+> `GRANTED`/`DENIED`/`NOT_INSTALLED`/`NOT_RUNNING`; Sui present when
+> `managerInstalled || binderAlive`. Sole API `PrivilegedShell` /
+> `PrivilegedResult` / `PrivilegedResultCodec`; `NullPrivilegedShell` fallback;
+> `PrivilegedProcessRunner` argv `ProcessBuilder`, no stdout/stderr logging,
+> 64 KiB cap. `ShizukuManager.requestPermission()` no-op except from `DENIED`;
+> `onCreate` only starts listeners. Bind UserService lazily after `GRANTED`,
+> off main thread (`daemon false`, `processNameSuffix privileged`,
+> `debuggable false`). `IPrivilegedShell.aidl` destroy=16777114, exec=1,
+> readDeviceState=2, pmGrant=3. Deps 13.1.5, `ShizukuProvider`, `API_V23`,
+> queries for Shizuku + Sui. Every privileged op goes through `ApprovalCenter`;
+> `pmGrant` is interop-only (typed `GRANT PERMISSION`, no UI). No applicationId /
+> signing / versioning change. No flatDir AAR fetch (comment documents the CI
+> gotcha). Verified: `:core:test` **194/0** (`ShizukuStateResolverTest` 8,
+> `ShizukuManagerTest` 5, `PrivilegedShellTest` 7, `PrivilegedCommandsTest` 6),
+> `:desktop:test` 2/0, `:desktop:compileKotlin`, `:app:testDebugUnitTest` 28/0,
+> `:app:assembleDebug` (applicationId still `ai.rootforge.os.debug`; `aapt2`
+> lists `moe.shizuku.manager.permission.API_V23`). `tests/run-tests.sh` 1023/0,
+> `tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run:** a
+> phone, the desktop window, Paparazzi re-record (settings golden unchanged:
+> Shizuku card is hidden when `shizuku == null`). Merged `main` (#74 launcher icon)
+> into this branch (docs-only conflicts).
 
 > **Update 2026-10-19 (launcher icon from logo):** branch `feat/app-icon-from-logo`
 > (PR #74). Replaced the orange anvil vector (`drawable/ic_launcher_foreground.xml`)
@@ -164,7 +189,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), and the Custom RR build catalog with a Dashboard card (#66; the APK now requests `INTERNET` for its Download button only). None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66; the APK now requests `INTERNET` for its Download button only), and Shizuku/Sui (#75). None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
@@ -172,6 +197,10 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 - Desktop mode: Android Dashboard card for VictorSuite (`com.termux`). Pin by package+cert, then
   RUN_COMMAND with a fixed `rootforge-desktop-mode` command, or a dedicated action VictorSuite
   does not export yet (`docs/DESKTOP_MODE.md`). Missing companion is a hint. Not run on a phone.
+- Shizuku/Sui (PR #75, on `main`): fleet four-state manager + `PrivilegedShell` sole API, bound
+  `IPrivilegedShell` UserService after `GRANTED`, approval-gated read-only Settings
+  lookups; `pmGrant` hidden + typed confirm. Deps 13.1.5. `:core:test` 194/0 on that PR,
+  `:app:assembleDebug` applicationId `ai.rootforge.os.debug`. **Not run on a phone.**
 - Android launcher icon is the repo-logo emblem (adaptive + legacy mipmaps, navy
   `#0C1D36`). `tests/test_launcher_icons.py` 7/0; `:app:assembleDebug` packaged the
   new mipmaps (2026-10-19). Not installed on a phone.

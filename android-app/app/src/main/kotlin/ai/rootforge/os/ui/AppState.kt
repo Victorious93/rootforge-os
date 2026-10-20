@@ -18,6 +18,7 @@ import ai.rootforge.os.root.BootImageParser
 import ai.rootforge.os.root.RootManager
 import ai.rootforge.os.desktopmode.DesktopModeOp
 import ai.rootforge.os.desktopmode.DesktopModeView
+import ai.rootforge.os.shizuku.ShizukuState
 import ai.rootforge.os.usb.AttachedTarget
 
 /** Everything the screens render. Plain data so screens can be previewed and screenshot-tested. */
@@ -53,6 +54,11 @@ data class AppUiState(
     val hostCaption: String = "this phone",
     val transportCaption: String = "Android USB Host API, pure Kotlin ADB, fastboot, Sahara",
     val emptyTargetsHint: String? = null,
+    /** Null on desktop: Shizuku is Android-only. */
+    val shizuku: ShizukuState? = null,
+    val shizukuBusy: Boolean = false,
+    /** Last host-phone Shizuku readout. Never written to the shared command log. */
+    val shizukuResult: String = "",
 )
 
 /** Every user-triggerable action. The real implementation talks to the target; the preview one does nothing. */
@@ -139,6 +145,16 @@ interface AppActions {
     fun dismissController(caller: CallerIdentity)
     fun revokeController(packageName: String)
     fun openUrl(url: String)
+
+    fun requestShizukuPermission()
+    fun refreshShizuku()
+    fun openShizukuApp()
+    fun shizukuListPackages(thirdPartyOnly: Boolean)
+    fun shizukuPackageInfo(packageName: String)
+    fun shizukuSettingsGet(namespace: String, key: String)
+    fun shizukuGetprop(key: String)
+    fun shizukuListBlockDevices()
+    fun shizukuDeviceInfo()
 }
 
 object NoopActions : AppActions {
@@ -201,4 +217,13 @@ object NoopActions : AppActions {
     override fun dismissController(caller: CallerIdentity) = Unit
     override fun revokeController(packageName: String) = Unit
     override fun openUrl(url: String) = Unit
+    override fun requestShizukuPermission() = Unit
+    override fun refreshShizuku() = Unit
+    override fun openShizukuApp() = Unit
+    override fun shizukuListPackages(thirdPartyOnly: Boolean) = Unit
+    override fun shizukuPackageInfo(packageName: String) = Unit
+    override fun shizukuSettingsGet(namespace: String, key: String) = Unit
+    override fun shizukuGetprop(key: String) = Unit
+    override fun shizukuListBlockDevices() = Unit
+    override fun shizukuDeviceInfo() = Unit
 }

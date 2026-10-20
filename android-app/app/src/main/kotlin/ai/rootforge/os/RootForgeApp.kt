@@ -16,6 +16,11 @@ import ai.rootforge.os.core.OutputLog
 import ai.rootforge.os.core.TargetController
 import ai.rootforge.os.desktopmode.AndroidCompanionLookup
 import ai.rootforge.os.desktopmode.DesktopMode
+import ai.rootforge.os.shizuku.AndroidShizukuHost
+import ai.rootforge.os.shizuku.BoundPrivilegedShell
+import ai.rootforge.os.shizuku.PrivilegedShell
+import ai.rootforge.os.shizuku.ShizukuManager
+import ai.rootforge.os.shizuku.ShizukuState
 import ai.rootforge.os.usb.TargetMode
 import ai.rootforge.os.usb.UsbHost
 import android.Manifest
@@ -62,6 +67,13 @@ class RootForgeApp : Application() {
         )
     }
 
+    val shizukuHost by lazy { AndroidShizukuHost(this) }
+    val shizukuManager by lazy { ShizukuManager(shizukuHost) }
+    val privilegedShell: PrivilegedShell by lazy { BoundPrivilegedShell(this, shizukuManager) }
+    val shizukuState = kotlinx.coroutines.flow.MutableStateFlow(ShizukuState.NOT_INSTALLED)
+    val shizukuBusy = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val shizukuResult = kotlinx.coroutines.flow.MutableStateFlow("")
+
     val adbFingerprint = kotlinx.coroutines.flow.MutableStateFlow("")
     val desktopMode = kotlinx.coroutines.flow.MutableStateFlow(
         DesktopMode.probe(emptyList(), pinned = null),
@@ -75,6 +87,8 @@ class RootForgeApp : Application() {
         super.onCreate()
         createChannel()
         usb.start()
+        shizukuManager.addListener { shizukuState.value = it }
+        shizukuManager.start()
         refreshFingerprint()
         refreshDesktopMode()
         watchPendingPairing()

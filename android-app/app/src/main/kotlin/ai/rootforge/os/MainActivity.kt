@@ -52,9 +52,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        (application as RootForgeApp).uiVisible = true
-        (application as RootForgeApp).usb.refresh()
-        (application as RootForgeApp).refreshDesktopMode()
+        val app = application as RootForgeApp
+        app.uiVisible = true
+        app.usb.refresh()
+        app.refreshDesktopMode()
+        app.shizukuManager.refresh()
     }
 
     override fun onStop() {
@@ -83,11 +85,15 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
     val paired = app.pairing.paired.collectAsStateWithLifecycle().value
     val pending = app.pairing.pending.collectAsStateWithLifecycle().value
     val fingerprint = app.adbFingerprint.collectAsStateWithLifecycle().value
+    val shizuku = app.shizukuState.collectAsStateWithLifecycle().value
+    val shizukuBusy = app.shizukuBusy.collectAsStateWithLifecycle().value
+    val shizukuResult = app.shizukuResult.collectAsStateWithLifecycle().value
     val nodeId = remember { app.settings.nodeId }
     return AppUiState(
         targets = targets, link = link, info = info, busy = busy, progress = progress, library = library, buildCatalog = buildCatalog,
         logcatRunning = logcat, log = log, approvals = approvals, bridgeEnabled = bridge, autoConnect = auto,
         terminalApp = terminalApp, terminalHandoff = true, desktopMode = desktopMode,
         nodeId = nodeId, paired = paired, pending = pending, adbFingerprint = fingerprint, appVersion = BuildConfig.VERSION_NAME,
+        shizuku = shizuku, shizukuBusy = shizukuBusy, shizukuResult = shizukuResult,
     )
 }
