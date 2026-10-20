@@ -129,6 +129,11 @@ class DesktopActions(
         scope.launch { controller.buildModule(spec).onSuccess { then(it) } }
     }
     override fun installModule(file: LibraryFile, manager: RootManager) { scope.launch { controller.installModuleOnTarget(file, manager) } }
+    override fun refreshLocalRoot() = Unit
+    override fun listLocalModules() = log.info("Listing modules with su is only in the Android APK (this phone).")
+    override fun installModuleLocally(file: LibraryFile, manager: RootManager, dryRun: Boolean) =
+        log.info("Installing with su on this computer is not supported. Use Push and install on target.")
+    override fun rebootThisPhone() = log.info("Reboot this phone is only in the Android APK.")
 
     override fun probeCustomRecovery(then: (List<RecoveryProbe>) -> Unit) {
         scope.launch {

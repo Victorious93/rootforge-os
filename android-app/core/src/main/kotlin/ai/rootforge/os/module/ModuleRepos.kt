@@ -74,11 +74,11 @@ object ModuleRepos {
         ModuleRepo(
             id = "mmrl",
             name = "MMRL",
-            url = "https://github.com/DerGoogler/MMRL",
-            description = "An app for managing, sharing and exploring modules across repositories. GPL-3.0.",
+            url = "https://github.com/MMRLApp/MMRL",
+            description = "An app for managing, sharing and exploring modules across repositories. GPL-3.0. Formerly DerGoogler/MMRL.",
             kind = RepoKind.CLIENT,
             supports = setOf(RepoSupport.MAGISK, RepoSupport.KERNELSU, RepoSupport.APATCH),
-            checked = "$CHECKED: repository exists; its page states compatibility with Magisk, KernelSU and APatch. Release date not checked.",
+            checked = "$CHECKED: repository exists at MMRLApp/MMRL (DerGoogler/MMRL redirects here); its page states compatibility with Magisk, KernelSU and APatch.",
             note = "Install it on the target phone yourself. RootForge does not drive it.",
         ),
     )

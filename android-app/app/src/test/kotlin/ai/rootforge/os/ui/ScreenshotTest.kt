@@ -7,6 +7,7 @@ import ai.rootforge.os.desktopmode.PinnedCompanion
 import ai.rootforge.os.desktopmode.VictorSuite
 import ai.rootforge.os.ui.screens.BuildCatalogCard
 import ai.rootforge.os.ui.screens.DesktopModeCard
+import ai.rootforge.os.ui.screens.ModulesScreen
 import ai.rootforge.os.ui.theme.RootForgeTheme
 import ai.rootforge.os.usb.TargetMode
 import app.cash.paparazzi.DeviceConfig
@@ -63,7 +64,16 @@ class ScreenshotTest {
     fun modules() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Modules) }
 
     @Test
+    fun modulesThisPhone() = snap { ModulesScreen(previewState(), NoopActions, startTab = 1) }
+
+    @Test
     fun help() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Help) }
+
+    @Test
+    fun links() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Links) }
+
+    @Test
+    fun glossary() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Glossary) }
 
     @Test
     fun customRecovery() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.CustomRecovery) }

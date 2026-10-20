@@ -18,6 +18,7 @@ import ai.rootforge.os.core.OutputLog
 import ai.rootforge.os.core.TargetController
 import ai.rootforge.os.desktopmode.AndroidCompanionLookup
 import ai.rootforge.os.desktopmode.DesktopMode
+import ai.rootforge.os.root.RootManager
 import ai.rootforge.os.shizuku.AndroidShizukuHost
 import ai.rootforge.os.shizuku.BoundPrivilegedShell
 import ai.rootforge.os.shizuku.PrivilegedShell
@@ -51,7 +52,13 @@ class RootForgeApp : Application() {
     val usb by lazy { UsbHost(this) }
     val keyStore by lazy { AdbKeyStore(File(noBackupFilesDir, "adb")) }
     val approvals = ApprovalCenter(onNewRequest = { notifyApproval(it) })
-    val controller by lazy { TargetController(usb, log, library, approvals, keyStore, appScope) }
+    val controller by lazy {
+        TargetController(
+            usb, log, library, approvals, keyStore, appScope,
+            localPackages = { installedManagerPackages() },
+            canRunLocalSu = true,
+        )
+    }
     val pairing by lazy {
         val prefs = getSharedPreferences("pairing", MODE_PRIVATE)
         PairingStore(object : PairingPersistence {
@@ -109,6 +116,20 @@ class RootForgeApp : Application() {
 
     fun refreshFingerprint() {
         appScope.launch(Dispatchers.IO) { adbFingerprint.value = keyStore.loadOrCreate().fingerprint() }
+    }
+
+    private fun installedManagerPackages(): Set<String> {
+        val pm = packageManager
+        return RootManager.entries.map { it.packageName }.filter { name ->
+            runCatching {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    pm.getPackageInfo(name, PackageManager.PackageInfoFlags.of(0))
+                } else {
+                    @Suppress("DEPRECATION")
+                    pm.getPackageInfo(name, 0)
+                }
+            }.isSuccess
+        }.toSet()
     }
 
     fun refreshDesktopMode() {

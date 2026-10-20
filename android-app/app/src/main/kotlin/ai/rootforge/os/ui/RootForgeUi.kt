@@ -9,6 +9,8 @@ import ai.rootforge.os.ui.screens.FastbootScreen
 import ai.rootforge.os.ui.screens.FlashToolsScreen
 import ai.rootforge.os.ui.screens.AskScreen
 import ai.rootforge.os.ui.screens.GuideScreen
+import ai.rootforge.os.ui.screens.GlossaryScreen
+import ai.rootforge.os.ui.screens.LinksScreen
 import ai.rootforge.os.ui.screens.LogsScreen
 import ai.rootforge.os.ui.screens.ManualScreen
 import ai.rootforge.os.ui.screens.ModulesScreen
@@ -33,6 +35,8 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Menu
@@ -83,6 +87,8 @@ enum class Destination(val title: String, val icon: ImageVector) {
     Logs("Logs / Terminal", Icons.Filled.Terminal),
     Settings("Settings", Icons.Filled.Settings),
     Help("Help", Icons.AutoMirrored.Filled.Help),
+    Links("Links", Icons.Filled.Link),
+    Glossary("Glossary", Icons.AutoMirrored.Filled.ListAlt),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -140,7 +146,7 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
             bottomBar = {
                 Column(Modifier.fillMaxWidth()) {
                     ProgressBanner(state.progress, state.busy)
-                    if (current != Destination.Logs && current != Destination.RootGuide && current != Destination.Ask && current != Destination.Help) {
+                    if (current != Destination.Logs && current != Destination.RootGuide && current != Destination.Ask && current != Destination.Help && current != Destination.Links && current != Destination.Glossary) {
                         TerminalPanel(state.log, terminalOpen, { terminalOpen = !terminalOpen }, actions)
                     }
                 }
@@ -163,7 +169,7 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
                     Destination.Fastboot -> FastbootScreen(state, actions)
                     Destination.Edl -> EdlScreen(state, actions)
                     Destination.Root -> RootScreen(state, actions)
-                    Destination.Modules -> ModulesScreen(state, actions)
+                    Destination.Modules -> ModulesScreen(state, actions, onOpenLinks = { current = Destination.Links })
                     Destination.Recovery -> RecoveryScreen(state, actions)
                     Destination.CustomRecovery -> CustomRecoveryScreen(
                         state,
@@ -171,8 +177,19 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
                         prefill = recoveryPrefillRaw?.let { CatalogRecoveryPrefill.decode(it) },
                     )
                     Destination.Logs -> LogsScreen(state, actions)
-                    Destination.Settings -> SettingsScreen(state, actions) { current = Destination.Help }
-                    Destination.Help -> ManualScreen(state, actions)
+                    Destination.Settings -> SettingsScreen(
+                        state, actions,
+                        onOpenHelp = { current = Destination.Help },
+                        onOpenLinks = { current = Destination.Links },
+                    )
+                    Destination.Help -> ManualScreen(
+                        state,
+                        actions,
+                        onOpenLinks = { current = Destination.Links },
+                        onOpenGlossary = { current = Destination.Glossary },
+                    )
+                    Destination.Links -> LinksScreen(actions, onOpenGlossary = { current = Destination.Glossary })
+                    Destination.Glossary -> GlossaryScreen(onOpenLinks = { current = Destination.Links })
                 }
             }
         }

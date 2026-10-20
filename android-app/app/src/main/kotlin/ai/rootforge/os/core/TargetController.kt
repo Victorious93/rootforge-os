@@ -14,6 +14,8 @@ import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.fastboot.TargetIdentity
 import ai.rootforge.os.usb.UsbScanFilter
 import ai.rootforge.os.module.BuiltModule
+import ai.rootforge.os.module.InstalledModule
+import ai.rootforge.os.module.LocalModules
 import ai.rootforge.os.recovery.AdbRootSession
 import ai.rootforge.os.recovery.ProcessRootSession
 import ai.rootforge.os.recovery.RecoveryCommands
@@ -26,6 +28,7 @@ import ai.rootforge.os.module.ModuleBuilder
 import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.root.BootImageInfo
 import ai.rootforge.os.root.BootImageParser
+import ai.rootforge.os.root.RootDetection
 import ai.rootforge.os.root.RootManager
 import ai.rootforge.os.root.RootPaths
 import ai.rootforge.os.usb.AttachedTarget
@@ -46,6 +49,12 @@ import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
 
+data class LocalRootSnapshot(
+    val detection: RootDetection = RootDetection(emptyList(), null, "Not scanned yet."),
+    val modules: List<InstalledModule> = emptyList(),
+    val listed: Boolean = false,
+)
+
 /**
  * The single place that touches the target. The UI, the bridge for
  * droidcommand-ai and tests all go through here, so every destructive
@@ -59,6 +68,8 @@ class TargetController(
     private val keyStore: AdbKeyStore,
     private val scope: CoroutineScope,
     private val openTransport: (AttachedTarget) -> BulkTransport = { usb.open(it) },
+    private val localPackages: () -> Set<String> = { emptySet() },
+    private val canRunLocalSu: Boolean = false,
 ) {
     val targets: StateFlow<List<AttachedTarget>> = usb.targets
 
@@ -72,6 +83,8 @@ class TargetController(
     val progress: StateFlow<Progress?> = progressState.asStateFlow()
     private val logcatState = MutableStateFlow(false)
     val logcatRunning: StateFlow<Boolean> = logcatState.asStateFlow()
+    private val localRootState = MutableStateFlow(LocalRootSnapshot())
+    val localRoot: StateFlow<LocalRootSnapshot> = localRootState.asStateFlow()
 
     private val opLock = Mutex()
     private var adb: AdbConnection? = null
@@ -637,7 +650,7 @@ class TargetController(
         val remote = "/data/local/tmp/rf-module.zip"
         zip.file.inputStream().use { conn.push(it, zip.size, remote) { d, t -> setProgress("Pushing module", d, t) } }
         clearProgress()
-        val bin = when (manager) { RootManager.MAGISK, RootManager.KITSUNE -> "magisk"; RootManager.KERNELSU -> "/data/adb/ksud"; RootManager.APATCH -> "/data/adb/apd" }
+        val bin = manager.moduleBinary
         val cmd = "su -c '$bin ${manager.moduleInstallCommand.substringAfter(' ')} $remote'"
         log.warn("The target may show a Superuser prompt for the shell; allow it once.")
         log.command("adb shell $cmd")
@@ -645,6 +658,84 @@ class TargetController(
         conn.shell("rm -f $remote")
         if (r.exitCode != 0) throw IOException("Module install exited with ${r.exitCode}. Is ${manager.label} active and root granted to shell?")
         r.output
+    }
+
+    // ----- this-phone modules (su on the host phone) --------------------------------------------------
+
+    fun refreshLocalRoot() {
+        localRootState.value = localRootState.value.copy(detection = RootManager.detect(localPackages()))
+    }
+
+    suspend fun listLocalModules(): Result<List<InstalledModule>> = operation("List modules on this phone") {
+        val session = requireLocalSu()
+        val id = session.su("id", 8_000)
+        if (!LocalModules.parseRooted(id.output, id.exitCode)) {
+            throw IOException("su is not available on this phone (need Magisk, KernelSU or APatch, and grant RootForge). ${id.output.trim().take(120)}")
+        }
+        val listing = session.su(LocalModules.MARKERS_SCRIPT, 10_000)
+        val markers = LocalModules.markersFromAdbLs(listing.output)
+        val detection = RootManager.detect(localPackages(), markers)
+        log.info(detection.reason)
+        val dump = session.su(LocalModules.LIST_SCRIPT, 30_000)
+        log.out(dump.output)
+        val modules = LocalModules.parseList(dump.output)
+        localRootState.value = LocalRootSnapshot(detection, modules, listed = true)
+        log.info(if (modules.isEmpty()) "No modules in ${LocalModules.MODULES_DIR}." else "Listed ${modules.size} module(s) in ${LocalModules.MODULES_DIR}.")
+        modules
+    }
+
+    suspend fun installModuleLocally(zip: LibraryFile, manager: RootManager, dryRun: Boolean): Result<String> =
+        operation(if (dryRun) "Dry-run ${zip.name} on this phone" else "Install ${zip.name} on this phone via ${manager.label}") {
+            if (!zip.file.isFile) throw IOException("${zip.name} is not in the library.")
+            val sha = FileDigest.sha256Hex(zip.file)
+            val plan = LocalModules.plan(zip.file.absolutePath, zip.name, zip.size, sha, manager)
+            plan.dryRunLines.forEach { log.info(it) }
+            if (dryRun) {
+                log.command(plan.displayCommand)
+                log.info("Dry run finished. Nothing was installed and this phone was not rebooted.")
+                return@operation plan.displayCommand
+            }
+            requireLocalSu()
+            val approved = approvals.request(
+                title = "Install ${zip.name} as root on this phone",
+                lines = plan.approvalLines,
+                phrase = "INSTALL MODULE",
+            )
+            if (!approved) throw IOException("Install was not confirmed; nothing was installed on this phone.")
+            log.warn("This phone may show a Superuser prompt; allow it once.")
+            log.command(plan.displayCommand)
+            val r = ProcessRootSession().su(plan.script, 180_000)
+            log.out(r.output)
+            if (!r.ok) {
+                throw IOException(
+                    "Module install exited with ${r.exitCode}. Is ${manager.label} active and root granted to RootForge?",
+                )
+            }
+            log.info("Install finished. RootForge did not reboot; use Reboot this phone if the manager asks for it.")
+            r.output
+        }
+
+    suspend fun rebootThisPhone(): Result<Unit> = operation("Reboot this phone") {
+        val session = requireLocalSu()
+        val approved = approvals.request(
+            title = "Reboot this phone",
+            lines = listOf(
+                "This reboots the phone you are holding, not a USB target.",
+                "Newly installed modules load after this reboot.",
+                "RootForge does not reboot on its own after a module install.",
+            ),
+            phrase = null,
+            destructive = true,
+        )
+        if (!approved) throw IOException("Reboot was not confirmed.")
+        log.command(LocalModules.suShell(LocalModules.rebootInner()))
+        session.su(LocalModules.rebootInner(), 10_000)
+        log.info("Reboot requested.")
+    }
+
+    private fun requireLocalSu(): ProcessRootSession {
+        if (!canRunLocalSu) throw IOException("Installing with su on this host is only in the Android APK.")
+        return ProcessRootSession()
     }
 
     // ----- custom recovery (rooted su/dd) -------------------------------------------------------------

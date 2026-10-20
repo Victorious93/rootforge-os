@@ -566,11 +566,7 @@ class HostController(
             if (!approved) throw IOException("Install was not confirmed; nothing was pushed to the target.")
             val remote = "/data/local/tmp/rf-module.zip"
             adb(listOf("push", zip.file.absolutePath, remote), 120_000)
-            val bin = when (manager) {
-                RootManager.MAGISK, RootManager.KITSUNE -> "magisk"
-                RootManager.KERNELSU -> "/data/adb/ksud"
-                RootManager.APATCH -> "/data/adb/apd"
-            }
+            val bin = manager.moduleBinary
             val cmd = "su -c '$bin ${manager.moduleInstallCommand.substringAfter(' ')} $remote'"
             log.warn("The target may show a Superuser prompt for the shell; allow it once.")
             log.command("adb shell $cmd")

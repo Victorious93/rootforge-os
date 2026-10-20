@@ -145,6 +145,12 @@ class AppActionsImpl(
         scope.launch { controller.buildModule(spec).onSuccess { then(it) } }
     }
     override fun installModule(file: LibraryFile, manager: RootManager) { scope.launch { controller.installModuleOnTarget(file, manager) } }
+    override fun refreshLocalRoot() = controller.refreshLocalRoot()
+    override fun listLocalModules() { scope.launch { controller.listLocalModules() } }
+    override fun installModuleLocally(file: LibraryFile, manager: RootManager, dryRun: Boolean) {
+        scope.launch { controller.installModuleLocally(file, manager, dryRun) }
+    }
+    override fun rebootThisPhone() { scope.launch { controller.rebootThisPhone() } }
 
     override fun probeCustomRecovery(then: (List<RecoveryProbe>) -> Unit) {
         scope.launch {

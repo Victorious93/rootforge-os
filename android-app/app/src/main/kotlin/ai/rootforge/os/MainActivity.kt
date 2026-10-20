@@ -88,6 +88,7 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
     val shizuku = app.shizukuState.collectAsStateWithLifecycle().value
     val shizukuBusy = app.shizukuBusy.collectAsStateWithLifecycle().value
     val shizukuResult = app.shizukuResult.collectAsStateWithLifecycle().value
+    val localRoot = c.localRoot.collectAsStateWithLifecycle().value
     val nodeId = remember { app.settings.nodeId }
     return AppUiState(
         targets = targets, link = link, info = info, busy = busy, progress = progress, library = library, buildCatalog = buildCatalog,
@@ -95,5 +96,11 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
         terminalApp = terminalApp, terminalHandoff = true, desktopMode = desktopMode,
         nodeId = nodeId, paired = paired, pending = pending, adbFingerprint = fingerprint, appVersion = BuildConfig.VERSION_NAME,
         shizuku = shizuku, shizukuBusy = shizukuBusy, shizukuResult = shizukuResult,
+        localSu = true,
+        localManagers = localRoot.detection.installed,
+        localPreferred = localRoot.detection.preferred,
+        localRootNote = localRoot.detection.reason,
+        localModules = localRoot.modules,
+        localListed = localRoot.listed,
     )
 }

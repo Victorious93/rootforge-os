@@ -35,6 +35,8 @@ class ManualLibraryTest {
         assertTrue("Custom RR PitchBlack host missing", "pitchblack.tech" in text)
         assertTrue("typed FLASH missing", "FLASH" in text)
         assertTrue("privacy: no analytics missing", "analytics" in text.lowercase())
+        assertTrue("glossary missing Root", "**Root.**" in library.raw)
+        assertTrue("glossary missing Bootloop", "**Bootloop.**" in library.raw)
     }
 
     @Test
@@ -94,6 +96,7 @@ class ManualLibraryTest {
             "fleet integration",
             "troubleshooting",
             "privacy",
+            "glossary",
         )
     }
 }
