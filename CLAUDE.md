@@ -11,6 +11,28 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (multi-device identify):** branch
+> `feat/multi-device-identify`. **Devices** drawer screen lists every attached
+> phone (ADB, fastboot, Qualcomm EDL `05c6:9008`) from USB attach plus a 2 s
+> poll. Read-only identity (brand, model, `ro.product.device`, SoC, Android
+> version, security patch, bootloader lock, Magisk/KernelSU/APatch/none, slot,
+> USB mode). Fastboot `getvar`; EDL identify only (no Firehose). Serials
+> masked to last four characters in UI and logs. Root plan
+> unlock → recovery → root manager from the Custom RR catalog; actions open
+> existing tools for that serial. `SerialOpLock` is one mutex per serial
+> (devices can work in parallel). Dry-run, typed confirm, backup-first, no
+> auto-reboot unchanged. `applicationId`, signing and versioning unchanged.
+> Docs: `docs/MANUAL.md` / Help / Glossary (Serial, SoC, Slot, USB mode).
+> Based on `origin/main` `3f7661d` (#83); `fix/bug-sweep-2026-10-20` had not
+> landed. Local suite: `:core:test` **378/0** (`DeviceIdentityParserTest` 9,
+> `SerialMaskTest` 3, `RootPlanTest` 7, `SerialOpLockTest` 3,
+> `UsbScanFilterTest` 6); `:desktop:test` 2/0; `:app:testDebugUnitTest` 35/0
+> (Paparazzi `devices`; `dashboard` / `glossary` re-recorded);
+> `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug` /
+> `versionCode=1` / `versionName=0.1.0-debug`); `bash tests/run-tests.sh`
+> 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run on a phone.**
+
 > **Update 2026-10-20 (fleet config.export / config.import):** branch
 > `feat/config-backup`. Protocol 1.1 standalone Bridge ops `config.export` and
 > `config.import` (droidcommand-AI `UNIFIED_BACKUP.md` / DCA #236) on the
@@ -343,17 +365,26 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-20 · **Branch:** `feat/config-backup`
+**Last updated:** 2026-10-20 · **Branch:** `feat/multi-device-identify`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), and local module install + Links + Glossary (#81 / `b72d214`). On `main`: #82 `node.status.get`. This branch adds fleet `config.export` / `config.import`. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), and fleet `config.export` / `config.import` (#83 / `3f7661d`). This branch adds the **Devices** multi-phone identify screen. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Fleet config backup (this branch, after merging `origin/main` `3737c12` #82):
+- Multi-device identify (this branch, based on `origin/main` `3f7661d` #83):
+  **Devices** lists every attached phone. USB attach + 2 s poll. Read-only
+  identity; serials masked to last four characters; Root plan from the
+  Custom RR catalog; `SerialOpLock` per serial; EDL identify only. Dry-run,
+  typed confirm, backup-first, no auto-reboot unchanged. `applicationId` /
+  signing / versioning unchanged. `:core:test` 378/0, `:desktop:test` 2/0,
+  `:app:testDebugUnitTest` 35/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1055/0,
+  `tests/lint.sh` clean. **Not run on a phone.**
+- Fleet config backup (PR #83, on `main` as `3f7661d`, after merging `origin/main` `3737c12` #82):
   `config.export` / `config.import` advertised with `remoteAllowed=false`;
   remote callers `capability_off`; export omits secrets; import dry-run /
   skip / overwrite / merge-by-id; confirm required; never enables

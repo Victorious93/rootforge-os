@@ -1,5 +1,7 @@
 package ai.rootforge.os.usb
 
+import ai.rootforge.os.device.SerialMask
+
 /** What a USB device attached to the host phone is, as far as its descriptors say. */
 enum class TargetMode(val label: String) {
     ADB("ADB"),
@@ -25,7 +27,9 @@ data class AttachedTarget(
     val manufacturer: String?,
 ) {
     val vidPid: String get() = "%04x:%04x".format(vendorId, productId)
-    val displayName: String get() = listOfNotNull(manufacturer, product).joinToString(" ").ifBlank { serial ?: vidPid }
+    val displayName: String get() = listOfNotNull(manufacturer, product).joinToString(" ").ifBlank {
+        if (serial != null) SerialMask.mask(serial) else vidPid
+    }
 }
 
 /**

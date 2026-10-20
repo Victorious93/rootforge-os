@@ -179,7 +179,7 @@ Screenshots below are Paparazzi renders with sample data. **They are not capture
 
 ![Dashboard](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_dashboard.png)
 
-The home screen. You see attached USB devices, the connected target, a short device info card, reboot shortcuts, your imported file library, **Builds for this device**, and (Android only) **Desktop mode**.
+The home screen. You see attached USB devices, the connected target, a short device info card, reboot shortcuts, your imported file library, **Builds for this device**, and (Android only) **Desktop mode**. For every plugged-in phone at once, use **Devices**.
 
 **Connect a target**
 
@@ -206,6 +206,29 @@ This card lists community ROMs, recoveries and root solutions whose catalog name
 **Desktop mode** (VictorSuite, Android only)
 
 See [Desktop mode via VictorSuite](#desktop-mode-via-victorsuite) below. The Linux/Windows desktop client hides this card.
+
+### Devices
+
+![Devices](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_devices.png)
+
+Lists **every** phone plugged into this host at the same time (ADB, fastboot, and Qualcomm EDL 9008). Plug-in is picked up from USB attach and from a short poll of the ADB/fastboot device lists (on a computer) or the USB device list (on the Android app).
+
+Each card is a read-only identity plus a **Root plan** for that exact phone:
+
+1. Brand, model, codename (`ro.product.device`), SoC/platform, Android version, security patch, bootloader lock, current root manager, A/B slot, USB mode.
+2. In fastboot the same fields come from `getvar` (`product`, `unlocked`, `current-slot`, and the rest the bootloader reports).
+3. Serial numbers are shown as `••••` plus the last four characters, in the app and in the command log.
+4. The Root plan recommends **unlock bootloader → custom recovery → root manager**. Matching Custom RR ROM/recovery/root rows for that codename are listed. A matching TWRP or PitchBlack row can open **Custom Recovery** already aimed at that project. ROMs stay links.
+5. Buttons open the existing ADB, Fastboot, EDL, Root / Patching, Modules or Custom Recovery screens **for that serial**.
+
+**EDL is identify only.** Qualcomm `05c6:9008` is recognised so you can see the chip. Devices never starts a Firehose write.
+
+Safety is unchanged: dry-run stays the default where it already was, typed confirm still gates writes, a recovery write still backs up first, nothing reboots by itself, and each serial has its own lock so two phones can work at the same time without sharing one queue.
+
+1. Open **Devices**.
+2. Plug the phones in. Grant USB access if a row asks.
+3. Tap **Identify attached** if a card is still empty.
+4. Read the Root plan. Open the tool you need for that phone.
 
 ### Ask
 
@@ -879,6 +902,14 @@ Drawer entry **Glossary**, also from Help and from Links. One short line per ter
 
 **EDL.** Emergency Download (Qualcomm 9008): a very low-level USB mode. Experimental here; a retail phone only accepts its maker's programmer.
 
+**Serial.** The USB id of a phone. RootForge shows only the last four characters in the app and in logs.
+
+**SoC.** The main chip inside the phone (the processor and related parts).
+
+**Slot.** On many phones, two copies of the system (A and B) so an update can roll back.
+
+**USB mode.** Whether the cable is talking ADB, fastboot, or EDL right now.
+
 **Bootloader.** The tiny program that starts the phone before Android. Unlocking it usually wipes the phone.
 
 **Recovery.** A small system you boot instead of Android to install updates or wipe data.
@@ -901,4 +932,4 @@ Drawer entry **Glossary**, also from Help and from Links. One short line per ter
 
 ---
 
-*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, and the in-app Glossary. If a line here disagrees with the running app, the app is right — please file an issue.*
+*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, the in-app Glossary, and the **Devices** multi-phone identify screen. If a line here disagrees with the running app, the app is right — please file an issue.*

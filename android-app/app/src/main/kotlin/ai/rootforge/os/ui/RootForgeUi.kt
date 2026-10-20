@@ -4,6 +4,7 @@ import ai.rootforge.os.catalog.CatalogRecoveryPrefill
 import ai.rootforge.os.core.LinkState
 import ai.rootforge.os.ui.screens.AdbScreen
 import ai.rootforge.os.ui.screens.DashboardScreen
+import ai.rootforge.os.ui.screens.DevicesScreen
 import ai.rootforge.os.ui.screens.EdlScreen
 import ai.rootforge.os.ui.screens.FastbootScreen
 import ai.rootforge.os.ui.screens.FlashToolsScreen
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.automirrored.filled.Help
@@ -74,6 +76,7 @@ import kotlinx.coroutines.launch
 
 enum class Destination(val title: String, val icon: ImageVector) {
     Dashboard("Dashboard", Icons.Filled.Dashboard),
+    Devices("Devices", Icons.Filled.Devices),
     Ask("Ask", Icons.Filled.QuestionAnswer),
     RootGuide("Root Guide", Icons.AutoMirrored.Filled.MenuBook),
     FlashTools("Flash Tools", Icons.Filled.Build),
@@ -159,6 +162,19 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
                         recoveryPrefillRaw = prefill.encode()
                         current = Destination.CustomRecovery
                     })
+                    Destination.Devices -> DevicesScreen(
+                        state, actions,
+                        onOpenAdb = { target -> actions.connect(target); current = Destination.Adb },
+                        onOpenFastboot = { target -> actions.connect(target); current = Destination.Fastboot },
+                        onOpenEdl = { target -> actions.connect(target); current = Destination.Edl },
+                        onOpenRoot = { target -> actions.connect(target); current = Destination.Root },
+                        onOpenModules = { target -> actions.connect(target); current = Destination.Modules },
+                        onOpenCustomRecovery = { target, prefill ->
+                            actions.connect(target)
+                            recoveryPrefillRaw = prefill?.encode()
+                            current = Destination.CustomRecovery
+                        },
+                    )
                     Destination.Ask -> AskScreen(onOpenGuide = { id, anchor ->
                         guideTarget = if (anchor != null) "$id#$anchor" else id
                         current = Destination.RootGuide

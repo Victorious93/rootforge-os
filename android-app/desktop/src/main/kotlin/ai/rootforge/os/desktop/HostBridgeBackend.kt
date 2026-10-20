@@ -3,6 +3,7 @@ package ai.rootforge.os.desktop
 import ai.rootforge.os.bridge.BridgeBackend
 import ai.rootforge.os.bridge.BridgeDevice
 import ai.rootforge.os.core.LinkState
+import ai.rootforge.os.device.publicLabel
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.usb.TargetMode
@@ -20,7 +21,7 @@ class HostBridgeBackend(private val controller: HostController, override val app
                 },
                 state = if (linked != null && linked.mode == t.mode) "connected" else if (t.hasPermission) "authorized" else "unauthorized",
                 usable = t.mode != TargetMode.UNKNOWN && t.hasPermission,
-                note = t.displayName,
+                note = t.publicLabel(),
             )
         }
     }

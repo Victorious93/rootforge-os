@@ -12,6 +12,12 @@ import ai.rootforge.os.core.OutputLog
 import ai.rootforge.os.core.Progress
 import ai.rootforge.os.core.TargetInfo
 import ai.rootforge.os.core.humanSize
+import ai.rootforge.os.device.DeviceIdentityParser
+import ai.rootforge.os.device.DeviceRoster
+import ai.rootforge.os.device.SerialMask
+import ai.rootforge.os.device.SerialOpLock
+import ai.rootforge.os.device.publicLabel
+import ai.rootforge.os.device.rosterKey
 import ai.rootforge.os.fastboot.FlashPlanner
 import ai.rootforge.os.fastboot.FlashSafety
 import ai.rootforge.os.fastboot.RebootTarget
@@ -43,9 +49,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -73,8 +78,11 @@ class HostController(
     val progress: StateFlow<Progress?> = progressState.asStateFlow()
     private val logcatState = MutableStateFlow(false)
     val logcatRunning: StateFlow<Boolean> = logcatState.asStateFlow()
+    private val identityState = MutableStateFlow<Map<String, ai.rootforge.os.device.DeviceIdentity>>(emptyMap())
+    val identities: StateFlow<Map<String, ai.rootforge.os.device.DeviceIdentity>> = identityState.asStateFlow()
+    private val serialLock = SerialOpLock()
+    val serialBusy: StateFlow<Map<String, String>> = serialLock.busyMap
 
-    private val opLock = Mutex()
     private var active: AttachedTarget? = null
     private var logcatJob: Job? = null
     @Volatile private var logcatStop = false
@@ -93,20 +101,24 @@ class HostController(
             HostDevices.parseLsusbEdl(lsusb),
         )
         val current = targetState.value
-        val act = active ?: return
-        if (current.none { it.serial == act.serial && it.mode == act.mode }) {
+        val act = active
+        if (act != null && current.none { it.serial == act.serial && it.mode == act.mode }) {
             log.warn("The target disconnected (or changed mode).")
             disconnect()
         }
+        identityState.value = DeviceRoster.prune(identityState.value, current)
     }
 
     fun scanUsb() {
         scan()
         val result = UsbScanFilter.partition(targetState.value)
         log.command("usb scan")
+        val serials = knownSerials()
         UsbScanFilter.describe(result).forEach { line ->
-            if (line.startsWith("Ignored ") || line.startsWith("No ADB")) log.info(line) else log.out(line)
+            val masked = SerialMask.replaceKnown(line, serials)
+            if (line.startsWith("Ignored ") || line.startsWith("No ADB")) log.info(masked) else log.out(masked)
         }
+        scope.launch { identifyAttached(force = true) }
     }
 
     fun inspectLibraryFile(file: LibraryFile): FileInspection {
@@ -129,7 +141,7 @@ class HostController(
 
     fun requestPermission(target: AttachedTarget) {
         if (!target.hasPermission) {
-            log.warn("adb reports ${target.serial} as unauthorized. Unlock the target and allow this computer.")
+            log.warn("adb reports ${target.publicLabel()} as unauthorized. Unlock the target and allow this computer.")
         }
     }
 
@@ -143,37 +155,41 @@ class HostController(
     suspend fun connect(target: AttachedTarget): Result<Unit> {
         if (!target.hasPermission) {
             requestPermission(target)
-            return Result.failure(IOException("Target ${target.serial} is unauthorized or offline."))
+            return Result.failure(IOException("Target ${target.publicLabel()} is unauthorized or offline."))
         }
-        return operation("Connecting to ${target.displayName}") {
+        val key = target.rosterKey()
+        val activeKey = active?.rosterKey()
+        if (!activeKey.isNullOrEmpty() && activeKey != key && serialLock.isBusy(activeKey)) {
+            val msg = "Finish the current action on ${SerialMask.mask(activeKey)} first."
+            log.error(msg)
+            return Result.failure(IOException(msg))
+        }
+        return operationOn(key, "Connecting to ${target.publicLabel()}") {
             disconnect()
-            linkState.value = LinkState.Connecting("Talking to ${target.serial ?: target.deviceName}")
+            linkState.value = LinkState.Connecting("Talking to ${target.publicLabel()}")
             try {
                 active = target
                 when (target.mode) {
                     TargetMode.ADB -> {
                         requireAdb()
-                        loadAdbInfo()
-                        linkState.value = LinkState.Connected(TargetMode.ADB, target.displayName)
+                        loadAdbInfo(target)
+                        linkState.value = LinkState.Connected(TargetMode.ADB, target.publicLabel())
                     }
                     TargetMode.FASTBOOT -> {
-                        val vars = getvarAll()
-                        infoState.value = TargetInfo(TargetMode.FASTBOOT, fastbootRows(vars))
-                        linkState.value = LinkState.Connected(TargetMode.FASTBOOT, target.displayName)
+                        val vars = getvarAll(target.serial ?: target.deviceName)
+                        val identity = DeviceIdentityParser.fromFastboot(vars, target)
+                        publishIdentity(identity)
+                        infoState.value = identity.toTargetInfo()
+                        linkState.value = LinkState.Connected(TargetMode.FASTBOOT, target.publicLabel())
                     }
                     TargetMode.EDL -> {
-                        infoState.value = TargetInfo(
-                            TargetMode.EDL,
-                            listOf(
-                                "Port" to target.deviceName,
-                                "VID:PID" to target.vidPid,
-                                "edl binary" to (tools.edl?.absolutePath ?: "not found — install bkerler/edl or use QFIL"),
-                            ),
-                        )
-                        linkState.value = LinkState.Connected(TargetMode.EDL, target.displayName)
-                        log.info("EDL on desktop uses the host `edl` binary when present. No programmer is bundled.")
+                        val identity = DeviceIdentityParser.fromEdl(target)
+                        publishIdentity(identity)
+                        infoState.value = identity.toTargetInfo()
+                        linkState.value = LinkState.Connected(TargetMode.EDL, target.publicLabel())
+                        log.info("EDL on desktop is identify-only here. The host `edl` binary is not invoked from Devices.")
                     }
-                    TargetMode.UNKNOWN -> throw IOException("${target.displayName} is not an ADB, fastboot or EDL device.")
+                    TargetMode.UNKNOWN -> throw IOException("${target.publicLabel()} is not an ADB, fastboot or EDL device.")
                 }
             } catch (e: Exception) {
                 disconnect()
@@ -184,9 +200,14 @@ class HostController(
     }
 
     suspend fun refreshInfo(): Result<Unit> = operation("Refreshing device info") {
+        val target = active ?: return@operation
         when (currentMode) {
-            TargetMode.ADB -> loadAdbInfo()
-            TargetMode.FASTBOOT -> infoState.value = TargetInfo(TargetMode.FASTBOOT, fastbootRows(getvarAll()))
+            TargetMode.ADB -> loadAdbInfo(target)
+            TargetMode.FASTBOOT -> {
+                val identity = DeviceIdentityParser.fromFastboot(getvarAll(), target)
+                publishIdentity(identity)
+                infoState.value = identity.toTargetInfo()
+            }
             else -> Unit
         }
     }
@@ -227,7 +248,7 @@ class HostController(
     }
 
     suspend fun adbDeviceCheck(): Result<Unit> = operation("Device check") {
-        loadAdbInfo()
+        loadAdbInfo(active ?: throw IOException("Not connected."))
         log.command("adb device check")
         infoState.value?.rows?.forEach { (k, v) -> log.out("$k: $v") }
     }
@@ -270,26 +291,29 @@ class HostController(
         logcatStop = false
         logcatState.value = true
         logcatJob = scope.launch(Dispatchers.IO) {
-            opLock.withLock {
-                busyState.value = "Logcat"
-                val args = listOf("-s", serial, "logcat", "-v", "threadtime") + filter.split(" ").filter { it.isNotBlank() }
-                log.command("adb ${args.joinToString(" ")}")
-                try {
-                    val proc = ProcessBuilder(listOf(exe.absolutePath) + args).start()
-                    proc.outputStream.close()
-                    proc.inputStream.bufferedReader().useLines { lines ->
-                        for (line in lines) {
-                            if (logcatStop) break
-                            log.out(line)
+            try {
+                serialLock.withLock(serial, "Logcat") {
+                    busyState.value = "Logcat"
+                    val args = listOf("-s", serial, "logcat", "-v", "threadtime") + filter.split(" ").filter { it.isNotBlank() }
+                    log.command("adb ${args.joinToString(" ")}")
+                    try {
+                        val proc = ProcessBuilder(listOf(exe.absolutePath) + args).start()
+                        proc.outputStream.close()
+                        proc.inputStream.bufferedReader().useLines { lines ->
+                            for (line in lines) {
+                                if (logcatStop) break
+                                logMasked(line)
+                            }
                         }
+                        proc.destroyForcibly()
+                    } catch (e: Exception) {
+                        log.error("logcat ended: ${e.message}")
+                    } finally {
+                        logcatState.value = false
                     }
-                    proc.destroyForcibly()
-                } catch (e: Exception) {
-                    log.error("logcat ended: ${e.message}")
-                } finally {
-                    busyState.value = null
-                    logcatState.value = false
                 }
+            } finally {
+                refreshBusy()
             }
         }
     }
@@ -301,7 +325,7 @@ class HostController(
     suspend fun fastbootGetvar(name: String): Result<String> = operation("fastboot getvar $name") {
         log.command("fastboot getvar $name")
         val r = fastboot(listOf("getvar", name), 30_000)
-        log.out(r.output)
+        logMasked(r.output)
         r.output
     }
 
@@ -310,8 +334,13 @@ class HostController(
         val vars = getvarAll()
         vars.filterKeys { it.startsWith("partition-") || it in setOf("product", "current-slot", "slot-count") }
             .toSortedMap()
-            .forEach { (k, v) -> log.out("$k: $v") }
-        infoState.value = TargetInfo(TargetMode.FASTBOOT, fastbootRows(vars))
+            .forEach { (k, v) -> logMasked("$k: $v") }
+        val target = active
+        if (target != null) {
+            val identity = DeviceIdentityParser.fromFastboot(vars, target)
+            publishIdentity(identity)
+            infoState.value = identity.toTargetInfo()
+        }
     }
 
     suspend fun fastbootReboot(target: RebootTarget): Result<Unit> = operation("Reboot ${target.label}") {
@@ -389,7 +418,13 @@ class HostController(
         val r = fastboot(listOf("set_active", slot), 30_000)
         log.out(r.output)
         if (!r.ok) throw IOException(r.output.ifBlank { "set_active failed" })
-        infoState.value = TargetInfo(TargetMode.FASTBOOT, fastbootRows(getvarAll()))
+        val after = getvarAll()
+        val target = active
+        if (target != null) {
+            val identity = DeviceIdentityParser.fromFastboot(after, target)
+            publishIdentity(identity)
+            infoState.value = identity.toTargetInfo()
+        }
     }
 
     suspend fun fastbootErase(partition: String): Result<Unit> = operation("Erase $partition") {
@@ -644,62 +679,80 @@ class HostController(
         }
     }
 
-    private fun loadAdbInfo() {
-        val keys = listOf(
-            "ro.product.manufacturer", "ro.product.model", "ro.product.name", "ro.product.device",
-            "ro.build.version.release", "ro.build.version.sdk", "ro.build.version.security_patch",
-            "ro.build.fingerprint", "ro.product.cpu.abi", "ro.serialno",
-            "ro.boot.verifiedbootstate", "ro.boot.flash.locked", "ro.boot.slot_suffix",
-        )
-        val p = mutableMapOf<String, String>()
-        for (k in keys) {
-            val r = adb(listOf("shell", "getprop", k), 10_000)
-            p[k] = r.stdout.trim()
+    private fun loadAdbInfo(target: AttachedTarget) {
+        val serial = target.serial ?: target.deviceName
+        val dump = adb(listOf("shell", "getprop"), 20_000, serial).output
+        val parsed = DeviceIdentityParser.parseGetpropDump(dump)
+        val props = parsed.ifEmpty {
+            val keys = listOf(
+                "ro.product.brand", "ro.product.manufacturer", "ro.product.model", "ro.product.name",
+                "ro.product.device", "ro.board.platform", "ro.soc.model", "ro.soc.manufacturer",
+                "ro.build.version.release", "ro.build.version.sdk", "ro.build.version.security_patch",
+                "ro.build.fingerprint", "ro.serialno", "ro.boot.verifiedbootstate",
+                "ro.boot.flash.locked", "ro.boot.vbmeta.device_state", "ro.boot.slot_suffix",
+            )
+            keys.associateWith { k -> adb(listOf("shell", "getprop", k), 10_000, serial).stdout.trim() }
         }
-        val pkgs = adb(listOf("shell", "pm", "list", "packages"), 15_000).output
-        val managers = RootManager.entries.filter { pkgs.contains("package:${it.packageName}") }
-        infoState.value = TargetInfo(
-            TargetMode.ADB,
-            listOf(
-                "Model" to listOfNotNull(p["ro.product.manufacturer"], p["ro.product.model"]).joinToString(" ").ifBlank { "unknown" },
-                "Product" to (p["ro.product.name"] ?: "unknown"),
-                "Codename" to (p["ro.product.device"] ?: "unknown"),
-                "Android" to "${p["ro.build.version.release"] ?: "?"} (SDK ${p["ro.build.version.sdk"] ?: "?"})",
-                "Security patch" to (p["ro.build.version.security_patch"] ?: "unknown"),
-                "Build" to (p["ro.build.fingerprint"] ?: "unknown"),
-                "ABI" to (p["ro.product.cpu.abi"] ?: "unknown"),
-                "Serial" to (p["ro.serialno"] ?: active?.serial ?: "unknown"),
-                "Verified boot" to (p["ro.boot.verifiedbootstate"] ?: "unknown"),
-                "Bootloader locked" to when (p["ro.boot.flash.locked"]) { "1" -> "yes"; "0" -> "no"; else -> "unknown" },
-                "Slot" to (p["ro.boot.slot_suffix"]?.ifBlank { null } ?: "none / unknown"),
-                "Root managers" to managers.joinToString { it.label }.ifBlank { "none detected" },
-            ),
-            modelNumber = p["ro.product.model"],
-        )
+        val pkgs = adb(listOf("shell", "pm", "list", "packages"), 15_000, serial).output
+        val identity = DeviceIdentityParser.fromAdb(props, pkgs, target)
+        publishIdentity(identity)
+        if (active?.rosterKey() == target.rosterKey()) infoState.value = identity.toTargetInfo()
     }
 
-    private fun getvarAll(): Map<String, String> {
-        val r = fastboot(listOf("getvar", "all"), 30_000)
-        val map = linkedMapOf<String, String>()
-        r.output.lineSequence().forEach { line ->
-            FlashPlanner.parseVarLine(line.trim())?.let { (k, v) -> map.putIfAbsent(k, v) }
-        }
-        return map
+    private fun getvarAll(serial: String? = activeSerial()): Map<String, String> {
+        val r = fastboot(listOf("getvar", "all"), 30_000, serial)
+        return DeviceIdentityParser.parseGetvarDump(r.output)
     }
 
-    private fun fastbootRows(v: Map<String, String>): List<Pair<String, String>> = listOf(
-        "Product" to (v["product"] ?: "unknown"),
-        "Variant" to (v["variant"] ?: "unknown"),
-        "Serial" to (v["serialno"] ?: active?.serial ?: "unknown"),
-        "Bootloader unlocked" to (v["unlocked"] ?: "unknown"),
-        "Secure" to (v["secure"] ?: "unknown"),
-        "Current slot" to (v["current-slot"] ?: "none / unknown"),
-        "Slot count" to (v["slot-count"] ?: "unknown"),
-        "Max download" to (v["max-download-size"] ?: "unknown"),
-        "Bootloader version" to (v["version-bootloader"] ?: "unknown"),
-        "Baseband" to (v["version-baseband"] ?: "unknown"),
-        "Userspace fastboot" to (v["is-userspace"] ?: "unknown"),
-    )
+    suspend fun identifyAttached(force: Boolean = false) {
+        val current = targetState.value
+        identityState.value = DeviceRoster.prune(identityState.value, current)
+        for (target in current) {
+            if (target.mode == TargetMode.UNKNOWN) continue
+            if (!force && !DeviceRoster.needsIdentify(target, identityState.value)) continue
+            runCatching { identifyOne(target) }.onFailure { e ->
+                log.warn("Identify ${target.publicLabel()} failed: ${e.message}")
+                publishIdentity(DeviceIdentityParser.stub(target, e.message ?: e.javaClass.simpleName))
+            }
+        }
+    }
+
+    private suspend fun identifyOne(target: AttachedTarget) {
+        if (!target.hasPermission) {
+            publishIdentity(DeviceIdentityParser.stub(target, "unauthorized or offline"))
+            return
+        }
+        val key = target.rosterKey()
+        serialLock.withLock(key, "Identify") {
+            when (target.mode) {
+                TargetMode.ADB -> loadAdbInfo(target)
+                TargetMode.FASTBOOT -> {
+                    val identity = DeviceIdentityParser.fromFastboot(getvarAll(target.serial ?: target.deviceName), target)
+                    publishIdentity(identity)
+                    if (active?.rosterKey() == key) infoState.value = identity.toTargetInfo()
+                }
+                TargetMode.EDL -> {
+                    val identity = DeviceIdentityParser.fromEdl(target)
+                    publishIdentity(identity)
+                    if (active?.rosterKey() == key) infoState.value = identity.toTargetInfo()
+                }
+                TargetMode.UNKNOWN -> Unit
+            }
+        }
+    }
+
+    private fun publishIdentity(identity: ai.rootforge.os.device.DeviceIdentity) {
+        val key = identity.rosterKey().ifEmpty { return }
+        identityState.update { it + (key to identity) }
+        log.info("Identified ${identity.brand ?: "unknown"} ${identity.model ?: ""} (${identity.codename ?: "no codename"}) · ${identity.mode.label} · serial ${identity.maskedSerial}".replace("  ", " "))
+    }
+
+    private fun knownSerials(): List<String> =
+        (targetState.value.mapNotNull { it.serial } + identityState.value.values.mapNotNull { it.serial } + listOfNotNull(active?.serial)).distinct()
+
+    private fun logMasked(text: String) {
+        log.out(SerialMask.replaceKnown(text, knownSerials()))
+    }
 
     private fun activeSerial(): String? = active?.serial ?: active?.deviceName
 
@@ -718,41 +771,55 @@ class HostController(
     private fun requireAdb(): File = tools.adb ?: throw IOException("adb not found. Install Android platform-tools and put them on PATH, or set ANDROID_HOME.")
     private fun requireFastboot(): File = tools.fastboot ?: throw IOException("fastboot not found. Install Android platform-tools and put them on PATH, or set ANDROID_HOME.")
 
-    private fun adb(args: List<String>, timeoutMs: Long): CmdResult {
+    private fun adb(args: List<String>, timeoutMs: Long, serial: String? = activeSerial()): CmdResult {
         val exe = requireAdb()
-        val serial = activeSerial()
         val full = if (serial != null) listOf("-s", serial) + args else args
         val r = runner.run(exe, full, timeoutMs)
         if (!r.ok && r.output.contains("no devices", ignoreCase = true)) throw IOException("No adb device (current mode: ${currentMode?.label ?: "none"}).")
         return r
     }
 
-    private fun fastboot(args: List<String>, timeoutMs: Long): CmdResult {
+    private fun fastboot(args: List<String>, timeoutMs: Long, serial: String? = activeSerial()): CmdResult {
         val exe = requireFastboot()
-        val serial = activeSerial()
         val full = if (serial != null) listOf("-s", serial) + args else args
         return runner.run(exe, full, timeoutMs)
     }
 
-    private suspend fun <T> operation(label: String, block: suspend () -> T): Result<T> {
-        if (logcatState.value && label != "Logcat") {
+    private suspend fun <T> operation(label: String, block: suspend () -> T): Result<T> =
+        operationOn(active?.rosterKey(), label, block)
+
+    private fun refreshBusy() {
+        if (logcatState.value) {
+            busyState.value = "Logcat"
+            return
+        }
+        val activeKey = SerialOpLock.key(active?.rosterKey())
+        busyState.value = serialLock.busyLabel(activeKey) ?: serialLock.busyMap.value.values.firstOrNull()
+    }
+
+    private suspend fun <T> operationOn(serial: String?, label: String, block: suspend () -> T): Result<T> {
+        val logcatSerial = active?.rosterKey()
+        if (logcatState.value && label != "Logcat" && (serial == null || serial == logcatSerial)) {
             val msg = "Stop logcat before running another action."
             log.error(msg)
             return Result.failure(IOException(msg))
         }
-        return opLock.withLock {
-            busyState.value = label
-            try {
-                Result.success(withContext(Dispatchers.IO) { block() })
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log.error("$label failed: ${e.message ?: e.javaClass.simpleName}")
-                Result.failure(e)
-            } finally {
-                progressState.value = null
-                busyState.value = null
+        return try {
+            serialLock.withLock(serial, label) {
+                busyState.value = label
+                try {
+                    Result.success(withContext(Dispatchers.IO) { block() })
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    log.error("$label failed: ${e.message ?: e.javaClass.simpleName}")
+                    Result.failure(e)
+                } finally {
+                    progressState.value = null
+                }
             }
+        } finally {
+            refreshBusy()
         }
     }
 }

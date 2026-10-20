@@ -27,6 +27,9 @@ class ScreenshotTest {
     fun dashboard() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Dashboard, startExpanded = true) }
 
     @Test
+    fun devices() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Devices) }
+
+    @Test
     fun flashTools() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.FlashTools) }
 
     @Test

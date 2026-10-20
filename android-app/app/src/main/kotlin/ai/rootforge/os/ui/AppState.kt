@@ -11,6 +11,7 @@ import ai.rootforge.os.core.LinkState
 import ai.rootforge.os.core.LogLine
 import ai.rootforge.os.core.Progress
 import ai.rootforge.os.core.TargetInfo
+import ai.rootforge.os.device.DeviceIdentity
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.module.BuiltModule
 import ai.rootforge.os.module.InstalledModule
@@ -71,6 +72,10 @@ data class AppUiState(
     val localModules: List<InstalledModule> = emptyList(),
     /** True after a successful List on this phone (even if the list is empty). */
     val localListed: Boolean = false,
+    /** Read-only identities keyed by serial (or USB device name). */
+    val identities: Map<String, DeviceIdentity> = emptyMap(),
+    /** Per-serial busy labels so two phones can work at once. */
+    val serialBusy: Map<String, String> = emptyMap(),
 )
 
 /** Every user-triggerable action. The real implementation talks to the target; the preview one does nothing. */
@@ -79,6 +84,8 @@ interface AppActions {
     fun connect(target: AttachedTarget)
     fun disconnect()
     fun refreshInfo()
+    /** USB refresh + read-only identify of every attached phone. */
+    fun identifyDevices()
 
     /** Opens the system file picker and copies the choice into the app library. */
     fun importFile(then: (LibraryFile) -> Unit = {})
@@ -190,6 +197,7 @@ object NoopActions : AppActions {
     override fun connect(target: AttachedTarget) = Unit
     override fun disconnect() = Unit
     override fun refreshInfo() = Unit
+    override fun identifyDevices() = Unit
     override fun importFile(then: (LibraryFile) -> Unit) = Unit
     override fun deleteFile(name: String) = Unit
     override fun downloadBuildCatalog() = Unit

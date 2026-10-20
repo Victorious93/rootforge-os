@@ -3,6 +3,10 @@ package ai.rootforge.os.ui.screens
 import ai.rootforge.os.catalog.CatalogRecoveryPrefill
 import ai.rootforge.os.core.LinkState
 import ai.rootforge.os.core.humanSize
+import ai.rootforge.os.device.SerialMask
+import ai.rootforge.os.device.SerialOpLock
+import ai.rootforge.os.device.publicLabel
+import ai.rootforge.os.device.rosterKey
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.ui.ActionButton
 import ai.rootforge.os.ui.ActionKind
@@ -126,8 +130,8 @@ internal fun TargetRow(target: AttachedTarget, state: AppUiState, actions: AppAc
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
-                Text(target.displayName, style = MaterialTheme.typography.titleSmall)
-                Text("${target.vidPid}${target.serial?.let { "  serial $it" } ?: ""}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(target.publicLabel(), style = MaterialTheme.typography.titleSmall)
+                Text("${target.vidPid}${target.serial?.let { "  serial ${SerialMask.mask(it)}" } ?: ""}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             StatusPill(target.mode.label, modeColor(target.mode))
         }
@@ -136,7 +140,8 @@ internal fun TargetRow(target: AttachedTarget, state: AppUiState, actions: AppAc
             if (!target.hasPermission) {
                 ActionButton("Grant USB access", Icons.Filled.Usb, ActionKind.Primary) { actions.requestUsbPermission(target) }
             } else if (!connected) {
-                ActionButton("Connect (${target.mode.label})", Icons.Filled.Usb, ActionKind.Primary, enabled = state.busy == null) { actions.connect(target) }
+                val thisBusy = state.serialBusy[SerialOpLock.key(target.rosterKey())] ?: state.serialBusy[target.rosterKey()]
+                ActionButton("Connect (${target.mode.label})", Icons.Filled.Usb, ActionKind.Primary, enabled = thisBusy == null) { actions.connect(target) }
             }
         }
     }

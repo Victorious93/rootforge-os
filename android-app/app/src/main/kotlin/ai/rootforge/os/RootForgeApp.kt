@@ -40,6 +40,8 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -115,6 +117,12 @@ class RootForgeApp : Application() {
             usb.targets.collect { list ->
                 controller.onTargetsChanged(list)
                 autoConnect(list)
+            }
+        }
+        appScope.launch {
+            while (isActive) {
+                delay(2_000)
+                usb.refresh()
             }
         }
     }

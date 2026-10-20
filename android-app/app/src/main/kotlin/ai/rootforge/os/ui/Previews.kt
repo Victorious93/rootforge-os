@@ -11,6 +11,8 @@ import ai.rootforge.os.desktopmode.DesktopMode
 import ai.rootforge.os.core.LogLevel
 import ai.rootforge.os.core.LogLine
 import ai.rootforge.os.core.TargetInfo
+import ai.rootforge.os.device.BootloaderLock
+import ai.rootforge.os.device.DeviceIdentity
 import ai.rootforge.os.ui.theme.RootForgeTheme
 import ai.rootforge.os.usb.AttachedTarget
 import ai.rootforge.os.usb.TargetMode
@@ -29,6 +31,17 @@ internal fun previewState(): AppUiState = AppUiState(
             serial = "PIXELTEST",
             product = "Pixel 8",
             manufacturer = "Google",
+        ),
+        AttachedTarget(
+            deviceName = "/dev/bus/usb/001/004",
+            vendorId = 0x04E8,
+            productId = 0x6860,
+            mode = TargetMode.FASTBOOT,
+            interfaceId = 0,
+            hasPermission = true,
+            serial = "R5CT70TESTSAMS",
+            product = "SM-S911B",
+            manufacturer = "samsung",
         ),
     ),
     link = LinkState.Connected(TargetMode.ADB, "Google Pixel 8"),
@@ -65,6 +78,35 @@ internal fun previewState(): AppUiState = AppUiState(
         ),
     ),
     localListed = true,
+    identities = mapOf(
+        "PIXELTEST" to DeviceIdentity(
+            mode = TargetMode.ADB,
+            brand = "google",
+            model = "Pixel 8",
+            codename = "shiba",
+            product = "shiba",
+            soc = "Google Tensor G3",
+            androidVersion = "15",
+            sdk = "35",
+            securityPatch = "2025-12-05",
+            bootloader = BootloaderLock.UNLOCKED,
+            rootManagers = listOf(ai.rootforge.os.root.RootManager.MAGISK),
+            slot = "a",
+            serial = "PIXELTEST",
+            modelNumber = "Pixel 8",
+        ),
+        "R5CT70TESTSAMS" to DeviceIdentity(
+            mode = TargetMode.FASTBOOT,
+            brand = "samsung",
+            model = "SM-S911B",
+            codename = "dm1q",
+            product = "dm1q",
+            soc = "kalama",
+            bootloader = BootloaderLock.LOCKED,
+            slot = "b",
+            serial = "R5CT70TESTSAMS",
+        ),
+    ),
 )
 
 /** Placeholder entries for previews and screenshots; not real catalog data. */
@@ -93,6 +135,12 @@ private fun previewCatalog(): LoadedCatalog {
 @Composable
 fun PreviewDashboard() {
     RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Dashboard, startExpanded = true) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Devices")
+@Composable
+fun PreviewDevices() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Devices) }
 }
 
 @Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Flash Tools")

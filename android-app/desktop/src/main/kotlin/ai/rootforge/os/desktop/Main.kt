@@ -80,6 +80,7 @@ fun main(args: Array<String>) {
         scope.launch {
             while (isActive) {
                 controller.scan()
+                controller.identifyAttached()
                 delay(2_000)
             }
         }
@@ -103,6 +104,7 @@ fun main(args: Array<String>) {
                 LaunchedEffect(Unit) {
                     while (true) {
                         controller.scan()
+                        controller.identifyAttached()
                         val auto = settings.autoConnect
                         val link = controller.link.value
                         if (auto && link is ai.rootforge.os.core.LinkState.Disconnected) {
@@ -139,6 +141,8 @@ private fun rememberDesktopUiState(
     val pendingApprovals by approvals.pending.collectAsState()
     val files by library.files.collectAsState()
     val catalog by buildCatalog.loaded.collectAsState()
+    val identities by controller.identities.collectAsState()
+    val serialBusy by controller.serialBusy.collectAsState()
     val bridge by settings.bridgeEnabledFlow.collectAsState()
     val auto by settings.autoConnectFlow.collectAsState()
     val paired by pairing.paired.collectAsState()
@@ -154,6 +158,8 @@ private fun rememberDesktopUiState(
         emptyTargetsHint = "No adb/fastboot device. Plug the target into this computer, enable USB debugging, " +
             "or boot it to the bootloader. Install Google platform-tools (or Debian's adb/fastboot) and put them on PATH. " +
             "On Windows also install the Google USB driver / Qualcomm 9008 driver — see the README.",
+        identities = identities,
+        serialBusy = serialBusy,
     )
 }
 
