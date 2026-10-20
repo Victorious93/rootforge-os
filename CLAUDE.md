@@ -19,9 +19,13 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > Destructive ops (flash, recovery names, `shizuku.pmGrant`) go through
 > `ApprovalCenter` and never auto-approve. Legacy snake_case `rootforge.*`
 > envelope unchanged (`BridgeIngress`). Docs: `docs/MANUAL.md` Fleet integration.
-> `applicationId` / signing / versioning unchanged. Tests this session: pending
-> when this note was first written; see the verification line after the local
-> suite.
+> `applicationId` / signing / versioning unchanged. Verified: `:core:test`
+> **250/0** (`FleetEnvelopeTest` 12, `ReplayGuardTest` 8, `FleetAuthTest` 7,
+> `FleetCapabilitiesTest` 2, `FleetExecutorTest` 15), `:desktop:test` 2/0,
+> `:app:testDebugUnitTest` 29/0, `:app:assembleDebug` (`aapt`:
+> `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`);
+> `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean (shellcheck
+> 0.11.0 via the repo wheel). **Not run on a phone.**
 
 > **Update 2026-10-20 (Desktop mode):** branch `feat/desktop-mode-x11`. Android Dashboard
 > card talks to VictorSuite (`com.termux`, confirmed in that repo) by package + cert pin,
@@ -209,7 +213,8 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 - Fleet protocol 1.1 (`BRIDGE_PROTOCOL_MINOR = 1`): Messenger JSON `op` envelope with
   nonce replay/expiry, package+cert pairing, default-off external control, and
   `ApprovalCenter` for destructive remote actions. Legacy `rootforge.*` envelope still
-  accepted. Documented in `docs/MANUAL.md`. Not run on a phone.
+  accepted. Documented in `docs/MANUAL.md`. `:core:test` 250/0 this session (44 new
+  fleet tests). Not run on a phone.
 - Desktop mode: Android Dashboard card for VictorSuite (`com.termux`). Pin by package+cert, then
   RUN_COMMAND with a fixed `rootforge-desktop-mode` command, or a dedicated action VictorSuite
   does not export yet (`docs/DESKTOP_MODE.md`). Missing companion is a hint. Not run on a phone.
