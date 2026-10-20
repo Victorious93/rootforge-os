@@ -10,6 +10,7 @@ import ai.rootforge.os.ui.screens.AskScreen
 import ai.rootforge.os.ui.screens.GuideScreen
 import ai.rootforge.os.ui.screens.LogsScreen
 import ai.rootforge.os.ui.screens.ModulesScreen
+import ai.rootforge.os.ui.screens.CustomRecoveryScreen
 import ai.rootforge.os.ui.screens.RecoveryScreen
 import ai.rootforge.os.ui.screens.RootScreen
 import ai.rootforge.os.ui.screens.SettingsScreen
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsBackupRestore
+import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -74,6 +76,7 @@ enum class Destination(val title: String, val icon: ImageVector) {
     Root("Root / Patching", Icons.Filled.Security),
     Modules("Modules", Icons.Filled.Extension),
     Recovery("Recovery", Icons.Filled.SettingsBackupRestore),
+    CustomRecovery("Custom Recovery", Icons.Filled.SystemUpdateAlt),
     Logs("Logs / Terminal", Icons.Filled.Terminal),
     Settings("Settings", Icons.Filled.Settings),
 }
@@ -148,6 +151,7 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
                     Destination.Root -> RootScreen(state, actions)
                     Destination.Modules -> ModulesScreen(state, actions)
                     Destination.Recovery -> RecoveryScreen(state, actions)
+                    Destination.CustomRecovery -> CustomRecoveryScreen(state, actions)
                     Destination.Logs -> LogsScreen(state, actions)
                     Destination.Settings -> SettingsScreen(state, actions)
                 }

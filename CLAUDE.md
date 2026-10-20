@@ -16,28 +16,51 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > (`ai.rootforge.os.action.BRIDGE`): `op` `capabilities.get` | `remote.command` |
 > `macro.step` | `macro.run`, nonce/ttl/skew replay cache, pairing by package +
 > cert SHA-256 only (never `trigger.*`). External control still off by default.
-> Destructive ops (flash, recovery names, `shizuku.pmGrant`) go through
-> `ApprovalCenter` and never auto-approve. Legacy snake_case `rootforge.*`
-> envelope unchanged (`BridgeIngress`). Docs: `docs/MANUAL.md` Fleet integration.
-> `applicationId` / signing / versioning unchanged. Verified: `:core:test`
-> **250/0** (`FleetEnvelopeTest` 12, `ReplayGuardTest` 8, `FleetAuthTest` 7,
+> Destructive ops (flash, recovery names including Custom Recovery `su`/`dd`,
+> `shizuku.pmGrant`) go through `ApprovalCenter` and never auto-approve. Legacy
+> snake_case `rootforge.*` envelope unchanged (`BridgeIngress`). Docs:
+> `docs/MANUAL.md` Fleet integration. `applicationId` / signing / versioning
+> unchanged. Verified before merging `main` (#77): `:core:test` **250/0**
+> (`FleetEnvelopeTest` 12, `ReplayGuardTest` 8, `FleetAuthTest` 7,
 > `FleetCapabilitiesTest` 2, `FleetExecutorTest` 15), `:desktop:test` 2/0,
 > `:app:testDebugUnitTest` 29/0, `:app:assembleDebug` (`aapt`:
 > `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`);
 > `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean (shellcheck
-> 0.11.0 via the repo wheel). **Not run on a phone.**
+> 0.11.0 via the repo wheel). **Not run on a phone.** Re-run after merging #77.
 
-> **Update 2026-10-20 (Desktop mode):** branch `feat/desktop-mode-x11`. Android Dashboard
-> card talks to VictorSuite (`com.termux`, confirmed in that repo) by package + cert pin,
-> then `RUN_COMMAND` with only `rootforge-desktop-mode <op>` (dedicated
-> `ai.victorsuite.action.DESKTOP_MODE` is specified in `docs/DESKTOP_MODE.md` and is **not**
-> in VictorSuite yet). Setup scripts `setup_desktop_mode.sh` /
-> `rootforge_desktop_mode.sh` / `termux/desktop-mode-entry.sh`. Missing companion is a
-> hint, never a crash. Signing / `applicationId` / versioning unchanged. Verified:
+> **Update 2026-10-20 (Custom Recovery installer):** branch `feat/recovery-installer`
+> (PR #77, on `main` as `fabc649`). New drawer screen **Custom Recovery**
+> (Android + desktop) installs official TWRP (`twrp.me/search.json` +
+> `dl.twrp.me/<codename>/`) and PitchBlack (`pitchblackrecovery.com`, GitHub
+> releases, SourceForge) on a **rooted** phone with `su`/`dd`. Detects
+> `ro.product.device` / `ro.build.product`, `su -c id`, A/B vs A-only, and
+> dedicated `recovery`/`recovery_a`/`recovery_b` vs recovery-in-boot
+> (`vendor_boot`/`boot`). Writes only the dedicated recovery partition; never
+> `boot` or `vendor_boot`. Dry-run default; typed `FLASH RECOVERY` via
+> `ApprovalCenter`; backup of the current partition into the library first;
+> reboot to recovery is a separate button. Images are not bundled; https
+> official hosts only; TWRP `.md5` checked when present, SHA-256 always shown.
+> `applicationId` / signing / versioning unchanged. Re-verified after #76
+> merge: `:core:test` 248/0 (`recovery/` 41, `shizuku/` 26, `desktopmode/` 12),
+> `:desktop:test` 2/0, `:app:testDebugUnitTest` 30/0, `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`). `bash tests/run-tests.sh` → 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not
+> run:** a phone, a live TWRP/PBRP download+write. Doc:
+> `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+
+> **Update 2026-10-20 (Desktop mode):** branch `feat/desktop-mode-x11` (PR #76, on `main` as `b8e7708`).
+> Android Dashboard card talks to VictorSuite (`com.termux`, confirmed in that repo)
+> by package + cert pin, then `RUN_COMMAND` with only `rootforge-desktop-mode <op>`
+> (dedicated `ai.victorsuite.action.DESKTOP_MODE` is specified in
+> `docs/DESKTOP_MODE.md` and is **not** in VictorSuite yet). Setup scripts
+> `setup_desktop_mode.sh` / `rootforge_desktop_mode.sh` /
+> `termux/desktop-mode-entry.sh`. Missing companion is a hint, never a crash.
+> Signing / `applicationId` / versioning unchanged. Verified on that PR:
 > `:core:test` 180/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` + `assembleDebug`
 > (`aapt`: `ai.rootforge.os.debug` / `0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
 > `bash tests/lint.sh` clean. **Not run on a phone.** Merged `origin/main` (#75 Shizuku)
-> into this branch.
+> into that branch.
 
 > **Update 2026-10-19 (Shizuku fleet alignment):** branch `feat/shizuku` (PR #75).
 > Aligned with droidcommand-AI PR #231 under RootForge packages. Four states
@@ -205,19 +228,28 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66; the APK now requests `INTERNET` for its Download button only), and Shizuku/Sui (#75). None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite X11 (#76), and Custom Recovery installer (#77). Fleet protocol 1.1 is this branch. The APK requests `INTERNET` for catalog Download and for Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
 - Fleet protocol 1.1 (`BRIDGE_PROTOCOL_MINOR = 1`): Messenger JSON `op` envelope with
   nonce replay/expiry, package+cert pairing, default-off external control, and
-  `ApprovalCenter` for destructive remote actions. Legacy `rootforge.*` envelope still
-  accepted. Documented in `docs/MANUAL.md`. `:core:test` 250/0 this session (44 new
-  fleet tests). Not run on a phone.
-- Desktop mode: Android Dashboard card for VictorSuite (`com.termux`). Pin by package+cert, then
-  RUN_COMMAND with a fixed `rootforge-desktop-mode` command, or a dedicated action VictorSuite
-  does not export yet (`docs/DESKTOP_MODE.md`). Missing companion is a hint. Not run on a phone.
+  `ApprovalCenter` for destructive remote actions (including Custom Recovery writes).
+  Legacy `rootforge.*` envelope still accepted. Documented in `docs/MANUAL.md`.
+  `:core:test` 250/0 this session before merging #77 (44 new fleet tests). Not run
+  on a phone.
+- Custom Recovery installer (PR #77, on `main`): `:core` `ai.rootforge.os.recovery`
+  plus Compose **Custom Recovery** screen. Dedicated recovery only; dry-run default;
+  `FLASH RECOVERY`; no bundled images. After merging #75 and #76: `:core:test`
+  248/0 (`recovery/` 41/0, `shizuku/` 26/0, `desktopmode/` 12/0);
+  `:desktop:test` 2/0; `:app:testDebugUnitTest` 30/0; `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`). **Not run on a phone.** Doc:
+  `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+- Desktop mode (PR #76, on `main`): Android Dashboard card for VictorSuite (`com.termux`).
+  Pin by package+cert, then RUN_COMMAND with a fixed `rootforge-desktop-mode`
+  command, or a dedicated action VictorSuite does not export yet
+  (`docs/DESKTOP_MODE.md`). Missing companion is a hint. Not run on a phone.
 - Shizuku/Sui (PR #75, on `main`): fleet four-state manager + `PrivilegedShell` sole API, bound
   `IPrivilegedShell` UserService after `GRANTED`, approval-gated read-only Settings
   lookups; `pmGrant` hidden + typed confirm. Deps 13.1.5. `:core:test` 194/0 on that PR,
@@ -226,8 +258,9 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   `#0C1D36`). `tests/test_launcher_icons.py` 7/0; `:app:assembleDebug` packaged the
   new mipmaps (2026-10-19). Not installed on a phone.
 - Custom RR catalog: Dashboard "Builds for this device" card (Android + desktop), Download over
-  https (APK requests `INTERNET` for this only) or Import file; `:core` `catalog/` tests 20/0
-  (2026-10-19). Never affects flash gating. Not run on a phone. Doc: `docs/CUSTOM_RR_CATALOG.md`.
+  https or Import file; `:core` `catalog/` tests 20/0 (2026-10-19). Never affects flash gating.
+  `INTERNET` is also used by Custom Recovery lookup/download (this branch). Not run on a phone.
+  Doc: `docs/CUSTOM_RR_CATALOG.md`.
 - Desktop `~/.rootforge/desktop.properties` is created mode `0600` and an existing
   world-readable copy is tightened before load (`DesktopSettings`, #64). `:desktop:test
   --tests ai.rootforge.os.desktop.DesktopSettingsTest` → 2 tests, 0 failures
@@ -298,7 +331,8 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   release; the Python CLI can run from a git clone.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`. Flash Tools: `docs/FLASH_TOOLS_PLAN.md`.
-  Custom RR catalog: `docs/CUSTOM_RR_CATALOG.md`.
+  Custom RR catalog: `docs/CUSTOM_RR_CATALOG.md`. Custom Recovery installer:
+  `docs/CUSTOM_RECOVERY_INSTALLER.md`.
 
 **Incident worth remembering:** merge `b02e7c4` silently reverted six build hooks to a flavour
 that defined SHA-256 pins and never compared them (one also used an undefined variable),
@@ -317,7 +351,7 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-The Root Guide, terminal hand-off, Kitsune, module work and the Custom RR build catalog are on `main` (see Updates 2026-10-19). The APK requests `INTERNET` for the catalog Download button only. ISO Stage 5 is still blocked
+The Root Guide, terminal hand-off, Kitsune, module work, the Custom RR build catalog, Shizuku/Sui (#75) and Desktop mode (#76) are on `main`. Custom Recovery installer is on `feat/recovery-installer` (not on `main` yet). The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only on a tap. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 

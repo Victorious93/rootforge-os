@@ -124,10 +124,11 @@ Only actions that already exist on this node:
 | `shizuku.pmGrant` | destructive | typed `GRANT PERMISSION` |
 
 `shizuku.exec` exists on the host but is **not** remotely allowed
-(`capability_off`). EDL, recovery writes, sideload, `fastboot oem` /
-erase / boot-once, APK install and push/pull are **not** fleet actions;
-naming them returns `confirmation_required` and nothing is written.
-A remote `trigger` never auto-approves a destructive op.
+(`capability_off`). EDL, recovery writes (including Custom Recovery
+`su`/`dd` / `FLASH RECOVERY`), sideload, `fastboot oem` / erase /
+boot-once, APK install and push/pull are **not** fleet actions; naming
+them returns `confirmation_required` and nothing is written. A remote
+`trigger` never auto-approves a destructive op.
 
 ### Error codes
 

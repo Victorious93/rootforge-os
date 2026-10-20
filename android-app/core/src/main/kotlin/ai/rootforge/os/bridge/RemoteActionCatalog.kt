@@ -42,6 +42,8 @@ object RemoteActionCatalog {
         "rootforge.recovery.sideload",
         "rootforge.recovery.flash",
         "rootforge.recovery.install",
+        "rootforge.recovery.custom",
+        "rootforge.customrecovery.install",
         "rootforge.fastboot.oem",
         "rootforge.fastboot.erase",
         "rootforge.fastboot.boot",

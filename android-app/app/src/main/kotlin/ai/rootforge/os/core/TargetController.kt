@@ -14,6 +14,14 @@ import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.fastboot.TargetIdentity
 import ai.rootforge.os.usb.UsbScanFilter
 import ai.rootforge.os.module.BuiltModule
+import ai.rootforge.os.recovery.AdbRootSession
+import ai.rootforge.os.recovery.ProcessRootSession
+import ai.rootforge.os.recovery.RecoveryCommands
+import ai.rootforge.os.recovery.RecoveryInstallResult
+import ai.rootforge.os.recovery.RecoveryInstaller
+import ai.rootforge.os.recovery.RecoveryProbe
+import ai.rootforge.os.recovery.RecoverySource
+import ai.rootforge.os.recovery.RootSession
 import ai.rootforge.os.module.ModuleBuilder
 import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.root.BootImageInfo
@@ -637,6 +645,78 @@ class TargetController(
         conn.shell("rm -f $remote")
         if (r.exitCode != 0) throw IOException("Module install exited with ${r.exitCode}. Is ${manager.label} active and root granted to shell?")
         r.output
+    }
+
+    // ----- custom recovery (rooted su/dd) -------------------------------------------------------------
+
+    private fun recoveryInstaller() = RecoveryInstaller(log, library, approvals)
+
+    fun probeThisPhone(): RecoveryProbe {
+        val installer = recoveryInstaller()
+        val props = localGetprop()
+        val id = runCatching { ai.rootforge.os.recovery.ProcessCapture.run(RecoveryCommands.suArgv(RecoveryCommands.rootId()), 8_000) }
+        val listing = runCatching {
+            ai.rootforge.os.recovery.ProcessCapture.run(RecoveryCommands.suArgv(RecoveryCommands.listPartitions()), 12_000)
+        }.recoverCatching {
+            ai.rootforge.os.recovery.ProcessCapture.run(listOf("sh", "-c", RecoveryCommands.listPartitions()), 12_000)
+        }.getOrNull()?.output.orEmpty()
+        return installer.probe(
+            RecoverySource.THIS_PHONE,
+            props,
+            listing,
+            id.getOrNull()?.output ?: (id.exceptionOrNull()?.message ?: "su not found"),
+            id.getOrNull()?.exit,
+        )
+    }
+
+    suspend fun probeAdbRecovery(): Result<RecoveryProbe> = operation("Probe recovery (USB target)") {
+        val conn = requireAdb()
+        val installer = recoveryInstaller()
+        val props = conn.getprop()
+        val id = conn.shell(RecoveryCommands.suShell(RecoveryCommands.rootId()), 15_000)
+        val rooted = installer.parseRoot(id.output, id.exitCode)
+        val listing = if (rooted) {
+            conn.shell(RecoveryCommands.suShell(RecoveryCommands.listPartitions()), 15_000).output
+        } else {
+            conn.shell(RecoveryCommands.listPartitions(), 15_000).output
+        }
+        installer.probe(RecoverySource.ADB_TARGET, props, listing, id.output, id.exitCode).also {
+            log.info("USB target ${it.identity.device ?: "unknown"}: rooted=${it.rooted}, ${it.layout.kind}, write=${it.layout.writePath ?: "none"}")
+        }
+    }
+
+    suspend fun installCustomRecovery(
+        probe: RecoveryProbe,
+        image: LibraryFile,
+        dryRun: Boolean,
+        publishedMd5: String? = null,
+        publishedSha256: String? = null,
+    ): Result<RecoveryInstallResult> = operation(if (dryRun) "Recovery dry-run" else "Write recovery") {
+        val session = sessionFor(probe.source)
+        recoveryInstaller().install(session, probe, image, dryRun, publishedMd5, publishedSha256)
+    }
+
+    suspend fun rebootCustomRecovery(probe: RecoveryProbe): Result<Unit> = operation("Reboot to recovery") {
+        recoveryInstaller().rebootToRecovery(sessionFor(probe.source))
+    }
+
+    private fun sessionFor(source: RecoverySource): RootSession = when (source) {
+        RecoverySource.THIS_PHONE -> ProcessRootSession()
+        RecoverySource.ADB_TARGET -> AdbRootSession(requireAdb())
+    }
+
+    private fun localGetprop(): Map<String, String> {
+        val dump = runCatching {
+            ai.rootforge.os.recovery.ProcessCapture.run(listOf("getprop"), 8_000).output
+        }.getOrNull()
+        val parsed = dump?.let { ai.rootforge.os.recovery.RecoveryIdentity.parseGetprop(it) }.orEmpty()
+        if (parsed.isNotEmpty()) return parsed
+        return mapOf(
+            "ro.product.device" to android.os.Build.DEVICE,
+            "ro.build.product" to android.os.Build.DEVICE,
+            "ro.product.name" to android.os.Build.PRODUCT,
+            "ro.product.model" to android.os.Build.MODEL,
+        )
     }
 
     // ----- plumbing -----------------------------------------------------------------------------------

@@ -171,19 +171,27 @@ class FleetExecutorTest {
 
     @Test
     fun recoveryWriteReturnsConfirmationRequiredAndDoesNotNeedABackend() = runTest {
-        val backend = RecordingBackend()
-        val r = parseFleet(
-            fleetExec(backend = backend).handle(
-                fleetJson(
-                    op = FleetOp.REMOTE_COMMAND,
-                    nonce = nonce(7),
-                    extra = buildJsonObject { put("actionRef", JsonPrimitive("rootforge.recovery.flash")) },
-                ),
-                CALLER,
-            ),
+        val names = listOf(
+            "rootforge.recovery.flash",
+            "rootforge.recovery.install",
+            "rootforge.recovery.custom",
+            "rootforge.customrecovery.install",
         )
-        assertEquals(FleetError.CONFIRMATION_REQUIRED, r.error?.code)
-        assertTrue(backend.flashes.isEmpty())
+        names.forEachIndexed { i, name ->
+            val backend = RecordingBackend()
+            val r = parseFleet(
+                fleetExec(backend = backend).handle(
+                    fleetJson(
+                        op = FleetOp.REMOTE_COMMAND,
+                        nonce = nonce(70 + i),
+                        extra = buildJsonObject { put("actionRef", JsonPrimitive(name)) },
+                    ),
+                    CALLER,
+                ),
+            )
+            assertEquals(name, FleetError.CONFIRMATION_REQUIRED, r.error?.code)
+            assertTrue(backend.flashes.isEmpty())
+        }
     }
 
     @Test
