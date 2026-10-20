@@ -1,5 +1,6 @@
 package ai.rootforge.os.bridge
 
+import ai.rootforge.os.config.ConfigBackup
 import ai.rootforge.os.core.ApprovalCenter
 import ai.rootforge.os.shizuku.PrivilegedResult
 import ai.rootforge.os.shizuku.PrivilegedShell
@@ -51,7 +52,8 @@ internal fun fleetExec(
     replay: ReplayGuard = ReplayGuard(clock = { NOW }),
     statusSource: NodeStatusSource = NodeStatusSource.Default,
     clock: () -> Long = { NOW },
-): FleetExecutor = FleetExecutor(NODE, backend, approvals, pairing, { enabled }, privileged, replay, statusSource, clock)
+    configBackup: ConfigBackup = ConfigBackup(),
+): FleetExecutor = FleetExecutor(NODE, backend, approvals, pairing, { enabled }, privileged, replay, statusSource, clock, configBackup)
 
 internal fun parseFleet(line: String) = bridgeJson.decodeFromString<FleetResponse>(line)
 

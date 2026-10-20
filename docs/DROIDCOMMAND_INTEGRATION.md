@@ -122,7 +122,7 @@ A re-signed DCA (new debug keystore) shows as pending again with a "different si
 
 - App: `android-app/core/src/main/kotlin/ai/rootforge/os/bridge/Protocol.kt` (`BRIDGE_PROTOCOL_MAJOR`, `BRIDGE_PROTOCOL_MINOR = 1`, Messenger constants, `BridgeOp`).
 - Executor + pairing: `BridgeExecutor.kt`, `PairingStore.kt`.
-- Fleet remote-control envelope (minor 1: `op` / `requestId` / nonce): `FleetExecutor.kt`, `docs/MANUAL.md` (Fleet integration). Same Messenger service; `BridgeIngress` routes on a top-level `op` field. Envelope ops: `capabilities.get`, `remote.command`, `macro.step`, `macro.run`, `node.status.get` (STATUS-TRAY snapshot; pairing + default-off switch; `kind=read`, `remoteAllowed=true`, `requiresConfirm=false`).
+- Fleet remote-control envelope (minor 1: `op` / `requestId` / nonce): `FleetExecutor.kt`, `docs/MANUAL.md` (Fleet integration). Same Messenger service; `BridgeIngress` routes on a top-level `op` field. Envelope ops: `capabilities.get`, `remote.command`, `macro.step`, `macro.run`, `node.status.get` (STATUS-TRAY snapshot; pairing + default-off switch; `kind=read`, `remoteAllowed=true`, `requiresConfirm=false`), `config.export` / `config.import` (`remoteAllowed=false`; remote callers refused; local logic is `:core` `config/ConfigBackup`).
 - Messenger service: `android-app/app/.../bridge/RootForgeBridgeService.kt` (exported, no signature permission). Caller UID is `Message.sendingUid`, with `Binder.getCallingUid()` as fallback.
 - Tests: `BridgeExecutorTest.kt`, `PairingStoreTest.kt`, `FleetEnvelopeTest.kt`, `ReplayGuardTest.kt`, `FleetAuthTest.kt`, `FleetCapabilitiesTest.kt`, `FleetExecutorTest.kt`, `NodeStatusSnapshotTest.kt`.
 - DCA: `core-rootforge/.../Protocol.kt`. A vendored schema/fixture set (blueprint §10) is still not done.

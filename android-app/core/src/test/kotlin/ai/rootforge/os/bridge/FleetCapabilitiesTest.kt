@@ -45,6 +45,17 @@ class FleetCapabilitiesTest {
         val list = actions.single { it.getValue("name").jsonPrimitive.content == BridgeOp.DEVICES_LIST }
         assertEquals(FleetKind.READ, list.getValue("kind").jsonPrimitive.content)
         assertFalse(list.getValue("requiresConfirm").jsonPrimitive.content.toBoolean())
+
+        val export = ops.single { it.getValue("name").jsonPrimitive.content == FleetOp.CONFIG_EXPORT }
+        assertEquals(FleetKind.ACTION, export.getValue("kind").jsonPrimitive.content)
+        assertFalse(export.getValue("remoteAllowed").jsonPrimitive.content.toBoolean())
+        assertFalse(export.getValue("requiresConfirm").jsonPrimitive.content.toBoolean())
+        val importOp = ops.single { it.getValue("name").jsonPrimitive.content == FleetOp.CONFIG_IMPORT }
+        assertEquals(FleetKind.ACTION, importOp.getValue("kind").jsonPrimitive.content)
+        assertFalse(importOp.getValue("remoteAllowed").jsonPrimitive.content.toBoolean())
+        assertTrue(importOp.getValue("requiresConfirm").jsonPrimitive.content.toBoolean())
+        assertFalse(names.contains(FleetOp.CONFIG_EXPORT))
+        assertFalse(names.contains(FleetOp.CONFIG_IMPORT))
     }
 
     @Test

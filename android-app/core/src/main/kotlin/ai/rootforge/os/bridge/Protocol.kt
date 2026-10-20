@@ -14,8 +14,8 @@ import kotlinx.serialization.json.JsonObject
  *
  * Minor 1 adds the fleet remote-control envelope (`op` / `requestId` / nonce)
  * documented in `docs/MANUAL.md` (Fleet integration), including the STATUS-TRAY
- * read `node.status.get`. Major 1 snake_case requests (`operation`,
- * `rootforge.*`) stay valid.
+ * read `node.status.get` and `config.export` / `config.import` (UNIFIED_BACKUP).
+ * Major 1 snake_case requests (`operation`, `rootforge.*`) stay valid.
  */
 const val BRIDGE_PROTOCOL_MAJOR = 1
 const val BRIDGE_PROTOCOL_MINOR = 1

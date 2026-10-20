@@ -1,5 +1,8 @@
 package ai.rootforge.os.bridge
 
+import ai.rootforge.os.config.ConfigBackup
+import ai.rootforge.os.config.ConfigBackupException
+import ai.rootforge.os.config.ConfigConflictPolicy
 import ai.rootforge.os.core.ApprovalCenter
 import ai.rootforge.os.core.Library
 import ai.rootforge.os.module.ModuleSpec
@@ -13,6 +16,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
@@ -38,6 +42,7 @@ class FleetExecutor(
     private val replay: ReplayGuard = ReplayGuard(),
     private val statusSource: NodeStatusSource = NodeStatusSource.Default,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val configBackup: ConfigBackup = ConfigBackup(),
 ) {
     suspend fun handle(requestLine: String, caller: CallerIdentity): String =
         bridgeJson.encodeToString(process(requestLine, caller))
@@ -85,9 +90,13 @@ class FleetExecutor(
                 FleetOp.REMOTE_COMMAND -> runAction(request.actionRef!!, request.params, caller)
                 FleetOp.MACRO_STEP -> runAction(request.actionRef!!, request.params, caller)
                 FleetOp.MACRO_RUN -> runMacro(request, caller)
+                FleetOp.CONFIG_EXPORT -> runConfigExport(request)
+                FleetOp.CONFIG_IMPORT -> runConfigImport(request, caller)
                 else -> throw FleetOpFailed(FleetError.UNSUPPORTED_OP, "no such op '${request.op}'")
             }
             FleetResponse(ok = true, requestId = id, nodeRef = nodeId, result = result)
+        } catch (e: ConfigBackupException) {
+            error(id, e.code, e.message)
         } catch (e: FleetBadParameters) {
             error(id, FleetError.INVALID_PARAMETERS, e.message ?: "invalid parameters")
         } catch (e: FleetOpFailed) {
@@ -126,6 +135,57 @@ class FleetExecutor(
         put("usbHost", backend.usbHost)
         putJsonArray("ops") { RemoteActionCatalog.ENVELOPE_OPS.forEach { add(it.toJson()) } }
         putJsonArray("actions") { RemoteActionCatalog.ACTIONS.filter { it.remoteAllowed }.forEach { add(it.toJson()) } }
+    }
+
+    private fun refuseRemoteConfig(op: String) {
+        val cap = RemoteActionCatalog.envelope(op)
+            ?: throw FleetOpFailed(FleetError.UNSUPPORTED_OP, "no such op '$op'")
+        if (!cap.remoteAllowed) {
+            throw FleetOpFailed(FleetError.CAPABILITY_OFF, "$op is not allowed over the fleet bridge")
+        }
+    }
+
+    private fun runConfigExport(request: FleetRequest): JsonObject {
+        refuseRemoteConfig(request.op)
+        val extra = request.params.keys - setOf("clearPayload", "packageName")
+        if (extra.isNotEmpty()) {
+            throw FleetBadParameters("unknown parameter(s): ${extra.sorted().joinToString()}")
+        }
+        val restrict = request.params.stringOrNull("packageName", max = 256)
+        return configBackup.export(restrict)
+    }
+
+    private suspend fun runConfigImport(request: FleetRequest, caller: CallerIdentity): JsonObject {
+        refuseRemoteConfig(request.op)
+        val extra = request.params.keys - setOf("bundle", "dryRun", "conflictPolicy")
+        if (extra.isNotEmpty()) {
+            throw FleetBadParameters("unknown parameter(s): ${extra.sorted().joinToString()}")
+        }
+        val dryRun = request.dryRun || request.params.flag("dryRun")
+        val policy = request.params.stringOrNull("conflictPolicy", max = 16) ?: ConfigConflictPolicy.SKIP
+        val bundleEl = request.params["bundle"]
+        val bundleText = when (bundleEl) {
+            null -> null
+            is JsonPrimitive -> if (bundleEl.isString) bundleEl.content else throw FleetBadParameters("'bundle' must be a string or object")
+            is JsonObject -> null
+            else -> throw FleetBadParameters("'bundle' must be a string or object")
+        }
+        val bundleObject = bundleEl as? JsonObject
+        return configBackup.import(
+            bundleText = bundleText,
+            bundleObject = bundleObject,
+            dryRun = dryRun,
+            conflictPolicy = policy,
+            source = caller.packageName,
+        )
+    }
+
+    private fun JsonObject.flag(key: String): Boolean {
+        val el = this[key] ?: return false
+        val prim = el as? JsonPrimitive ?: throw FleetBadParameters("'$key' must be a boolean or string")
+        prim.booleanOrNull?.let { return it }
+        if (prim.isString) return prim.content.equals("true", ignoreCase = true)
+        throw FleetBadParameters("'$key' must be a boolean or string")
     }
 
     private suspend fun runMacro(request: FleetRequest, caller: CallerIdentity): JsonObject {

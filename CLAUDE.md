@@ -11,6 +11,31 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (fleet config.export / config.import):** branch
+> `feat/config-backup`. Protocol 1.1 standalone Bridge ops `config.export` and
+> `config.import` (droidcommand-AI `UNIFIED_BACKUP.md` / DCA #236) on the
+> frozen EXTERNAL_NODE envelope. Advertised in `capabilities.get`:
+> `config.export` `{kind:action, remoteAllowed:false, requiresConfirm:false}`;
+> `config.import` `{kind:action, remoteAllowed:false, requiresConfirm:true}`.
+> Same package+cert pairing; a remote caller is `capability_off` for both.
+> Export is non-secret preferences only (`autoConnect`, `terminalApp`); never
+> Magisk/KernelSU/APatch tokens, root passwords, signing material, pairing
+> keys/allow-list secrets, VictorSuite pin, desktop API token. Import:
+> `dryRun`, `conflictPolicy` skip|overwrite|merge-by-id, on-device
+> `ApprovalCenter` confirm, never enables `remote.command` / external control
+> (stays as-is). Unknown/oversized payloads rejected. `applicationId`,
+> signing and versioning unchanged. Local implementation is `:core`
+> `ai.rootforge.os.config`. Docs: `docs/MANUAL.md` / Help (`cmp` identical).
+> Merged `origin/main` (`3737c12` #82 `node.status.get`, plus #81). After
+> that merge: `:core:test` **355/0** (`ConfigBackupTest` 12,
+> `FleetCapabilitiesTest` 2, `FleetEnvelopeTest` 14, `FleetExecutorTest` 16,
+> `NodeStatusSnapshotTest` 9, `NodeStatusFleetOpTest` 6,
+> `ManualLibraryTest` 4); `:desktop:test` 2/0; `:app:testDebugUnitTest`
+> 34/0; `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug`
+> / `versionCode=1` / `versionName=0.1.0-debug`); `bash tests/run-tests.sh`
+> 1056/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run on a phone.**
+
 > **Update 2026-10-20 (fleet `node.status.get`):** branch `feat/node-status-get`.
 > Protocol 1.1 envelope op `node.status.get` on the existing Messenger
 > service. Advertised in `capabilities.get` as `{kind:read,
@@ -318,16 +343,25 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-20 · **Branch:** `feat/node-status-get`
+**Last updated:** 2026-10-20 · **Branch:** `feat/config-backup`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), and local module install + Links + Glossary (#81 / `b72d214`). This branch adds fleet `node.status.get` (STATUS-TRAY). The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), and local module install + Links + Glossary (#81 / `b72d214`). On `main`: #82 `node.status.get`. This branch adds fleet `config.export` / `config.import`. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Fleet config backup (this branch, after merging `origin/main` `3737c12` #82):
+  `config.export` / `config.import` advertised with `remoteAllowed=false`;
+  remote callers `capability_off`; export omits secrets; import dry-run /
+  skip / overwrite / merge-by-id; confirm required; never enables
+  `remote.command`. Documented in `docs/MANUAL.md` / Help. After merging
+  `3737c12` #82: `:core:test` 355/0, `:desktop:test` 2/0,
+  `:app:testDebugUnitTest` 34/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1056/0,
+  `tests/lint.sh` clean. **Not run on a phone.**
 - Fleet `node.status.get` (this branch): protocol 1.1 STATUS-TRAY read on the
   existing Messenger service. Advertised `{kind:read, remoteAllowed:true,
   requiresConfirm:false}`. Snapshot shape as frozen in droidcommand-AI

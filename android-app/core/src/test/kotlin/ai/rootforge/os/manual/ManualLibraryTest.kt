@@ -39,6 +39,8 @@ class ManualLibraryTest {
         assertTrue("STATUS-TRAY snapshot missing", "NodeStatusSnapshot" in text)
         assertTrue("glossary missing Root", "**Root.**" in library.raw)
         assertTrue("glossary missing Bootloop", "**Bootloop.**" in library.raw)
+        assertTrue("config backup ops missing", "config.export" in text && "config.import" in text)
+        assertTrue("config backup remote refuse missing", "not remotely allowed" in text.lowercase())
     }
 
     @Test

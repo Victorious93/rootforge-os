@@ -14,6 +14,8 @@ object RemoteActionCatalog {
         RemoteCapability(FleetOp.MACRO_STEP, FleetKind.ACTION, remoteAllowed = true, requiresConfirm = true, description = "Run one step of a controller-owned macro."),
         RemoteCapability(FleetOp.MACRO_RUN, FleetKind.ACTION, remoteAllowed = true, requiresConfirm = true, description = "Run or dry-run a list of steps. Destructive steps never auto-approve."),
         RemoteCapability(FleetOp.NODE_STATUS, FleetKind.READ, remoteAllowed = true, requiresConfirm = false, description = "This node's STATUS-TRAY snapshot (node_health, optional root)."),
+        RemoteCapability(FleetOp.CONFIG_EXPORT, FleetKind.ACTION, remoteAllowed = false, requiresConfirm = false, description = "Export non-secret preferences as one UNIFIED_BACKUP entry. Remote callers are refused."),
+        RemoteCapability(FleetOp.CONFIG_IMPORT, FleetKind.ACTION, remoteAllowed = false, requiresConfirm = true, description = "Import a UNIFIED_BACKUP bundle. On-device confirm. Never enables remote.command. Remote callers are refused."),
     )
 
     val ACTIONS: List<RemoteCapability> = listOf(
