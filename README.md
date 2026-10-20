@@ -136,7 +136,7 @@ The app requests the internet permission for one thing only: the **Download** bu
 "Builds for this device" card, which fetches the Custom RR catalog over https
 ([docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md)). Device work never uses the network.
 
-Screens: Dashboard, **Root Guide**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
+Screens: Dashboard, **Ask**, **Root Guide**, **Help**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
 Modules (creator and repository links), Recovery, Logs / Terminal, Settings.
 
 **Root Guide** is offline rooting documentation inside the app (bootloader unlock, Magisk / KernelSU / APatch,
@@ -419,6 +419,7 @@ Makefile · BUILD.md · HACKING.md · AGENTS.md · CLAUDE.md
 | [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md) | BIOS-only live ISO; architecture caveats |
 | [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | Trust boundaries, logging, flashing gates |
 | [docs/ANDROID_APP.md](docs/ANDROID_APP.md) | Host-phone APK: USB Host, screens, install, debug key, limits |
+| [docs/MANUAL.md](docs/MANUAL.md) | How-to manual (plain language). Same text is the in-app **Help** screen |
 | [docs/ROOT_GUIDE.md](docs/ROOT_GUIDE.md) | Root Guide: bundled pages, importer, parser, refresh procedure, limits |
 | [docs/FLASH_TOOLS_PLAN.md](docs/FLASH_TOOLS_PLAN.md) | Flash Tools hub, device-match check, manifest format, EDL-Commander plan |
 | [docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md) | "Builds for this device" card: Custom RR ROM/recovery catalog by codename, download or import |

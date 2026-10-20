@@ -7,6 +7,11 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### How-to manual and in-app Help (2026-10-20)
+- New `docs/MANUAL.md`: plain-language how-to covering what RootForge is and its `EXTERNAL_NODE` fleet role, install and first-run (including the v0.2.0 debug-key uninstall), every current screen, every manifest permission, fleet pairing and the default-off remote-control switch, troubleshooting, and privacy. Desktop mode (PR #76) and the rooted TWRP/PitchBlack installer (PR #77) are described as **coming in the next update**. Header art is the repo emblem inside a neon cyan-to-magenta ring (`docs/images/manual/header.png`; regenerator `android-app/tools/generate_manual_header.py`). Paparazzi goldens are reused as screenshots.
+- The same markdown is bundled on the `:core` classpath and rendered offline by a **Help** drawer screen (and Settings → Open the manual) with a GitHub link. `applicationId`, signing and versioning were not changed.
+- Tests: `tests/test_manual.py`; `:core` `ManualLibraryTest`.
+
 ### Shizuku / Sui on the Android host phone (2026-10-19)
 - Optional Shizuku (and Sui) support in the host-phone APK, aligned with the fleet pattern from droidcommand-AI PR #231. `dev.rikka.shizuku:api` / `provider` **13.1.5**, official `ShizukuProvider`, permission `moe.shizuku.manager.permission.API_V23`, `<queries>` for `moe.shizuku.privileged.api` and `rikka.sui`.
 - Four states: `GRANTED` / `DENIED` / `NOT_INSTALLED` / `NOT_RUNNING`. Sui counts as present when `managerInstalled || binderAlive`. `ShizukuManager.requestPermission()` is a no-op except from `DENIED`. `onCreate` only starts listeners.

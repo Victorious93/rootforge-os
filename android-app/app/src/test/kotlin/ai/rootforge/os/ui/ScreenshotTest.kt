@@ -48,6 +48,9 @@ class ScreenshotTest {
     fun modules() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Modules) }
 
     @Test
+    fun help() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Help) }
+
+    @Test
     fun settings() = snap {
         RootForgeUi(
             previewState().copy(

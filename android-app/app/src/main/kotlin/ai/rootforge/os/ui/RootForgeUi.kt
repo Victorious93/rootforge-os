@@ -9,6 +9,7 @@ import ai.rootforge.os.ui.screens.FlashToolsScreen
 import ai.rootforge.os.ui.screens.AskScreen
 import ai.rootforge.os.ui.screens.GuideScreen
 import ai.rootforge.os.ui.screens.LogsScreen
+import ai.rootforge.os.ui.screens.ManualScreen
 import ai.rootforge.os.ui.screens.ModulesScreen
 import ai.rootforge.os.ui.screens.RecoveryScreen
 import ai.rootforge.os.ui.screens.RootScreen
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Menu
@@ -76,6 +78,7 @@ enum class Destination(val title: String, val icon: ImageVector) {
     Recovery("Recovery", Icons.Filled.SettingsBackupRestore),
     Logs("Logs / Terminal", Icons.Filled.Terminal),
     Settings("Settings", Icons.Filled.Settings),
+    Help("Help", Icons.Filled.Help),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -126,7 +129,7 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
             bottomBar = {
                 Column(Modifier.fillMaxWidth()) {
                     ProgressBanner(state.progress, state.busy)
-                    if (current != Destination.Logs && current != Destination.RootGuide && current != Destination.Ask) {
+                    if (current != Destination.Logs && current != Destination.RootGuide && current != Destination.Ask && current != Destination.Help) {
                         TerminalPanel(state.log, terminalOpen, { terminalOpen = !terminalOpen }, actions)
                     }
                 }
@@ -149,7 +152,8 @@ fun RootForgeUi(state: AppUiState, actions: AppActions, startAt: Destination = D
                     Destination.Modules -> ModulesScreen(state, actions)
                     Destination.Recovery -> RecoveryScreen(state, actions)
                     Destination.Logs -> LogsScreen(state, actions)
-                    Destination.Settings -> SettingsScreen(state, actions)
+                    Destination.Settings -> SettingsScreen(state, actions) { current = Destination.Help }
+                    Destination.Help -> ManualScreen(state, actions)
                 }
             }
         }

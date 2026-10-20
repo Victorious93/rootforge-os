@@ -11,6 +11,18 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (how-to manual + in-app Help):** branch `docs/manual`.
+> Added `docs/MANUAL.md` (plain-language how-to: what it is / EXTERNAL_NODE
+> fleet role, install and v0.2.0 debug-key uninstall, every screen, every
+> manifest permission, fleet pairing + default-off switch, troubleshooting,
+> privacy). Header art: emblem + neon cyan-to-magenta ring
+> (`docs/images/manual/header.png`; `android-app/tools/generate_manual_header.py`).
+> Same markdown is bundled at `ai/rootforge/os/manual/MANUAL.md` and rendered
+> by a **Help** drawer screen (also Settings → Open the manual) with a GitHub
+> link. Desktop mode (#76) and the rooted TWRP/PitchBlack installer (#77) are
+> marked coming in the next update. `applicationId`, signing and versioning
+> unchanged. Tests and CI recorded in this session's later notes.
+
 > **Update 2026-10-19 (Shizuku fleet alignment):** branch `feat/shizuku` (PR #75).
 > Aligned with droidcommand-AI PR #231 under RootForge packages. Four states
 > `GRANTED`/`DENIED`/`NOT_INSTALLED`/`NOT_RUNNING`; Sui present when
@@ -172,7 +184,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-19 · **Branch:** `feat/shizuku`
+**Last updated:** 2026-10-20 · **Branch:** `docs/manual`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
@@ -182,6 +194,9 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- How-to manual: `docs/MANUAL.md` plus in-app **Help** (bundled markdown,
+  `ManualLibrary` / `ManualScreen`). Desktop mode and the rooted recovery
+  installer are documented as coming next (#76, #77). Identity unchanged.
 - Shizuku/Sui (PR #75): fleet four-state manager + `PrivilegedShell` sole API, bound
   `IPrivilegedShell` UserService after `GRANTED`, approval-gated read-only Settings
   lookups; `pmGrant` hidden + typed confirm. Deps 13.1.5. `:core:test` 194/0,
