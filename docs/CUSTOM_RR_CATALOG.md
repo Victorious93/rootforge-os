@@ -82,12 +82,27 @@ applies over ADB.
 An unknown target (no product, codename or model) shows "Connect a target":
 unknown is not a wildcard.
 
-**Known gap.** Rows without model numbers cannot use the fallback. OnePlus stock
-OxygenOS names (`oneplus6t` for `fajita`, reported model `ONEPLUS A6013`) still
-get "No catalog entry lists …", and Transsion/realme vendor prefixes and regional
-suffixes are not stripped. Custom RR's own app handles these with a hand-written
-alias table; RootForge has not copied it (see [Licensing](#licensing)) and has no
-table of its own.
+**Alias table.** OnePlus stock builds report `ro.product.device` as e.g.
+`OnePlus6T`, while the catalog says `fajita`. `:core` `CodenameAliases` maps 48
+stock names to catalog codenames (OnePlus 3T through 9R, Nord / N10 / N200 and the
+newer `OP…L1` device names). It only **adds** names to look up; the phone's own
+names still match, so rows filed under both forms (`oneplus8` and `instantnoodle`)
+both show. It is display-only and never feeds `DeviceMatchGate`.
+
+How it was built (RootForge's own, not Custom RR's `codename_aliases.dart`): each
+stock name and its model numbers come from Google's public Play supported-devices
+list (`storage.googleapis.com/play_public/supported_devices.csv`); a row was kept only
+when one of those model numbers appears under the target codename in the catalog
+(`assets/catalog.json`, `_generatedAt` read 2026-10-20). The few catalog rows
+without model numbers (OnePlus 5, 5T, 6, 6T, One) are matched by marketing name
+instead, which is a weaker check [Likely]. A script confirmed all 48 targets exist
+as codenames in that catalog; it was a throwaway and is not committed. Table
+entries are not re-verified automatically: if the catalog renames a codename the
+alias just stops matching.
+
+**Known gap.** Rows without model numbers still cannot use the model fallback, and
+Transsion/realme vendor prefixes and regional suffixes are not stripped. Brands
+other than OnePlus have no alias table.
 
 ## Data source
 
@@ -138,9 +153,45 @@ Apache-2.0. So:
   Android file picker path, and the card with a real target are untested), and
   the desktop window.
 
+## Phone test checklist (owner)
+
+Not run by the agent: it needs a phone. Use a debug APK built from this branch and
+a real target phone with USB debugging on. Write down what you see; "it looked
+fine" is not a result.
+
+1. **Install.** `adb install -r app-debug.apk` (or sideload the CI artifact). If the
+   v0.2.0 APK is installed, uninstall it once first (different debug key).
+2. **Before any catalog.** Open Dashboard → *Builds for this device*. Expect: "No
+   catalog yet…" and the buttons *Download* and *Import file*; no *Remove*.
+3. **Download.** Turn on mobile data or Wi-Fi, tap *Download*. Expect: a line like
+   "<source> · catalog generated <date>", the button now says *Update*, and *Remove*
+   appears. Repeat with network off: expect a readable error, and the old catalog
+   (if any) still shown.
+4. **Import file.** Tap *Remove*, then put `catalog.json` (and optionally
+   `freshness.json`) from `github.com/monsiu/Custom-RR/tree/main/assets` on the
+   phone, tap *Import file*, pick it. Expect the same card as step 3. Then pick a
+   non-catalog file (any `.txt`): expect a rejection and the earlier catalog kept.
+5. **With a real target.** Plug in the target phone (this phone as host, USB OTG),
+   allow USB debugging, wait for the Dashboard to show its codename. Expect build
+   rows that list that exact codename; the freshness pill and "last build" appear
+   when `freshness.json` was loaded. Record the codename and model you saw.
+6. **Fallbacks.** Try (a) a OnePlus on stock OxygenOS / ColorOS: expect rows via
+   the alias table (e.g. `OnePlus6T` → fajita builds); (b) a Redmi 8: expect rows
+   labelled "matched model M1908C3IG as …"; (c) a phone no entry lists: expect
+   "No catalog entry lists …", not a crash or an empty card.
+7. **Buttons.** *Download page* / *Forum* should open the system browser only. On a
+   TWRP or PitchBlack RECOVERY row, *Install with Custom Recovery* should open the
+   Custom Recovery screen pre-filled, still in **dry-run**. Do **not** turn off
+   dry-run or type `FLASH RECOVERY` unless you mean to flash that phone.
+8. **Report back:** device, Android version, what happened at each step, and
+   screenshots of any step that did not match "Expect".
+
 ## Possible follow-ups
 
-1. RootForge's own alias table for rows without model numbers (see Known gap).
-2. Show the card's catalog age more prominently, or warn when it is old.
-3. OrangeFox / SHRP / RedWolf stay link-only; they are not part of the Custom
+1. Alias tables for other brands, built the same way (only rows with a verifiable
+   source).
+2. Mark rows found through an alias on the card (today they look like codename
+   matches).
+3. Show the card's catalog age more prominently, or warn when it is old.
+4. OrangeFox / SHRP / RedWolf stay link-only; they are not part of the Custom
    Recovery writer (TWRP and PitchBlack only).
