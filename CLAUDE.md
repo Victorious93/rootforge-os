@@ -21,8 +21,14 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > the same screen: host `adb`/`fastboot`, two-column grid at ≥ 840 dp,
 > `HostControllerIdentifyTest`. Glossary: Download mode, Odin, Knox, Mi
 > Unlock. Merged `origin/main` `3d05929` (#84). `applicationId`, signing
-> and versioning unchanged. Local suite counts will be filled after this
-> head is tested. **Not run on a phone or a desktop window.**
+> and versioning unchanged. Local suite: `:core:test` **396/0**
+> (`RootGuidesTest` 9, `DeviceIdentityParserTest` 10, `RootPlanTest` 7);
+> `:desktop:test` **3/0** (`HostControllerIdentifyTest` 1);
+> `:app:testDebugUnitTest` 35/0; `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run on a phone or a desktop window.**
 
 > **Update 2026-10-20 (multi-device identify):** branch
 > `feat/multi-device-identify`. **Devices** drawer screen lists every attached
@@ -415,8 +421,10 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   Samsung / Xiaomi / OnePlus / Motorola / generic; Odin is explanation
   only; same dry-run / typed confirm / no auto-reboot; desktop host
   adb/fastboot + two-column grid. Merged `origin/main` `3d05929` (#84).
-  Suite counts filled after this head. **Not run on a phone or a
-  desktop window.**
+  `:core:test` 396/0, `:desktop:test` 3/0, `:app:testDebugUnitTest` 35/0,
+  `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`),
+  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a
+  phone or a desktop window.**
 - Multi-device identify (this branch): **Devices** lists every attached
   phone. USB attach + 2 s poll. Read-only identity; serials masked to
   last four characters; Root plan from the Custom RR catalog;
