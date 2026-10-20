@@ -373,7 +373,13 @@ Three tabs.
 
 **Repositories**
 
-This tab only opens known module-repository websites in the browser. RootForge does not fetch, index or vet modules. Some sites were unreachable when the list was written and are marked "not checked".
+This tab only opens known module-repository websites in the browser. RootForge does not fetch, index or vet modules. Some sites were unreachable when the list was written and are marked "not checked". **Links directory** (button on this screen) opens the fuller list.
+
+### Links directory
+
+![Links](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_links.png)
+
+Drawer entry **Links**, also from Modules → **Links directory**, Settings → About, and Help. Official https pages for Magisk / KernelSU / APatch, module repositories (Alt-Repo, MMRL, Xposed-Modules-Repo, LSPosed / Vector, Zygisk Next), and Shizuku apps (Shizuku, Sui, App Ops, Ice Box, Hail, SystemUI Tuner, Canta, Inure, aShell / aShell You, Dhizuku). Each tap opens the system browser. Nothing is downloaded or bundled. URLs that could not be verified as official https pages are omitted.
 
 ### Recovery (USB fastboot path)
 
@@ -480,9 +486,9 @@ Useful commands: `help`, `adb shell …`, a limited set of `fastboot` reads. The
 
 **External control.** The remote-control switch, node id, pending and paired controllers. See [Fleet integration](#fleet-integration).
 
-**About.** Version, the one network use (catalog Download), USB stack note, Shizuku status. **Open the manual** opens this Help screen.
+**About.** Version, the one network use (catalog Download), USB stack note, Shizuku status. **Open the manual** opens this Help screen. **Links directory** opens the official-URL list.
 
-**Help** is also a drawer entry. It renders this bundled manual offline and offers **Open on GitHub**.
+**Help** is also a drawer entry. It renders this bundled manual offline and offers **Open on GitHub** and **Links directory**.
 
 ![Help](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_help.png)
 

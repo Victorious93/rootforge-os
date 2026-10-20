@@ -45,6 +45,7 @@ fun ManualScreen(
     state: AppUiState,
     actions: AppActions,
     library: ManualLibrary = ManualLibrary.default,
+    onOpenLinks: () -> Unit = {},
 ) {
     var contentsOpen by rememberSaveable { mutableStateOf(false) }
     var jumpTo by rememberSaveable { mutableStateOf<String?>(null) }
@@ -83,6 +84,11 @@ fun ManualScreen(
                     Icons.AutoMirrored.Filled.OpenInNew,
                     ActionKind.Outline,
                 ) { actions.openUrl(ManualLibrary.GITHUB_URL) }
+                ActionButton(
+                    "Links directory",
+                    Icons.AutoMirrored.Filled.OpenInNew,
+                    ActionKind.Outline,
+                ) { onOpenLinks() }
             }
         }
         item {

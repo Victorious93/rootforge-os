@@ -145,3 +145,9 @@ fun PreviewRootGuide() {
 fun PreviewHelp() {
     RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Help) }
 }
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Links")
+@Composable
+fun PreviewLinks() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Links) }
+}

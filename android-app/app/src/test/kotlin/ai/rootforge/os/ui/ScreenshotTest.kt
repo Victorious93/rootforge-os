@@ -70,6 +70,9 @@ class ScreenshotTest {
     fun help() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Help) }
 
     @Test
+    fun links() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Links) }
+
+    @Test
     fun customRecovery() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.CustomRecovery) }
 
     @Test

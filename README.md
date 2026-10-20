@@ -137,7 +137,7 @@ The app requests the internet permission for one thing only: the **Download** bu
 ([docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md)). Device work never uses the network.
 
 Screens: Dashboard (including **Desktop mode** through VictorSuite; see
-[docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Ask**, **Root Guide**, **Help**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
+[docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Ask**, **Root Guide**, **Help**, **Links** (official https directory, browser only), **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
 Modules (creator, this-phone su install, and repository links), Recovery (USB fastboot), Custom Recovery (rooted TWRP/PitchBlack installer), Logs / Terminal, Settings.
 
 **Root Guide** is offline rooting documentation inside the app (bootloader unlock, Magisk / KernelSU / APatch,

@@ -34,7 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Public
@@ -63,7 +63,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 @Composable
-fun ModulesScreen(state: AppUiState, actions: AppActions, startTab: Int = 0) {
+fun ModulesScreen(state: AppUiState, actions: AppActions, startTab: Int = 0, onOpenLinks: () -> Unit = {}) {
     var id by rememberSaveable { mutableStateOf("my_module") }
     var name by rememberSaveable { mutableStateOf("My Module") }
     var version by rememberSaveable { mutableStateOf("v1.0") }
@@ -113,6 +113,7 @@ fun ModulesScreen(state: AppUiState, actions: AppActions, startTab: Int = 0) {
                 SegmentedButton(selected = tab == i, onClick = { tab = i }, shape = SegmentedButtonDefaults.itemShape(i, tabs.size)) { Text(label) }
             }
         }
+        ActionButton("Links directory", Icons.AutoMirrored.Filled.OpenInNew, ActionKind.Outline) { onOpenLinks() }
         when (tab) {
             1 -> ThisPhoneTab(state, actions, localManager, { localOverride = it.name }, dryRun, { dryRun = it }, idle)
             2 -> RepositoriesTab(state, actions, installer, { installer = it }, localManager, dryRun, idle)
@@ -382,7 +383,8 @@ private fun RepositoriesTab(
 
     NoticeCard(
         "RootForge only links to these places. It does not download, index or check anything from them, and a module " +
-            "runs scripts as root on the target. Prefer modules whose source you can read, and read it.",
+            "runs scripts as root on the target. Prefer modules whose source you can read, and read it. " +
+            "The Links directory (button above) has the fuller list, including Shizuku apps.",
     )
     RepoKind.entries.forEach { kind ->
         val repos = ModuleRepos.all.filter { it.kind == kind }
@@ -424,6 +426,6 @@ private fun RepoCard(repo: ModuleRepo, actions: AppActions) {
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (repo.note.isNotBlank()) Text(repo.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        ActionButton("Open in browser", Icons.Filled.OpenInNew, ActionKind.Outline) { actions.openUrl(repo.url) }
+        ActionButton("Open in browser", Icons.AutoMirrored.Filled.OpenInNew, ActionKind.Outline) { actions.openUrl(repo.url) }
     }
 }

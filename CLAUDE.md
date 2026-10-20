@@ -21,13 +21,16 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > default (logs the `su` command, does not call su), typed `INSTALL MODULE`
 > via `ApprovalCenter`, never auto-reboot (separate Reboot button).
 > Installed modules listed read-only from `/data/adb/modules`. LSPosed APKs
-> stay on ADB → Install APK. Desktop is a no-op. `applicationId`, signing
+> stay on ADB → Install APK. Desktop is a no-op. Same PR: in-app **Links**
+> directory (`DirectoryLinks`) of official https pages (managers, module
+> repos, Shizuku apps); browser only; from Modules, Settings, Help and the
+> drawer. `applicationId`, signing
 > and versioning unchanged. After merging `origin/main` (#79 / `988a941`):
-> `:core:test` 310/0 (`LocalModulesTest` + `RootManagersTest` detect, plus
-> fleet 1.1); `:desktop:test` 2/0; `:app:testDebugUnitTest` 32/0 (Paparazzi
-> `modules` re-recorded, `modulesThisPhone` added); `:app:assembleDebug`
+> `:core:test` 313/0 (`LocalModulesTest`, `RootManagersTest` detect,
+> `DirectoryLinksTest`, plus fleet 1.1); `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 33/0 (Paparazzi `links` added); `:app:assembleDebug`
 > (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
-> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1056/0;
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
 > `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
 > **Not run:** a phone, the desktop window.
 
@@ -268,10 +271,11 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   installs a library zip via `su` (`magisk --install-module` / `ksud module
   install` / `apd module install`), auto-detects the manager, lists
   `/data/adb/modules` read-only, dry-run default, typed `INSTALL MODULE`,
-  never reboots. LSPosed APKs unchanged. Desktop no-op. After merging #79:
-  `:core:test` 310/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 32/0,
+  never reboots. LSPosed APKs unchanged. Desktop no-op. Same PR: **Links**
+  directory of official https pages, browser only. After merging #79 plus Links:
+  `:core:test` 313/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 33/0,
   `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`),
-  `tests/run-tests.sh` 1056/0, `tests/lint.sh` clean. **Not run on a phone.**
+  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a phone.**
 - Fleet protocol 1.1 (PR #79, on `main` as `988a941`): Messenger JSON `op` envelope with
   nonce replay/expiry, package+cert pairing, default-off external control, and
   `ApprovalCenter` for destructive remote actions (including Custom Recovery writes).
