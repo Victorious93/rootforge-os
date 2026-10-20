@@ -22,14 +22,14 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > via `ApprovalCenter`, never auto-reboot (separate Reboot button).
 > Installed modules listed read-only from `/data/adb/modules`. LSPosed APKs
 > stay on ADB → Install APK. Desktop is a no-op. `applicationId`, signing
-> and versioning unchanged. Verified before merging `main` (#79): `:core:test`
-> 266/0 (`LocalModulesTest` + `RootManagersTest` detect); `:desktop:test` 2/0;
-> `:app:testDebugUnitTest` 32/0 (Paparazzi `modules` re-recorded, `modulesThisPhone`
-> added); `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug` /
-> `versionCode=1` / `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
-> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). This
-> paragraph will be updated with post-merge counts. **Not run:** a phone,
-> the desktop window.
+> and versioning unchanged. After merging `origin/main` (#79 / `988a941`):
+> `:core:test` 310/0 (`LocalModulesTest` + `RootManagersTest` detect, plus
+> fleet 1.1); `:desktop:test` 2/0; `:app:testDebugUnitTest` 32/0 (Paparazzi
+> `modules` re-recorded, `modulesThisPhone` added); `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1056/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run:** a phone, the desktop window.
 
 > **Update 2026-10-20 (fleet bridge v1):** PR #79, on `main` as `988a941`. Protocol 1.1
 > fleet remote-control envelope on the existing exported Messenger service
@@ -268,10 +268,10 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   installs a library zip via `su` (`magisk --install-module` / `ksud module
   install` / `apd module install`), auto-detects the manager, lists
   `/data/adb/modules` read-only, dry-run default, typed `INSTALL MODULE`,
-  never reboots. LSPosed APKs unchanged. Desktop no-op. Pre-merge suite:
-  `:core:test` 266/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 32/0,
+  never reboots. LSPosed APKs unchanged. Desktop no-op. After merging #79:
+  `:core:test` 310/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 32/0,
   `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`),
-  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a phone.**
+  `tests/run-tests.sh` 1056/0, `tests/lint.sh` clean. **Not run on a phone.**
 - Fleet protocol 1.1 (PR #79, on `main` as `988a941`): Messenger JSON `op` envelope with
   nonce replay/expiry, package+cert pairing, default-off external control, and
   `ApprovalCenter` for destructive remote actions (including Custom Recovery writes).
