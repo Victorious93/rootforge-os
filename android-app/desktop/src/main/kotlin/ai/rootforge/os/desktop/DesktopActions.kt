@@ -6,6 +6,7 @@ import ai.rootforge.os.core.DigestCheck
 import ai.rootforge.os.core.FileInspection
 import ai.rootforge.os.core.LibraryFile
 import ai.rootforge.os.core.TerminalCommand
+import ai.rootforge.os.desktopmode.DesktopModeOp
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.module.BuiltModule
 import ai.rootforge.os.module.ModuleSpec
@@ -167,6 +168,9 @@ class DesktopActions(
     override fun setAutoConnect(enabled: Boolean) { settings.autoConnect = enabled }
     override fun setTerminalApp(packageName: String) = Unit
     override fun openTerminalApp() = log.info("Opening another app is an Android-only feature.")
+    override fun pinVictorSuite() = Unit
+    override fun launchDesktopMode(op: DesktopModeOp) =
+        log.info("Desktop mode is an Android + VictorSuite feature. This computer already is the desktop client.")
 
     override fun resetAdbKey() {
         log.warn("Desktop uses the host adb key (~/.android/adbkey). Remove that file yourself if you want a new identity; this app will not delete it.")

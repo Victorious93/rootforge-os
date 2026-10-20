@@ -19,17 +19,23 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > (`docs/images/manual/header.png`; `android-app/tools/generate_manual_header.py`).
 > Same markdown is bundled at `ai/rootforge/os/manual/MANUAL.md` and rendered
 > by a **Help** drawer screen (also Settings → Open the manual) with a GitHub
-> link. Desktop mode (#76) and the rooted TWRP/PitchBlack installer (#77) are
-> marked coming in the next update. `applicationId`, signing and versioning
-> unchanged (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1`
-> / `versionName=0.1.0-debug`; APK lists `POST_NOTIFICATIONS`, `INTERNET`,
-> `API_V23`). Verified: `:core:test` 198/0 (`ManualLibraryTest` 4),
-> `:desktop:test` 2/0, `:desktop:compileKotlin`, `:app:testDebugUnitTest`
-> 29/0 (Paparazzi includes `help`), `:app:assembleDebug`.
-> `tests/test_manual.py` 4/0 inside `bash tests/run-tests.sh` 1023/0;
-> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
-> PR #78 CI: 9/9 green on the first push. **Not run:** a phone, the
-> desktop window.
+> link. After merging `origin/main` (`b8e7708`, Desktop mode #76), the manual
+> describes Desktop mode as landed. The rooted TWRP/PitchBlack installer
+> (PR #77) is still marked coming in the next update. `applicationId`,
+> signing and versioning unchanged.
+
+> **Update 2026-10-20 (Desktop mode):** branch `feat/desktop-mode-x11` (PR #76,
+> on `main` as `b8e7708`). Android Dashboard card talks to VictorSuite
+> (`com.termux`, confirmed in that repo) by package + cert pin, then
+> `RUN_COMMAND` with only `rootforge-desktop-mode <op>` (dedicated
+> `ai.victorsuite.action.DESKTOP_MODE` is specified in `docs/DESKTOP_MODE.md` and is **not**
+> in VictorSuite yet). Setup scripts `setup_desktop_mode.sh` /
+> `rootforge_desktop_mode.sh` / `termux/desktop-mode-entry.sh`. Missing companion is a
+> hint, never a crash. Signing / `applicationId` / versioning unchanged. Verified:
+> `:core:test` 180/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` + `assembleDebug`
+> (`aapt`: `ai.rootforge.os.debug` / `0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean. **Not run on a phone.** Merged `origin/main` (#75 Shizuku)
+> into this branch.
 
 > **Update 2026-10-19 (Shizuku fleet alignment):** branch `feat/shizuku` (PR #75).
 > Aligned with droidcommand-AI PR #231 under RootForge packages. Four states
@@ -197,17 +203,20 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), and the Custom RR build catalog with a Dashboard card (#66; the APK now requests `INTERNET` for its Download button only). None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66; the APK now requests `INTERNET` for its Download button only), and Shizuku/Sui (#75). None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
 - How-to manual: `docs/MANUAL.md` plus in-app **Help** (bundled markdown,
-  `ManualLibrary` / `ManualScreen`). Desktop mode and the rooted recovery
-  installer are documented as coming next (#76, #77). Identity unchanged.
-- Shizuku/Sui (PR #75): fleet four-state manager + `PrivilegedShell` sole API, bound
+  `ManualLibrary` / `ManualScreen`). Desktop mode is documented as landed
+  (#76 / `b8e7708`). The rooted recovery installer is still coming next (#77).
+- Desktop mode: Android Dashboard card for VictorSuite (`com.termux`). Pin by package+cert, then
+  RUN_COMMAND with a fixed `rootforge-desktop-mode` command, or a dedicated action VictorSuite
+  does not export yet (`docs/DESKTOP_MODE.md`). Missing companion is a hint. Not run on a phone.
+- Shizuku/Sui (PR #75, on `main`): fleet four-state manager + `PrivilegedShell` sole API, bound
   `IPrivilegedShell` UserService after `GRANTED`, approval-gated read-only Settings
-  lookups; `pmGrant` hidden + typed confirm. Deps 13.1.5. `:core:test` 194/0,
+  lookups; `pmGrant` hidden + typed confirm. Deps 13.1.5. `:core:test` 194/0 on that PR,
   `:app:assembleDebug` applicationId `ai.rootforge.os.debug`. **Not run on a phone.**
 - Android launcher icon is the repo-logo emblem (adaptive + legacy mipmaps, navy
   `#0C1D36`). `tests/test_launcher_icons.py` 7/0; `:app:assembleDebug` packaged the

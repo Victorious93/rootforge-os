@@ -23,6 +23,9 @@ class MainActivity : ComponentActivity() {
         pendingPick = null
     }
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private val desktopModePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        (application as RootForgeApp).refreshDesktopMode()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,6 +40,8 @@ class MainActivity : ComponentActivity() {
                 picker.launch(arrayOf("*/*"))
             },
             startActivity = { startActivity(it) },
+            startService = { startService(it) },
+            requestPermission = { desktopModePermission.launch(it) },
         )
         setContent {
             RootForgeTheme {
@@ -50,6 +55,7 @@ class MainActivity : ComponentActivity() {
         val app = application as RootForgeApp
         app.uiVisible = true
         app.usb.refresh()
+        app.refreshDesktopMode()
         app.shizukuManager.refresh()
     }
 
@@ -75,6 +81,7 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
     val bridge = app.settings.bridgeEnabledFlow.collectAsStateWithLifecycle().value
     val auto = app.settings.autoConnectFlow.collectAsStateWithLifecycle().value
     val terminalApp = app.settings.terminalAppFlow.collectAsStateWithLifecycle().value
+    val desktopMode = app.desktopMode.collectAsStateWithLifecycle().value
     val paired = app.pairing.paired.collectAsStateWithLifecycle().value
     val pending = app.pairing.pending.collectAsStateWithLifecycle().value
     val fingerprint = app.adbFingerprint.collectAsStateWithLifecycle().value
@@ -85,7 +92,7 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
     return AppUiState(
         targets = targets, link = link, info = info, busy = busy, progress = progress, library = library, buildCatalog = buildCatalog,
         logcatRunning = logcat, log = log, approvals = approvals, bridgeEnabled = bridge, autoConnect = auto,
-        terminalApp = terminalApp, terminalHandoff = true,
+        terminalApp = terminalApp, terminalHandoff = true, desktopMode = desktopMode,
         nodeId = nodeId, paired = paired, pending = pending, adbFingerprint = fingerprint, appVersion = BuildConfig.VERSION_NAME,
         shizuku = shizuku, shizukuBusy = shizukuBusy, shizukuResult = shizukuResult,
     )

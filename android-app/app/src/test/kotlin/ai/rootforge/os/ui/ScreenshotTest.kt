@@ -1,7 +1,12 @@
 package ai.rootforge.os.ui
 
 import ai.rootforge.os.core.LinkState
+import ai.rootforge.os.desktopmode.CompanionPackage
+import ai.rootforge.os.desktopmode.DesktopMode
+import ai.rootforge.os.desktopmode.PinnedCompanion
+import ai.rootforge.os.desktopmode.VictorSuite
 import ai.rootforge.os.ui.screens.BuildCatalogCard
+import ai.rootforge.os.ui.screens.DesktopModeCard
 import ai.rootforge.os.ui.theme.RootForgeTheme
 import ai.rootforge.os.usb.TargetMode
 import app.cash.paparazzi.DeviceConfig
@@ -41,6 +46,16 @@ class ScreenshotTest {
         ScreenColumn {
             BuildCatalogCard(state.buildCatalog, state.info, busy = false, actions = NoopActions)
             BuildCatalogCard(null, state.info, busy = false, actions = NoopActions)
+        }
+    }
+
+    @Test
+    fun desktopMode() = snap {
+        val installed = CompanionPackage(VictorSuite.PACKAGE, "aa".repeat(32), exportsRunCommand = true, exportsDesktopAction = false)
+        ScreenColumn {
+            DesktopModeCard(DesktopMode.probe(emptyList(), null), NoopActions)
+            DesktopModeCard(DesktopMode.probe(listOf(installed), null), NoopActions)
+            DesktopModeCard(DesktopMode.probe(listOf(installed), PinnedCompanion(VictorSuite.PACKAGE, "aa".repeat(32))), NoopActions)
         }
     }
 

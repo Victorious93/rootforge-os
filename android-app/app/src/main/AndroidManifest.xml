@@ -14,6 +14,14 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
+      VictorSuite (package com.termux) defines this dangerous permission on its RUN_COMMAND
+      service. RootForge only sends the documented rootforge-desktop-mode command, never a
+      free-form shell. Harmless if VictorSuite is not installed.
+    -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+    <!-- Specified in docs/DESKTOP_MODE.md; VictorSuite does not define this yet. -->
+    <uses-permission android:name="ai.victorsuite.permission.DESKTOP_MODE" />
+    <!--
       Shizuku/Sui API (runtime, requested via Shizuku.requestPermission, not the
       platform permission dialog). Same permission for Shizuku and Sui.
     -->
@@ -22,12 +30,21 @@
     <queries>
         <package android:name="ai.droidcommand.app" />
         <package android:name="ai.droidcommand.app.debug" />
+        <package android:name="com.termux" />
+        <package android:name="ai.victorsuite.app" />
+        <package android:name="ai.victorsuite.app.debug" />
         <package android:name="moe.shizuku.privileged.api" />
         <package android:name="rikka.sui" />
         <!-- Lets the Settings-chosen terminal app be found and launched; its package name is not known in advance. -->
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="com.termux.RUN_COMMAND" />
+        </intent>
+        <intent>
+            <action android:name="ai.victorsuite.action.DESKTOP_MODE" />
         </intent>
     </queries>
 

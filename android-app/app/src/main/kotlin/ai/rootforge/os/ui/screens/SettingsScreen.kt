@@ -233,7 +233,7 @@ private fun TerminalAppCard(state: AppUiState, actions: AppActions) {
         OutlinedTextField(
             value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
             label = { Text("Package name") }, isError = !valid,
-            supportingText = { Text(if (valid) "Default com.termux (Termux). Use VictorSuite's package if it has its own, shown in Android's app info." else "Not a valid Android package name.") },
+            supportingText = { Text(if (valid) "Default com.termux — VictorSuite keeps that Termux id. Change it only if you use a different terminal app." else "Not a valid Android package name.") },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionButton("Save", kind = ActionKind.Outline, enabled = valid && trimmed != state.terminalApp) { actions.setTerminalApp(trimmed) }

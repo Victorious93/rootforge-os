@@ -7,6 +7,7 @@ import ai.rootforge.os.catalog.Freshness
 import ai.rootforge.os.catalog.FreshnessFeed
 import ai.rootforge.os.catalog.LoadedCatalog
 import ai.rootforge.os.core.LinkState
+import ai.rootforge.os.desktopmode.DesktopMode
 import ai.rootforge.os.core.LogLevel
 import ai.rootforge.os.core.LogLine
 import ai.rootforge.os.core.TargetInfo
@@ -49,6 +50,7 @@ internal fun previewState(): AppUiState = AppUiState(
     ),
     nodeId = "rf-00112233445566778899aabbccddeeff",
     appVersion = "0.1.0-debug",
+    desktopMode = DesktopMode.probe(emptyList(), pinned = null),
     adbFingerprint = "A1:B2:C3:D4:E5:F6:00:11:22:33:44:55:66:77:88:99",
     buildCatalog = previewCatalog(),
 )

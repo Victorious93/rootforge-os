@@ -136,7 +136,8 @@ The app requests the internet permission for one thing only: the **Download** bu
 "Builds for this device" card, which fetches the Custom RR catalog over https
 ([docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md)). Device work never uses the network.
 
-Screens: Dashboard, **Ask**, **Root Guide**, **Help**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
+Screens: Dashboard (including **Desktop mode** through VictorSuite; see
+[docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Ask**, **Root Guide**, **Help**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
 Modules (creator and repository links), Recovery, Logs / Terminal, Settings.
 
 **Root Guide** is offline rooting documentation inside the app (bootloader unlock, Magisk / KernelSU / APatch,
