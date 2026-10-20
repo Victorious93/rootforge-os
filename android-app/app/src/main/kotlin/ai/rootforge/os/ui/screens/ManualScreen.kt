@@ -22,7 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -93,7 +93,7 @@ fun ManualScreen(
                 ) { onOpenLinks() }
                 ActionButton(
                     "Glossary",
-                    Icons.Filled.ListAlt,
+                    Icons.AutoMirrored.Filled.ListAlt,
                     ActionKind.Outline,
                 ) { onOpenGlossary() }
             }

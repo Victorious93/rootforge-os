@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,7 +33,7 @@ fun LinksScreen(actions: AppActions, onOpenGlossary: () -> Unit = {}) {
             "These are official project pages. Tapping a button opens the system browser. " +
                 "RootForge does not download, install or vet anything from this list.",
         )
-        ActionButton("Glossary", Icons.Filled.ListAlt, ActionKind.Outline) { onOpenGlossary() }
+        ActionButton("Glossary", Icons.AutoMirrored.Filled.ListAlt, ActionKind.Outline) { onOpenGlossary() }
         LinkSection.entries.forEach { section ->
             val links = DirectoryLinks.all.filter { it.section == section }
             if (links.isNotEmpty()) {

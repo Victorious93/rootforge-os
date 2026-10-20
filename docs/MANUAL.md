@@ -806,6 +806,8 @@ No accounts. No cloud. No phone-home. Uninstalling the app (or the one-time v0.2
 
 ## Glossary
 
+![Glossary](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_glossary.png)
+
 Drawer entry **Glossary**, also from Help and from Links. One short line per term, in everyday words. Official Magisk, LSPosed, Vector, Shizuku and Sui pages stay on **Links**. Nothing here is a how-to or a download.
 
 **Root.** Extra control over the phone so some apps can do things a normal app is not allowed to.

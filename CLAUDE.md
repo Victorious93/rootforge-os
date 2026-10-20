@@ -21,7 +21,12 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `docs/MANUAL.md` § Glossary (bundled in Help). Links still lists Xposed,
 > LSPosed, Vector and Sui. `:core` `GlossaryTest` requires every entry
 > non-empty and unique. `applicationId`, signing and versioning unchanged.
-> **Suite counts filled after tests this session.** **Not run:** a phone.
+> `:core:test` 324/0 (`GlossaryTest` 3); `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 34/0 (Paparazzi `glossary` / `help` / `links`);
+> `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug` /
+> `versionCode=1` / `versionName=0.1.0-debug`); `bash tests/run-tests.sh`
+> 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run:** a phone, the desktop window.
 
 > **Update 2026-10-20 (local module install on this phone):** branch
 > `feat/local-module-install` (PR #81). Merged `origin/main` `ef088d3` (#80
@@ -309,11 +314,10 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   APKs unchanged. Desktop no-op. Same PR: **Links** directory of official
   https pages, browser only; **Glossary** drawer screen (`:core`
   `Glossary`) from Help and Links, same text in `docs/MANUAL.md`. After
-  merging `ef088d3` / #80: `:core:test` 321/0, `:desktop:test` 2/0,
-  `:app:testDebugUnitTest` 33/0, `:app:assembleDebug`
+  merging `ef088d3` / #80 plus Glossary: `:core:test` 324/0,
+  `:desktop:test` 2/0, `:app:testDebugUnitTest` 34/0, `:app:assembleDebug`
   (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1055/0,
-  `tests/lint.sh` clean (glossary suite counts filled after this session).
-  **Not run on a phone.**
+  `tests/lint.sh` clean. **Not run on a phone.**
 - Custom RR → Custom Recovery (PR #80, on `main` as `ef088d3`): matching
   TWRP/PitchBlack catalog rows open Custom Recovery pre-filled; official
   lookup uses the probed phone; `pitchblack.tech` added to the https host

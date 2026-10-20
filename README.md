@@ -195,6 +195,10 @@ Rendered by Paparazzi unit tests with sample data. **These are not captures from
 |---|---|---|---|---|---|---|
 | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_dashboard.png" alt="Dashboard screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_flashTools.png" alt="Flash Tools screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_adb.png" alt="ADB screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_fastboot.png" alt="Fastboot screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_modules.png" alt="Module Builder screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_settings.png" alt="Settings screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_help.png" alt="Help / how-to manual screen" width="140"> |
 
+| Links | Glossary |
+|---|---|
+| <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_links.png" alt="Links directory screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_glossary.png" alt="Glossary screen" width="140"> |
+
 Live ISO, Calamares installer and Termux screenshots will come after a real boot and install.
 
 ## Install and run

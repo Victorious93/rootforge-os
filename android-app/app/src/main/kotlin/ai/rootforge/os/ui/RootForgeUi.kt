@@ -36,7 +36,7 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Menu
@@ -88,7 +88,7 @@ enum class Destination(val title: String, val icon: ImageVector) {
     Settings("Settings", Icons.Filled.Settings),
     Help("Help", Icons.AutoMirrored.Filled.Help),
     Links("Links", Icons.Filled.Link),
-    Glossary("Glossary", Icons.Filled.ListAlt),
+    Glossary("Glossary", Icons.AutoMirrored.Filled.ListAlt),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
