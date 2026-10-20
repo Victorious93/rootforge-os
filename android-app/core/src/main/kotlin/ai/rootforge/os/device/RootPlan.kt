@@ -21,6 +21,7 @@ data class RootPlan(
     val recoveries: List<BuildMatch> = emptyList(),
     val roots: List<BuildMatch> = emptyList(),
     val guide: RootGuide? = null,
+    val portal: UnlockPortal? = null,
 ) {
     val writableRecovery: BuildMatch?
         get() = recoveries.firstOrNull { CatalogRecoveryBridge.prefill(it) != null }
@@ -45,6 +46,7 @@ object RootPlanner {
                     ),
                 ),
                 guide = null,
+                portal = null,
             )
         }
         if (identity.mode == TargetMode.EDL) {
@@ -60,6 +62,7 @@ object RootPlanner {
                     ),
                 ),
                 guide = null,
+                portal = null,
             )
         }
 
@@ -137,13 +140,44 @@ object RootPlanner {
             ),
         )
 
+        val portal = UnlockPortals.forIdentity(identity)
         return RootPlan(
             headline,
-            listOf(unlock, recovery, root) + romNote,
+            listOf(unlock) + portalSteps(portal) + listOf(recovery, root) + romNote,
             roms,
             recoveries,
             roots,
             guide = RootGuides.forIdentity(identity),
+            portal = portal,
+        )
+    }
+
+    private fun portalSteps(portal: UnlockPortal?): List<RootPlanStep> {
+        if (portal == null) return emptyList()
+        val portalDetail = buildString {
+            append(portal.note)
+            if (!portal.offered) append(" This brand no longer offers official unlocking.")
+            if (portal.url != null) {
+                append(" Opens in the system browser only. RootForge never sends serial, IMEI or unlock data to this site.")
+            } else if (portal.offered) {
+                append(" There is no maker token webpage to open.")
+            }
+        }
+        val dataDetail = buildString {
+            append(portal.unlockData)
+            portal.unlockDataCommand?.let { cmd ->
+                append(" Command: fastboot $cmd. Dry-run first; typed UNLOCK still gates a later unlock.")
+            }
+            append(" RootForge never pastes this into a website.")
+        }
+        return listOf(
+            RootPlanStep(
+                "portal",
+                portal.name,
+                portalDetail,
+                done = !portal.offered,
+            ),
+            RootPlanStep("unlock-data", "Read unlock data", dataDetail, done = false),
         )
     }
 }

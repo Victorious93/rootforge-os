@@ -64,11 +64,9 @@ object RootGuides {
 
     fun forIdentity(identity: DeviceIdentity?): RootGuide {
         if (identity == null || identity.mode == TargetMode.EDL) return GENERIC
-        val blob = listOfNotNull(identity.brand, identity.model, identity.product, identity.codename)
-            .joinToString(" ")
-            .lowercase()
+        val tokens = identity.brandTokens()
         return all.firstOrNull { guide ->
-            guide.kind != RootGuideKind.GENERIC && guide.brands.any { token -> token.lowercase() in blob }
+            guide.kind != RootGuideKind.GENERIC && guide.brands.any { token -> token.lowercase() in tokens }
         } ?: GENERIC
     }
 
@@ -79,6 +77,8 @@ object RootGuides {
         summary = "OEM unlocking, then fastboot unlock, then custom recovery, then a root manager.",
         brands = listOf("google", "pixel"),
         steps = listOf(
+            officialPortalStep(UnlockPortals.GOOGLE),
+            readUnlockDataStep(UnlockPortals.GOOGLE),
             step(
                 "oem", "Turn on OEM unlocking",
                 "On the phone: Settings → About → tap Build number seven times. Then Developer options → OEM unlocking and USB debugging.",
@@ -114,6 +114,8 @@ object RootGuides {
         knoxWarning = "Unlocking or unofficial images usually trip Knox (Warranty bit 0x1). That is permanent: Samsung Pay, Secure Folder and the warranty typically stop. RootForge cannot undo it.",
         odinFlashing = false,
         steps = listOf(
+            officialPortalStep(UnlockPortals.SAMSUNG),
+            readUnlockDataStep(UnlockPortals.SAMSUNG),
             step(
                 "knox", "Read the Knox warning",
                 "Knox is Samsung's tamper flag. A tripped flag does not brick the phone, but it does not reset. If you need banking apps or Samsung Pay, stop here.",
@@ -158,12 +160,13 @@ object RootGuides {
                 erases = "Nothing yet.",
                 action = RootGuideAction.OPEN_ADB,
             ),
+            readUnlockDataStep(UnlockPortals.XIAOMI),
             step(
                 "wait", "Mi Unlock wait period",
-                "Xiaomi often makes you wait 7 to 30 days (sometimes longer on HyperOS) after the account is bound before it will allow an unlock. RootForge cannot skip, shorten, or fake that wait. The clock is on Xiaomi's side.",
+                "Xiaomi often makes you wait 7 to 30 days (sometimes longer on HyperOS) after the account is bound before it will allow an unlock. RootForge cannot skip, shorten, or fake that wait. The clock is on Xiaomi's side. Open Xiaomi's official Mi Unlock page in the browser; RootForge never logs into a Xiaomi account.",
                 erases = "Nothing during the wait.",
                 action = RootGuideAction.OPEN_URL,
-                url = "https://www.mi.com/global/support",
+                url = UnlockPortals.XIAOMI.url,
             ),
             step(
                 "unlock", "Unlock in fastboot after the wait",
@@ -186,12 +189,13 @@ object RootGuides {
         summary = "OEM unlocking, then fastboot unlock. Some ColorOS builds also need OnePlus's Deep Testing / unlock token.",
         brands = listOf("oneplus"),
         steps = listOf(
+            officialPortalStep(UnlockPortals.ONEPLUS),
+            readUnlockDataStep(UnlockPortals.ONEPLUS),
             step(
                 "oem", "Turn on OEM unlocking",
                 "Developer options → OEM unlocking and USB debugging. On some ColorOS OnePlus phones you must also apply for Deep Testing in the system app before fastboot will accept unlock. RootForge does not request that token for you.",
                 erases = "Nothing yet.",
                 action = RootGuideAction.OPEN_ADB,
-                url = "https://www.oneplus.com/support",
             ),
             step(
                 "unlock", "Unlock the bootloader",
@@ -214,12 +218,13 @@ object RootGuides {
         summary = "Get an unlock code from Motorola, then fastboot unlock.",
         brands = listOf("motorola", "moto"),
         steps = listOf(
+            readUnlockDataStep(UnlockPortals.MOTOROLA),
             step(
                 "code", "Get the official unlock code",
-                "Motorola issues a per-phone unlock key from its support site after you paste the bootloader identifier. RootForge does not fetch or type that code. Open the official page, then come back.",
+                "Motorola issues a per-phone unlock key from its support site after you paste the bootloader identifier. Copy oem get_unlock_data yourself onto that page. RootForge does not fetch or type that code, and never uploads those lines.",
                 erases = "Nothing on the Motorola site. Unlocking later wipes the phone.",
                 action = RootGuideAction.OPEN_URL,
-                url = "https://en-us.support.motorola.com/app/standalone/bootloader/unlock-your-device-a",
+                url = UnlockPortals.MOTOROLA.url,
             ),
             step(
                 "unlock", "Unlock with Motorola's code",
@@ -263,6 +268,34 @@ object RootGuides {
     )
 
     val all: List<RootGuide> = listOf(PIXEL, SAMSUNG, XIAOMI, ONEPLUS, MOTOROLA, GENERIC)
+
+    private fun officialPortalStep(portal: UnlockPortal) = step(
+        "portal",
+        portal.name,
+        if (portal.url != null) {
+            "${portal.note} Opens in the system browser only. RootForge never sends serial, IMEI or unlock data there."
+        } else if (!portal.offered) {
+            "${portal.note} This brand no longer offers official unlocking. There is no portal to open."
+        } else {
+            "${portal.note} There is no maker token webpage to open."
+        },
+        erases = "Nothing on a maker website. Unlocking later usually wipes the phone.",
+        action = if (portal.url != null) RootGuideAction.OPEN_URL else RootGuideAction.NONE,
+        url = portal.url,
+    )
+
+    private fun readUnlockDataStep(portal: UnlockPortal) = step(
+        "unlock-data",
+        "Read unlock data",
+        if (portal.unlockDataCommand != null) {
+            "${portal.unlockData} Dry-run first; a later Unlock still needs typed UNLOCK. This read is not a write. RootForge never pastes the output into a site."
+        } else {
+            portal.unlockData
+        },
+        erases = "Nothing. Reading an identifier does not unlock or wipe.",
+        dryRunFirst = portal.unlockDataCommand != null,
+        action = if (portal.unlockDataCommand != null) RootGuideAction.OPEN_FASTBOOT else RootGuideAction.NONE,
+    )
 
     private fun recoveryStep() = step(
         "recovery", "Custom recovery",

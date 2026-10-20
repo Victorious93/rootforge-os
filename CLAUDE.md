@@ -11,6 +11,28 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (bootloader unlock portals):** branch
+> `feat/multi-device-identify` (same PR). Official maker unlock-token
+> pages (`:core` `UnlockPortals`) on the Devices Root plan and in Links
+> (**Bootloader unlock portals**). Live https vendor pages checked
+> 2026-10-20: Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev,
+> OnePlus, Fairphone. Pixel has no token page; Nothing has no token
+> webpage; Samsung / ASUS / LG / Huawei no longer offer official
+> unlocking (in-app note, no invented URL). Plan shows matching portal
+> plus a plain-words unlock-data step (`oem get_unlock_data` for
+> Motorola) with dry-run first; typed `UNLOCK` still gates a later
+> unlock. System browser only; never sends serial/IMEI/unlock data.
+> `DirectoryLink.url` may be null. Glossary: Unlock portal.
+> `applicationId`, signing and versioning unchanged. Local suite:
+> `:core:test` **403/0** (`UnlockPortalsTest` 5, `RootPlanTest` 9,
+> `RootGuidesTest` 9, `DirectoryLinksTest` 3); `:desktop:test` **3/0**;
+> `:app:testDebugUnitTest` 35/0 (Paparazzi `devices` / `links` /
+> `glossary` / `help` still match); `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run on a phone or a desktop window.**
+
 > **Update 2026-10-20 (brand root wizards + PC Devices):** branch
 > `feat/multi-device-identify` (same PR). `RootGuides` table drives a
 > per-identity wizard on Devices: Pixel, Samsung (Odin/Download Mode
@@ -412,11 +434,21 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), fleet `config.export` / `config.import` (#83 / `3f7661d`), and the bug sweep (#84 / `3d05929`). This branch adds the **Devices** multi-phone identify screen, brand Root wizards, and the PC Devices grid. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), fleet `config.export` / `config.import` (#83 / `3f7661d`), and the bug sweep (#84 / `3d05929`). This branch adds the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, and official bootloader unlock portals. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Bootloader unlock portals (this branch): `:core` `UnlockPortals` on
+  the Devices Root plan and Links **Bootloader unlock portals**. Live
+  https: Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev, OnePlus,
+  Fairphone. Pixel / Nothing have no token page; Samsung / ASUS / LG /
+  Huawei closed (in-app note). Unlock-data step with dry-run first;
+  browser only; never auto-sends device data. `:core:test` 403/0,
+  `:desktop:test` 3/0, `:app:testDebugUnitTest` 35/0,
+  `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`),
+  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a
+  phone or a desktop window.**
 - Brand root wizards + PC Devices (this branch): `RootGuides` Pixel /
   Samsung / Xiaomi / OnePlus / Motorola / generic; Odin is explanation
   only; same dry-run / typed confirm / no auto-reboot; desktop host

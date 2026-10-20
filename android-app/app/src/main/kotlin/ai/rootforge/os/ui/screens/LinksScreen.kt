@@ -49,9 +49,20 @@ fun LinksScreen(actions: AppActions, onOpenGlossary: () -> Unit = {}) {
 private fun LinkCard(link: DirectoryLink, actions: AppActions) {
     ForgeCard(link.name, link.section.label, Icons.Filled.Link) {
         Text(link.description, style = MaterialTheme.typography.bodyMedium)
-        Text(link.url, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val url = link.url
+        if (url != null) {
+            Text(url, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else if (link.section == LinkSection.BOOTLOADER_UNLOCK_PORTALS) {
+            Text(
+                "No official portal page. RootForge will not invent one, and never sends serial, IMEI or unlock data to a site.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ActionButton("Open in browser", Icons.AutoMirrored.Filled.OpenInNew, ActionKind.Outline) { actions.openUrl(link.url) }
+            if (url != null) {
+                ActionButton("Open in browser", Icons.AutoMirrored.Filled.OpenInNew, ActionKind.Outline) { actions.openUrl(url) }
+            }
             link.extras.forEach { extra ->
                 ActionButton(extra.label, Icons.AutoMirrored.Filled.OpenInNew, ActionKind.Outline) { actions.openUrl(extra.url) }
             }

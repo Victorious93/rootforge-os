@@ -1,5 +1,6 @@
 package ai.rootforge.os.links
 
+import ai.rootforge.os.device.UnlockPortals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,7 +12,11 @@ class DirectoryLinksTest {
         assertEquals(ids.size, ids.toSet().size)
         for (link in DirectoryLinks.all) {
             assertTrue(link.id, link.name.isNotBlank() && link.description.isNotBlank())
-            assertTrue(link.id, link.url.isNotBlank())
+            if (link.url != null) {
+                assertTrue(link.id, link.url.isNotBlank())
+            } else {
+                assertEquals(link.id, LinkSection.BOOTLOADER_UNLOCK_PORTALS, link.section)
+            }
             val extraLabels = link.extras.map { it.label }
             assertEquals(link.id, extraLabels.size, extraLabels.toSet().size)
             for (extra in link.extras) {
@@ -34,9 +39,24 @@ class DirectoryLinksTest {
     }
 
     @Test
-    fun allThreeSectionsArePresentWithNamedProjects() {
+    fun allSectionsArePresentWithNamedProjectsAndUnlockPortals() {
         val bySection = DirectoryLinks.all.groupBy { it.section }
         assertTrue(bySection.keys.containsAll(LinkSection.entries.toSet()))
+        val portals = bySection.getValue(LinkSection.BOOTLOADER_UNLOCK_PORTALS)
+        assertEquals(UnlockPortals.all.size, portals.size)
+        val portalUrls = portals.mapNotNull { it.url }
+        assertEquals(portalUrls.size, portalUrls.toSet().size)
+        for (url in portalUrls) {
+            assertTrue(url, url.startsWith("https://"))
+        }
+        assertTrue(portals.any { it.name.contains("Motorola") && it.url != null })
+        assertTrue(portals.any { it.name.contains("Sony") && it.url != null })
+        assertTrue(portals.any { it.name.contains("Xiaomi") && it.url != null })
+        assertTrue(portals.any { it.name.contains("HTC") && it.url != null })
+        assertTrue(portals.any { it.name.contains("OnePlus") && it.url != null })
+        assertTrue(portals.any { it.id == "unlock-asus" && it.url == null })
+        assertTrue(portals.any { it.id == "unlock-lg" && it.url == null })
+        assertTrue(portals.any { it.id == "unlock-huawei" && it.url == null })
         val names = DirectoryLinks.all.map { it.name }.toSet()
         assertTrue(names.contains("Magisk"))
         assertTrue(names.contains("KernelSU"))

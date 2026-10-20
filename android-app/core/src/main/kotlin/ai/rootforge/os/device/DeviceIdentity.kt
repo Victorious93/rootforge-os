@@ -58,6 +58,13 @@ data class DeviceIdentity(
     fun rosterKey(fallback: String? = null): String =
         serial?.trim()?.takeIf { it.isNotEmpty() } ?: fallback.orEmpty()
 
+    /** Whole-word tokens from brand/model/product/codename. "lg" must not match "google". */
+    fun brandTokens(): Set<String> =
+        listOfNotNull(brand, model, product, codename)
+            .flatMap { it.lowercase().split(Regex("[^a-z0-9]+")) }
+            .filter { it.isNotEmpty() }
+            .toSet()
+
     fun toTargetIdentity(): TargetIdentity = TargetIdentity(
         product = TargetIdentity.clean(product),
         codename = TargetIdentity.clean(codename),

@@ -157,6 +157,31 @@ private fun DevicePhoneCard(
             )
         }
 
+        card.plan.portal?.let { portal ->
+            Text("Unlock portal · ${portal.name}", style = MaterialTheme.typography.titleSmall)
+            Text(portal.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!portal.offered) {
+                NoticeCard("This brand no longer offers official unlocking. There is no portal to open.")
+            }
+            Text(portal.unlockData, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            portal.unlockDataCommand?.let { cmd ->
+                Text(
+                    "Read it on Fastboot (dry-run first; typed UNLOCK still gates a later unlock): fastboot $cmd",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            NoticeCard("Opens in the system browser only. RootForge never sends serial, IMEI or unlock data to any site.")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                portal.url?.let { url ->
+                    ActionButton("Official portal", Icons.Filled.OpenInBrowser, ActionKind.Outline) { actions.openUrl(url) }
+                }
+                if (portal.unlockDataCommand != null) {
+                    ActionButton("Open Fastboot", kind = ActionKind.Outline, enabled = card.busy == null) { onOpenFastboot(card.target) }
+                }
+            }
+        }
+
         card.plan.guide?.let { guide ->
             Text("Root wizard · ${guide.title}", style = MaterialTheme.typography.titleSmall)
             Text(guide.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

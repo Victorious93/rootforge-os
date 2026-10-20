@@ -84,6 +84,9 @@ class ManualDocTests(unittest.TestCase):
         self.assertIn("**SHA-256 / checksum.**", text)
         self.assertIn("### Devices", text)
         self.assertIn("Root plan", text)
+        self.assertIn("Bootloader unlock portals", text)
+        self.assertIn("oem get_unlock_data", text)
+        self.assertIn("never sends serial", text.lower())
         self.assertIn("05c6:9008", text)
         self.assertIn("••••", text)
 

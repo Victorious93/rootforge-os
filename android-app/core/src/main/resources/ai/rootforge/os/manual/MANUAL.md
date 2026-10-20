@@ -220,10 +220,12 @@ Each card is a read-only identity, a **Root plan**, and a brand **Root wizard** 
 3. Serial numbers are shown as `••••` plus the last four characters, in the app and in the command log.
 4. The Root plan recommends **unlock bootloader → custom recovery → root manager**. Matching Custom RR ROM/recovery/root rows for that codename are listed. A matching TWRP or PitchBlack row can open **Custom Recovery** already aimed at that project. ROMs stay links.
 5. The Root wizard is a step list from the identity: **Google Pixel**, **Samsung**, **Xiaomi / Redmi / POCO**, **OnePlus**, **Motorola**, or a **generic fastboot** path. Every step is plain language and says what will be erased. Writes still open the existing Fastboot / Custom Recovery / Root screens: dry-run first, typed confirm, never auto-reboot.
-6. **Samsung:** Download Mode and Odin are explained only. RootForge does not speak Odin and will not flash a tar. Read the Knox warning before any unlock — a tripped Knox flag does not reset. If the phone is actually in fastboot, Unlock is the existing typed-`UNLOCK` path (still a wipe, still trips Knox).
-7. **Xiaomi:** the Mi Unlock wait (often 7 to 30 days) is on Xiaomi's side. RootForge cannot skip it.
-8. **Motorola:** get the unlock code from Motorola's official site, then come back. RootForge does not fetch that code.
-9. Buttons open the existing ADB, Fastboot, EDL, Root / Patching, Modules or Custom Recovery screens **for that serial**. Official https pages (Samsung Knox, Xiaomi support, Motorola unlock) open in the browser.
+6. The Root plan also shows that brand's official **bootloader unlock portal** when one exists (Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev, OnePlus, Fairphone). Pixel has no token page (OEM unlocking, then typed `UNLOCK`). Nothing has no token webpage. Samsung, ASUS, LG and Huawei no longer offer official unlocking — the card says so and does not invent a site. Sony / HTC / Fairphone still get their portal even when the wizard is the generic fastboot path.
+7. **Read unlock data** is a plain-words step (for Motorola: `fastboot oem get_unlock_data`). Dry-run first; a later Unlock still needs typed `UNLOCK`. Copy the lines yourself if a maker asks. **RootForge never sends serial, IMEI or unlock data to any site.** Official pages open in the system browser only.
+8. **Samsung:** Download Mode and Odin are explained only. RootForge does not speak Odin and will not flash a tar. Read the Knox warning before any unlock — a tripped Knox flag does not reset. If the phone is actually in fastboot, Unlock is the existing typed-`UNLOCK` path (still a wipe, still trips Knox).
+9. **Xiaomi:** the Mi Unlock wait (often 7 to 30 days) is on Xiaomi's side. RootForge cannot skip it. The official page is Xiaomi's Mi Unlock site.
+10. **Motorola:** read `oem get_unlock_data` on Fastboot, then open Motorola's official unlock portal in the browser. RootForge does not fetch that code.
+11. Buttons open the existing ADB, Fastboot, EDL, Root / Patching, Modules or Custom Recovery screens **for that serial**. Official https pages open in the browser.
 
 **EDL is identify only.** Qualcomm `05c6:9008` is recognised so you can see the chip. Devices never starts a Firehose write.
 
@@ -410,7 +412,7 @@ This tab only opens known module-repository websites in the browser. RootForge d
 
 ![Links](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_links.png)
 
-Drawer entry **Links**, also from Modules → **Links directory**, Settings → About, and Help. Official https pages for Magisk / KernelSU / APatch, module repositories (Alt-Repo, MMRL, Xposed-Modules-Repo, LSPosed / Vector, Zygisk Next), and Shizuku apps (Shizuku, Sui, App Ops, Ice Box, Hail, SystemUI Tuner, Canta, Inure, aShell / aShell You, Dhizuku). Each tap opens the system browser. Nothing is downloaded or bundled. URLs that could not be verified as official https pages are omitted. **Glossary** on this screen (and a drawer entry) opens the everyday-words list.
+Drawer entry **Links**, also from Modules → **Links directory**, Settings → About, and Help. Official https pages for Magisk / KernelSU / APatch, module repositories (Alt-Repo, MMRL, Xposed-Modules-Repo, LSPosed / Vector, Zygisk Next), Shizuku apps (Shizuku, Sui, App Ops, Ice Box, Hail, SystemUI Tuner, Canta, Inure, aShell / aShell You, Dhizuku), and **Bootloader unlock portals** (Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev, OnePlus, Fairphone; Pixel / Nothing have no token page; Samsung / ASUS / LG / Huawei no longer offer official unlocking). Each live tap opens the system browser. Nothing is downloaded or bundled. RootForge never sends serial, IMEI or unlock data to these sites. URLs that could not be verified as official https pages are omitted. **Glossary** on this screen (and a drawer entry) opens the everyday-words list.
 
 ### Recovery (USB fastboot path)
 
@@ -922,6 +924,8 @@ Drawer entry **Glossary**, also from Help and from Links. One short line per ter
 
 **Mi Unlock.** Xiaomi's official unlock process. After you bind an account you often wait days; RootForge cannot skip that wait.
 
+**Unlock portal.** The maker's official webpage for a bootloader unlock code. RootForge only opens it in the browser and never sends phone data there.
+
 **Bootloader.** The tiny program that starts the phone before Android. Unlocking it usually wipes the phone.
 
 **Recovery.** A small system you boot instead of Android to install updates or wipe data.
@@ -944,4 +948,4 @@ Drawer entry **Glossary**, also from Help and from Links. One short line per ter
 
 ---
 
-*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, the in-app Glossary, the **Devices** multi-phone identify screen, brand Root wizards, and the PC Devices grid. If a line here disagrees with the running app, the app is right — please file an issue.*
+*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, the in-app Glossary, the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, and official bootloader unlock portals. If a line here disagrees with the running app, the app is right — please file an issue.*

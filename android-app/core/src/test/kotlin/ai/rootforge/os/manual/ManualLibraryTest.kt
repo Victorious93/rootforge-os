@@ -45,6 +45,9 @@ class ManualLibraryTest {
         assertTrue("Odin link-only missing", "does not speak Odin" in library.raw)
         assertTrue("Mi Unlock missing", "Mi Unlock" in library.raw)
         assertTrue("desktop two-column grid missing", "side by side" in library.raw)
+        assertTrue("unlock portal section missing", "Bootloader unlock portals" in library.raw)
+        assertTrue("oem get_unlock_data missing", "oem get_unlock_data" in library.raw)
+        assertTrue("never-send unlock data missing", "never sends serial" in library.raw.lowercase())
         assertTrue("config backup ops missing", "config.export" in text && "config.import" in text)
         assertTrue("config backup remote refuse missing", "not remotely allowed" in text.lowercase())
     }

@@ -71,14 +71,21 @@ class RootGuidesTest {
         assertTrue(wait.erases.lowercase().contains("nothing"))
         assertFalse(wait.write)
         assertEquals(RootGuideAction.OPEN_URL, wait.action)
+        assertEquals(UnlockPortals.XIAOMI.url, wait.url)
         assertTrue(wait.url!!.startsWith("https://"))
+        assertTrue(guide.steps.any { it.id == "unlock-data" && !it.write })
     }
 
     @Test
     fun onePlusMatchesBrand() {
         val id = DeviceIdentity(mode = TargetMode.ADB, brand = "OnePlus", model = "CPH2449", codename = "OP594DL1")
-        assertEquals(RootGuideKind.ONEPLUS, RootGuides.forIdentity(id).kind)
-        assertEquals("UNLOCK", RootGuides.forIdentity(id).steps.first { it.write }.confirmPhrase)
+        val guide = RootGuides.forIdentity(id)
+        assertEquals(RootGuideKind.ONEPLUS, guide.kind)
+        assertEquals("UNLOCK", guide.steps.first { it.write }.confirmPhrase)
+        val portal = guide.steps.first { it.id == "portal" }
+        assertEquals(RootGuideAction.OPEN_URL, portal.action)
+        assertEquals(UnlockPortals.ONEPLUS.url, portal.url)
+        assertTrue(guide.steps.any { it.id == "unlock-data" && it.detail.contains("serial") })
     }
 
     @Test
@@ -88,9 +95,15 @@ class RootGuidesTest {
         assertEquals(RootGuideKind.MOTOROLA, guide.kind)
         val code = guide.steps.first { it.id == "code" }
         assertEquals(RootGuideAction.OPEN_URL, code.action)
+        assertEquals(UnlockPortals.MOTOROLA.url, code.url)
         assertTrue(code.url!!.contains("motorola"))
         assertTrue(code.url!!.startsWith("https://"))
         assertFalse(code.write)
+        val data = guide.steps.first { it.id == "unlock-data" }
+        assertTrue(data.detail.contains("oem get_unlock_data"))
+        assertTrue(data.dryRunFirst)
+        assertEquals(RootGuideAction.OPEN_FASTBOOT, data.action)
+        assertFalse(data.write)
     }
 
     @Test

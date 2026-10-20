@@ -6,6 +6,7 @@ import ai.rootforge.os.core.OutputLog
 import ai.rootforge.os.device.DeviceRoster
 import ai.rootforge.os.device.RootGuideKind
 import ai.rootforge.os.device.RootGuides
+import ai.rootforge.os.device.UnlockPortals
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlinx.coroutines.CoroutineScope
@@ -15,6 +16,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -51,9 +53,16 @@ class HostControllerIdentifyTest {
 
         val cards = DeviceRoster.cards(controller.targets.value, identities, emptyMap(), null)
         assertEquals(2, cards.size)
-        val pixelGuide = cards.first { it.key == PIXEL_SERIAL }.plan.guide
+        val pixelCard = cards.first { it.key == PIXEL_SERIAL }
+        val pixelGuide = pixelCard.plan.guide
         assertEquals(RootGuideKind.PIXEL, pixelGuide?.kind)
         assertTrue(pixelGuide!!.steps.any { it.write && it.dryRunFirst && it.confirmPhrase == "UNLOCK" && !it.autoReboot })
+        assertEquals("google", pixelCard.plan.portal?.id)
+        assertNull(pixelCard.plan.portal?.url)
+        val samsungCard = cards.first { it.key == SAMSUNG_SERIAL }
+        assertEquals("samsung", samsungCard.plan.portal?.id)
+        assertFalse(samsungCard.plan.portal!!.offered)
+        assertEquals(UnlockPortals.SAMSUNG.id, samsungCard.plan.portal?.id)
         assertEquals(2, RootGuides.columnsForWidthDp(1100))
         assertEquals(1, RootGuides.columnsForWidthDp(412))
 

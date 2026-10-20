@@ -31,12 +31,17 @@ class RootPlanTest {
         )
         val plan = RootPlanner.plan(id, catalog())
         assertEquals("Locked — unlock first", plan.headline)
-        assertEquals(listOf("unlock", "recovery", "root"), plan.steps.map { it.id }.take(3))
+        assertEquals("unlock", plan.steps.first().id)
+        assertTrue(plan.steps.map { it.id }.containsAll(listOf("unlock", "portal", "unlock-data", "recovery", "root")))
         assertFalse(plan.steps.first { it.id == "unlock" }.done)
         assertTrue(plan.steps.first { it.id == "unlock" }.detail.contains("wipes"))
         assertEquals(RootGuideKind.SAMSUNG, plan.guide?.kind)
         assertFalse(plan.guide!!.odinFlashing)
         assertNotNull(plan.guide!!.knoxWarning)
+        assertEquals("samsung", plan.portal?.id)
+        assertFalse(plan.portal!!.offered)
+        assertNull(plan.portal!!.url)
+        assertTrue(plan.steps.first { it.id == "portal" }.detail.contains("no longer offers") || plan.steps.first { it.id == "portal" }.detail.contains("does not publish"))
     }
 
     @Test
@@ -53,6 +58,9 @@ class RootPlanTest {
         val plan = RootPlanner.plan(id, catalog())
         assertEquals("Recommended: unlock → recovery → root manager", plan.headline)
         assertTrue(plan.steps.first { it.id == "unlock" }.done)
+        assertEquals("google", plan.portal?.id)
+        assertNull(plan.portal!!.url)
+        assertTrue(plan.portal!!.offered)
         assertEquals(RootGuideKind.PIXEL, plan.guide?.kind)
         assertEquals(listOf("lineage"), plan.roms.map { it.entry.id })
         assertEquals(listOf("twrp"), plan.recoveries.map { it.entry.id })
@@ -90,6 +98,7 @@ class RootPlanTest {
         assertTrue(plan.steps.single().detail.contains("does not write") || plan.steps.single().detail.contains("No EDL writes"))
         assertTrue(plan.roms.isEmpty())
         assertNull(plan.guide)
+        assertNull(plan.portal)
     }
 
     @Test
@@ -98,6 +107,38 @@ class RootPlanTest {
         assertEquals("identify", plan.steps.single().id)
         assertFalse(plan.steps.single().done)
         assertNull(plan.guide)
+        assertNull(plan.portal)
+    }
+
+    @Test
+    fun motorolaPlanShowsOfficialPortalAndUnlockDataCommand() {
+        val id = DeviceIdentity(
+            mode = TargetMode.FASTBOOT,
+            brand = "motorola",
+            model = "motorola edge 40",
+            codename = "rtwo",
+            bootloader = BootloaderLock.LOCKED,
+            serial = "ZY22TESTMOTO",
+        )
+        val plan = RootPlanner.plan(id, catalog())
+        assertEquals("motorola", plan.portal?.id)
+        assertEquals(UnlockPortals.MOTOROLA.url, plan.portal?.url)
+        assertTrue(plan.portal!!.url!!.startsWith("https://"))
+        val data = plan.steps.first { it.id == "unlock-data" }
+        assertTrue(data.detail.contains("oem get_unlock_data"))
+        assertTrue(data.detail.contains("never") || data.detail.contains("never pastes"))
+        val portalStep = plan.steps.first { it.id == "portal" }
+        assertTrue(portalStep.detail.contains("system browser") || portalStep.detail.contains("never sends"))
+    }
+
+    @Test
+    fun sonyGenericWizardStillGetsTheOfficialPortal() {
+        val id = DeviceIdentity(mode = TargetMode.ADB, brand = "sony", model = "Xperia 1 V", codename = "pdx234")
+        val plan = RootPlanner.plan(id, catalog())
+        assertEquals(RootGuideKind.GENERIC, plan.guide?.kind)
+        assertEquals("sony", plan.portal?.id)
+        assertTrue(plan.portal!!.url!!.startsWith("https://developer.sony.com/"))
+        assertTrue(plan.steps.any { it.id == "unlock-data" && it.detail.contains("IMEI") })
     }
 
     @Test
