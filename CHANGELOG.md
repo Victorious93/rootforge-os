@@ -7,6 +7,11 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Local module install on this phone (2026-10-20)
+- Modules gains a **This phone** tab (Android APK). When this phone is rooted, a zip from the library is installed with the active manager: Magisk `magisk --install-module`, KernelSU `ksud module install`, APatch `apd module install`. The manager is auto-detected from installed packages (`RootManager.detect`) and, after List, from `/data/adb` (`ksud` / `apd` / `magisk`); the dropdown still overrides. Kitsune is detected but remains [UNSUPPORTED] and assumed Magisk-like.
+- Same safety as USB install: zip SHA-256 is shown, dry-run is the default (logs the `su` command, does not call su), a real install needs typed `INSTALL MODULE` via `ApprovalCenter`, and RootForge never reboots (separate **Reboot this phone** button). Installed modules are listed read-only from `/data/adb/modules/*/module.prop`. LSPosed APKs stay on ADB → Install APK. Desktop is a no-op (USB target install unchanged). `applicationId`, signing and versioning unchanged.
+- `:core` `LocalModules` builds the quoted `cp` + install + `rm` script and parses the module list. USB `installModuleOnTarget` now uses `RootManager.moduleBinary` for the same binaries.
+
 ### How-to manual and in-app Help (2026-10-20)
 - New `docs/MANUAL.md`: plain-language how-to covering what RootForge is and its `EXTERNAL_NODE` fleet role, install and first-run (including the v0.2.0 debug-key uninstall), every current screen, every manifest permission, fleet pairing and the default-off remote-control switch, troubleshooting, and privacy. Desktop mode (#76) and the Custom Recovery installer (#77 / `fabc649`) are documented as landed. Header art is the repo emblem inside a neon cyan-to-magenta ring (`docs/images/manual/header.png`; regenerator `android-app/tools/generate_manual_header.py`). Paparazzi goldens are reused as screenshots.
 - The same markdown is bundled on the `:core` classpath and rendered offline by a **Help** drawer screen (and Settings → Open the manual) with a GitHub link. `applicationId`, signing and versioning were not changed.

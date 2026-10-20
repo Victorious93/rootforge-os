@@ -348,7 +348,7 @@ Managers you can pick: Magisk, KernelSU, APatch, and **Kitsune** (marked unsuppo
 
 ![Modules](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_modules.png)
 
-Two tabs.
+Three tabs.
 
 **Create a module zip**
 
@@ -356,12 +356,20 @@ Two tabs.
 2. Optionally turn on `boot-completed.sh` or `action.sh`, and type your own script text.
 3. Tap **Build zip**. The zip lands in the library. Compatibility notes are hedged: they are not a guarantee.
 
-**Install a module on the target**
+**Install a module on the USB target**
 
 1. The target must already have a root manager.
 2. Pick the zip (built here or imported).
 3. Type `INSTALL MODULE`. The dialog shows the zip's SHA-256.
 4. RootForge pushes the zip and asks the manager to install it.
+
+**Install a module on this phone** (Android APK, This phone tab)
+
+1. This phone must already be rooted (Magisk, KernelSU or APatch). RootForge auto-detects the manager; override the dropdown if it is wrong.
+2. **List installed modules** is read-only (`/data/adb/modules`). It asks for root once.
+3. Pick a zip. The SHA-256 and the `su` command are shown. Dry-run is on by default: the tap only logs the command.
+4. Turn dry-run off and type `INSTALL MODULE` to run `magisk --install-module`, `ksud module install` or `apd module install`. RootForge does **not** reboot.
+5. **Reboot this phone** is a separate button. LSPosed modules are APKs: use ADB → Install APK.
 
 **Repositories**
 

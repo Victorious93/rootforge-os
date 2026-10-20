@@ -138,7 +138,7 @@ The app requests the internet permission for one thing only: the **Download** bu
 
 Screens: Dashboard (including **Desktop mode** through VictorSuite; see
 [docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Ask**, **Root Guide**, **Help**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
-Modules (creator and repository links), Recovery (USB fastboot), Custom Recovery (rooted TWRP/PitchBlack installer), Logs / Terminal, Settings.
+Modules (creator, this-phone su install, and repository links), Recovery (USB fastboot), Custom Recovery (rooted TWRP/PitchBlack installer), Logs / Terminal, Settings.
 
 **Root Guide** is offline rooting documentation inside the app (bootloader unlock, Magisk / KernelSU / APatch,
 device guides, FAQ, troubleshooting) with search. Most pages are adapted from

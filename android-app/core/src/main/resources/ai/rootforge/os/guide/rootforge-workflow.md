@@ -27,8 +27,9 @@ Unlocking a bootloader erases the target and can void its warranty. A bad flash 
 | Boot or flash TWRP, OrangeFox, PitchBlack or another recovery over USB fastboot | **Recovery** | Also enters recovery from Android or from the bootloader. |
 | Install TWRP or PitchBlack on a **rooted** phone with `su` | **Custom Recovery** | Official download on tap, dry-run default, backup, typed `FLASH RECOVERY`. Will not write `boot`. |
 | `adb sideload update.zip` | **ADB → Sideload** | Target must be in recovery sideload mode. |
-| Build your own Magisk-style module zip | **Modules → Create** | Optional lifecycle files, your own script text, hedged per-manager notes. Pushes and installs it on the target when ADB is ready. |
+| Build your own Magisk-style module zip | **Modules → Create** | Optional lifecycle files, your own script text, hedged per-manager notes. Pushes and installs it on the USB target when ADB is ready, or on this phone from the This phone tab. |
 | Find and install a module from a repository | **Modules → Repositories** | Links only: you download in your browser, import the zip, and install it. Installing any module needs a typed `INSTALL MODULE` confirmation that shows the zip's SHA-256. |
+| Install a zip on **this** rooted phone (`magisk --install-module` / `ksud module install` / `apd module install`) | **Modules → This phone** | Auto-detects Magisk / KernelSU / APatch, lists `/data/adb/modules` read-only, dry-run default, typed `INSTALL MODULE`, never reboots. LSPosed APKs still go through ADB → Install APK. |
 | Qualcomm 9008 (EDL) | **EDL** | Experimental. Retail phones accept only the manufacturer's signed programmer, which this app does not ship. |
 
 ## The flash safety gate

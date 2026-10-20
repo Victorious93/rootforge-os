@@ -11,6 +11,21 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (local module install on this phone):** branch
+> `feat/local-module-install`. Modules gains a **This phone** tab on the
+> Android APK: when this phone is rooted, a library zip is installed with
+> Magisk (`magisk --install-module`), KernelSU (`ksud module install`) or
+> APatch (`apd module install`). `RootManager.detect` auto-picks from
+> installed packages and, after List, from `/data/adb` markers; the
+> dropdown overrides. Same safety as USB install: SHA-256 shown, dry-run
+> default (logs the `su` command, does not call su), typed `INSTALL MODULE`
+> via `ApprovalCenter`, never auto-reboot (separate Reboot button).
+> Installed modules listed read-only from `/data/adb/modules`. LSPosed APKs
+> stay on ADB → Install APK. Desktop is a no-op. `applicationId`, signing
+> and versioning unchanged. `:core` `LocalModules` + detect tests:
+> `:core:test` 266/0. **Not yet in this update's remaining paragraph:**
+> `:desktop:test`, `:app` tests/assemble, hermetic suite, lint, a phone.
+
 > **Update 2026-10-20 (how-to manual + in-app Help):** branch `docs/manual`
 > (PR #78). Added `docs/MANUAL.md` (plain-language how-to: what it is /
 > EXTERNAL_NODE fleet role, install and v0.2.0 debug-key uninstall, every
@@ -218,7 +233,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-20 · **Branch:** `docs/manual`
+**Last updated:** 2026-10-20 · **Branch:** `feat/local-module-install`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
@@ -228,6 +243,13 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Local module install on this phone (this branch): Modules **This phone** tab
+  installs a library zip via `su` (`magisk --install-module` / `ksud module
+  install` / `apd module install`), auto-detects the manager, lists
+  `/data/adb/modules` read-only, dry-run default, typed `INSTALL MODULE`,
+  never reboots. LSPosed APKs unchanged. Desktop no-op. `:core:test` 266/0
+  (`LocalModulesTest` + `RootManagersTest` detect). Other suites not yet
+  recorded in this bullet. **Not run on a phone.**
 - How-to manual: `docs/MANUAL.md` plus in-app **Help**. After merging
   `origin/main` (`fabc649`, #77) into `docs/manual`, Desktop mode and the
   Custom Recovery installer are documented as landed. This-head suite:
