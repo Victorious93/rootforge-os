@@ -2,13 +2,14 @@ package ai.rootforge.os.bridge
 
 import kotlin.math.abs
 
-enum class ReplayVerdict { OK, EXPIRED, REPLAY }
+enum class ReplayVerdict { OK, EXPIRED, REPLAY, BUSY }
 
 /**
  * Rejects expired envelopes and duplicate nonces. Seen nonces are keyed by
  * ([sourceNodeRef], [nonce]) where [sourceNodeRef] comes from the kernel
  * caller identity, never from JSON. Entries are kept at least
- * [FLEET_NONCE_RETAIN_MS] (10 minutes).
+ * [FLEET_NONCE_RETAIN_MS] (10 minutes). The size cap never evicts a live
+ * nonce; a full cache refuses the new request instead.
  */
 class ReplayGuard(
     private val clock: () -> Long = System::currentTimeMillis,
@@ -25,11 +26,8 @@ class ReplayGuard(
         synchronized(lock) {
             pruneLocked(now)
             if (seen.containsKey(key)) return ReplayVerdict.REPLAY
+            if (seen.size >= maxEntries) return ReplayVerdict.BUSY
             seen[key] = now
-            while (seen.size > maxEntries) {
-                val oldest = seen.keys.first()
-                seen.remove(oldest)
-            }
         }
         if (abs(now - timestampMs) > maxSkewMs) return ReplayVerdict.EXPIRED
         if (now > timestampMs + ttlMs) return ReplayVerdict.EXPIRED

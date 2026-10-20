@@ -164,7 +164,7 @@ class RootForgeApp : Application() {
     private fun createChannel() {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(
+        nm.createNotificationChannel(
             NotificationChannel(CHANNEL_APPROVALS, "Approval requests", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "A controller app is asking to pair or run a command on the target"
             },

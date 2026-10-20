@@ -20,9 +20,9 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > Recovery / Root (dry-run, typed phrase, never auto-reboot). Desktop uses
 > the same screen: host `adb`/`fastboot`, two-column grid at ≥ 840 dp,
 > `HostControllerIdentifyTest`. Glossary: Download mode, Odin, Knox, Mi
-> Unlock. `applicationId`, signing and versioning unchanged. Based on
-> `origin/main` `3f7661d` (#83). Local suite counts will be filled after
-> this head is tested. **Not run on a phone or a desktop window.**
+> Unlock. Merged `origin/main` `3d05929` (#84). `applicationId`, signing
+> and versioning unchanged. Local suite counts will be filled after this
+> head is tested. **Not run on a phone or a desktop window.**
 
 > **Update 2026-10-20 (multi-device identify):** branch
 > `feat/multi-device-identify`. **Devices** drawer screen lists every attached
@@ -36,15 +36,38 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > (devices can work in parallel). Dry-run, typed confirm, backup-first, no
 > auto-reboot unchanged. `applicationId`, signing and versioning unchanged.
 > Docs: `docs/MANUAL.md` / Help / Glossary (Serial, SoC, Slot, USB mode).
-> Based on `origin/main` `3f7661d` (#83); `fix/bug-sweep-2026-10-20` had not
-> landed. Local suite: `:core:test` **378/0** (`DeviceIdentityParserTest` 9,
-> `SerialMaskTest` 3, `RootPlanTest` 7, `SerialOpLockTest` 3,
-> `UsbScanFilterTest` 6); `:desktop:test` 2/0; `:app:testDebugUnitTest` 35/0
-> (Paparazzi `devices`; `dashboard` / `glossary` re-recorded);
-> `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug` /
-> `versionCode=1` / `versionName=0.1.0-debug`); `bash tests/run-tests.sh`
-> 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> Local suite (before #84 merge): `:core:test` **378/0**
+> (`DeviceIdentityParserTest` 9, `SerialMaskTest` 3, `RootPlanTest` 7,
+> `SerialOpLockTest` 3, `UsbScanFilterTest` 6); `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 35/0 (Paparazzi `devices`; `dashboard` /
+> `glossary` re-recorded); `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
 > **Not run on a phone.**
+
+> **Update 2026-10-20 (bug sweep):** PR #84, on `main` as `3d05929`.
+> Four confirmed bugs on `main` `3f7661d` (#76–#83): (1) fleet
+> `ReplayGuard` evicted the oldest live nonce after 4,096 distinct
+> `(source, nonce)` pairs, so a reused envelope inside the 10-minute
+> retain window could return `OK` — the cap now refuses the new
+> request (`internal`) and never evicts a live nonce; (2) Custom
+> Recovery allowed a `dd` write when `blockdev --getsize64` failed
+> or was unreadable — unknown size is now a blocker; (3)
+> `config.import` accepted any `terminalApp` / `autoConnect` string
+> — import now requires `true`/`false` and a valid package name
+> (empty terminal app still clears it); (4) Android
+> `FileInputStream.readNBytes` (API 33) was used on minSdk 26 for
+> image-header reads and would crash on API 26–32 — now `:core`
+> `readPrefix`. External control stays off; `applicationId` /
+> signing / versioning unchanged. Local suite on that PR:
+> `:core:test` 363/0; `:desktop:test` 2/0; `:app:testDebugUnitTest`
+> 34/0; `:app:assembleDebug` (`aapt dump badging`:
+> `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `:app:lintDebug` 0 errors (24
+> pre-existing warnings); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo
+> wheel). **Not run on a phone.**
 
 > **Update 2026-10-20 (fleet config.export / config.import):** branch
 > `feat/config-backup`. Protocol 1.1 standalone Bridge ops `config.export` and
@@ -383,7 +406,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), and fleet `config.export` / `config.import` (#83 / `3f7661d`). This branch adds the **Devices** multi-phone identify screen, brand Root wizards, and the PC Devices grid. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), fleet `config.export` / `config.import` (#83 / `3f7661d`), and the bug sweep (#84 / `3d05929`). This branch adds the **Devices** multi-phone identify screen, brand Root wizards, and the PC Devices grid. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
@@ -391,18 +414,28 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 - Brand root wizards + PC Devices (this branch): `RootGuides` Pixel /
   Samsung / Xiaomi / OnePlus / Motorola / generic; Odin is explanation
   only; same dry-run / typed confirm / no auto-reboot; desktop host
-  adb/fastboot + two-column grid. Suite counts filled after this head.
-  **Not run on a phone or a desktop window.**
-- Multi-device identify (this branch, based on `origin/main` `3f7661d` #83):
-  **Devices** lists every attached phone. USB attach + 2 s poll. Read-only
-  identity; serials masked to last four characters; Root plan from the
-  Custom RR catalog; `SerialOpLock` per serial; EDL identify only. Dry-run,
-  typed confirm, backup-first, no auto-reboot unchanged. `applicationId` /
-  signing / versioning unchanged. `:core:test` 378/0, `:desktop:test` 2/0,
-  `:app:testDebugUnitTest` 35/0, `:app:assembleDebug`
+  adb/fastboot + two-column grid. Merged `origin/main` `3d05929` (#84).
+  Suite counts filled after this head. **Not run on a phone or a
+  desktop window.**
+- Multi-device identify (this branch): **Devices** lists every attached
+  phone. USB attach + 2 s poll. Read-only identity; serials masked to
+  last four characters; Root plan from the Custom RR catalog;
+  `SerialOpLock` per serial; EDL identify only. Dry-run, typed confirm,
+  backup-first, no auto-reboot unchanged. `applicationId` / signing /
+  versioning unchanged. Pre-#84 local suite: `:core:test` 378/0,
+  `:desktop:test` 2/0, `:app:testDebugUnitTest` 35/0, `:app:assembleDebug`
   (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1055/0,
   `tests/lint.sh` clean. **Not run on a phone.**
-- Fleet config backup (PR #83, on `main` as `3f7661d`, after merging `origin/main` `3737c12` #82):
+- Bug sweep (PR #84, on `main` as `3d05929`): replay cache never
+  evicts a live nonce; Custom Recovery refuses unknown partition size;
+  config import validates `autoConnect` / `terminalApp`; Android header
+  reads use `readPrefix` (minSdk 26). External control stays off. On
+  that PR: `:core:test` 363/0, `:desktop:test` 2/0,
+  `:app:testDebugUnitTest` 34/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `:app:lintDebug` 0
+  errors, `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not
+  run on a phone.**
+- Fleet config backup (`main` `3f7661d` #83):
   `config.export` / `config.import` advertised with `remoteAllowed=false`;
   remote callers `capability_off`; export omits secrets; import dry-run /
   skip / overwrite / merge-by-id; confirm required; never enables

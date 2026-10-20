@@ -36,6 +36,8 @@ images are bundled in the APK.
   wildcard.
 - Guess an A/B slot. If `recovery_a`/`recovery_b` exist and the current slot is
   unknown, it refuses to write.
+- Write when `blockdev --getsize64` failed or returned nothing. Unknown
+  partition size is not safe.
 - `dd` a zip. Zips are for sideload / an already-running recovery.
 - Bundle third-party images, follow `http://`, or download from hosts outside
   TWRP's `dl.twrp.me` / `twrp.me` and PitchBlack's site (`pitchblackrecovery.com`,

@@ -6,6 +6,7 @@ import ai.rootforge.os.core.Library
 import ai.rootforge.os.core.LibraryFile
 import ai.rootforge.os.core.OutputLog
 import ai.rootforge.os.core.humanSize
+import ai.rootforge.os.core.readPrefix
 import java.io.File
 import java.io.IOException
 
@@ -60,7 +61,7 @@ class RecoveryInstaller(
         publishedSha256: String? = null,
         partitionSize: Long? = null,
     ): RecoveryPlan {
-        val head = image.file.inputStream().use { it.readNBytes(4096) }
+        val head = image.file.readPrefix(4096)
         val sha = FileDigest.sha256Hex(image.file)
         val md5 = FileDigest.md5Hex(image.file)
         return RecoveryPlanner.plan(

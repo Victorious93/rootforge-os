@@ -64,7 +64,9 @@ object RecoveryPlanner {
                 blockers += "No dedicated recovery partition. Will not write boot or vendor_boot. Use Boot once from the Recovery screen, or the official installer zip from inside recovery."
             }
             if (imageSize <= 0) blockers += "The image is empty."
-            if (partitionSize != null && partitionSize <= 0) blockers += "Could not read the recovery partition size."
+            if (partitionSize == null || partitionSize <= 0) {
+                blockers += "Could not read the recovery partition size."
+            }
             if (partitionSize != null && partitionSize > RecoveryCommands.MAX_PARTITION_BYTES) {
                 blockers += "Recovery partition is ${humanSize(partitionSize)}, larger than the ${humanSize(RecoveryCommands.MAX_PARTITION_BYTES)} safety cap."
             }

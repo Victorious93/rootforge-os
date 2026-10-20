@@ -5,6 +5,7 @@ import ai.rootforge.os.bridge.BRIDGE_PACKAGE_DEBUG
 import ai.rootforge.os.bridge.FleetError
 import ai.rootforge.os.bridge.bridgeJson
 import ai.rootforge.os.core.ApprovalCenter
+import ai.rootforge.os.core.TerminalApp
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -166,7 +167,23 @@ class ConfigBackup(
             val id = obj.string("id")
             val value = obj.string("value")
             if (id.isBlank()) throw ConfigBackupException(FleetError.INVALID_PARAMETERS, "preferences[$i] missing id")
+            validatePreference(id, value)
             ConfigPreference(id, value)
+        }
+    }
+
+    private fun validatePreference(id: String, value: String) {
+        when (id) {
+            ConfigPreferenceId.AUTO_CONNECT -> {
+                if (value != "true" && value != "false") {
+                    throw ConfigBackupException(FleetError.INVALID_PARAMETERS, "autoConnect must be true or false")
+                }
+            }
+            ConfigPreferenceId.TERMINAL_APP -> {
+                if (value.isNotEmpty() && !TerminalApp.isValidPackage(value)) {
+                    throw ConfigBackupException(FleetError.INVALID_PARAMETERS, "terminalApp is not a valid Android package name")
+                }
+            }
         }
     }
 

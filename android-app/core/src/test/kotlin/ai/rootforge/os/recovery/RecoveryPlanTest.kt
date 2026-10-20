@@ -104,6 +104,16 @@ class RecoveryPlanTest {
     }
 
     @Test
+    fun writeIsBlockedWhenPartitionSizeIsUnknown() {
+        val plan = RecoveryPlanner.plan(
+            layout, rooted = true, "twrp.img", 90L * 1024 * 1024, magic,
+            sha256 = "ab".repeat(32), dryRun = false, partitionSize = null,
+        )
+        assertFalse(plan.allowed)
+        assertTrue(plan.blockers.any { it.contains("Could not read the recovery partition size") })
+    }
+
+    @Test
     fun payloadDetectsBootMagicAndZip() {
         assertEquals(RecoveryPayload.IMAGE, RecoveryPlanner.payloadOf("twrp.img", magic))
         assertEquals(RecoveryPayload.ZIP, RecoveryPlanner.payloadOf("pbrp.zip", zipHead))

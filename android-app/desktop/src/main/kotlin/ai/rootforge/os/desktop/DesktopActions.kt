@@ -10,6 +10,7 @@ import ai.rootforge.os.desktopmode.DesktopModeOp
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.core.FileDigest
 import ai.rootforge.os.core.Library
+import ai.rootforge.os.core.readPrefix
 import ai.rootforge.os.module.BuiltModule
 import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.recovery.RecoveryCatalogClient
@@ -173,7 +174,7 @@ class DesktopActions(
                 withContext(Dispatchers.IO) {
                     val dest = controller.library.fileFor(Library.sanitize(offer.filename))
                     RecoveryFetcher.fetchToFile(url, dest, referer = offer.referer)
-                    val head = dest.inputStream().use { it.readNBytes(8) }
+                    val head = dest.readPrefix(8)
                     if (RecoveryPlanner.payloadOf(dest.name, head) == RecoveryPayload.OTHER) {
                         dest.delete()
                         error("${offer.filename} is not a recovery.img or zip (the host may have returned an HTML page).")
