@@ -362,6 +362,7 @@ class BridgeExecutorTest {
     @Test
     fun messengerContractConstantsMatchTheDoc() {
         assertEquals(1, BRIDGE_PROTOCOL_MAJOR)
+        assertEquals(1, BRIDGE_PROTOCOL_MINOR)
         assertEquals(1, BRIDGE_MSG_REQUEST)
         assertEquals(2, BRIDGE_MSG_RESPONSE)
         assertEquals("request", BRIDGE_KEY_REQUEST)
