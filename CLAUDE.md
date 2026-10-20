@@ -11,6 +11,15 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (Desktop mode):** branch `feat/desktop-mode-x11`. Android Dashboard
+> card talks to VictorSuite (`com.termux`, confirmed in that repo) by package + cert pin,
+> then `RUN_COMMAND` with only `rootforge-desktop-mode <op>` (dedicated
+> `ai.victorsuite.action.DESKTOP_MODE` is specified in `docs/DESKTOP_MODE.md` and is **not**
+> in VictorSuite yet). Setup scripts `setup_desktop_mode.sh` /
+> `rootforge_desktop_mode.sh` / `termux/desktop-mode-entry.sh`. Missing companion is a
+> hint, never a crash. Signing / `applicationId` / versioning unchanged. **Not run on a
+> phone.**
+
 > **Update 2026-10-19 (launcher icon from logo):** branch `feat/app-icon-from-logo`
 > (PR #74). Replaced the orange anvil vector (`drawable/ic_launcher_foreground.xml`)
 > with the emblem cropped from `assets/logo/rootforge-os-logo.jpg` (fist + anvil +
@@ -148,7 +157,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-19 · **Branch:** `feat/app-icon-from-logo`
+**Last updated:** 2026-10-20 · **Branch:** `feat/desktop-mode-x11`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
@@ -158,6 +167,9 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Desktop mode: Android Dashboard card for VictorSuite (`com.termux`). Pin by package+cert, then
+  RUN_COMMAND with a fixed `rootforge-desktop-mode` command, or a dedicated action VictorSuite
+  does not export yet (`docs/DESKTOP_MODE.md`). Missing companion is a hint. Not run on a phone.
 - Android launcher icon is the repo-logo emblem (adaptive + legacy mipmaps, navy
   `#0C1D36`). `tests/test_launcher_icons.py` 7/0; `:app:assembleDebug` packaged the
   new mipmaps (2026-10-19). Not installed on a phone.

@@ -14,6 +14,8 @@ import ai.rootforge.os.core.Library
 import ai.rootforge.os.core.LinkState
 import ai.rootforge.os.core.OutputLog
 import ai.rootforge.os.core.TargetController
+import ai.rootforge.os.desktopmode.AndroidCompanionLookup
+import ai.rootforge.os.desktopmode.DesktopMode
 import ai.rootforge.os.usb.TargetMode
 import ai.rootforge.os.usb.UsbHost
 import android.Manifest
@@ -61,6 +63,10 @@ class RootForgeApp : Application() {
     }
 
     val adbFingerprint = kotlinx.coroutines.flow.MutableStateFlow("")
+    val desktopMode = kotlinx.coroutines.flow.MutableStateFlow(
+        DesktopMode.probe(emptyList(), pinned = null),
+    )
+    val companionLookup by lazy { AndroidCompanionLookup(packageManager) }
 
     @Volatile var uiVisible = false
     private var lastAutoKey: String? = null
@@ -70,6 +76,7 @@ class RootForgeApp : Application() {
         createChannel()
         usb.start()
         refreshFingerprint()
+        refreshDesktopMode()
         watchPendingPairing()
         appScope.launch {
             usb.targets.collect { list ->
@@ -81,6 +88,13 @@ class RootForgeApp : Application() {
 
     fun refreshFingerprint() {
         appScope.launch(Dispatchers.IO) { adbFingerprint.value = keyStore.loadOrCreate().fingerprint() }
+    }
+
+    fun refreshDesktopMode() {
+        val view = runCatching {
+            DesktopMode.probe(companionLookup.installed(), settings.victorSuitePin)
+        }.getOrElse { DesktopMode.probe(emptyList(), settings.victorSuitePin) }
+        desktopMode.value = view
     }
 
     private fun autoConnect(list: List<ai.rootforge.os.usb.AttachedTarget>) {

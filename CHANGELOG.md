@@ -7,6 +7,11 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Desktop mode (VictorSuite X11) (2026-10-20)
+- Android Dashboard **Desktop mode** card. VictorSuite’s package is `com.termux` (read from Victorious93/VictorSuite on 2026-10-20). RootForge detects it with PackageManager + `<queries>`, pins it by package + signing-certificate SHA-256 (no shared key), and then sends either the dedicated `ai.victorsuite.action.DESKTOP_MODE` intent (specified, not implemented in VictorSuite yet) or Termux `RUN_COMMAND` with only `rootforge-desktop-mode <start|stop|setup|status>`. Missing VictorSuite is a hint, not a crash. Desktop JVM client hides the card. `applicationId`, signing and versioning unchanged.
+- Toolkit: `setup_desktop_mode.sh` (idempotent XFCE + tigervnc + VS Code-if-present + launchers), `rootforge_desktop_mode.sh` (X11 or VNC fallback), `termux/desktop-mode-entry.sh`. Unpinned code-server downloads are refused. Spec: `docs/DESKTOP_MODE.md`.
+- Tests: `:core` `DesktopModeTest`; hermetic shell coverage of the three scripts; Paparazzi `desktopMode` golden. **Not run on a phone.**
+
 ### Android launcher icon from the repo logo (2026-10-19)
 - The host-phone APK launcher icon is now the RootForge emblem (fist + anvil + rings, no wordmark) cropped from `assets/logo/rootforge-os-logo.jpg`. Adaptive icon: foreground scaled into the 66% (72/108 dp) safe zone, background `#0C1D36` sampled from the logo field, monochrome stencil for Android 13+ themed icons. Legacy `ic_launcher` / `ic_launcher_round` PNGs at mdpi–xxxhdpi. Regenerator: `android-app/tools/generate_launcher_icons.py`. Signing, `applicationId` and versioning were not changed (`aapt dump badging`: `ai.rootforge.os.debug`, `0.1.0-debug`). Tests: `tests/test_launcher_icons.py` 7/0; `:core:test` 168/0; `:app:testDebugUnitTest` 28/0; `:app:assembleDebug`; `bash tests/run-tests.sh` 1023/0; `bash tests/lint.sh` clean (shellcheck 0.11.0). **Not run on a phone.**
 
