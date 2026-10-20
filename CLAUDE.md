@@ -26,10 +26,15 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > The catalog still does not feed `DeviceMatchGate`. `applicationId`, signing
 > and versioning unchanged. Merged `origin/main` (`44716de` #78 how-to + Help,
 > then `988a941` #79 fleet protocol 1.1). The action is in `docs/MANUAL.md` /
-> in-app Help (`cmp` identical to the bundled copy). After #78: `:core:test`
-> 260/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 31/0,
-> `:app:assembleDebug`, `tests/run-tests.sh` 1055/0, lint clean. Suite after
-> #79 is recorded when re-run. **Not run:** a phone, the desktop window.
+> in-app Help (`cmp` identical to the bundled copy). After that merge:
+> `:core:test` 304/0 (`CatalogRecoveryBridgeTest` 7, `RecoveryCatalogTest` 9,
+> `ManualLibraryTest` 4, plus fleet 1.1 from #79); `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 31/0; `:app:assembleDebug` (`aapt dump badging`:
+> `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`).
+> `verifyPaparazziDebug` fails only on `modules` (stale on `main` since #69);
+> Help golden still matches. `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run:** a phone, the desktop window.
 
 > **Update 2026-10-20 (fleet bridge v1):** branch `feat/fleet-bridge-v1`
 > (PR #79, on `main` as `988a941`). Protocol 1.1 fleet remote-control envelope
@@ -271,8 +276,9 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   #79 `988a941`): matching TWRP/PitchBlack catalog rows open Custom Recovery
   pre-filled; official lookup uses the probed phone; `pitchblack.tech` added
   to the https host allow-list. ROMs and other recoveries stay links.
-  Documented in `docs/MANUAL.md` / Help. After #78: `:core:test` 260/0.
-  Suite after #79 is recorded when re-run. **Not run on a phone.**
+  Documented in `docs/MANUAL.md` / Help. `:core:test` 304/0; `:desktop:test`
+  2/0; `:app:testDebugUnitTest` 31/0; `:app:assembleDebug`;
+  `tests/run-tests.sh` 1055/0; `tests/lint.sh` clean. **Not run on a phone.**
 - Fleet protocol 1.1 (PR #79, on `main` as `988a941`): Messenger JSON `op`
   envelope with nonce replay/expiry, package+cert pairing, default-off
   external control, and `ApprovalCenter` for destructive remote actions
