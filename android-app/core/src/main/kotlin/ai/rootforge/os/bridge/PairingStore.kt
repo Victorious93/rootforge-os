@@ -11,7 +11,15 @@ import kotlinx.serialization.json.Json
  * Who the caller is, as established by Android rather than by anything in
  * the request: the package and signing certificate behind the calling UID.
  */
-data class CallerIdentity(val packageName: String, val certSha256: String)
+data class CallerIdentity(val packageName: String, val certSha256: String) {
+    /**
+     * Replay-cache key for this caller. Derived from Binder/PackageManager
+     * identity, never from an envelope `sourceNodeRef` or `trigger` field.
+     */
+    fun sourceNodeRef(): String = "${packageName}:${certSha256.lowercase()}"
+
+    fun isComplete(): Boolean = packageName.isNotBlank() && certSha256.isNotBlank()
+}
 
 @Serializable
 data class PairedController(val packageName: String, val certSha256: String, val pairedAtMs: Long)
