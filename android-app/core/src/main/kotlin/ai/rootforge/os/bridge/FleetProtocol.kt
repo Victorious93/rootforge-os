@@ -9,8 +9,9 @@ object FleetOp {
     const val REMOTE_COMMAND = "remote.command"
     const val MACRO_STEP = "macro.step"
     const val MACRO_RUN = "macro.run"
+    const val NODE_STATUS = "node.status.get"
 
-    val ALL: Set<String> = setOf(CAPABILITIES, REMOTE_COMMAND, MACRO_STEP, MACRO_RUN)
+    val ALL: Set<String> = setOf(CAPABILITIES, REMOTE_COMMAND, MACRO_STEP, MACRO_RUN, NODE_STATUS)
 }
 
 /**

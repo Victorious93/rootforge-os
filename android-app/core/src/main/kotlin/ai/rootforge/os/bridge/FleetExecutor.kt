@@ -36,6 +36,8 @@ class FleetExecutor(
     private val bridgeEnabled: () -> Boolean = { true },
     private val privileged: PrivilegedShell = NullPrivilegedShell(),
     private val replay: ReplayGuard = ReplayGuard(),
+    private val statusSource: NodeStatusSource = NodeStatusSource.Default,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     suspend fun handle(requestLine: String, caller: CallerIdentity): String =
         bridgeJson.encodeToString(process(requestLine, caller))
@@ -79,6 +81,7 @@ class FleetExecutor(
         return try {
             val result = when (request.op) {
                 FleetOp.CAPABILITIES -> capabilities()
+                FleetOp.NODE_STATUS -> nodeStatus(request)
                 FleetOp.REMOTE_COMMAND -> runAction(request.actionRef!!, request.params, caller)
                 FleetOp.MACRO_STEP -> runAction(request.actionRef!!, request.params, caller)
                 FleetOp.MACRO_RUN -> runMacro(request, caller)
@@ -93,6 +96,22 @@ class FleetExecutor(
             throw e
         } catch (e: Exception) {
             error(id, FleetError.INTERNAL, e.message ?: e.javaClass.simpleName)
+        }
+    }
+
+    private fun nodeStatus(request: FleetRequest): JsonObject {
+        val extra = request.params.keys - NODE_STATUS_KEYS
+        if (extra.isNotEmpty()) {
+            throw FleetBadParameters("unknown parameter(s): ${extra.sorted().joinToString()}")
+        }
+        val asked = request.params.stringOrNull("nodeId")
+        if (!asked.isNullOrBlank() && asked != nodeId) {
+            throw FleetOpFailed(FleetError.NOT_FOUND, "this node is not $asked")
+        }
+        return try {
+            NodeStatusSnapshotCodec.encode(statusSource.snapshot(nodeId, clock()))
+        } catch (e: IllegalArgumentException) {
+            throw FleetBadParameters(e.message ?: "invalid snapshot")
         }
     }
 
@@ -370,6 +389,7 @@ class FleetExecutor(
 
     companion object {
         private const val MAX_OUTPUT = 64 * 1024
+        private val NODE_STATUS_KEYS = setOf("nodeId", "snapshot")
         private val ADB_REBOOT_TARGETS = listOf("", "bootloader", "recovery", "sideload", "fastboot", "edl")
         private val FASTBOOT_REBOOT_TARGETS = listOf("system", "bootloader", "recovery", "fastbootd")
         private val PARTITION = Regex("[A-Za-z0-9_.-]{1,40}")

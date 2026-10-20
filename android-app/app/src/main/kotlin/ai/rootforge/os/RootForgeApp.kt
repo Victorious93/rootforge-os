@@ -7,6 +7,7 @@ import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.bridge.ControllerBackend
 import ai.rootforge.os.bridge.FleetExecutor
 import ai.rootforge.os.bridge.PairingPersistence
+import ai.rootforge.os.bridge.ProbingNodeStatusSource
 import ai.rootforge.os.bridge.PairingStore
 import ai.rootforge.os.catalog.BuildCatalogStore
 import ai.rootforge.os.core.AppSettings
@@ -81,6 +82,10 @@ class RootForgeApp : Application() {
                 pairing,
                 bridgeEnabled = enabled,
                 privileged = privilegedShell,
+                statusSource = ProbingNodeStatusSource(
+                    packageName = packageName,
+                    installedManagers = { installedManagerPackages() },
+                ),
             ),
         )
     }

@@ -7,6 +7,11 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Fleet `node.status.get` (STATUS-TRAY) (2026-10-20)
+- Protocol 1.1 envelope op **`node.status.get`** on the existing Messenger service (`ai.rootforge.os.action.BRIDGE`). Advertised in `capabilities.get` as `{kind: read, remoteAllowed: true, requiresConfirm: false}`. Same package+certificate pairing, default-off external-control switch, nonce/ttl/replay as remote control. Protocol minor stays **1**. `applicationId`, signing and versioning unchanged.
+- Success `result` is one frozen `NodeStatusSnapshot`: `nodeId`, `packageName` (Android applicationId; omitted on desktop), `connectionClass: EXTERNAL_NODE`, `updatedAtMs`, `domains[{name, state, detail?}]`. Always reports `node_health`. The Android app adds an `other` domain for root (`su` binary present — looked up, never executed — and manager APK from `RootManager.detect`). `detail` ≤ 200 characters; a snapshot whose detail or leftover payload keys look like secrets (`password`, `token`, `secret`, `signingKey`, …) is `invalid_parameters`, not stripped. Optional `params.nodeId` must match this node (`not_found` otherwise). RootForge is a node, not the tray aggregator.
+- Docs: `docs/MANUAL.md` Fleet integration (same text in in-app Help). Spec: droidcommand-AI `docs/specs/STATUS_TRAY.md`.
+
 ### Glossary (2026-10-20)
 - In-app **Glossary** drawer screen (`:core` `Glossary`): one short everyday-words line per term (root, su, Magisk, KernelSU, KernelSU Next, APatch, module, Zygisk, Zygisk Next, ReZygisk, Xposed, LSPosed, Vector, Shizuku, Sui, Dhizuku, ADB, fastboot, EDL, bootloader, recovery, TWRP, PitchBlack, boot image, ROM, flash, dry run, SHA-256/checksum, bootloop). Reachable from Help and Links as well as the drawer. The same text is `docs/MANUAL.md` § Glossary (bundled in Help). Official Magisk / LSPosed / Vector / Sui pages stay on **Links**.
 - `:core` `GlossaryTest` requires every term and line to be non-empty and unique. `DirectoryLinksTest` still requires Xposed, LSPosed, Vector and Sui on the Links list.

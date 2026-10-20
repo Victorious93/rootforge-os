@@ -93,7 +93,7 @@ private class FleetParser(private val root: JsonObject) {
         val steps = optionalArray("steps")?.let { parseSteps(it) } ?: emptyList()
 
         when (op) {
-            FleetOp.CAPABILITIES -> Unit
+            FleetOp.CAPABILITIES, FleetOp.NODE_STATUS -> Unit
             FleetOp.REMOTE_COMMAND -> if (actionRef.isNullOrBlank()) fail(FleetError.INVALID_PARAMETERS, "missing field 'actionRef'")
             FleetOp.MACRO_STEP -> {
                 if (actionRef.isNullOrBlank()) fail(FleetError.INVALID_PARAMETERS, "missing field 'actionRef'")

@@ -77,6 +77,8 @@ class ManualDocTests(unittest.TestCase):
         self.assertIn("images/manual/header.png", text)
         self.assertNotIn("applicationIdSuffix", text)
         self.assertIn("**Root.**", text)
+        self.assertIn("node.status.get", text)
+        self.assertIn("NodeStatusSnapshot", text)
         self.assertIn("**Bootloop.**", text)
         self.assertIn("**LSPosed.**", text)
         self.assertIn("**SHA-256 / checksum.**", text)

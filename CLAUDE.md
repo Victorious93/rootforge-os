@@ -11,6 +11,22 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (fleet `node.status.get`):** branch `feat/node-status-get`.
+> Protocol 1.1 envelope op `node.status.get` on the existing Messenger
+> service. Advertised in `capabilities.get` as `{kind:read,
+> remoteAllowed:true, requiresConfirm:false}`. Returns one frozen
+> `NodeStatusSnapshot` (`nodeId`, `packageName`, `connectionClass:
+> EXTERNAL_NODE`, `updatedAtMs`, `domains[{name,state,detail?}]`): always
+> `node_health`, plus an `other` root pulse on Android (`su` binary
+> present — looked up, never executed — and manager APK via
+> `RootManager.detect`). `detail` ≤ 200 chars; secret-shaped detail is
+> `invalid_parameters`, not stripped. Same package+cert pairing, default-off
+> external control, nonce/ttl/replay as remote control. Protocol minor stays
+> 1. `applicationId`, signing and versioning unchanged. RootForge is a node,
+> not the tray aggregator. Spec: droidcommand-AI
+> `docs/specs/STATUS_TRAY.md`. Documented in `docs/MANUAL.md` / Help.
+> **Not run on a phone.**
+
 > **Update 2026-10-20 (glossary):** branch `feat/local-module-install`
 > (PR #81). In-app **Glossary** drawer screen (`:core` `Glossary`): one
 > short everyday-words line per required term (root, su, Magisk, KernelSU,
@@ -296,17 +312,24 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-20 · **Branch:** `feat/local-module-install`
+**Last updated:** 2026-10-20 · **Branch:** `feat/node-status-get`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), and Custom RR → Custom Recovery (#80 / `ef088d3`). Local module install on this phone is this branch (PR #81). The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), and local module install + Links + Glossary (#81 / `b72d214`). This branch adds fleet `node.status.get` (STATUS-TRAY). The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Local module install on this phone (PR #81, this branch, after merging
+- Fleet `node.status.get` (this branch): protocol 1.1 STATUS-TRAY read on the
+  existing Messenger service. Advertised `{kind:read, remoteAllowed:true,
+  requiresConfirm:false}`. Snapshot shape as frozen in droidcommand-AI
+  `docs/specs/STATUS_TRAY.md`. Pairing + default-off switch unchanged.
+  Protocol minor stays 1. `applicationId` / signing / versioning unchanged.
+  **Not run on a phone.** Local suite numbers are filled in after this
+  session's Gradle / hermetic runs.
+- Local module install on this phone (PR #81, on `main` as `b72d214`, after merging
   `origin/main` `ef088d3` / #80): Modules **This phone** tab installs a
   library zip via `su` (`magisk --install-module` / `ksud module install` /
   `apd module install`), auto-detects the manager, lists `/data/adb/modules`

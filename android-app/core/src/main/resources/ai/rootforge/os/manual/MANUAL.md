@@ -595,7 +595,7 @@ Desktop / Docker reuse the same JSON on `POST /v1/bridge` (loopback bearer token
 
 | Field | Rule |
 |---|---|
-| `op` | `capabilities.get` \| `remote.command` \| `macro.step` \| `macro.run` |
+| `op` | `capabilities.get` \| `remote.command` \| `macro.step` \| `macro.run` \| `node.status.get` |
 | `requestId` | Echoed on the reply |
 | `targetNodeRef` | This install's node id (Settings). Mismatch → `not_found` |
 | `actionRef` | Required for `remote.command` and `macro.step` |
@@ -630,10 +630,29 @@ A request is `expired` when `now > timestampMs + ttlMs` **or** `|now - timestamp
 
 Returns `protocolMajor`, `protocolMinor`, `fleetClass: external_node`, node identity, then:
 
-- `ops[]` — the four envelope ops
+- `ops[]` — the five envelope ops (`capabilities.get`, `remote.command`, `macro.step`, `macro.run`, `node.status.get`)
 - `actions[]` — `remote.command` action refs that are remotely allowed
 
 Each entry is `{name, kind, remoteAllowed, requiresConfirm}` where `kind` is `read` \| `action` \| `destructive`.
+
+### `node.status.get`
+
+Read. Same pairing, default-off switch, and nonce/ttl/replay as the other protocol 1.1 ops. No confirm. Returns **one** `NodeStatusSnapshot` for this node (the frozen STATUS-TRAY schema from droidcommand-AI `docs/specs/STATUS_TRAY.md`). RootForge is a node, not the tray aggregator, so the reply is the snapshot object itself, not `{ "snapshots": […] }`.
+
+```json
+{
+  "nodeId": "rf-…",
+  "packageName": "ai.rootforge.os.debug",
+  "connectionClass": "EXTERNAL_NODE",
+  "updatedAtMs": 1700000000000,
+  "domains": [
+    { "name": "node_health", "state": "ok", "detail": "process alive" },
+    { "name": "other", "state": "ok", "detail": "su available; Magisk detected" }
+  ]
+}
+```
+
+`packageName` is this app's applicationId on Android and is omitted on the desktop client. `connectionClass` is always `EXTERNAL_NODE`. Domains always include `node_health`. On the Android app an `other` domain is added for root: whether a `su` binary is **present** (looked up on disk, never executed, so no Superuser prompt) and which manager APK was detected (`RootManager.detect`). `detail` is at most 200 characters and contains no secrets; a snapshot that would leak a forbidden name (`password`, `token`, `secret`, `signingKey`, …) is refused as `invalid_parameters`, not stripped. Optional `params.nodeId` must be this node or the reply is `not_found`. Optional `params.snapshot` is ignored.
 
 ### What a remote caller may run
 
@@ -713,7 +732,7 @@ The sidecar / device-match check runs before a flash and again after you confirm
 2. Install a debug droidcommand-AI build. Bind `ai.rootforge.os.action.BRIDGE` and send `capabilities.get` with that `targetNodeRef`, a unique 32-hex `nonce`, and `timestampMs` = now.
 3. The first reply is `not_paired` or `external_control_disabled`. RootForge Settings shows the pending package + cert prefix.
 4. Turn **Allow external controllers** on, then **Pair**.
-5. Repeat `capabilities.get`. Reads run; action ops prompt on the phone; destructive ops need the same typed phrase the GUI uses.
+5. Repeat `capabilities.get`. Reads (`capabilities.get`, `node.status.get`, `rootforge.devices.list`, …) run; action ops prompt on the phone; destructive ops need the same typed phrase the GUI uses.
 
 This path has **not** been run on a phone in this repository.
 
@@ -722,9 +741,10 @@ This path has **not** been run on a phone in this repository.
 - Envelope: `android-app/core/.../bridge/FleetProtocol.kt`, `FleetEnvelope.kt`
 - Replay: `ReplayGuard.kt`
 - Executor: `FleetExecutor.kt`, `RemoteActionCatalog.kt`
+- STATUS-TRAY snapshot: `NodeStatusSnapshot.kt`, `NodeStatusSource.kt`
 - Ingress (fleet vs legacy): `BridgeIngress.kt`
 - Messenger: `android-app/app/.../bridge/RootForgeBridgeService.kt`
-- Tests: `FleetEnvelopeTest`, `ReplayGuardTest`, `FleetAuthTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`
+- Tests: `FleetEnvelopeTest`, `ReplayGuardTest`, `FleetAuthTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`, `NodeStatusSnapshotTest`
 
 ---
 
