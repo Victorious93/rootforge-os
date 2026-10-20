@@ -7,6 +7,11 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Custom RR catalog → Custom Recovery (2026-10-20)
+- Dashboard **Builds for this device**: a matching Custom RR **RECOVERY** row for TWRP or PitchBlack now has **Install with Custom Recovery**, which opens the Custom Recovery screen aimed at that project. Official files are looked up from the **probed** phone, not from the catalog row's device list. Downloads still have to pass the installer https host allow-list; `pitchblack.tech` (the host Custom RR publishes for PitchBlack) was added. SHA-256 is shown; a published MD5/SHA-256 is checked when present. Dry-run stays the default. A write still needs typed `FLASH RECOVERY`, backs up first, writes only `recovery` / `recovery_a` / `recovery_b`, never `dd`s a zip, and never reboots by itself.
+- ROMs, root solutions, OrangeFox, SHRP and RedWolf stay link-only. The catalog still does not feed `DeviceMatchGate`. `applicationId`, signing and versioning unchanged.
+- Tests: new `:core` `CatalogRecoveryBridgeTest`; `RecoveryCatalogTest` host + project-filter cases. Doc: `docs/CUSTOM_RR_CATALOG.md`, `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+
 ### Custom Recovery installer for rooted phones (2026-10-20)
 - New drawer screen **Custom Recovery** on Android and desktop. It lists official TWRP (`twrp.me` search.json + `dl.twrp.me/<codename>/`) and PitchBlack Recovery (`pitchblackrecovery.com`, GitHub releases, SourceForge) for `ro.product.device` / `ro.build.product`, and accepts a local `.img`/`.zip`. Images are not bundled.
 - Detects root (`su -c id`), A/B vs A-only, and whether a dedicated `recovery` / `recovery_a` / `recovery_b` exists. Recovery-in-boot / vendor_boot devices get the installer-zip and “Boot once” paths only; `boot` is never written.

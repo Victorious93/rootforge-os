@@ -1,5 +1,6 @@
 package ai.rootforge.os.ui.screens
 
+import ai.rootforge.os.catalog.CatalogRecoveryPrefill
 import ai.rootforge.os.core.LinkState
 import ai.rootforge.os.core.humanSize
 import ai.rootforge.os.fastboot.RebootTarget
@@ -46,7 +47,7 @@ fun modeColor(mode: TargetMode) = when (mode) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DashboardScreen(state: AppUiState, actions: AppActions) {
+fun DashboardScreen(state: AppUiState, actions: AppActions, onInstallRecovery: (CatalogRecoveryPrefill) -> Unit = {}) {
     ScreenColumn {
         ForgeCard("Target device", state.transportCaption, Icons.Filled.Usb) {
             val link = state.link
@@ -80,7 +81,7 @@ fun DashboardScreen(state: AppUiState, actions: AppActions) {
             }
         }
 
-        BuildCatalogCard(state.buildCatalog, state.info, busy = state.busy != null, actions)
+        BuildCatalogCard(state.buildCatalog, state.info, busy = state.busy != null, actions, onInstallRecovery)
 
         DesktopModeCard(state.desktopMode, actions)
 

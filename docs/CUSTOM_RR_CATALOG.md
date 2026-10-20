@@ -20,15 +20,23 @@ host-phone app and on the desktop client. The catalog arrives one of two ways:
 - **For:** showing, next to a connected target, the ROMs, recoveries and root
   solutions whose catalog entry lists that phone's product or codename, with
   the project's download page, its forum, any warning the catalog carries, and a
-  freshness label (`active`, `stale`, `abandoned`).
+  freshness label (`active`, `stale`, `abandoned`). A matching **TWRP** or
+  **PitchBlack** recovery row also has **Install with Custom Recovery**, which
+  opens the Custom Recovery screen already aimed at that project
+  ([CUSTOM_RECOVERY_INSTALLER.md](CUSTOM_RECOVERY_INSTALLER.md)).
 - **Not for:** deciding whether a flash is allowed. Nothing in `catalog/` is read
   by `DeviceMatchGate`, `FlashSafety` or any typed confirmation. A listing is not
   permission to flash and does not stand in for an image sidecar manifest. No
-  setting changes that.
-- **Not a download source.** The catalog has no image files and no digests, only
-  each project's download page. Those open in the browser. A file the user then
-  downloads still needs its own `<image>.manifest.json` to pass the Flash Tools
-  check ([FLASH_TOOLS_PLAN.md](FLASH_TOOLS_PLAN.md)).
+  setting changes that. The installer still defaults to dry-run, shows SHA-256,
+  verifies a published checksum when one exists, backs up first, and needs typed
+  `FLASH RECOVERY`.
+- **Not a zip/image source.** The catalog has no image files and no digests, only
+  each project's download page. ROMs and root solutions stay browser links. A
+  TWRP / PitchBlack install looks up official files from the **probed** phone
+  (not from the catalog row's device list) and still has to pass the installer's
+  https host allow-list. OrangeFox, SHRP and RedWolf stay link-only. A file the
+  user downloads for Flash Tools still needs its own `<image>.manifest.json`
+  ([FLASH_TOOLS_PLAN.md](FLASH_TOOLS_PLAN.md)).
 
 ## Code
 
@@ -41,11 +49,18 @@ All shared logic is in `:core` (Apache-2.0), package `ai.rootforge.os.catalog`:
 | `BuildCatalogFetcher` | `https://` only, 15 s connect / 30 s read timeouts, a non-200 status is an error, 8 MiB cap (the published catalog is about 1.4 MB). |
 | `BuildCatalogStore(dir)` | Holds the last good catalog in app-private storage (`filesDir/build-catalog` on Android, `~/.rootforge/build-catalog` on desktop). Every write is parsed first and written via a temp file + rename, so a bad download, an HTML error page, `{}` or the wrong file never replaces a good catalog. A missing freshness feed still stores the catalog. A stored file that no longer parses loads as "no catalog". |
 | `CatalogEntry.safeDownloadUrl()` / `safeForumUrl()` | The link only if it starts with `https://`. The card uses these, and both apps' `openUrl` also refuse anything else. |
+| `CatalogRecoveryBridge.prefill(match)` | Maps a RECOVERY `BuildMatch` onto `CatalogRecoveryPrefill` (TWRP or PitchBlack, https page on the installer allow-list). ROMs, root solutions, OrangeFox, SHRP, RedWolf, `http://` and off-host pages return null. Official lookup uses `lookupNames(probed)` — the phone, not the catalog row. |
 
 Clients: `ui/screens/BuildCatalogCard.kt` (shared Compose UI), `AppActionsImpl`
 (Android) and `DesktopActions` (desktop). On Android, Import goes through the
 normal file picker into the library and the library copy is deleted afterwards;
 the catalog is kept separately so it never shows up in flash file lists.
+**Install with Custom Recovery** is shown only when `CatalogRecoveryBridge`
+returns a prefill; it switches to the Custom Recovery drawer screen with that
+project selected. The 2026-09-12 Custom RR catalog lists five recoveries
+(`twrp`, `orangefox`, `redwolf`, `pitchblack`, `shrp`); only TWRP (`twrp.me`)
+and PitchBlack (`pitchblack.tech`) map. `pitchblack.tech` was added to the
+installer allow-list for that reason (https only).
 
 **Matching rules.** The target's product and codename (lower-cased, `unknown`
 dropped, via `TargetIdentity.names()`) are compared exactly against each catalog
@@ -127,3 +142,5 @@ Apache-2.0. So:
 
 1. RootForge's own alias table for rows without model numbers (see Known gap).
 2. Show the card's catalog age more prominently, or warn when it is old.
+3. OrangeFox / SHRP / RedWolf stay link-only; they are not part of the Custom
+   Recovery writer (TWRP and PitchBlack only).

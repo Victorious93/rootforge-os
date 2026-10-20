@@ -29,8 +29,10 @@ data class RecoveryOffer(
 
 object RecoveryHosts {
     private val TWRP = setOf("dl.twrp.me", "eu.dl.twrp.me", "twrp.me")
+    // pitchblack.tech is the host Custom RR's published catalog uses (2026-09-12).
     private val PBRP = setOf(
         "pitchblackrecovery.com", "www.pitchblackrecovery.com",
+        "pitchblack.tech", "www.pitchblack.tech",
         "github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com",
         "sourceforge.net", "downloads.sourceforge.net",
     )
@@ -105,13 +107,21 @@ class RecoveryCatalogClient(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun lookup(codenames: List<String>): List<RecoveryOffer> {
+    fun lookup(codenames: List<String>, project: RecoveryProject? = null): List<RecoveryOffer> {
         val names = codenames.map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
         if (names.isEmpty()) return emptyList()
         val out = mutableListOf<RecoveryOffer>()
         val errors = mutableListOf<String>()
-        runCatching { out += lookupTwrp(names) }.onFailure { errors += "TWRP: ${it.message}" }
-        runCatching { out += lookupPitchBlack(names) }.onFailure { errors += "PitchBlack: ${it.message}" }
+        when (project) {
+            null -> {
+                runCatching { out += lookupTwrp(names) }.onFailure { errors += "TWRP: ${it.message}" }
+                runCatching { out += lookupPitchBlack(names) }.onFailure { errors += "PitchBlack: ${it.message}" }
+            }
+            RecoveryProject.TWRP ->
+                runCatching { out += lookupTwrp(names) }.onFailure { errors += "TWRP: ${it.message}" }
+            RecoveryProject.PITCHBLACK ->
+                runCatching { out += lookupPitchBlack(names) }.onFailure { errors += "PitchBlack: ${it.message}" }
+        }
         if (out.isEmpty() && errors.isNotEmpty()) throw IOException(errors.joinToString(" "))
         return out.distinctBy { it.downloadUrl }
     }

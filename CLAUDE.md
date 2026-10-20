@@ -11,6 +11,23 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (Custom RR → Custom Recovery):** branch `feat/custom-rr-install`.
+> Dashboard **Builds for this device** now has **Install with Custom Recovery** on
+> a matching Custom RR TWRP or PitchBlack RECOVERY row. That opens the Custom
+> Recovery screen pre-filled with that project (`CatalogRecoveryBridge`). Official
+> files are looked up from the **probed** phone, not the catalog row. Downloads
+> still pass the installer https host allow-list; `pitchblack.tech` /
+> `www.pitchblack.tech` were added because that is the host Custom RR publishes
+> for PitchBlack (2026-09-12 catalog). ROMs, root solutions, OrangeFox, SHRP and
+> RedWolf stay link-only. Dry-run stays the default; SHA-256 is shown; a
+> published checksum is verified when present; a write still needs typed
+> `FLASH RECOVERY`, backs up first, writes only `recovery` / `recovery_a` /
+> `recovery_b`, never `boot`/`vendor_boot`, never `dd`s a zip, never auto-reboots.
+> The catalog still does not feed `DeviceMatchGate`. `applicationId`, signing
+> and versioning unchanged. Tests this session: pending in this file until the
+> local suite is run. Docs: `docs/CUSTOM_RR_CATALOG.md`,
+> `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+
 > **Update 2026-10-20 (Custom Recovery installer):** branch `feat/recovery-installer`.
 > New drawer screen **Custom Recovery** (Android + desktop) installs official TWRP
 > (`twrp.me/search.json` + `dl.twrp.me/<codename>/`) and PitchBlack
@@ -214,17 +231,21 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-20 · **Branch:** `feat/recovery-installer`
+**Last updated:** 2026-10-20 · **Branch:** `feat/custom-rr-install`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), and Desktop mode via VictorSuite X11 (#76). Custom Recovery installer is this branch (not on `main` yet). The APK requests `INTERNET` for catalog Download and for Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite X11 (#76), and Custom Recovery installer (#77). This branch connects matching TWRP/PitchBlack catalog rows to that installer. The APK requests `INTERNET` for catalog Download and for Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Custom Recovery installer (this branch): `:core` `ai.rootforge.os.recovery` plus
+- Custom RR → Custom Recovery (this branch): matching TWRP/PitchBlack catalog
+  rows open Custom Recovery pre-filled; official lookup uses the probed phone;
+  `pitchblack.tech` added to the https host allow-list. ROMs and other recoveries
+  stay links. Local suite not yet recorded in this paragraph.
+- Custom Recovery installer (#77, on `main`): `:core` `ai.rootforge.os.recovery` plus
   Compose **Custom Recovery** screen. Dedicated recovery only; dry-run default;
   `FLASH RECOVERY`; no bundled images. After merging #75 and #76: `:core:test`
   248/0 (`recovery/` 41/0, `shizuku/` 26/0, `desktopmode/` 12/0);
