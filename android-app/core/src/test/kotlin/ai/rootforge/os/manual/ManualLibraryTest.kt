@@ -27,8 +27,9 @@ class ManualLibraryTest {
         assertTrue("remote-control default missing", "off by default" in text.lowercase())
         assertTrue("INTERNET reason missing", "INTERNET" in text)
         assertTrue("Shizuku missing", "Shizuku" in text)
-        assertTrue("coming-soon desktop mode missing", "coming in the next update" in text.lowercase() && "VictorSuite" in text)
-        assertTrue("coming-soon recovery installer missing", "PitchBlack" in text && "TWRP" in text)
+        assertTrue("Desktop mode pin missing", "Pin this VictorSuite" in text)
+        assertTrue("Desktop mode RUN_COMMAND missing", "RUN_COMMAND" in text && "VictorSuite" in text)
+        assertTrue("coming-soon recovery installer missing", "coming in the next update" in text.lowercase() && "PitchBlack" in text && "TWRP" in text)
         assertTrue("typed FLASH missing", "FLASH" in text)
         assertTrue("privacy: no analytics missing", "analytics" in text.lowercase())
     }

@@ -176,7 +176,7 @@ Screenshots below are Paparazzi renders with sample data. **They are not capture
 
 ![Dashboard](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_dashboard.png)
 
-The home screen. You see attached USB devices, the connected target, a short device info card, reboot shortcuts, your imported file library, and **Builds for this device**.
+The home screen. You see attached USB devices, the connected target, a short device info card, reboot shortcuts, your imported file library, **Builds for this device**, and (Android only) **Desktop mode**.
 
 **Connect a target**
 
@@ -198,6 +198,10 @@ This card lists community ROMs and recoveries whose catalog name matches the con
 1. Tap **Download** to fetch the catalog over https (this is the only reason the app asks for Internet). Or tap **Import file** and pick a `catalog.json` / `freshness.json` you already have.
 2. Open a download or forum link in the system browser if you want the file. RootForge does not download the ROM itself.
 3. **Remove** forgets the stored catalog. The last good copy is kept if a new download does not parse.
+
+**Desktop mode** (VictorSuite, Android only)
+
+See [Desktop mode via VictorSuite](#desktop-mode-via-victorsuite) below. The Linux/Windows desktop client hides this card.
 
 ### Ask
 
@@ -387,20 +391,52 @@ Planned behaviour, so you know what to expect:
 
 Until that update lands, use **Recovery** (fastboot) and the Root Guide pages for TWRP / PitchBlack.
 
-### Desktop mode via VictorSuite — coming in the next update
+### Desktop mode via VictorSuite
 
-A Dashboard **Desktop mode** card (open pull request #76, branch `feat/desktop-mode-x11`) will start a Linux desktop (XFCE) on the host phone through **VictorSuite**, then run RootForge's desktop UI inside that session.
+![Desktop mode](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_desktopMode.png)
 
-VictorSuite is a Termux-based companion. Its package id is `com.termux` (same as upstream Termux; the two cannot be installed together).
+On the Android host-phone app, Dashboard has a **Desktop mode** card (landed in #76 / `b8e7708`). It asks **VictorSuite** to start a Linux desktop (XFCE) on this phone, then run RootForge's own desktop UI and VS Code inside that session. The Linux/Windows desktop client hides the card — that process already *is* the desktop UI.
 
-Planned behaviour:
+This has **not** been run on a phone. Treat the buttons as untested on hardware. The full contract is [docs/DESKTOP_MODE.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DESKTOP_MODE.md).
 
-1. Install VictorSuite. Without it the card is only a hint and the app stays up.
-2. Tap **Pin this VictorSuite** (package + signing-certificate SHA-256, same idea as fleet pairing).
-3. Grant "Run commands in Termux environment" if Android asks, and set `allow-external-apps=true` in VictorSuite's `termux.properties`.
-4. **Set up environment**, then **Start desktop** / **Stop**. RootForge sends only `start`, `stop`, `setup` or `status` — never a free-form shell.
+**VictorSuite** is a Termux-based companion (<https://github.com/Victorious93/VictorSuite>). Its package id is **`com.termux`** (the same as upstream Termux; the two cannot be installed together). They do **not** share a signing key. Identity is package name plus certificate hash, the same rule as fleet pairing, in the opposite direction (RootForge is the caller).
 
-This has **not** been run on a phone. The dedicated VictorSuite Desktop-mode action is specified but not in VictorSuite yet; the fallback is Termux `RUN_COMMAND`.
+**What the card shows**
+
+| VictorSuite | What you see |
+|---|---|
+| Not installed | A hint. The app stays up. |
+| Installed, but no `RUN_COMMAND` and no Desktop-mode action | "Not supported yet", with a pointer at `docs/DESKTOP_MODE.md` |
+| Installed | You must **pin** it the first time, and again if the certificate changes |
+| Pinned | **Start desktop**, **Set up environment**, **Status**, **Stop** |
+
+**Steps**
+
+1. Install VictorSuite. Uninstall upstream Termux first if it is present. Without VictorSuite the card is only a hint.
+2. Open RootForge → Dashboard. The card should name `com.termux`.
+3. Tap **Pin this VictorSuite**. RootForge stores that package plus its signing-certificate SHA-256.
+4. Grant "Run commands in Termux environment" if Android asks.
+5. In VictorSuite, set `allow-external-apps=true` in `~/.termux/termux.properties`, and start its X11 path (internal or Termux:X11).
+6. Install a RootForge Debian rootfs (PRoot or chroot). Inside it run `setup_desktop_mode.sh`, or tap **Set up environment**.
+7. Tap **Start desktop**. VictorSuite should open a session running `rootforge-desktop-mode start`. XFCE appears on the X11 view; VS Code and RootForge's desktop UI start only if those binaries were installed.
+8. **Status** asks for the current session. **Stop** ends it. Clear app data to revoke the pin, or re-pin after a VictorSuite rebuild with a new certificate.
+
+RootForge sends only `start`, `stop`, `setup` or `status` as `rootforge-desktop-mode <op>`. The UI never splices typed text into that command.
+
+**How the apps talk**
+
+Today the only live path is Termux `RUN_COMMAND` (permission `com.termux.permission.RUN_COMMAND`). A narrower dedicated action (`ai.victorsuite.action.DESKTOP_MODE`, permission `ai.victorsuite.permission.DESKTOP_MODE`) is specified in `docs/DESKTOP_MODE.md` but is **not** in VictorSuite yet. Until it exists, the card says it is using `RUN_COMMAND`.
+
+**Honest limits**
+
+- Not run on a phone.
+- VictorSuite does not implement the dedicated action yet.
+- `RUN_COMMAND` still needs `allow-external-apps` and a granted permission.
+- RootForge's Compose desktop UI inside the rootfs needs a Linux aarch64 `:desktop` build copied to `/opt/rootforge-os` or `$HOME/rootforge/desktop`. This repo does not fetch one.
+- `code-oss` is often absent from stock Debian apt. code-server is installed only when both a URL and a SHA-256 pin are set.
+- VNC fallback listens on localhost. How you view it on the phone is not implemented here.
+
+Scripts in this repository (`setup_desktop_mode.sh`, `rootforge_desktop_mode.sh`, `termux/desktop-mode-entry.sh`) run **inside** the Debian rootfs that VictorSuite hosts.
 
 ### Logs / Terminal
 
@@ -474,6 +510,8 @@ Read from the app's `AndroidManifest.xml`. Android may also show a USB-access pr
 | **Notifications** (`POST_NOTIFICATIONS`) | Only to tell you a controller is waiting for pairing, or that a remote command needs approval, and only when the app is not on screen. Android 13+ asks once at first launch |
 | **Internet** (`INTERNET`) | **Only** the Dashboard **Download** button on "Builds for this device": two https reads of the Custom RR catalog. Device work never uses the network. Import file is offline |
 | **Shizuku API** (`moe.shizuku.manager.permission.API_V23`) | Optional. Requested through Shizuku's own dialog, not the usual Android permission screen. Lets read-only lookups run when you have granted Shizuku |
+| **Run commands in Termux** (`com.termux.permission.RUN_COMMAND`) | Desktop mode: after you pin VictorSuite, Start / Set up / Status / Stop send one documented `rootforge-desktop-mode` command. Android may ask once |
+| **Desktop mode** (`ai.victorsuite.permission.DESKTOP_MODE`) | Declared for the dedicated VictorSuite action. VictorSuite does not define this permission yet, so Android will not prompt for it today |
 | **USB device access** (runtime prompt) | Android asks each time a new USB target appears until you allow this app to use that device |
 | **Install unknown apps** | Only if you open the APK on the phone itself to install RootForge. Not requested by the app |
 
@@ -481,13 +519,13 @@ The app also *looks up* (does not request permission for) these other packages, 
 
 - `ai.droidcommand.app` and `ai.droidcommand.app.debug` — so pairing can read the controller's signing certificate
 - `moe.shizuku.privileged.api` and `rikka.sui` — so Settings can tell whether Shizuku or Sui is installed
+- `com.termux`, `ai.victorsuite.app` and `ai.victorsuite.app.debug` — so Desktop mode can see VictorSuite and read its signing certificate
+- The `com.termux.RUN_COMMAND` and `ai.victorsuite.action.DESKTOP_MODE` actions — so the card can tell which transport exists
 - Any app with a launcher icon — so Settings can find the terminal app you named
 
 The **Messenger bridge service** is exported on purpose (`ai.rootforge.os.action.BRIDGE`). Binding grants **nothing**. Pairing plus the off-by-default switch are the gates.
 
 Backup of app data is **off** (`allowBackup="false"`) so the ADB key is not copied by Android backup.
-
-Coming in the next update (#76): a `com.termux.permission.RUN_COMMAND` request so Desktop mode can ask VictorSuite to start or stop the Linux session. Not in the current release.
 
 ---
 
@@ -584,11 +622,13 @@ The sidecar / device-match check runs before a flash and again after you confirm
 
 **Desktop cannot see the phone.** Install platform-tools, udev/`plugdev` on Linux, Google USB drivers on Windows. WSL2 USB is unverified.
 
-**Will Desktop mode or the TWRP installer work today?** Not on the current main app. They are coming in the next update (PRs #76 and #77). This Help screen already describes them so the steps are here when they land.
+**Desktop mode does nothing.** The card is in the current app (Dashboard, Android only). It has **not** been run on a phone. Install VictorSuite (`com.termux`), pin it, grant `RUN_COMMAND`, set `allow-external-apps=true`, and install the rootfs wrapper. The dedicated Desktop-mode action is not in VictorSuite yet; `RUN_COMMAND` is the only live path. Missing VictorSuite is a hint, not a crash. See [docs/DESKTOP_MODE.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DESKTOP_MODE.md).
+
+**Will the TWRP / PitchBlack installer work today?** Not on the current main app. It is coming in the next update (PR #77, branch `feat/recovery-installer`). Use **Recovery** (fastboot) until then.
 
 **Is anything signed for release?** Only debug APKs. The v0.2.0 asset is debug. ISO and Termux rootfs were not attached to that release.
 
-**Where is a more technical write-up?** [docs/ANDROID_APP.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/ANDROID_APP.md), [docs/DROIDCOMMAND_INTEGRATION.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DROIDCOMMAND_INTEGRATION.md), [docs/SECURITY_MODEL.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/SECURITY_MODEL.md), [docs/FLASH_TOOLS_PLAN.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/FLASH_TOOLS_PLAN.md).
+**Where is a more technical write-up?** [docs/ANDROID_APP.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/ANDROID_APP.md), [docs/DESKTOP_MODE.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DESKTOP_MODE.md), [docs/DROIDCOMMAND_INTEGRATION.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DROIDCOMMAND_INTEGRATION.md), [docs/SECURITY_MODEL.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/SECURITY_MODEL.md), [docs/FLASH_TOOLS_PLAN.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/FLASH_TOOLS_PLAN.md).
 
 ---
 
@@ -601,6 +641,7 @@ RootForge does **not** ship analytics, crash reporters or advertising SDKs.
 | Data | Where | Notes |
 |---|---|---|
 | Settings (node id, switches, terminal package) | App preferences | Node id is random, generated once |
+| VictorSuite pin | App preferences (`victorsuite_pin`) | Package + certificate hash. Cleared with app data |
 | Paired controllers | App preferences | Package + certificate hash |
 | Pending pairing list | Memory only | Lost if the app process dies |
 | ADB host key | Private no-backup folder | Not included in Android backup |
@@ -630,4 +671,4 @@ No accounts. No cloud. No phone-home. Uninstalling the app (or the one-time v0.2
 
 ---
 
-*This manual matches the code on the `docs/manual` branch. Desktop mode and the rooted TWRP / PitchBlack installer are marked coming next because they are still open pull requests. If a line here disagrees with the running app, the app is right — please file an issue.*
+*This manual matches the code on the `docs/manual` branch, including Desktop mode from #76 (`b8e7708`). The rooted TWRP / PitchBlack installer is marked coming next because PR #77 is still open. If a line here disagrees with the running app, the app is right — please file an issue.*

@@ -62,8 +62,12 @@ class ManualDocTests(unittest.TestCase):
         self.assertIn("INTERNET", text)
         self.assertIn("moe.shizuku.manager.permission.API_V23", text)
         self.assertIn("coming in the next update", text.lower())
-        self.assertIn("feat/desktop-mode-x11", text)
         self.assertIn("feat/recovery-installer", text)
+        self.assertIn("Pin this VictorSuite", text)
+        self.assertIn("rootforge-desktop-mode", text)
+        self.assertIn("com.termux.permission.RUN_COMMAND", text)
+        self.assertIn("docs/DESKTOP_MODE.md", text)
+        self.assertNotIn("feat/desktop-mode-x11", text)
         self.assertIn("images/manual/header.png", text)
         self.assertNotIn("applicationIdSuffix", text)
 
@@ -91,6 +95,8 @@ class ManualDocTests(unittest.TestCase):
         manifest = MANIFEST.read_text(encoding="utf-8")
         self.assertIn("android.permission.INTERNET", manifest)
         self.assertIn("android.permission.POST_NOTIFICATIONS", manifest)
+        self.assertIn("com.termux.permission.RUN_COMMAND", manifest)
+        self.assertIn("ai.victorsuite.permission.DESKTOP_MODE", manifest)
 
 
 if __name__ == "__main__":
