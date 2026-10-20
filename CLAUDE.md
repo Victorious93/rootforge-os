@@ -11,18 +11,25 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-20 (how-to manual + in-app Help):** branch `docs/manual`.
-> Added `docs/MANUAL.md` (plain-language how-to: what it is / EXTERNAL_NODE
-> fleet role, install and v0.2.0 debug-key uninstall, every screen, every
-> manifest permission, fleet pairing + default-off switch, troubleshooting,
-> privacy). Header art: emblem + neon cyan-to-magenta ring
+> **Update 2026-10-20 (how-to manual + in-app Help):** branch `docs/manual`
+> (PR #78). Added `docs/MANUAL.md` (plain-language how-to: what it is /
+> EXTERNAL_NODE fleet role, install and v0.2.0 debug-key uninstall, every
+> screen, every manifest permission, fleet pairing + default-off switch,
+> troubleshooting, privacy). Header art: emblem + neon cyan-to-magenta ring
 > (`docs/images/manual/header.png`; `android-app/tools/generate_manual_header.py`).
 > Same markdown is bundled at `ai/rootforge/os/manual/MANUAL.md` and rendered
 > by a **Help** drawer screen (also Settings → Open the manual) with a GitHub
-> link. After merging `origin/main` (`b8e7708`, Desktop mode #76), the manual
-> describes Desktop mode as landed. The rooted TWRP/PitchBlack installer
-> (PR #77) is still marked coming in the next update. `applicationId`,
-> signing and versioning unchanged.
+> link. Merged `origin/main` (`b8e7708`, Desktop mode #76): the manual and
+> Help now document the Dashboard card, pin, `RUN_COMMAND` / dedicated
+> action, permissions and limits from `docs/DESKTOP_MODE.md`. The rooted
+> TWRP/PitchBlack installer (PR #77, still open) stays coming next.
+> `applicationId`, signing and versioning unchanged (`aapt dump badging`:
+> `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`;
+> APK lists `RUN_COMMAND` and `DESKTOP_MODE`). Verified on this head:
+> `:core:test` 210/0 (`ManualLibraryTest` 4, `DesktopModeTest` 12);
+> `:desktop:test` 2/0; `:app:testDebugUnitTest` 30/0; `:app:assembleDebug`;
+> `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean
+> (shellcheck 0.11.0). **Not run:** a phone, the desktop window.
 
 > **Update 2026-10-20 (Desktop mode):** branch `feat/desktop-mode-x11` (PR #76,
 > on `main` as `b8e7708`). Android Dashboard card talks to VictorSuite
@@ -203,14 +210,17 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66; the APK now requests `INTERNET` for its Download button only), and Shizuku/Sui (#75). None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66; the APK now requests `INTERNET` for its Download button only), Shizuku/Sui (#75), and Desktop mode via VictorSuite (#76 / `b8e7708`). None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
 - How-to manual: `docs/MANUAL.md` plus in-app **Help** (bundled markdown,
-  `ManualLibrary` / `ManualScreen`). Desktop mode is documented as landed
-  (#76 / `b8e7708`). The rooted recovery installer is still coming next (#77).
+  `ManualLibrary` / `ManualScreen`). After merging `origin/main` (`b8e7708`)
+  into `docs/manual`, Desktop mode is documented as landed (#76). The rooted
+  recovery installer is still coming next (#77, still open). This-head suite:
+  `:core:test` 210/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 30/0,
+  `:app:assembleDebug`, `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean.
 - Desktop mode: Android Dashboard card for VictorSuite (`com.termux`). Pin by package+cert, then
   RUN_COMMAND with a fixed `rootforge-desktop-mode` command, or a dedicated action VictorSuite
   does not export yet (`docs/DESKTOP_MODE.md`). Missing companion is a hint. Not run on a phone.
@@ -294,7 +304,8 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   release; the Python CLI can run from a git clone.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`. Flash Tools: `docs/FLASH_TOOLS_PLAN.md`.
-  Custom RR catalog: `docs/CUSTOM_RR_CATALOG.md`.
+  Custom RR catalog: `docs/CUSTOM_RR_CATALOG.md`. Desktop mode: `docs/DESKTOP_MODE.md`.
+  How-to: `docs/MANUAL.md`.
 
 **Incident worth remembering:** merge `b02e7c4` silently reverted six build hooks to a flavour
 that defined SHA-256 pins and never compared them (one also used an undefined variable),
@@ -313,7 +324,7 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-The Root Guide, terminal hand-off, Kitsune, module work and the Custom RR build catalog are on `main` (see Updates 2026-10-19). The APK requests `INTERNET` for the catalog Download button only. ISO Stage 5 is still blocked
+The Root Guide, terminal hand-off, Kitsune, module work, the Custom RR build catalog, Shizuku/Sui (#75) and Desktop mode (#76) are on `main`. The APK requests `INTERNET` for the catalog Download button only, plus `RUN_COMMAND` / `DESKTOP_MODE` for the Dashboard Desktop-mode card. PR #77 (rooted TWRP/PitchBlack installer) is still open. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 
