@@ -20,13 +20,13 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `shizuku.pmGrant`) go through `ApprovalCenter` and never auto-approve. Legacy
 > snake_case `rootforge.*` envelope unchanged (`BridgeIngress`). Docs:
 > `docs/MANUAL.md` Fleet integration. `applicationId` / signing / versioning
-> unchanged. Verified before merging `main` (#77): `:core:test` **250/0**
-> (`FleetEnvelopeTest` 12, `ReplayGuardTest` 8, `FleetAuthTest` 7,
+> unchanged. After merging `origin/main` (#77 Custom Recovery): `:core:test`
+> **292/0** (`FleetEnvelopeTest` 12, `ReplayGuardTest` 8, `FleetAuthTest` 7,
 > `FleetCapabilitiesTest` 2, `FleetExecutorTest` 15), `:desktop:test` 2/0,
-> `:app:testDebugUnitTest` 29/0, `:app:assembleDebug` (`aapt`:
+> `:app:testDebugUnitTest` 30/0, `:app:assembleDebug` (`aapt`:
 > `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`);
 > `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean (shellcheck
-> 0.11.0 via the repo wheel). **Not run on a phone.** Re-run after merging #77.
+> 0.11.0 via the repo wheel). **Not run on a phone.**
 
 > **Update 2026-10-20 (Custom Recovery installer):** branch `feat/recovery-installer`
 > (PR #77, on `main` as `fabc649`). New drawer screen **Custom Recovery**
@@ -237,7 +237,7 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   nonce replay/expiry, package+cert pairing, default-off external control, and
   `ApprovalCenter` for destructive remote actions (including Custom Recovery writes).
   Legacy `rootforge.*` envelope still accepted. Documented in `docs/MANUAL.md`.
-  `:core:test` 250/0 this session before merging #77 (44 new fleet tests). Not run
+  `:core:test` 292/0 after merging #77 (44 fleet tests among them). Not run
   on a phone.
 - Custom Recovery installer (PR #77, on `main`): `:core` `ai.rootforge.os.recovery`
   plus Compose **Custom Recovery** screen. Dedicated recovery only; dry-run default;
