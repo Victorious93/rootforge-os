@@ -578,7 +578,7 @@ Desktop / Docker reuse the same JSON on `POST /v1/bridge` (loopback bearer token
 
 | Field | Rule |
 |---|---|
-| `op` | `capabilities.get` \| `remote.command` \| `macro.step` \| `macro.run` |
+| `op` | `capabilities.get` \| `remote.command` \| `macro.step` \| `macro.run` \| `config.export` \| `config.import` |
 | `requestId` | Echoed on the reply |
 | `targetNodeRef` | This install's node id (Settings). Mismatch → `not_found` |
 | `actionRef` | Required for `remote.command` and `macro.step` |
@@ -613,7 +613,7 @@ A request is `expired` when `now > timestampMs + ttlMs` **or** `|now - timestamp
 
 Returns `protocolMajor`, `protocolMinor`, `fleetClass: external_node`, node identity, then:
 
-- `ops[]` — the four envelope ops
+- `ops[]` — envelope ops (`capabilities.get`, `remote.command`, `macro.step`, `macro.run`, plus `config.export` / `config.import`)
 - `actions[]` — `remote.command` action refs that are remotely allowed
 
 Each entry is `{name, kind, remoteAllowed, requiresConfirm}` where `kind` is `read` \| `action` \| `destructive`.
@@ -638,6 +638,17 @@ Only actions that already exist on this node:
 | `shizuku.pmGrant` | destructive | typed `GRANT PERMISSION` |
 
 `shizuku.exec` exists on the host but is **not** remotely allowed (`capability_off`). EDL, recovery writes (including Custom Recovery `su`/`dd` / `FLASH RECOVERY`), sideload, `fastboot oem` / erase / boot-once, APK install and push/pull are **not** fleet actions; naming them returns `confirmation_required` and nothing is written. A remote `trigger` never auto-approves a destructive op.
+
+### `config.export` / `config.import`
+
+Standalone protocol 1.1 ops (not `remote.command` action refs). Advertised as:
+
+| `op` | kind | `remoteAllowed` | `requiresConfirm` |
+|---|---|---|---|
+| `config.export` | action | **false** | false |
+| `config.import` | action | **false** | **true** |
+
+A remote caller (any other app on the Messenger / fleet path, after the usual package+certificate pairing) is refused (`capability_off`). Local Settings can still export and import. The payload is this node's UNIFIED_BACKUP entry (`schemaVersion` 1, `wrapping=none` + `clearPayload` in local-dev / tests). Export is **non-secret preferences only**: `autoConnect` and `terminalApp`. It never includes Magisk / KernelSU / APatch tokens, root passwords, signing material, pairing keys, the controller allow-list, the VictorSuite pin, or the desktop API token. Import accepts `dryRun` (envelope or params) and `conflictPolicy` `skip` (default) \| `overwrite` \| `merge-by-id`. A real import needs on-device confirm through `ApprovalCenter` and **never** turns on `remote.command` / Allow external controllers (the switch stays as-is). Unknown bundle/payload versions or keys, and oversized payloads, are `invalid_parameters`.
 
 The legacy snake_case envelope (`protocol_major: 1`, `operation: rootforge.*`) still lists the same USB actions (without the Shizuku names). Unknown legacy ops return `unknown_operation`. Images named in a flash request are **library file names**, not paths.
 
@@ -707,7 +718,7 @@ This path has **not** been run on a phone in this repository.
 - Executor: `FleetExecutor.kt`, `RemoteActionCatalog.kt`
 - Ingress (fleet vs legacy): `BridgeIngress.kt`
 - Messenger: `android-app/app/.../bridge/RootForgeBridgeService.kt`
-- Tests: `FleetEnvelopeTest`, `ReplayGuardTest`, `FleetAuthTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`
+- Tests: `FleetEnvelopeTest`, `ReplayGuardTest`, `FleetAuthTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`, `ConfigBackupTest`
 
 ---
 
@@ -779,7 +790,7 @@ Shizuku lookup output is shown on the Settings card only and is **not** written 
 
 ### What the controller can see
 
-A paired controller with the switch on can list USB targets and read the connected target's properties, run an approved shell command, and request flashes of **library** images. It cannot read your desktop API token, your ADB private key, or files outside the library name list.
+A paired controller with the switch on can list USB targets and read the connected target's properties, run an approved shell command, and request flashes of **library** images. It cannot read your desktop API token, your ADB private key, or files outside the library name list. `config.export` / `config.import` are advertised but **not** remotely allowed.
 
 ### What we do not collect
 

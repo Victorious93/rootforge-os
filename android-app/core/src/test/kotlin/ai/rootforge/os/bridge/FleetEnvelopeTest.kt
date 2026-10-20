@@ -113,6 +113,25 @@ class FleetEnvelopeTest {
     }
 
     @Test
+    fun configOpsParseAsStandaloneEnvelopeOps() {
+        val export = parseFleetRequest(fleetJson(op = FleetOp.CONFIG_EXPORT, nonce = nonce(20)))
+        assertTrue(export is FleetParseResult.Ok)
+        assertEquals(FleetOp.CONFIG_EXPORT, (export as FleetParseResult.Ok).request.op)
+
+        val importOp = parseFleetRequest(
+            fleetJson(
+                op = FleetOp.CONFIG_IMPORT,
+                nonce = nonce(21),
+                extra = buildJsonObject { put("dryRun", JsonPrimitive(true)) },
+                params = buildJsonObject { put("conflictPolicy", JsonPrimitive("overwrite")) },
+            ),
+        )
+        assertTrue(importOp is FleetParseResult.Ok)
+        assertTrue((importOp as FleetParseResult.Ok).request.dryRun)
+        assertEquals("overwrite", importOp.request.params.getValue("conflictPolicy").let { (it as JsonPrimitive).content })
+    }
+
+    @Test
     fun unknownOpIsUnsupported() {
         val err = parseFleetRequest(fleetJson(op = "root.secret", nonce = nonce(9))) as FleetParseResult.Err
         assertEquals(FleetError.UNSUPPORTED_OP, err.code)

@@ -9,8 +9,13 @@ object FleetOp {
     const val REMOTE_COMMAND = "remote.command"
     const val MACRO_STEP = "macro.step"
     const val MACRO_RUN = "macro.run"
+    const val CONFIG_EXPORT = "config.export"
+    const val CONFIG_IMPORT = "config.import"
 
-    val ALL: Set<String> = setOf(CAPABILITIES, REMOTE_COMMAND, MACRO_STEP, MACRO_RUN)
+    val ALL: Set<String> = setOf(
+        CAPABILITIES, REMOTE_COMMAND, MACRO_STEP, MACRO_RUN,
+        CONFIG_EXPORT, CONFIG_IMPORT,
+    )
 }
 
 /**

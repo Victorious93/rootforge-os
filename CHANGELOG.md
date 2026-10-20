@@ -7,6 +7,11 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Fleet config.export / config.import (2026-10-20)
+- Protocol 1.1 standalone Bridge ops `config.export` and `config.import` on the frozen EXTERNAL_NODE envelope (droidcommand-AI `docs/specs/UNIFIED_BACKUP.md` / DCA #236). Advertised in `capabilities.get` as `config.export` `{kind:action, remoteAllowed:false, requiresConfirm:false}` and `config.import` `{kind:action, remoteAllowed:false, requiresConfirm:true}`. Same package+certificate pairing as the other 1.1 ops; a remote caller is `capability_off` for both.
+- Export is non-secret preferences only (`autoConnect`, `terminalApp`). Magisk / KernelSU / APatch tokens, root passwords, signing material, pairing keys / allow-list secrets, the VictorSuite pin and the desktop API token are never included. Import accepts `dryRun` and `conflictPolicy` `skip` \| `overwrite` \| `merge-by-id`, needs on-device `ApprovalCenter` confirm, never turns on `remote.command` / external control, and rejects unknown or oversized payloads. `applicationId`, signing and versioning unchanged.
+- Tests: `ConfigBackupTest` (secret-exclusion, dry-run, each conflict mode, confirm required, remote.command never enabled, schema/size rejects); `FleetCapabilitiesTest` flags; `FleetExecutorTest` remote-caller refuse. Docs: `docs/MANUAL.md` / in-app Help.
+
 ### Custom RR catalog → Custom Recovery (2026-10-20)
 - Dashboard **Builds for this device**: a matching Custom RR **RECOVERY** row for TWRP or PitchBlack now has **Install with Custom Recovery**, which opens the Custom Recovery screen aimed at that project. Official files are looked up from the **probed** phone, not from the catalog row's device list. Downloads still have to pass the installer https host allow-list; `pitchblack.tech` (the host Custom RR publishes for PitchBlack) was added. SHA-256 is shown; a published MD5/SHA-256 is checked when present. Dry-run stays the default. A write still needs typed `FLASH RECOVERY`, backs up first, writes only `recovery` / `recovery_a` / `recovery_b`, never `dd`s a zip, and never reboots by itself.
 - ROMs, root solutions, OrangeFox, SHRP and RedWolf stay link-only. The catalog still does not feed `DeviceMatchGate`. `applicationId`, signing and versioning unchanged.

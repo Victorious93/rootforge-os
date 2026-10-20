@@ -1,5 +1,8 @@
 package ai.rootforge.os.bridge
 
+import ai.rootforge.os.config.ConfigBackup
+import ai.rootforge.os.config.ConfigPreferenceId
+import ai.rootforge.os.config.MemoryNodeConfigStore
 import ai.rootforge.os.core.ApprovalCenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -353,5 +356,38 @@ class FleetExecutorTest {
             ),
         )
         assertEquals(FleetError.INVALID_PARAMETERS, r.error?.code)
+    }
+
+    @Test
+    fun remoteCallerIsRefusedForConfigExportAndImport() = runTest {
+        val store = MemoryNodeConfigStore().also {
+            it.setPreference(ConfigPreferenceId.AUTO_CONNECT, "true")
+            it.setPreference(ConfigPreferenceId.TERMINAL_APP, "com.termux")
+        }
+        val config = ConfigBackup(store, ApprovalCenter())
+        val export = parseFleet(
+            fleetExec(configBackup = config).handle(
+                fleetJson(op = FleetOp.CONFIG_EXPORT, nonce = nonce(16)),
+                CALLER,
+            ),
+        )
+        assertEquals(FleetError.CAPABILITY_OFF, export.error?.code)
+        assertEquals("true", store.getPreference(ConfigPreferenceId.AUTO_CONNECT))
+
+        val importOp = parseFleet(
+            fleetExec(configBackup = config).handle(
+                fleetJson(
+                    op = FleetOp.CONFIG_IMPORT,
+                    nonce = nonce(17),
+                    extra = buildJsonObject { put("dryRun", JsonPrimitive(true)) },
+                    params = buildJsonObject { put("bundle", JsonPrimitive("{}")) },
+                ),
+                CALLER,
+            ),
+        )
+        assertEquals(FleetError.CAPABILITY_OFF, importOp.error?.code)
+        assertEquals("true", store.getPreference(ConfigPreferenceId.AUTO_CONNECT))
+        assertEquals("com.termux", store.getPreference(ConfigPreferenceId.TERMINAL_APP))
+        assertFalse(store.externalControlEnabled)
     }
 }

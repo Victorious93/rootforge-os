@@ -11,6 +11,25 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (fleet config.export / config.import):** branch
+> `feat/config-backup`. Protocol 1.1 standalone Bridge ops `config.export` and
+> `config.import` (droidcommand-AI `UNIFIED_BACKUP.md` / DCA #236) on the
+> frozen EXTERNAL_NODE envelope. Advertised in `capabilities.get`:
+> `config.export` `{kind:action, remoteAllowed:false, requiresConfirm:false}`;
+> `config.import` `{kind:action, remoteAllowed:false, requiresConfirm:true}`.
+> Same package+cert pairing; a remote caller is `capability_off` for both.
+> Export is non-secret preferences only (`autoConnect`, `terminalApp`); never
+> Magisk/KernelSU/APatch tokens, root passwords, signing material, pairing
+> keys/allow-list secrets, VictorSuite pin, desktop API token. Import:
+> `dryRun`, `conflictPolicy` skip|overwrite|merge-by-id, on-device
+> `ApprovalCenter` confirm, never enables `remote.command` / external control
+> (stays as-is). Unknown/oversized payloads rejected. `applicationId`,
+> signing and versioning unchanged. Local implementation is `:core`
+> `ai.rootforge.os.config`. Docs: `docs/MANUAL.md` / Help (`cmp` identical).
+> **Tests recorded after the local suite on this branch.** **Not run on a
+> phone.** Another agent may touch the capability registry on
+> `feat/node-status-get`; merge `origin/main` before finishing.
+
 > **Update 2026-10-20 (Custom RR → Custom Recovery):** branch `feat/custom-rr-install`.
 > Dashboard **Builds for this device** now has **Install with Custom Recovery** on
 > a matching Custom RR TWRP or PitchBlack RECOVERY row. That opens the Custom
@@ -262,18 +281,22 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-20 · **Branch:** `feat/custom-rr-install`
+**Last updated:** 2026-10-20 · **Branch:** `feat/config-backup`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to + in-app Help (#78 / `44716de`), and fleet protocol 1.1 (#79 / `988a941`). This branch connects matching TWRP/PitchBlack catalog rows to that installer and documents the action in Help. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), and Custom RR → Custom Recovery (#80 / `ef088d3`). This branch adds fleet `config.export` / `config.import`. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Custom RR → Custom Recovery (this branch, after merging #78 `44716de` and
-  #79 `988a941`): matching TWRP/PitchBlack catalog rows open Custom Recovery
+- Fleet config backup (this branch): `config.export` / `config.import` advertised
+  with `remoteAllowed=false`; remote callers `capability_off`; export omits
+  secrets; import dry-run / skip / overwrite / merge-by-id; confirm required;
+  never enables `remote.command`. Documented in `docs/MANUAL.md` / Help.
+  **Suite results filled in after the local run.** **Not run on a phone.**
+- Custom RR → Custom Recovery (on `main` as #80 / `ef088d3`): matching TWRP/PitchBlack catalog rows open Custom Recovery
   pre-filled; official lookup uses the probed phone; `pitchblack.tech` added
   to the https host allow-list. ROMs and other recoveries stay links.
   Documented in `docs/MANUAL.md` / Help. `:core:test` 304/0; `:desktop:test`

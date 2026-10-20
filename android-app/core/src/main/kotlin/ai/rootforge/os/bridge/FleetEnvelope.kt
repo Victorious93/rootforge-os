@@ -105,6 +105,7 @@ private class FleetParser(private val root: JsonObject) {
                 if (macroId.isNullOrBlank()) fail(FleetError.INVALID_PARAMETERS, "missing field 'macroId'")
                 if (root["steps"] == null) fail(FleetError.INVALID_PARAMETERS, "missing field 'steps'")
             }
+            FleetOp.CONFIG_EXPORT, FleetOp.CONFIG_IMPORT -> Unit
             else -> fail(FleetError.UNSUPPORTED_OP, "no such op '$op'")
         }
 

@@ -13,7 +13,8 @@ import kotlinx.serialization.json.JsonObject
  * transport, not a different protocol. See docs/DROIDCOMMAND_INTEGRATION.md.
  *
  * Minor 1 adds the fleet remote-control envelope (`op` / `requestId` / nonce)
- * documented in `docs/MANUAL.md` (Fleet integration). Major 1 snake_case
+ * documented in `docs/MANUAL.md` (Fleet integration), including
+ * `config.export` / `config.import` (UNIFIED_BACKUP). Major 1 snake_case
  * requests (`operation`, `rootforge.*`) stay valid.
  */
 const val BRIDGE_PROTOCOL_MAJOR = 1
