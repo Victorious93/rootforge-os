@@ -9,7 +9,8 @@ PBRP is built per device. Official support is a per-device list, and many builds
 ## Where to get it
 
 - The project's site is `pitchblackrecovery.com` (named as its homepage in the project's repository readme). It could not be reached from the sandbox this page was written in, so open it yourself and confirm it is the official site and that your device is listed.
-- The Recovery screen in RootForge has a **PitchBlack (PBRP)** button that opens it in your browser. The app does not download or bundle a recovery; its only network use is the build-catalog Download button.
+- The Recovery screen in RootForge has a **PitchBlack (PBRP)** button that opens it in your browser.
+- **Custom Recovery** can look up and download an official PBRP build for the detected codename (pitchblackrecovery.com and the project's GitHub releases) when you tap Look up / Download. Images are not bundled in the APK. Writes use `su` on a rooted phone, default to dry-run, and need a typed `FLASH RECOVERY`. See `docs/CUSTOM_RECOVERY_INSTALLER.md`.
 
 ## Using it with RootForge OS
 

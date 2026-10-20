@@ -7,6 +7,13 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Custom Recovery installer for rooted phones (2026-10-20)
+- New drawer screen **Custom Recovery** on Android and desktop. It lists official TWRP (`twrp.me` search.json + `dl.twrp.me/<codename>/`) and PitchBlack Recovery (`pitchblackrecovery.com`, GitHub releases, SourceForge) for `ro.product.device` / `ro.build.product`, and accepts a local `.img`/`.zip`. Images are not bundled.
+- Detects root (`su -c id`), A/B vs A-only, and whether a dedicated `recovery` / `recovery_a` / `recovery_b` exists. Recovery-in-boot / vendor_boot devices get the installer-zip and “Boot once” paths only; `boot` is never written.
+- Writes via `su` + `dd` (this phone on Android, USB ADB target on Android and desktop). Dry-run is the default. A real write uses `ApprovalCenter` with typed `FLASH RECOVERY`, backs up the current partition into the library first, and never reboots by itself.
+- Verifies TWRP `.md5` when present; SHA-256 is always shown. https only, official hosts only. `applicationId`, signing and versioning unchanged.
+- Tests: new `:core` `recovery/` unit tests (layout, commands, plan, catalog, installer). **Not run on a phone.** Doc: `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+
 ### Android launcher icon from the repo logo (2026-10-19)
 - The host-phone APK launcher icon is now the RootForge emblem (fist + anvil + rings, no wordmark) cropped from `assets/logo/rootforge-os-logo.jpg`. Adaptive icon: foreground scaled into the 66% (72/108 dp) safe zone, background `#0C1D36` sampled from the logo field, monochrome stencil for Android 13+ themed icons. Legacy `ic_launcher` / `ic_launcher_round` PNGs at mdpi–xxxhdpi. Regenerator: `android-app/tools/generate_launcher_icons.py`. Signing, `applicationId` and versioning were not changed (`aapt dump badging`: `ai.rootforge.os.debug`, `0.1.0-debug`). Tests: `tests/test_launcher_icons.py` 7/0; `:core:test` 168/0; `:app:testDebugUnitTest` 28/0; `:app:assembleDebug`; `bash tests/run-tests.sh` 1023/0; `bash tests/lint.sh` clean (shellcheck 0.11.0). **Not run on a phone.**
 

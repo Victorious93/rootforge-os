@@ -102,6 +102,12 @@ fun PreviewModules() {
     RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Modules) }
 }
 
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Custom Recovery")
+@Composable
+fun PreviewCustomRecovery() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.CustomRecovery) }
+}
+
 @Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Settings")
 @Composable
 fun PreviewSettings() {

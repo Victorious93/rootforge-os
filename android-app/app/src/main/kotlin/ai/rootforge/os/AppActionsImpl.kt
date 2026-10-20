@@ -8,8 +8,16 @@ import ai.rootforge.os.core.TerminalApp
 import ai.rootforge.os.core.importUri
 import ai.rootforge.os.core.TerminalCommand
 import ai.rootforge.os.fastboot.RebootTarget
+import ai.rootforge.os.core.FileDigest
+import ai.rootforge.os.core.Library
 import ai.rootforge.os.module.BuiltModule
 import ai.rootforge.os.module.ModuleSpec
+import ai.rootforge.os.recovery.RecoveryCatalogClient
+import ai.rootforge.os.recovery.RecoveryFetcher
+import ai.rootforge.os.recovery.RecoveryOffer
+import ai.rootforge.os.recovery.RecoveryPlanner
+import ai.rootforge.os.recovery.RecoveryPayload
+import ai.rootforge.os.recovery.RecoveryProbe
 import ai.rootforge.os.root.BootImageParser
 import ai.rootforge.os.root.RootManager
 import ai.rootforge.os.ui.AppActions
@@ -121,6 +129,77 @@ class AppActionsImpl(
         scope.launch { controller.buildModule(spec).onSuccess { then(it) } }
     }
     override fun installModule(file: LibraryFile, manager: RootManager) { scope.launch { controller.installModuleOnTarget(file, manager) } }
+
+    override fun probeCustomRecovery(then: (List<RecoveryProbe>) -> Unit) {
+        scope.launch {
+            val out = mutableListOf<RecoveryProbe>()
+            runCatching { withContext(Dispatchers.IO) { controller.probeThisPhone() } }
+                .onSuccess { out += it }
+                .onFailure { log.error("This-phone probe failed: ${it.message}") }
+            controller.probeAdbRecovery().onSuccess { out += it }
+            then(out)
+        }
+    }
+
+    override fun lookupOfficialRecoveries(codenames: List<String>, then: (List<RecoveryOffer>) -> Unit) {
+        scope.launch {
+            log.info("Looking up TWRP (twrp.me / dl.twrp.me) and PitchBlack (pitchblackrecovery.com / GitHub) for ${codenames.joinToString()}")
+            runCatching {
+                withContext(Dispatchers.IO) { RecoveryCatalogClient().lookup(codenames) }
+            }.onSuccess {
+                log.info("Found ${it.size} official recovery file(s).")
+                then(it)
+            }.onFailure { log.error("Recovery lookup failed: ${it.message}") }
+        }
+    }
+
+    override fun downloadOfficialRecovery(offer: RecoveryOffer, then: (LibraryFile) -> Unit) {
+        val url = offer.safeDownloadUrl() ?: run {
+            log.error("Refusing a non-https or off-host download: ${offer.downloadUrl}")
+            return
+        }
+        scope.launch {
+            log.info("Downloading ${offer.filename} from ${java.net.URI(url).host}")
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val dest = app.library.fileFor(Library.sanitize(offer.filename))
+                    RecoveryFetcher.fetchToFile(url, dest, referer = offer.referer)
+                    val head = dest.inputStream().use { it.readNBytes(8) }
+                    val payload = RecoveryPlanner.payloadOf(dest.name, head)
+                    if (payload == RecoveryPayload.OTHER) {
+                        dest.delete()
+                        error("${offer.filename} is not a recovery.img or zip (the host may have returned an HTML page).")
+                    }
+                    offer.md5?.let { expected ->
+                        val check = FileDigest.verifyMd5(expected, FileDigest.md5Hex(dest))
+                        if (!check.ok) {
+                            dest.delete()
+                            error(check.message)
+                        }
+                    }
+                    offer.sha256?.let { expected ->
+                        val check = FileDigest.verify(expected, FileDigest.sha256Hex(dest))
+                        if (!check.ok) {
+                            dest.delete()
+                            error(check.message)
+                        }
+                    }
+                    app.library.refresh()
+                    val stored = app.library.get(dest.name) ?: error("Download was not stored.")
+                    log.info("Saved ${stored.name} (SHA-256 ${FileDigest.sha256Hex(stored.file)})")
+                    stored
+                }
+            }.onSuccess { then(it) }.onFailure { log.error("Download failed: ${it.message}") }
+        }
+    }
+
+    override fun installCustomRecovery(probe: RecoveryProbe, file: LibraryFile, dryRun: Boolean, publishedMd5: String?, publishedSha256: String?) {
+        scope.launch { controller.installCustomRecovery(probe, file, dryRun, publishedMd5, publishedSha256) }
+    }
+
+    override fun rebootCustomRecovery(probe: RecoveryProbe) {
+        scope.launch { controller.rebootCustomRecovery(probe) }
+    }
 
     override fun answerApproval(id: Long, approve: Boolean, typed: String) {
         app.approvals.answer(id, approve, typed)

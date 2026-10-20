@@ -11,6 +11,28 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (Custom Recovery installer):** branch `feat/recovery-installer`.
+> New drawer screen **Custom Recovery** (Android + desktop) installs official TWRP
+> (`twrp.me/search.json` + `dl.twrp.me/<codename>/`) and PitchBlack
+> (`pitchblackrecovery.com`, GitHub releases, SourceForge) on a **rooted** phone
+> with `su`/`dd`. Detects `ro.product.device` / `ro.build.product`, `su -c id`,
+> A/B vs A-only, and dedicated `recovery`/`recovery_a`/`recovery_b` vs recovery-in-boot
+> (`vendor_boot`/`boot`). Writes only the dedicated recovery partition; never `boot`
+> or `vendor_boot`. Dry-run default; typed `FLASH RECOVERY` via `ApprovalCenter`;
+> backup of the current partition into the library first; reboot to recovery is a
+> separate button. Images are not bundled; https official hosts only; TWRP `.md5`
+> checked when present, SHA-256 always shown. `applicationId` / signing / versioning
+> unchanged (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`). On main this installer did **not** exist: Recovery
+> is USB fastboot (Boot once / Flash) plus browser links; sideload is ADB
+> `sideload-host`. Verified: `:core:test` 210/0 (`recovery/` 41), `:desktop:test`
+> 2/0, `:desktop:compileKotlin`, `:app:testDebugUnitTest` 29/0 (Paparazzi
+> `customRecovery` + `settings` recorded), `:app:assembleDebug`. APK contains
+> guide markdown, not recovery images. `bash tests/run-tests.sh` → 1023/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run:** a phone, a live
+> TWRP/PBRP download+write, `:app:verifyPaparazziDebug` full set (fails on
+> `modules`, stale on `main` since #69). Doc: `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+
 > **Update 2026-10-19 (launcher icon from logo):** branch `feat/app-icon-from-logo`
 > (PR #74). Replaced the orange anvil vector (`drawable/ic_launcher_foreground.xml`)
 > with the emblem cropped from `assets/logo/rootforge-os-logo.jpg` (fist + anvil +
@@ -148,22 +170,30 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-19 · **Branch:** `feat/app-icon-from-logo`
+**Last updated:** 2026-10-20 · **Branch:** `feat/recovery-installer`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), and the Custom RR build catalog with a Dashboard card (#66; the APK now requests `INTERNET` for its Download button only). None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), and the Custom RR build catalog with a Dashboard card (#66). Custom Recovery installer is this branch (not on `main` yet). The APK requests `INTERNET` for catalog Download and for Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Custom Recovery installer (this branch): `:core` `ai.rootforge.os.recovery` plus
+  Compose **Custom Recovery** screen. Dedicated recovery only; dry-run default;
+  `FLASH RECOVERY`; no bundled images. `:core:test` 210/0 (`recovery/` 41/0);
+  `:desktop:test` 2/0; `:app:testDebugUnitTest` 29/0; `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`). Paparazzi `customRecovery` and
+  `settings` recorded. `tests/run-tests.sh` 1023/0; `tests/lint.sh` clean
+  (shellcheck 0.11.0). **Not run on a phone.** Doc: `docs/CUSTOM_RECOVERY_INSTALLER.md`.
 - Android launcher icon is the repo-logo emblem (adaptive + legacy mipmaps, navy
   `#0C1D36`). `tests/test_launcher_icons.py` 7/0; `:app:assembleDebug` packaged the
   new mipmaps (2026-10-19). Not installed on a phone.
 - Custom RR catalog: Dashboard "Builds for this device" card (Android + desktop), Download over
-  https (APK requests `INTERNET` for this only) or Import file; `:core` `catalog/` tests 20/0
-  (2026-10-19). Never affects flash gating. Not run on a phone. Doc: `docs/CUSTOM_RR_CATALOG.md`.
+  https or Import file; `:core` `catalog/` tests 20/0 (2026-10-19). Never affects flash gating.
+  `INTERNET` is also used by Custom Recovery lookup/download (this branch). Not run on a phone.
+  Doc: `docs/CUSTOM_RR_CATALOG.md`.
 - Desktop `~/.rootforge/desktop.properties` is created mode `0600` and an existing
   world-readable copy is tightened before load (`DesktopSettings`, #64). `:desktop:test
   --tests ai.rootforge.os.desktop.DesktopSettingsTest` → 2 tests, 0 failures
@@ -234,7 +264,8 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   release; the Python CLI can run from a git clone.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`. Flash Tools: `docs/FLASH_TOOLS_PLAN.md`.
-  Custom RR catalog: `docs/CUSTOM_RR_CATALOG.md`.
+  Custom RR catalog: `docs/CUSTOM_RR_CATALOG.md`. Custom Recovery installer:
+  `docs/CUSTOM_RECOVERY_INSTALLER.md`.
 
 **Incident worth remembering:** merge `b02e7c4` silently reverted six build hooks to a flavour
 that defined SHA-256 pins and never compared them (one also used an undefined variable),
@@ -253,7 +284,7 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-The Root Guide, terminal hand-off, Kitsune, module work and the Custom RR build catalog are on `main` (see Updates 2026-10-19). The APK requests `INTERNET` for the catalog Download button only. ISO Stage 5 is still blocked
+The Root Guide, terminal hand-off, Kitsune, module work and the Custom RR build catalog are on `main` (see Updates 2026-10-19). Custom Recovery installer is on `feat/recovery-installer` (not on `main` yet). The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only on a tap. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 

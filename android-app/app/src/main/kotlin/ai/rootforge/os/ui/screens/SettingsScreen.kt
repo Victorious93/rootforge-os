@@ -78,7 +78,7 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
 
         ForgeCard("About", icon = Icons.Filled.Info) {
             KeyValueRow("Version", state.appVersion)
-            KeyValueRow("Network", "Only the build-catalog Download button (https, raw.githubusercontent.com)")
+            KeyValueRow("Network", "Catalog Download, plus Custom Recovery lookup/download (https, only when tapped)")
             KeyValueRow("USB", state.transportCaption)
             Text(
                 "Known limits: EDL is experimental and unverified on hardware; oversized non-sparse images are refused; " +
