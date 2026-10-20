@@ -47,7 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun SettingsScreen(state: AppUiState, actions: AppActions) {
+fun SettingsScreen(state: AppUiState, actions: AppActions, onOpenHelp: () -> Unit = {}) {
     ScreenColumn {
         ForgeCard("Connection", icon = Icons.Filled.Usb) {
             SwitchRow("Connect automatically", "Connect when a recognised device appears and USB access is already granted", state.autoConnect, actions::setAutoConnect)
@@ -93,6 +93,7 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
             KeyValueRow("Version", state.appVersion)
             KeyValueRow("Network", "Catalog Download, plus Custom Recovery lookup/download (https, only when tapped)")
             KeyValueRow("USB", state.transportCaption)
+            ActionButton("Open the manual", kind = ActionKind.Primary) { onOpenHelp() }
             if (state.shizuku != null) {
                 KeyValueRow("Shizuku", "${ShizukuCopy.statusTitle(state.shizuku)} — optional, this phone only, read-only")
             }

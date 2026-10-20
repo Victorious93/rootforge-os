@@ -63,6 +63,9 @@ class ScreenshotTest {
     fun modules() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Modules) }
 
     @Test
+    fun help() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Help) }
+
+    @Test
     fun customRecovery() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.CustomRecovery) }
 
     @Test
