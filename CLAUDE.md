@@ -11,21 +11,28 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-20 (bug sweep):** branch `fix/bug-sweep-2026-10-20`.
-> Three confirmed bugs on `main` `3f7661d` (#76–#83): (1) fleet
-> `ReplayGuard` evicted the oldest live nonce after 4,096 distinct
-> `(source, nonce)` pairs, so a reused envelope inside the 10-minute
-> retain window could return `OK` instead of `replay_detected` — the
-> cap now refuses the new request (`internal`) and never evicts a
-> live nonce; (2) Custom Recovery allowed a `dd` write when
-> `blockdev --getsize64` failed or was unreadable (`partitionSize ==
-> null` skipped every size check) — unknown size is now a blocker;
-> (3) `config.import` accepted any `terminalApp` / `autoConnect`
-> string — import now requires `true`/`false` and a valid package
-> name (empty terminal app still clears it). External control stays
-> off; `remote.command` enable paths unchanged; `applicationId` /
-> signing / versioning unchanged. **Not run on a phone.** Emulator
-> was not available (no Android SDK/system image in this VM).
+> **Update 2026-10-20 (bug sweep):** branch `fix/bug-sweep-2026-10-20`
+> (PR #84). Four confirmed bugs on `main` `3f7661d` (#76–#83): (1)
+> fleet `ReplayGuard` evicted the oldest live nonce after 4,096
+> distinct `(source, nonce)` pairs, so a reused envelope inside the
+> 10-minute retain window could return `OK` — the cap now refuses
+> the new request (`internal`) and never evicts a live nonce; (2)
+> Custom Recovery allowed a `dd` write when `blockdev --getsize64`
+> failed or was unreadable — unknown size is now a blocker; (3)
+> `config.import` accepted any `terminalApp` / `autoConnect` string
+> — import now requires `true`/`false` and a valid package name
+> (empty terminal app still clears it); (4) Android
+> `FileInputStream.readNBytes` (API 33) was used on minSdk 26 for
+> image-header reads and would crash on API 26–32 — now `:core`
+> `readPrefix`. External control stays off; `applicationId` /
+> signing / versioning unchanged. Local suite: `:core:test` 363/0;
+> `:desktop:test` 2/0; `:app:testDebugUnitTest` 34/0;
+> `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug`
+> / `versionCode=1` / `versionName=0.1.0-debug`); `:app:lintDebug`
+> 0 errors (24 pre-existing warnings); `bash tests/run-tests.sh`
+> 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the
+> repo wheel). **Not run on a phone.** This VM has KVM but no
+> emulator system image.
 
 > **Update 2026-10-20 (fleet config.export / config.import):** branch
 > `feat/config-backup`. Protocol 1.1 standalone Bridge ops `config.export` and
@@ -369,15 +376,15 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Bug sweep on `main` `3f7661d` (this branch): replay cache never evicts a
-  live nonce; Custom Recovery refuses unknown partition size; config
-  import validates `autoConnect` / `terminalApp`. External control stays
-  off. New tests: `ReplayGuardTest.fillingTheCacheDoesNotEvictALiveNonce`,
-  `RecoveryPlanTest.writeIsBlockedWhenPartitionSizeIsUnknown`,
-  `RecoveryInstallerTest.writeIsRefusedWhenBlockdevSizeIsUnknown`,
-  `ConfigBackupTest.importRejectsInvalidTerminalApp` /
-  `importRejectsInvalidAutoConnect`. Full suite counts recorded after the
-  local run on this head.
+- Bug sweep on `main` `3f7661d` (this branch, PR #84): replay cache
+  never evicts a live nonce; Custom Recovery refuses unknown
+  partition size; config import validates `autoConnect` /
+  `terminalApp`; Android header reads use `readPrefix` (minSdk 26).
+  External control stays off. `:core:test` 363/0, `:desktop:test` 2/0,
+  `:app:testDebugUnitTest` 34/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `:app:lintDebug` 0
+  errors, `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not
+  run on a phone.** No emulator system image here.
 - Fleet config backup (`main` `3f7661d` #83):
   `config.export` / `config.import` advertised with `remoteAllowed=false`;
   remote callers `capability_off`; export omits secrets; import dry-run /

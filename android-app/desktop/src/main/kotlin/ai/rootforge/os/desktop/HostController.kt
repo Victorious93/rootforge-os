@@ -12,6 +12,7 @@ import ai.rootforge.os.core.OutputLog
 import ai.rootforge.os.core.Progress
 import ai.rootforge.os.core.TargetInfo
 import ai.rootforge.os.core.humanSize
+import ai.rootforge.os.core.readPrefix
 import ai.rootforge.os.fastboot.FlashPlanner
 import ai.rootforge.os.fastboot.FlashSafety
 import ai.rootforge.os.fastboot.RebootTarget
@@ -110,7 +111,7 @@ class HostController(
     }
 
     fun inspectLibraryFile(file: LibraryFile): FileInspection {
-        val head = file.file.inputStream().use { it.readNBytes(4096) }
+        val head = file.file.readPrefix(4096)
         val sha = FileDigest.sha256Hex(file.file)
         return FileInspector.inspect(file.name, file.size, head, sha, FlashSafety.loadSidecar(library, file.name))
     }
@@ -332,7 +333,7 @@ class HostController(
             val identity = currentIdentity(vars)
             val safety = FlashSafety.evaluateLibrary(library, image, identity)
             FlashSafety.refuse(log, safety)
-            val head = image.file.inputStream().use { it.readNBytes(4096) }
+            val head = image.file.readPrefix(4096)
             val plan = FlashPlanner.plan(
                 partition = partition,
                 slot = vars["current-slot"],
@@ -366,7 +367,7 @@ class HostController(
         }
 
     suspend fun fastbootBootImage(image: LibraryFile): Result<Unit> = operation("Boot ${image.name} (temporary)") {
-        val head = image.file.inputStream().use { it.readNBytes(8) }
+        val head = image.file.readPrefix(8)
         if (String(head, Charsets.ISO_8859_1) != "ANDROID!") throw IOException("${image.name} is not an Android boot image.")
         log.command("fastboot boot ${image.name}")
         val r = fastboot(listOf("boot", image.file.absolutePath), 180_000)

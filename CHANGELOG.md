@@ -11,6 +11,8 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 - Fleet replay cache no longer drops a still-live nonce when it hits the 4,096-entry cap. A full cache is `internal` (`too many recent fleet nonces`) so the 10-minute retain window stays intact (`ReplayGuard`).
 - Custom Recovery refuses a write (and a dry-run) when `blockdev --getsize64` failed or returned nothing. Unknown partition size is not safe (`RecoveryPlanner`).
 - `config.import` rejects `autoConnect` values other than `true`/`false` and `terminalApp` values that are not a valid Android package name (same rule as Settings). Empty `terminalApp` still clears it. Remote callers stay `capability_off`; external control is unchanged.
+- Android library/image header reads no longer call `InputStream.readNBytes` (API 33). They use `:core` `readPrefix`, which is safe on minSdk 26. `:app:lintDebug` NewApi on those call sites is gone.
+- Tests on this head: `:core:test` **363/0**; `:desktop:test` 2/0; `:app:testDebugUnitTest` 34/0; `:app:assembleDebug` (`ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`); `:app:lintDebug` 0 errors (24 pre-existing warnings); `bash tests/run-tests.sh` **1055/0**; `bash tests/lint.sh` clean (shellcheck 0.11.0). **Not run on a phone.**
 - `applicationId`, signing and versioning unchanged.
 
 ### Fleet config.export / config.import (2026-10-20)
