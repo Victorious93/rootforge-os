@@ -1,3 +1,31 @@
+<!-- victorious-fleet-readme-refresh:start -->
+<p align="center">
+  <img src="assets/logo.png" alt="rootforge-os logo" width="200">
+</p>
+
+# rootforge-os
+
+Android rooting / root-management app (EXTERNAL_NODE).
+
+**Package id:** `ai.rootforge.os`
+
+> **Package note:** From `android-app/app/build.gradle.kts`.
+
+**Status:** CI green *(from [fleet-manifest ROADMAP](https://github.com/Victorious93/fleet-manifest/blob/main/ROADMAP.md))*
+
+## Install / build
+
+Android app under `android-app/`. Typical: `cd android-app && ./gradlew :app:assembleDebug` if wrapper present — verify in-repo.
+
+_Steps above are taken from this repo’s build files / existing docs; anything not exercised in this refresh is unlabeled as verified on a device._
+
+## Victorious fleet
+
+- Monorepo: [https://github.com/Victorious93/victorious-fleet](https://github.com/Victorious93/victorious-fleet)
+- Fleet site: [https://victorious-framework.pages.dev](https://victorious-framework.pages.dev)
+
+<!-- victorious-fleet-readme-refresh:end -->
+
 <p align="center">
   <img src="assets/logo/rootforge-os-logo.jpg" alt="RootForge OS logo" width="240">
 </p>
