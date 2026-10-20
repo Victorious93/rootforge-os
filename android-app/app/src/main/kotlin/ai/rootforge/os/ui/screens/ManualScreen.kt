@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +47,7 @@ fun ManualScreen(
     actions: AppActions,
     library: ManualLibrary = ManualLibrary.default,
     onOpenLinks: () -> Unit = {},
+    onOpenGlossary: () -> Unit = {},
 ) {
     var contentsOpen by rememberSaveable { mutableStateOf(false) }
     var jumpTo by rememberSaveable { mutableStateOf<String?>(null) }
@@ -89,6 +91,11 @@ fun ManualScreen(
                     Icons.AutoMirrored.Filled.OpenInNew,
                     ActionKind.Outline,
                 ) { onOpenLinks() }
+                ActionButton(
+                    "Glossary",
+                    Icons.Filled.ListAlt,
+                    ActionKind.Outline,
+                ) { onOpenGlossary() }
             }
         }
         item {

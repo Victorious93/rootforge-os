@@ -7,6 +7,10 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Glossary (2026-10-20)
+- In-app **Glossary** drawer screen (`:core` `Glossary`): one short everyday-words line per term (root, su, Magisk, KernelSU, KernelSU Next, APatch, module, Zygisk, Zygisk Next, ReZygisk, Xposed, LSPosed, Vector, Shizuku, Sui, Dhizuku, ADB, fastboot, EDL, bootloader, recovery, TWRP, PitchBlack, boot image, ROM, flash, dry run, SHA-256/checksum, bootloop). Reachable from Help and Links as well as the drawer. The same text is `docs/MANUAL.md` § Glossary (bundled in Help). Official Magisk / LSPosed / Vector / Sui pages stay on **Links**.
+- `:core` `GlossaryTest` requires every term and line to be non-empty and unique. `DirectoryLinksTest` still requires Xposed, LSPosed, Vector and Sui on the Links list.
+
 ### Local module install on this phone (2026-10-20)
 - Modules gains a **This phone** tab (Android APK). When this phone is rooted, a zip from the library is installed with the active manager: Magisk `magisk --install-module`, KernelSU `ksud module install`, APatch `apd module install`. The manager is auto-detected from installed packages (`RootManager.detect`) and, after List, from `/data/adb` (`ksud` / `apd` / `magisk`); the dropdown still overrides. Kitsune is detected but remains [UNSUPPORTED] and assumed Magisk-like.
 - Same safety as USB install: zip SHA-256 is shown, dry-run is the default (logs the `su` command, does not call su), a real install needs typed `INSTALL MODULE` via `ApprovalCenter`, and RootForge never reboots (separate **Reboot this phone** button). Installed modules are listed read-only from `/data/adb/modules/*/module.prop`. LSPosed APKs stay on ADB → Install APK. Desktop is a no-op (USB target install unchanged). `applicationId`, signing and versioning unchanged.

@@ -139,7 +139,7 @@ PitchBlack lookup. A matching TWRP or PitchBlack catalog row can open that insta
 other recoveries stay links. Device work never uses the network.
 
 Screens: Dashboard (including **Desktop mode** through VictorSuite; see
-[docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Ask**, **Root Guide**, **Help**, **Links** (official https directory, browser only), **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
+[docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Ask**, **Root Guide**, **Help**, **Links** (official https directory, browser only), **Glossary** (everyday-words definitions; from Help and Links), **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
 Modules (creator, this-phone su install, and repository links), Recovery (USB fastboot), Custom Recovery (rooted TWRP/PitchBlack installer), Logs / Terminal, Settings.
 
 **Root Guide** is offline rooting documentation inside the app (bootloader unlock, Magisk / KernelSU / APatch,

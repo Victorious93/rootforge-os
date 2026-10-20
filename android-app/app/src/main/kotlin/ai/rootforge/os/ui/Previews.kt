@@ -154,3 +154,9 @@ fun PreviewHelp() {
 fun PreviewLinks() {
     RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Links) }
 }
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Glossary")
+@Composable
+fun PreviewGlossary() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Glossary) }
+}
