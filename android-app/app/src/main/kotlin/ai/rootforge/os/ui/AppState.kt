@@ -18,6 +18,8 @@ import ai.rootforge.os.recovery.RecoveryOffer
 import ai.rootforge.os.recovery.RecoveryProbe
 import ai.rootforge.os.root.BootImageParser
 import ai.rootforge.os.root.RootManager
+import ai.rootforge.os.desktopmode.DesktopModeOp
+import ai.rootforge.os.desktopmode.DesktopModeView
 import ai.rootforge.os.shizuku.ShizukuState
 import ai.rootforge.os.usb.AttachedTarget
 
@@ -40,6 +42,11 @@ data class AppUiState(
     val terminalApp: String = "",
     /** True where RootForge can launch another app (Android). Desktop has no hand-off. */
     val terminalHandoff: Boolean = false,
+    /**
+     * VictorSuite Desktop mode. Null on the desktop client (hidden). On Android this is
+     * always set, including the "not installed" hint, so a missing companion never crashes.
+     */
+    val desktopMode: DesktopModeView? = null,
     val nodeId: String = "",
     val paired: List<PairedController> = emptyList(),
     val pending: List<CallerIdentity> = emptyList(),
@@ -136,6 +143,13 @@ interface AppActions {
 
     /** Opens the configured terminal app. Launch only: no command, serial or file is passed. */
     fun openTerminalApp()
+
+    /** Pins the currently installed VictorSuite package + signing certificate. */
+    fun pinVictorSuite()
+
+    /** Sends the documented Desktop-mode intent. No-op when the companion is not ready. */
+    fun launchDesktopMode(op: DesktopModeOp)
+
     fun resetAdbKey()
     fun approveController(caller: CallerIdentity)
     fun dismissController(caller: CallerIdentity)
@@ -211,6 +225,8 @@ object NoopActions : AppActions {
     override fun setAutoConnect(enabled: Boolean) = Unit
     override fun setTerminalApp(packageName: String) = Unit
     override fun openTerminalApp() = Unit
+    override fun pinVictorSuite() = Unit
+    override fun launchDesktopMode(op: DesktopModeOp) = Unit
     override fun resetAdbKey() = Unit
     override fun approveController(caller: CallerIdentity) = Unit
     override fun dismissController(caller: CallerIdentity) = Unit

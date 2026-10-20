@@ -14,6 +14,11 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 - Verifies TWRP `.md5` when present; SHA-256 is always shown. https only, official hosts only. `applicationId`, signing and versioning unchanged.
 - Tests: new `:core` `recovery/` unit tests (layout, commands, plan, catalog, installer). **Not run on a phone.** Doc: `docs/CUSTOM_RECOVERY_INSTALLER.md`.
 
+### Desktop mode (VictorSuite X11) (2026-10-20)
+- Android Dashboard **Desktop mode** card. VictorSuite’s package is `com.termux` (read from Victorious93/VictorSuite on 2026-10-20). RootForge detects it with PackageManager + `<queries>`, pins it by package + signing-certificate SHA-256 (no shared key), and then sends either the dedicated `ai.victorsuite.action.DESKTOP_MODE` intent (specified, not implemented in VictorSuite yet) or Termux `RUN_COMMAND` with only `rootforge-desktop-mode <start|stop|setup|status>`. Missing VictorSuite is a hint, not a crash. Desktop JVM client hides the card. `applicationId`, signing and versioning unchanged.
+- Toolkit: `setup_desktop_mode.sh` (idempotent XFCE + tigervnc + VS Code-if-present + launchers), `rootforge_desktop_mode.sh` (X11 or VNC fallback), `termux/desktop-mode-entry.sh`. Unpinned code-server downloads are refused. Spec: `docs/DESKTOP_MODE.md`.
+- Tests: `:core:test` 180/0 (`DesktopModeTest` 12); `:desktop:test` 2/0; `:app:testDebugUnitTest` and `:app:assembleDebug` (Paparazzi `desktopMode` golden recorded). `aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`. `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0). **Not run on a phone.**
+
 ### Shizuku / Sui on the Android host phone (2026-10-19)
 - Optional Shizuku (and Sui) support in the host-phone APK, aligned with the fleet pattern from droidcommand-AI PR #231. `dev.rikka.shizuku:api` / `provider` **13.1.5**, official `ShizukuProvider`, permission `moe.shizuku.manager.permission.API_V23`, `<queries>` for `moe.shizuku.privileged.api` and `rikka.sui`.
 - Four states: `GRANTED` / `DENIED` / `NOT_INSTALLED` / `NOT_RUNNING`. Sui counts as present when `managerInstalled || binderAlive`. `ShizukuManager.requestPermission()` is a no-op except from `DENIED`. `onCreate` only starts listeners.

@@ -1,5 +1,6 @@
 package ai.rootforge.os.core
 
+import ai.rootforge.os.desktopmode.PinnedCompanion
 import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,11 +41,23 @@ class AppSettings(private val prefs: SharedPreferences) {
     val nodeId: String
         get() = prefs.getString(KEY_NODE, null) ?: generateNodeId().also { prefs.edit().putString(KEY_NODE, it).apply() }
 
+    /** VictorSuite package:cert pin. Empty until the owner confirms the installed companion. */
+    private val pinState = MutableStateFlow(prefs.getString(KEY_VS_PIN, "") ?: "")
+    val victorSuitePinFlow: StateFlow<String> = pinState.asStateFlow()
+    var victorSuitePin: PinnedCompanion?
+        get() = PinnedCompanion.parse(pinState.value)
+        set(v) {
+            val wire = v?.wire().orEmpty()
+            prefs.edit().putString(KEY_VS_PIN, wire).apply()
+            pinState.value = wire
+        }
+
     private companion object {
         const val KEY_BRIDGE = "bridge_enabled"
         const val KEY_AUTO = "auto_connect"
         const val KEY_NODE = "node_id"
         const val KEY_TERMINAL = "terminal_app"
+        const val KEY_VS_PIN = "victorsuite_pin"
 
         fun generateNodeId(): String {
             val bytes = ByteArray(16).also { SecureRandom().nextBytes(it) }

@@ -11,6 +11,14 @@ import ai.rootforge.os.shizuku.PrivilegedResult
 import ai.rootforge.os.shizuku.ShizukuCopy
 import ai.rootforge.os.shizuku.ShizukuPackages
 import ai.rootforge.os.core.TerminalCommand
+import ai.rootforge.os.desktopmode.AndroidCompanionLookup
+import ai.rootforge.os.desktopmode.DesktopMode
+import ai.rootforge.os.desktopmode.DesktopModeOp
+import ai.rootforge.os.desktopmode.PinnedCompanion
+import ai.rootforge.os.desktopmode.toAndroidIntent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.core.FileDigest
 import ai.rootforge.os.core.Library
@@ -39,6 +47,8 @@ class AppActionsImpl(
     private val app: RootForgeApp,
     private val pickDocument: ((Uri?) -> Unit) -> Unit,
     private val startActivity: (Intent) -> Unit,
+    private val startService: (Intent) -> Unit = { app.startService(it) },
+    private val requestPermission: (String) -> Unit = {},
 ) : AppActions {
     private val controller get() = app.controller
     private val scope get() = app.appScope
@@ -272,6 +282,70 @@ class AppActionsImpl(
             return
         }
         startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    override fun pinVictorSuite() {
+        val found = runCatching { AndroidCompanionLookup(app.packageManager).installed() }
+            .getOrDefault(emptyList())
+            .let { DesktopMode.pick(it) }
+        if (found == null) {
+            log.warn("VictorSuite is not installed, so there is nothing to pin.")
+            app.refreshDesktopMode()
+            return
+        }
+        if (found.certSha256.isBlank()) {
+            log.warn("Could not read ${found.packageName}'s signing certificate; not pinned.")
+            return
+        }
+        app.settings.victorSuitePin = PinnedCompanion(found.packageName, found.certSha256)
+        log.info("Pinned ${found.packageName} (sha256 ${found.certSha256.take(16)}…)")
+        app.refreshDesktopMode()
+    }
+
+    override fun launchDesktopMode(op: DesktopModeOp) {
+        val view = runCatching { app.desktopMode.value }.getOrElse {
+            log.warn("Desktop mode is unavailable: ${it.message}")
+            return
+        }
+        val spec = DesktopMode.intentFor(view, op)
+        if (spec == null) {
+            log.warn(view.body)
+            return
+        }
+        if (ContextCompat.checkSelfPermission(app, spec.permission) != PackageManager.PERMISSION_GRANTED) {
+            log.warn("Grant the Desktop mode / RUN_COMMAND permission, then try again.")
+            requestPermission(spec.permission)
+            return
+        }
+        val intent = spec.toAndroidIntent()
+        val started = runCatching {
+            if (spec.isService && Build.VERSION.SDK_INT >= 26) {
+                app.startForegroundService(intent)
+            } else if (spec.isService) {
+                startService(intent)
+            } else {
+                startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            true
+        }.recoverCatching { first ->
+            if (first is SecurityException) {
+                log.warn("Permission denied sending ${spec.action}. Grant it in system settings if the prompt did not appear.")
+                requestPermission(spec.permission)
+                return@recoverCatching false
+            }
+            if (spec.isService) {
+                startService(intent)
+                true
+            } else {
+                throw first
+            }
+        }.getOrElse { err ->
+            log.warn("Could not start Desktop mode (${err.javaClass.simpleName}: ${err.message}). VictorSuite may not implement this yet.")
+            false
+        }
+        if (started == true) {
+            log.info("Asked VictorSuite to ${op.wire} Desktop mode via ${spec.action}.")
+        }
     }
 
     override fun resetAdbKey() {
