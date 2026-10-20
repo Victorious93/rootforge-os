@@ -56,6 +56,10 @@ object BridgeOp {
         ADB_SHELL, ADB_REBOOT, FASTBOOT_REBOOT, MODULE_BUILD,
         FASTBOOT_FLASH, FASTBOOT_SLOT, FASTBOOT_UNLOCK, FASTBOOT_LOCK,
     )
+
+    /** Shell and reboot hit whichever phone is connected. Flash/unlock confirm inside the controller. */
+    fun bindsUsbTarget(name: String): Boolean =
+        name == ADB_SHELL || name == ADB_REBOOT || name == FASTBOOT_REBOOT
 }
 
 @Serializable

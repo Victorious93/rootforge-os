@@ -124,6 +124,36 @@ class ToolkitApiTests(unittest.TestCase):
                 ["/stub/fastboot", "-s", "OTHER", "flash", "boot", image.name],
             )
 
+    def test_adb_shell_pins_serial_and_refuses_an_ambiguous_target(self):
+        self.runner.script = [
+            (0, "List of devices attached\nPHONE\tdevice\nOTHER\tdevice\n", ""),
+            (0, "", ""),
+        ]
+        missed = self.handle("rootforge.adb.shell", {"command": "id"})
+        self.assertFalse(missed["ok"])
+        self.assertIn("more than one device", missed["error"]["message"])
+        self.assertFalse(any("shell" in call for call in self.runner.calls))
+
+        self.runner.calls.clear()
+        self.runner.script = [
+            (0, "List of devices attached\nPHONE\tdevice\nOTHER\tdevice\n", ""),
+            (0, "", ""),
+            (0, "uid=0\n", ""),
+        ]
+        hit = self.handle("rootforge.adb.shell", {"command": "id", "serial": "OTHER"})
+        self.assertTrue(hit["ok"], hit)
+        self.assertEqual(self.runner.calls[-1], ["/stub/adb", "-s", "OTHER", "shell", "id"])
+
+        self.runner.calls.clear()
+        self.runner.script = [
+            (0, "List of devices attached\nONLY\tdevice\n", ""),
+            (0, "", ""),
+            (0, "ok\n", ""),
+        ]
+        only = self.handle("rootforge.adb.shell", {"command": "id"})
+        self.assertTrue(only["ok"], only)
+        self.assertEqual(self.runner.calls[-1][:4], ["/stub/adb", "-s", "ONLY", "shell"])
+
     def test_adb_reboot_pins_serial(self):
         self.runner.script = [
             (0, "PHONE\tdevice\n", ""),
