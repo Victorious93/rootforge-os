@@ -80,6 +80,7 @@ class FleetExecutor(
         when (replay.check(caller.sourceNodeRef(), request.nonce, request.timestampMs, request.ttlMs)) {
             ReplayVerdict.REPLAY -> return error(id, FleetError.REPLAY_DETECTED, "nonce was already used")
             ReplayVerdict.EXPIRED -> return error(id, FleetError.EXPIRED, "request expired or clock skew exceeds ${FLEET_MAX_SKEW_MS} ms")
+            ReplayVerdict.BUSY -> return error(id, FleetError.INTERNAL, "too many recent fleet nonces; retry after some expire")
             ReplayVerdict.OK -> Unit
         }
 

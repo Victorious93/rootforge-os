@@ -7,6 +7,12 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Bug sweep 2026-10-20
+- Fleet replay cache no longer drops a still-live nonce when it hits the 4,096-entry cap. A full cache is `internal` (`too many recent fleet nonces`) so the 10-minute retain window stays intact (`ReplayGuard`).
+- Custom Recovery refuses a write (and a dry-run) when `blockdev --getsize64` failed or returned nothing. Unknown partition size is not safe (`RecoveryPlanner`).
+- `config.import` rejects `autoConnect` values other than `true`/`false` and `terminalApp` values that are not a valid Android package name (same rule as Settings). Empty `terminalApp` still clears it. Remote callers stay `capability_off`; external control is unchanged.
+- `applicationId`, signing and versioning unchanged.
+
 ### Fleet config.export / config.import (2026-10-20)
 - Protocol 1.1 standalone Bridge ops `config.export` and `config.import` on the frozen EXTERNAL_NODE envelope (droidcommand-AI `docs/specs/UNIFIED_BACKUP.md` / DCA #236). Advertised in `capabilities.get` as `config.export` `{kind:action, remoteAllowed:false, requiresConfirm:false}` and `config.import` `{kind:action, remoteAllowed:false, requiresConfirm:true}`. Same package+certificate pairing as the other 1.1 ops; a remote caller is `capability_off` for both.
 - Export is non-secret preferences only (`autoConnect`, `terminalApp`). Magisk / KernelSU / APatch tokens, root passwords, signing material, pairing keys / allow-list secrets, the VictorSuite pin and the desktop API token are never included. Import accepts `dryRun` and `conflictPolicy` `skip` \| `overwrite` \| `merge-by-id`, needs on-device `ApprovalCenter` confirm, never turns on `remote.command` / external control, and rejects unknown or oversized payloads. `applicationId`, signing and versioning unchanged.

@@ -289,6 +289,36 @@ class ConfigBackupTest {
     }
 
     @Test
+    fun importRejectsInvalidTerminalApp() = runTest {
+        val store = storeWithLive()
+        val result = runCatching {
+            backup(store).import(
+                bundleText = incomingBundle(terminalApp = "not a package").toString(),
+                dryRun = true,
+                conflictPolicy = ConfigConflictPolicy.OVERWRITE,
+            )
+        }
+        assertEquals(FleetError.INVALID_PARAMETERS, (result.exceptionOrNull() as ConfigBackupException).code)
+        assertTrue(result.exceptionOrNull()!!.message!!.contains("terminalApp"))
+        assertEquals("com.termux", store.getPreference(ConfigPreferenceId.TERMINAL_APP))
+    }
+
+    @Test
+    fun importRejectsInvalidAutoConnect() = runTest {
+        val store = storeWithLive()
+        val result = runCatching {
+            backup(store).import(
+                bundleText = incomingBundle(autoConnect = "maybe").toString(),
+                dryRun = true,
+                conflictPolicy = ConfigConflictPolicy.OVERWRITE,
+            )
+        }
+        assertEquals(FleetError.INVALID_PARAMETERS, (result.exceptionOrNull() as ConfigBackupException).code)
+        assertTrue(result.exceptionOrNull()!!.message!!.contains("autoConnect"))
+        assertEquals("true", store.getPreference(ConfigPreferenceId.AUTO_CONNECT))
+    }
+
+    @Test
     fun forbiddenNameDetectorCoversTokensAndPasswords() {
         assertTrue(ConfigSecrets.isForbiddenName("magiskToken"))
         assertTrue(ConfigSecrets.isForbiddenName("api_token"))

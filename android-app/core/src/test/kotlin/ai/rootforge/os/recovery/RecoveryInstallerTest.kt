@@ -92,6 +92,20 @@ class RecoveryInstallerTest {
     }
 
     @Test
+    fun writeIsRefusedWhenBlockdevSizeIsUnknown() = runBlocking {
+        val env = env()
+        val probe = env.installer.probe(RecoverySource.THIS_PHONE, props, listing, "uid=0(root)", 0)
+        val image = env.library.importStream("twrp.img", "ANDROID!".toByteArray().plus(ByteArray(32)).inputStream())
+        val session = FakeRootSession(listing, partitionBytes = null)
+        val result = runCatching { env.installer.install(session, probe, image, dryRun = false) }
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()!!.message!!.contains("Could not read the recovery partition size"))
+        assertFalse(session.pushed)
+        assertTrue(session.commands.none { it.contains("dd if='/data/local/tmp/rf-recovery.img'") })
+        assertTrue(env.approvals.pending.value.isEmpty())
+    }
+
+    @Test
     fun bootLayoutNeverProducesAWriteCommand() {
         val bootListing = """
             DIR /dev/block/by-name
@@ -137,7 +151,7 @@ class RecoveryInstallerTest {
 
     private class FakeRootSession(
         private val listing: String,
-        private val partitionBytes: Long = 64L * 1024 * 1024,
+        private val partitionBytes: Long? = 64L * 1024 * 1024,
     ) : RootSession {
         val commands = mutableListOf<String>()
         var pushed = false
@@ -145,7 +159,8 @@ class RecoveryInstallerTest {
         override fun su(command: String, timeoutMs: Long): RootShellResult {
             commands += command
             return when {
-                command.startsWith("blockdev") -> RootShellResult(partitionBytes.toString(), 0)
+                command.startsWith("blockdev") ->
+                    RootShellResult(partitionBytes?.toString() ?: "blockdev: cannot open", if (partitionBytes == null) 1 else 0)
                 command.startsWith("ls -l") -> RootShellResult("brw------- 1 root root 259, 5 recovery", 0)
                 command == RecoveryLayoutDetector.LIST_SCRIPT -> RootShellResult(listing, 0)
                 command.startsWith("dd if='/dev/block/by-name/") -> RootShellResult("", 0)

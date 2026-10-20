@@ -624,7 +624,7 @@ Pairing is an allow-list the owner manages in **Settings → External control**.
 
 ### Replay and expiry
 
-A request is `expired` when `now > timestampMs + ttlMs` **or** `|now - timestampMs| > 120000` (clock skew). A nonce already seen for the same authenticated source (`package:certSha256`) is `replay_detected`. The seen-nonce cache is kept **at least 10 minutes**. An expired nonce is still remembered so a later replay with a fresh timestamp is refused.
+A request is `expired` when `now > timestampMs + ttlMs` **or** `|now - timestampMs| > 120000` (clock skew). A nonce already seen for the same authenticated source (`package:certSha256`) is `replay_detected`. The seen-nonce cache is kept **at least 10 minutes**. An expired nonce is still remembered so a later replay with a fresh timestamp is refused. If the cache is full of still-live nonces, a new request is `internal` (`too many recent fleet nonces`) instead of dropping an older nonce.
 
 ### `capabilities.get`
 
@@ -789,7 +789,7 @@ This path has **not** been run on a phone in this repository.
 
 **Desktop mode does nothing.** The card is in the current app (Dashboard, Android only). It has **not** been run on a phone. Install VictorSuite (`com.termux`), pin it, grant `RUN_COMMAND`, set `allow-external-apps=true`, and install the rootfs wrapper. The dedicated Desktop-mode action is not in VictorSuite yet; `RUN_COMMAND` is the only live path. Missing VictorSuite is a hint, not a crash. See [docs/DESKTOP_MODE.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DESKTOP_MODE.md).
 
-**Custom Recovery will not write.** The phone must already have root (`su`). Dry-run is on by default. A real write needs typed `FLASH RECOVERY`. Recovery-in-boot devices are refused (use **Recovery → Boot once** or an installer zip). An unknown A/B slot is refused. A zip is never written with `dd`. This has **not** been run on a phone. See [docs/CUSTOM_RECOVERY_INSTALLER.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/CUSTOM_RECOVERY_INSTALLER.md).
+**Custom Recovery will not write.** The phone must already have root (`su`). Dry-run is on by default. A real write needs typed `FLASH RECOVERY`. Recovery-in-boot devices are refused (use **Recovery → Boot once** or an installer zip). An unknown A/B slot is refused. An unknown recovery partition size (blockdev failed or unreadable) is refused. A zip is never written with `dd`. This has **not** been run on a phone. See [docs/CUSTOM_RECOVERY_INSTALLER.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/CUSTOM_RECOVERY_INSTALLER.md).
 
 **Is anything signed for release?** Only debug APKs. The v0.2.0 asset is debug. ISO and Termux rootfs were not attached to that release.
 
