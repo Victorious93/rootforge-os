@@ -24,8 +24,15 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `FLASH RECOVERY`, backs up first, writes only `recovery` / `recovery_a` /
 > `recovery_b`, never `boot`/`vendor_boot`, never `dd`s a zip, never auto-reboots.
 > The catalog still does not feed `DeviceMatchGate`. `applicationId`, signing
-> and versioning unchanged. Tests this session: pending in this file until the
-> local suite is run. Docs: `docs/CUSTOM_RR_CATALOG.md`,
+> and versioning unchanged (`aapt2 dump badging`: `ai.rootforge.os.debug` /
+> `versionCode=1` / `versionName=0.1.0-debug`). Verified this session:
+> `:core:test` 256/0 (`CatalogRecoveryBridgeTest` 7, `RecoveryCatalogTest` 9);
+> `:desktop:test` 2/0; `:app:testDebugUnitTest` 30/0; `:app:assembleDebug`.
+> `buildCatalog` Paparazzi golden re-recorded (`:app:verifyPaparazziDebug`
+> still fails only on `modules`, stale on `main` since #69).
+> `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean (shellcheck
+> 0.11.0 via the repo wheel). **Not run:** a phone, a live catalog download +
+> write, the desktop window. Docs: `docs/CUSTOM_RR_CATALOG.md`,
 > `docs/CUSTOM_RECOVERY_INSTALLER.md`.
 
 > **Update 2026-10-20 (Custom Recovery installer):** branch `feat/recovery-installer`.
@@ -244,7 +251,9 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 - Custom RR → Custom Recovery (this branch): matching TWRP/PitchBlack catalog
   rows open Custom Recovery pre-filled; official lookup uses the probed phone;
   `pitchblack.tech` added to the https host allow-list. ROMs and other recoveries
-  stay links. Local suite not yet recorded in this paragraph.
+  stay links. `:core:test` 256/0; `:desktop:test` 2/0; `:app:testDebugUnitTest`
+  30/0; `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`).
+  `tests/run-tests.sh` 1055/0; `tests/lint.sh` clean. **Not run on a phone.**
 - Custom Recovery installer (#77, on `main`): `:core` `ai.rootforge.os.recovery` plus
   Compose **Custom Recovery** screen. Dedicated recovery only; dry-run default;
   `FLASH RECOVERY`; no bundled images. After merging #75 and #76: `:core:test`
