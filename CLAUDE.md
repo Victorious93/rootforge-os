@@ -24,45 +24,42 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `FLASH RECOVERY`, backs up first, writes only `recovery` / `recovery_a` /
 > `recovery_b`, never `boot`/`vendor_boot`, never `dd`s a zip, never auto-reboots.
 > The catalog still does not feed `DeviceMatchGate`. `applicationId`, signing
-> and versioning unchanged (`aapt2 dump badging`: `ai.rootforge.os.debug` /
-> `versionCode=1` / `versionName=0.1.0-debug`). Verified this session:
-> `:core:test` 256/0 (`CatalogRecoveryBridgeTest` 7, `RecoveryCatalogTest` 9);
-> `:desktop:test` 2/0; `:app:testDebugUnitTest` 30/0; `:app:assembleDebug`.
-> `buildCatalog` Paparazzi golden re-recorded (`:app:verifyPaparazziDebug`
-> still fails only on `modules`, stale on `main` since #69).
-> `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean (shellcheck
-> 0.11.0 via the repo wheel). **Not run:** a phone, a live catalog download +
-> write, the desktop window. Docs: `docs/CUSTOM_RR_CATALOG.md`,
-> `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+> and versioning unchanged. Merged `origin/main` (`44716de`, #78 how-to + Help)
+> and documented the action in `docs/MANUAL.md` / in-app Help. Local suite
+> re-run after that merge is recorded below when finished.
 
-> **Update 2026-10-20 (Custom Recovery installer):** branch `feat/recovery-installer`.
-> New drawer screen **Custom Recovery** (Android + desktop) installs official TWRP
-> (`twrp.me/search.json` + `dl.twrp.me/<codename>/`) and PitchBlack
-> (`pitchblackrecovery.com`, GitHub releases, SourceForge) on a **rooted** phone
-> with `su`/`dd`. Detects `ro.product.device` / `ro.build.product`, `su -c id`,
-> A/B vs A-only, and dedicated `recovery`/`recovery_a`/`recovery_b` vs recovery-in-boot
-> (`vendor_boot`/`boot`). Writes only the dedicated recovery partition; never `boot`
-> or `vendor_boot`. Dry-run default; typed `FLASH RECOVERY` via `ApprovalCenter`;
-> backup of the current partition into the library first; reboot to recovery is a
-> separate button. Images are not bundled; https official hosts only; TWRP `.md5`
-> checked when present, SHA-256 always shown. `applicationId` / signing / versioning
-> unchanged (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
-> `versionName=0.1.0-debug`). On main this installer did **not** exist: Recovery
-> is USB fastboot (Boot once / Flash) plus browser links; sideload is ADB
-> `sideload-host`. Merged `origin/main` (`cda8e3f`, #75 Shizuku) then
-> `origin/main` (`b8e7708`, #76 Desktop mode) — docs-only conflicts both times.
-> Re-verified after #76 merge: `:core:test` 248/0 (`recovery/` 41,
-> `shizuku/` 26, `desktopmode/` 12), `:desktop:test` 2/0,
-> `:desktop:compileKotlin`, `:app:testDebugUnitTest` 30/0 (Paparazzi
-> `customRecovery` + `desktopMode` + `settings`), `:app:assembleDebug`
-> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
-> `versionName=0.1.0-debug`; `INTERNET` + `moe.shizuku.manager.permission.API_V23`
-> + `com.termux.permission.RUN_COMMAND` + `ai.victorsuite.permission.DESKTOP_MODE`).
-> `bash tests/run-tests.sh` → 1055/0; `bash tests/lint.sh` clean
-> (shellcheck 0.11.0 via the repo wheel). **Not run:** a phone, a live
-> TWRP/PBRP download+write, `:app:verifyPaparazziDebug` full set (fails on
-> `modules`, stale on `main` since #69). Doc:
-> `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+> **Update 2026-10-20 (how-to manual + in-app Help):** branch `docs/manual`
+> (PR #78, on `main` as `44716de`). Added `docs/MANUAL.md` (plain-language how-to:
+> what it is / EXTERNAL_NODE fleet role, install and v0.2.0 debug-key uninstall,
+> every screen, every manifest permission, fleet pairing + default-off switch,
+> troubleshooting, privacy). Header art: emblem + neon cyan-to-magenta ring
+> (`docs/images/manual/header.png`; `android-app/tools/generate_manual_header.py`).
+> Same markdown is bundled at `ai/rootforge/os/manual/MANUAL.md` and rendered
+> by a **Help** drawer screen (also Settings → Open the manual) with a GitHub
+> link. Merged `origin/main` (`b8e7708` #76, then `fabc649` #77): Desktop mode
+> and the Custom Recovery installer are documented as landed. `applicationId`,
+> signing and versioning unchanged (`aapt dump badging`: `ai.rootforge.os.debug`
+> / `versionCode=1` / `versionName=0.1.0-debug`). Verified on that head:
+> `:core:test` 252/0 (`ManualLibraryTest` 4, `recovery/` 41, `DesktopModeTest`
+> 12); `:desktop:test` 2/0; `:app:testDebugUnitTest` 31/0; `:app:assembleDebug`;
+> `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean
+> (shellcheck 0.11.0). **Not run:** a phone, the desktop window.
+
+> **Update 2026-10-20 (Custom Recovery installer):** branch `feat/recovery-installer`
+> (PR #77, on `main` as `fabc649`). New drawer screen **Custom Recovery**
+> (Android + desktop) installs official TWRP (`twrp.me/search.json` +
+> `dl.twrp.me/<codename>/`) and PitchBlack (`pitchblackrecovery.com`, GitHub
+> releases, SourceForge) on a **rooted** phone with `su`/`dd`. Detects
+> `ro.product.device` / `ro.build.product`, `su -c id`, A/B vs A-only, and
+> dedicated `recovery`/`recovery_a`/`recovery_b` vs recovery-in-boot
+> (`vendor_boot`/`boot`). Writes only the dedicated recovery partition; never
+> `boot` or `vendor_boot`. Dry-run default; typed `FLASH RECOVERY` via
+> `ApprovalCenter`; backup of the current partition into the library first;
+> reboot to recovery is a separate button. Images are not bundled; https
+> official hosts only; TWRP `.md5` checked when present, SHA-256 always shown.
+> Verified on that PR: `:core:test` 248/0 (`recovery/` 41), `:desktop:test` 2/0,
+> `:app:testDebugUnitTest` 30/0, `:app:assembleDebug`. **Not run on a phone.**
+> Doc: `docs/CUSTOM_RECOVERY_INSTALLER.md`.
 
 > **Update 2026-10-20 (Desktop mode):** branch `feat/desktop-mode-x11` (PR #76, on `main` as `b8e7708`).
 > Android Dashboard card talks to VictorSuite (`com.termux`, confirmed in that repo)
@@ -243,7 +240,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite X11 (#76), and Custom Recovery installer (#77). This branch connects matching TWRP/PitchBlack catalog rows to that installer. The APK requests `INTERNET` for catalog Download and for Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), and the how-to + in-app Help (#78 / `44716de`). This branch connects matching TWRP/PitchBlack catalog rows to that installer and documents the action in Help. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
@@ -251,18 +248,16 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 - Custom RR → Custom Recovery (this branch): matching TWRP/PitchBlack catalog
   rows open Custom Recovery pre-filled; official lookup uses the probed phone;
   `pitchblack.tech` added to the https host allow-list. ROMs and other recoveries
-  stay links. `:core:test` 256/0; `:desktop:test` 2/0; `:app:testDebugUnitTest`
-  30/0; `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`).
-  `tests/run-tests.sh` 1055/0; `tests/lint.sh` clean. **Not run on a phone.**
-- Custom Recovery installer (#77, on `main`): `:core` `ai.rootforge.os.recovery` plus
-  Compose **Custom Recovery** screen. Dedicated recovery only; dry-run default;
-  `FLASH RECOVERY`; no bundled images. After merging #75 and #76: `:core:test`
-  248/0 (`recovery/` 41/0, `shizuku/` 26/0, `desktopmode/` 12/0);
-  `:desktop:test` 2/0; `:app:testDebugUnitTest` 30/0; `:app:assembleDebug`
-  (`ai.rootforge.os.debug` / `0.1.0-debug`). Paparazzi `customRecovery`,
-  `desktopMode` and `settings` recorded. `tests/run-tests.sh` 1055/0;
-  `tests/lint.sh` clean (shellcheck 0.11.0). **Not run on a phone.** Doc:
-  `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+  stay links. Documented in `docs/MANUAL.md` / Help after merging #78.
+  Local suite after that merge is recorded when re-run.
+- How-to manual (PR #78, on `main` as `44716de`): `docs/MANUAL.md` plus in-app
+  **Help**. On that head: `:core:test` 252/0, `:desktop:test` 2/0,
+  `:app:testDebugUnitTest` 31/0. **Not run on a phone.**
+- Custom Recovery installer (PR #77, on `main` as `fabc649`): `:core`
+  `ai.rootforge.os.recovery` plus Compose **Custom Recovery** screen.
+  Dedicated recovery only; dry-run default; `FLASH RECOVERY`; no bundled
+  images. On that PR: `:core:test` 248/0 (`recovery/` 41/0). **Not run on a
+  phone.** Doc: `docs/CUSTOM_RECOVERY_INSTALLER.md`.
 - Desktop mode (PR #76, on `main`): Android Dashboard card for VictorSuite (`com.termux`).
   Pin by package+cert, then RUN_COMMAND with a fixed `rootforge-desktop-mode`
   command, or a dedicated action VictorSuite does not export yet
@@ -348,8 +343,8 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   release; the Python CLI can run from a git clone.
 - Review: `docs/REVIEW.md`. App: `docs/ANDROID_APP.md`. Desktop/Docker: `docs/DESKTOP.md`.
   Bridge: `docs/DROIDCOMMAND_INTEGRATION.md`. Flash Tools: `docs/FLASH_TOOLS_PLAN.md`.
-  Custom RR catalog: `docs/CUSTOM_RR_CATALOG.md`. Custom Recovery installer:
-  `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+  Custom RR catalog: `docs/CUSTOM_RR_CATALOG.md`. Desktop mode: `docs/DESKTOP_MODE.md`.
+  Custom Recovery installer: `docs/CUSTOM_RECOVERY_INSTALLER.md`. How-to: `docs/MANUAL.md`.
 
 **Incident worth remembering:** merge `b02e7c4` silently reverted six build hooks to a flavour
 that defined SHA-256 pins and never compared them (one also used an undefined variable),
@@ -368,7 +363,7 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-The Root Guide, terminal hand-off, Kitsune, module work, the Custom RR build catalog, Shizuku/Sui (#75) and Desktop mode (#76) are on `main`. Custom Recovery installer is on `feat/recovery-installer` (not on `main` yet). The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only on a tap. ISO Stage 5 is still blocked
+The Root Guide, terminal hand-off, Kitsune, module work, the Custom RR build catalog, Shizuku/Sui (#75), Desktop mode (#76) and Custom Recovery installer (#77) are on `main`. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only on a tap, plus `RUN_COMMAND` / `DESKTOP_MODE` for the Dashboard Desktop-mode card. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 

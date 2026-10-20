@@ -139,7 +139,7 @@ PitchBlack lookup. A matching TWRP or PitchBlack catalog row can open that insta
 other recoveries stay links. Device work never uses the network.
 
 Screens: Dashboard (including **Desktop mode** through VictorSuite; see
-[docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Root Guide**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
+[docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Ask**, **Root Guide**, **Help**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
 Modules (creator and repository links), Recovery (USB fastboot), Custom Recovery (rooted TWRP/PitchBlack installer), Logs / Terminal, Settings.
 
 **Root Guide** is offline rooting documentation inside the app (bootloader unlock, Magisk / KernelSU / APatch,
@@ -191,9 +191,9 @@ connection until stopped. More in [docs/ANDROID_APP.md](docs/ANDROID_APP.md).
 
 Rendered by Paparazzi unit tests with sample data. **These are not captures from a real phone.**
 
-| Dashboard | Flash Tools | ADB | Fastboot | Modules | Settings |
-|---|---|---|---|---|---|
-| <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_dashboard.png" alt="Dashboard screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_flashTools.png" alt="Flash Tools screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_adb.png" alt="ADB screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_fastboot.png" alt="Fastboot screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_modules.png" alt="Module Builder screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_settings.png" alt="Settings screen" width="140"> |
+| Dashboard | Flash Tools | ADB | Fastboot | Modules | Settings | Help |
+|---|---|---|---|---|---|---|
+| <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_dashboard.png" alt="Dashboard screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_flashTools.png" alt="Flash Tools screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_adb.png" alt="ADB screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_fastboot.png" alt="Fastboot screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_modules.png" alt="Module Builder screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_settings.png" alt="Settings screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_help.png" alt="Help / how-to manual screen" width="140"> |
 
 Live ISO, Calamares installer and Termux screenshots will come after a real boot and install.
 
@@ -422,10 +422,13 @@ Makefile · BUILD.md · HACKING.md · AGENTS.md · CLAUDE.md
 | [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md) | BIOS-only live ISO; architecture caveats |
 | [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | Trust boundaries, logging, flashing gates |
 | [docs/ANDROID_APP.md](docs/ANDROID_APP.md) | Host-phone APK: USB Host, screens, install, debug key, limits |
+| [docs/MANUAL.md](docs/MANUAL.md) | How-to manual (plain language). Same text is the in-app **Help** screen |
 | [docs/ROOT_GUIDE.md](docs/ROOT_GUIDE.md) | Root Guide: bundled pages, importer, parser, refresh procedure, limits |
 | [docs/FLASH_TOOLS_PLAN.md](docs/FLASH_TOOLS_PLAN.md) | Flash Tools hub, device-match check, manifest format, EDL-Commander plan |
 | [docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md) | "Builds for this device" card: Custom RR ROM/recovery catalog by codename; TWRP/PitchBlack rows can open Custom Recovery |
+| [docs/CUSTOM_RECOVERY_INSTALLER.md](docs/CUSTOM_RECOVERY_INSTALLER.md) | Rooted TWRP / PitchBlack installer (`su` / `dd`, dry-run default) |
 | [docs/DESKTOP.md](docs/DESKTOP.md) | Linux/Windows desktop, Windows USB drivers, Docker |
+| [docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md) | Host-phone Desktop mode via VictorSuite (X11 / RUN_COMMAND) |
 | [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) | Bridge protocol for droidcommand-AI (Messenger, JSON envelope, pairing) |
 | [tests/README.md](tests/README.md) | Test and release-verifier notes |
 | [CHANGELOG.md](CHANGELOG.md) | v0.2.0 and later notes |
