@@ -25,14 +25,19 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > unchanged (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
 > `versionName=0.1.0-debug`). On main this installer did **not** exist: Recovery
 > is USB fastboot (Boot once / Flash) plus browser links; sideload is ADB
-> `sideload-host`. Merged `origin/main` after #75 (Shizuku) — docs-only conflicts.
-> Verified: `:core:test` 210/0 (`recovery/` 41), `:desktop:test`
-> 2/0, `:desktop:compileKotlin`, `:app:testDebugUnitTest` 29/0 (Paparazzi
-> `customRecovery` + `settings` recorded), `:app:assembleDebug`. APK contains
-> guide markdown, not recovery images. `bash tests/run-tests.sh` → 1023/0;
-> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run:** a phone, a live
-> TWRP/PBRP download+write, `:app:verifyPaparazziDebug` full set (fails on
-> `modules`, stale on `main` since #69). Doc: `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+> `sideload-host`. Merged `origin/main` (`cda8e3f`, #75 Shizuku) — docs-only
+> conflicts. Re-verified on merge commit `904d9fa`: `:core:test` 236/0
+> (`recovery/` 41, `shizuku/` 26), `:desktop:test` 2/0, `:desktop:compileKotlin`,
+> `:app:testDebugUnitTest` 29/0 (Paparazzi `customRecovery` + `settings`
+> recorded), `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug`
+> / `versionCode=1` / `versionName=0.1.0-debug`; `INTERNET` +
+> `moe.shizuku.manager.permission.API_V23`). `bash tests/run-tests.sh` → 1023/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). CI on
+> `904d9fa` (PR #77): all 9 checks green (apk, tests, shellcheck, python,
+> yaml-lint, package-lists, linux-desktop, windows-desktop, docker). **Not run:**
+> a phone, a live TWRP/PBRP download+write, `:app:verifyPaparazziDebug` full set
+> (fails on `modules`, stale on `main` since #69). Doc:
+> `docs/CUSTOM_RECOVERY_INSTALLER.md`.
 
 > **Update 2026-10-19 (Shizuku fleet alignment):** branch `feat/shizuku` (PR #75).
 > Aligned with droidcommand-AI PR #231 under RootForge packages. Four states
@@ -207,11 +212,13 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
 - Custom Recovery installer (this branch): `:core` `ai.rootforge.os.recovery` plus
   Compose **Custom Recovery** screen. Dedicated recovery only; dry-run default;
-  `FLASH RECOVERY`; no bundled images. `:core:test` 210/0 (`recovery/` 41/0);
-  `:desktop:test` 2/0; `:app:testDebugUnitTest` 29/0; `:app:assembleDebug`
-  (`ai.rootforge.os.debug` / `0.1.0-debug`). Paparazzi `customRecovery` and
-  `settings` recorded. `tests/run-tests.sh` 1023/0; `tests/lint.sh` clean
-  (shellcheck 0.11.0). **Not run on a phone.** Doc: `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+  `FLASH RECOVERY`; no bundled images. After merging #75: `:core:test` 236/0
+  (`recovery/` 41/0, `shizuku/` 26/0); `:desktop:test` 2/0;
+  `:app:testDebugUnitTest` 29/0; `:app:assembleDebug` (`ai.rootforge.os.debug`
+  / `0.1.0-debug`). Paparazzi `customRecovery` and `settings` recorded.
+  `tests/run-tests.sh` 1023/0; `tests/lint.sh` clean (shellcheck 0.11.0).
+  PR #77 CI on `904d9fa`: 9/0. **Not run on a phone.** Doc:
+  `docs/CUSTOM_RECOVERY_INSTALLER.md`.
 - Shizuku/Sui (PR #75, on `main`): fleet four-state manager + `PrivilegedShell` sole API, bound
   `IPrivilegedShell` UserService after `GRANTED`, approval-gated read-only Settings
   lookups; `pmGrant` hidden + typed confirm. Deps 13.1.5. `:core:test` 194/0,
