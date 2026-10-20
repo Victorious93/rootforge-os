@@ -432,6 +432,7 @@ Makefile · BUILD.md · HACKING.md · AGENTS.md · CLAUDE.md
 | [docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md) | "Builds for this device" card: Custom RR ROM/recovery catalog by codename; TWRP/PitchBlack rows can open Custom Recovery |
 | [docs/CUSTOM_RECOVERY_INSTALLER.md](docs/CUSTOM_RECOVERY_INSTALLER.md) | Rooted TWRP / PitchBlack installer (`su` / `dd`, dry-run default) |
 | [docs/DESKTOP.md](docs/DESKTOP.md) | Linux/Windows desktop, Windows USB drivers, Docker |
+| [docs/BOARD_HELPERS.md](docs/BOARD_HELPERS.md) | Raspberry Pi as Linux host and ESP32 USB-serial bridge (owner unlock/flash; no FRP / screen-lock bypass) |
 | [docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md) | Host-phone Desktop mode via VictorSuite (X11 / RUN_COMMAND) |
 | [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) | Bridge protocol for droidcommand-AI (Messenger, JSON envelope, pairing) |
 | [tests/README.md](tests/README.md) | Test and release-verifier notes |

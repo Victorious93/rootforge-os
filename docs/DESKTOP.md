@@ -14,6 +14,12 @@ plugged-in phone, show the Root plan and brand Root wizard, and pin later
 actions to that serial (`adb -s` / `fastboot -s`). A wide window shows two
 cards. EDL stays identify-only; Samsung Odin is not implemented.
 
+A **Raspberry Pi** (Raspberry Pi OS 64-bit, JDK 17) is this same Linux
+host path — `/proc/device-tree/model` sets the caption to “this Raspberry
+Pi”. CI `.deb` builds are amd64; on a Pi run `./gradlew :desktop:run` from
+source. An ESP32 may be a USB-serial bridge only. Screen-lock and FRP
+bypass are refused. See `docs/BOARD_HELPERS.md`.
+
 ## Linux desktop
 
 Build (JDK 17, Android SDK needed only because `:app` lives in the same

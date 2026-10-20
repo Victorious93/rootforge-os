@@ -226,6 +226,7 @@ Each card is a read-only identity, a **Root plan**, and a brand **Root wizard** 
 9. **Xiaomi:** the Mi Unlock wait (often 7 to 30 days) is on Xiaomi's side. RootForge cannot skip it. The official page is Xiaomi's Mi Unlock site.
 10. **Motorola:** read `oem get_unlock_data` on Fastboot, then open Motorola's official unlock portal in the browser. RootForge does not fetch that code.
 11. Buttons open the existing ADB, Fastboot, EDL, Root / Patching, Modules or Custom Recovery screens **for that serial**. Official https pages open in the browser.
+12. **ESP32 and Raspberry Pi helpers** are owner unlock/flash only. A Pi is the same Linux host `adb`/`fastboot` path as the desktop app. An ESP32 may be a USB-serial bridge. RootForge does **not** bypass a screen lock or Factory Reset Protection. Official pages: **Links → ESP32 & Pi helpers**. Full notes: [docs/BOARD_HELPERS.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/BOARD_HELPERS.md).
 
 **EDL is identify only.** Qualcomm `05c6:9008` is recognised so you can see the chip. Devices never starts a Firehose write.
 
@@ -412,7 +413,17 @@ This tab only opens known module-repository websites in the browser. RootForge d
 
 ![Links](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_links.png)
 
-Drawer entry **Links**, also from Modules → **Links directory**, Settings → About, and Help. Official https pages for Magisk / KernelSU / APatch, module repositories (Alt-Repo, MMRL, Xposed-Modules-Repo, LSPosed / Vector, Zygisk Next), Shizuku apps (Shizuku, Sui, App Ops, Ice Box, Hail, SystemUI Tuner, Canta, Inure, aShell / aShell You, Dhizuku), and **Bootloader unlock portals** (Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev, OnePlus, Fairphone; Pixel / Nothing have no token page; Samsung / ASUS / LG / Huawei no longer offer official unlocking). Each live tap opens the system browser. Nothing is downloaded or bundled. RootForge never sends serial, IMEI or unlock data to these sites. URLs that could not be verified as official https pages are omitted. **Glossary** on this screen (and a drawer entry) opens the everyday-words list.
+Drawer entry **Links**, also from Modules → **Links directory**, Settings → About, and Help. Official https pages for Magisk / KernelSU / APatch, module repositories (Alt-Repo, MMRL, Xposed-Modules-Repo, LSPosed / Vector, Zygisk Next), Shizuku apps (Shizuku, Sui, App Ops, Ice Box, Hail, SystemUI Tuner, Canta, Inure, aShell / aShell You, Dhizuku), **Bootloader unlock portals** (Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev, OnePlus, Fairphone; Pixel / Nothing have no token page; Samsung / ASUS / LG / Huawei no longer offer official unlocking), and **ESP32 & Pi helpers** (Raspberry Pi documentation, Espressif USB Serial/JTAG, Android platform-tools; owner unlock/flash only — no screen-lock or FRP bypass). Each live tap opens the system browser. Nothing is downloaded or bundled. RootForge never sends serial, IMEI or unlock data to these sites. URLs that could not be verified as official https pages are omitted. **Glossary** on this screen (and a drawer entry) opens the everyday-words list.
+
+### ESP32 and Raspberry Pi helpers
+
+A **Raspberry Pi** is a Linux host: install `adb`/`fastboot` (or run the desktop client from this repo with JDK 17) and use the same Devices / dry-run / typed-confirm path as a PC. After reboot to the bootloader, wait until the phone enumerates in fastboot before Unlock.
+
+An **ESP32-S3** can be Espressif's USB Serial/JTAG CDC bridge. RootForge does not ship HID firmware and will not type keys, PINs or patterns.
+
+**Not in this app:** screen-lock bypass, Factory Reset Protection (FRP) bypass, or anything meant to defeat an ownership lock. If you are locked out, use the maker's official account recovery.
+
+Open **Links → ESP32 & Pi helpers** for official https pages. Details: [docs/BOARD_HELPERS.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/BOARD_HELPERS.md). **Not run on a Pi or an ESP32.**
 
 ### Recovery (USB fastboot path)
 
@@ -926,6 +937,10 @@ Drawer entry **Glossary**, also from Help and from Links. One short line per ter
 
 **Unlock portal.** The maker's official webpage for a bootloader unlock code. RootForge only opens it in the browser and never sends phone data there.
 
+**ESP32 helper.** A small Espressif board used here only as a USB-serial bridge for phones you own. Not a screen-lock or FRP tool.
+
+**Raspberry Pi helper.** A Pi is a Linux computer running the same host adb/fastboot path as the desktop app, for phones you own.
+
 **Bootloader.** The tiny program that starts the phone before Android. Unlocking it usually wipes the phone.
 
 **Recovery.** A small system you boot instead of Android to install updates or wipe data.
@@ -948,4 +963,4 @@ Drawer entry **Glossary**, also from Help and from Links. One short line per ter
 
 ---
 
-*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, the in-app Glossary, the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, and official bootloader unlock portals. If a line here disagrees with the running app, the app is right — please file an issue.*
+*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, the in-app Glossary, the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, and ESP32 / Raspberry Pi owner helpers (no FRP or screen-lock bypass). If a line here disagrees with the running app, the app is right — please file an issue.*

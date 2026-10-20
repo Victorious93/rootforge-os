@@ -4,6 +4,7 @@ import ai.rootforge.os.catalog.CatalogRecoveryPrefill
 import ai.rootforge.os.catalog.CatalogRecoveryBridge
 import ai.rootforge.os.device.DeviceCardModel
 import ai.rootforge.os.device.DeviceRoster
+import ai.rootforge.os.device.HostPlatform
 import ai.rootforge.os.device.RootGuideAction
 import ai.rootforge.os.device.RootGuideKind
 import ai.rootforge.os.device.RootGuideStep
@@ -60,14 +61,16 @@ fun DevicesScreen(
     val cards = remember(state.targets, state.identities, state.serialBusy, state.buildCatalog) {
         DeviceRoster.cards(state.targets, state.identities, state.serialBusy, state.buildCatalog)
     }
-    val pc = state.hostCaption == "this computer"
+    val pc = HostPlatform.isHostComputer(state.hostCaption)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columns = RootGuides.columnsForWidthDp(maxWidth.value.roundToInt())
         ScreenColumn {
             ForgeCard("Connected phones", "USB attach plus a poll of ADB, fastboot and Qualcomm 9008. Identify is read-only.", Icons.Filled.PhoneAndroid) {
                 Text(
                     if (pc) {
-                        "This computer talks to every plugged-in phone through host adb and fastboot (`adb -s` / `fastboot -s`). Wide windows show two cards side by side. Serials show the last four characters. Destructive work still uses dry-run, a typed phrase, a backup before a recovery write, and never reboots by itself."
+                        val pi = state.hostCaption == HostPlatform.PI_CAPTION
+                        val host = if (pi) "This Raspberry Pi" else "This computer"
+                        "$host talks to every plugged-in phone through host adb and fastboot (`adb -s` / `fastboot -s`) — the same `:desktop` path on a Pi as on a PC. Wide windows show two cards side by side. Serials show the last four characters. Destructive work still uses dry-run, a typed phrase, a backup before a recovery write, and never reboots by itself."
                     } else {
                         "Every plugged-in phone is listed, even when only one is the active target. Serials show the last four characters. Destructive work still uses dry-run, a typed phrase, a backup before a recovery write, and never reboots by itself. One action per serial; other phones can continue."
                     },
@@ -104,7 +107,7 @@ fun DevicesScreen(
             }
 
             if (state.targets.isEmpty()) CableSetupCard()
-            NoticeCard("EDL (Qualcomm 05c6:9008) is identified only. Devices never starts a Firehose write. Samsung Download Mode / Odin is explained only — RootForge does not speak Odin. Unlock, flash, recovery write and module install keep the same confirms as their own screens.")
+            NoticeCard("EDL (Qualcomm 05c6:9008) is identified only. Devices never starts a Firehose write. Samsung Download Mode / Odin is explained only — RootForge does not speak Odin. Unlock, flash, recovery write and module install keep the same confirms as their own screens. ESP32 and Raspberry Pi helpers (Links) are owner unlock/flash only: a Pi is this Linux host path; an ESP32 may be a USB-serial bridge. RootForge does not bypass a screen lock or FRP.")
         }
     }
 }

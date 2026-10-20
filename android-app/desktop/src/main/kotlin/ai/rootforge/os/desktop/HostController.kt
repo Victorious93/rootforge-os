@@ -58,6 +58,10 @@ import kotlinx.coroutines.withContext
  * Desktop controller: same plan / typed-confirmation contract as the Android
  * [ai.rootforge.os.core.TargetController], but the transport is the host
  * `adb` / `fastboot` / `edl` binaries rather than USB Host bulk endpoints.
+ *
+ * A Raspberry Pi running Raspberry Pi OS is this same Linux host path
+ * ([ai.rootforge.os.device.BoardHelpers.RASPBERRY_PI], [HostToolset]).
+ * There is no second USB stack and no FRP / screen-lock helper.
  */
 class HostController(
     private val tools: HostToolset,

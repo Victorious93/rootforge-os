@@ -1,5 +1,6 @@
 package ai.rootforge.os.links
 
+import ai.rootforge.os.device.BoardHelpers
 import ai.rootforge.os.device.UnlockPortals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -57,6 +58,16 @@ class DirectoryLinksTest {
         assertTrue(portals.any { it.id == "unlock-asus" && it.url == null })
         assertTrue(portals.any { it.id == "unlock-lg" && it.url == null })
         assertTrue(portals.any { it.id == "unlock-huawei" && it.url == null })
+        val helpers = bySection.getValue(LinkSection.ESP32_PI_HELPERS)
+        assertEquals(BoardHelpers.all.size, helpers.size)
+        val helperUrls = helpers.flatMap { listOfNotNull(it.url) + it.extras.map { extra -> extra.url } }
+        assertEquals(helperUrls.size, helperUrls.toSet().size)
+        for (url in helperUrls) {
+            assertTrue(url, url.startsWith("https://"))
+        }
+        assertTrue(helpers.any { it.id == "helper-raspberry-pi" && it.url != null })
+        assertTrue(helpers.any { it.id == "helper-esp32-usb-serial" && it.url != null })
+        assertTrue(helpers.any { it.description.contains("FRP") || it.description.contains("key-injection") || it.description.contains("Not a lock-pick") })
         val names = DirectoryLinks.all.map { it.name }.toSet()
         assertTrue(names.contains("Magisk"))
         assertTrue(names.contains("KernelSU"))

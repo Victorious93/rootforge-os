@@ -7,6 +7,12 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### ESP32 and Raspberry Pi helpers (2026-10-20)
+- Owner-only bootloader unlock / flash helpers: `:core` `BoardHelpers` plus **Links → ESP32 & Pi helpers** (official https: Raspberry Pi documentation on GitHub, Espressif USB Serial/JTAG and ESP32-S3, Android platform-tools and AOSP locking/unlocking). A Raspberry Pi reuses `:desktop` `HostController` / `HostToolset` (`LinuxBoard` reads `/proc/device-tree/model`). An ESP32 is documented as a USB-serial CDC bridge only.
+- **Refused on ethics grounds (not implemented):** screen-lock bypass, FRP bypass, HID/key injection to type credentials. Shared refuse list in `BoardHelpers.REFUSED`; Ask topic `frp-screen-lock-refused`; comments in `esp32_toolkit.sh` / `rpi_fleet_tools.sh`. Dry-run, typed confirm, backup-first, no auto-reboot unchanged. `applicationId`, signing and versioning unchanged.
+- Doc: `docs/BOARD_HELPERS.md`. Glossary: ESP32 helper, Raspberry Pi helper.
+- Tests on this head: `BoardHelpersTest` 4/0 (https unique allowed hosts; FRP/screen-lock refuse list); `DirectoryLinksTest` 3/0; `LinuxBoardTest` 1/0; Ask `esp32-pi-helpers` / `frp-screen-lock-refused`. `:core:test` **407/0**; `:desktop:test` **4/0**; `:app:testDebugUnitTest` **35/0** (Paparazzi still match); `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run on a Pi, an ESP32, a phone, or a desktop window.**
+
 ### Official bootloader unlock portals (2026-10-20)
 - Devices **Root plan** now shows the matching maker's official unlock-token/code page (`:core` `UnlockPortals`) plus a plain-words **Read unlock data** step (Motorola `fastboot oem get_unlock_data`, HTC `oem get_identifier_token`, OnePlus `getvar serialno`). Dry-run first; typed `UNLOCK` still gates a later unlock. Official pages open in the system browser only. Serial, IMEI and unlock data are **never** sent to a site.
 - Live https vendor pages checked 2026-10-20: Motorola, Sony Open Devices, Xiaomi Mi Unlock (`en.miui.com/unlock/`), HTCdev, OnePlus unlock token, Fairphone. Pixel has no token portal (OEM unlocking). Nothing has no token webpage. Samsung, ASUS, LG and Huawei no longer offer official unlocking — in-app note, no invented URL. Sony / HTC / Fairphone still get their portal when the wizard is generic fastboot.

@@ -153,11 +153,11 @@ private fun rememberDesktopUiState(
         nodeId = settings.nodeId, paired = paired, pending = pending,
         adbFingerprint = tools.adb?.absolutePath ?: "adb not found",
         appVersion = DESKTOP_VERSION,
-        hostCaption = "this computer",
+        hostCaption = LinuxBoard.hostCaption(),
         transportCaption = "Host ${tools.summary()}",
-        emptyTargetsHint = "No adb/fastboot device. Plug the target into this computer, enable USB debugging, " +
+        emptyTargetsHint = "No adb/fastboot device. Plug the target into ${LinuxBoard.hostCaption()}, enable USB debugging, " +
             "or boot it to the bootloader. Install Google platform-tools (or Debian's adb/fastboot) and put them on PATH. " +
-            "On Windows also install the Google USB driver / Qualcomm 9008 driver — see the README.",
+            "A Raspberry Pi uses this same Linux host path. On Windows also install the Google USB driver / Qualcomm 9008 driver — see the README.",
         identities = identities,
         serialBusy = serialBusy,
     )

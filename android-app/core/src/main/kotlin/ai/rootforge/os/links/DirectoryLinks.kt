@@ -1,5 +1,6 @@
 package ai.rootforge.os.links
 
+import ai.rootforge.os.device.BoardHelpers
 import ai.rootforge.os.device.UnlockPortals
 
 enum class LinkSection(val label: String) {
@@ -7,6 +8,7 @@ enum class LinkSection(val label: String) {
     MODULE_SOURCES("Module repositories and sources"),
     SHIZUKU_APPS("Shizuku apps"),
     BOOTLOADER_UNLOCK_PORTALS("Bootloader unlock portals"),
+    ESP32_PI_HELPERS("ESP32 & Pi helpers"),
 }
 
 data class NamedUrl(val label: String, val url: String)
@@ -242,7 +244,18 @@ object DirectoryLinks {
         )
     }
 
-    val all: List<DirectoryLink> = PROJECT_LINKS + PORTAL_LINKS
+    private val HELPER_LINKS: List<DirectoryLink> = BoardHelpers.all.map { helper ->
+        DirectoryLink(
+            id = "helper-${helper.id}",
+            name = helper.name,
+            url = helper.page.url,
+            section = LinkSection.ESP32_PI_HELPERS,
+            description = helper.summary + " " + helper.inScope,
+            extras = helper.extras.map { extra -> NamedUrl(extra.label, extra.url) },
+        )
+    }
+
+    val all: List<DirectoryLink> = PROJECT_LINKS + PORTAL_LINKS + HELPER_LINKS
 
     /** Every URL this directory will offer to the browser, including extras. Null portal urls are omitted. */
     fun urls(): List<String> = all.flatMap { listOfNotNull(it.url) + it.extras.map { extra -> extra.url } }

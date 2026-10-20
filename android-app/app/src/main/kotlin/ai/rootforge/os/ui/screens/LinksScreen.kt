@@ -38,6 +38,13 @@ fun LinksScreen(actions: AppActions, onOpenGlossary: () -> Unit = {}) {
             val links = DirectoryLinks.all.filter { it.section == section }
             if (links.isNotEmpty()) {
                 SectionLabel(section.label)
+                if (section == LinkSection.ESP32_PI_HELPERS) {
+                    NoticeCard(
+                        "Owner phones only. A Raspberry Pi runs the same Linux host adb/fastboot path as the desktop app. " +
+                            "An ESP32 may be a USB-serial bridge. RootForge does not bypass a screen lock or Factory Reset Protection, " +
+                            "and it does not inject keys.",
+                    )
+                }
                 links.forEach { LinkCard(it, actions) }
             }
         }

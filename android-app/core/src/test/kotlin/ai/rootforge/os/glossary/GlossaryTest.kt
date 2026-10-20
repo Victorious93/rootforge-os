@@ -44,7 +44,7 @@ class GlossaryTest {
             "Root", "su", "Magisk", "KernelSU", "KernelSU Next", "APatch", "Module",
             "Zygisk", "Zygisk Next", "ReZygisk", "Xposed", "LSPosed", "Vector",
             "Shizuku", "Sui", "Dhizuku", "ADB", "fastboot", "EDL", "Serial", "SoC", "Slot", "USB mode",
-            "Download mode", "Odin", "Knox", "Mi Unlock", "Unlock portal", "Bootloader",
+            "Download mode", "Odin", "Knox", "Mi Unlock", "Unlock portal", "ESP32 helper", "Raspberry Pi helper", "Bootloader",
             "Recovery", "TWRP", "PitchBlack", "Boot image", "ROM", "Flash",
             "Dry run", "SHA-256 / checksum", "Bootloop",
         )

@@ -36,6 +36,8 @@ object Glossary {
         GlossaryEntry("Knox", "Samsung's tamper flag. Unlocking or unofficial images usually trip it for good."),
         GlossaryEntry("Mi Unlock", "Xiaomi's official unlock process. After you bind an account you often wait days; RootForge cannot skip that wait."),
         GlossaryEntry("Unlock portal", "The maker's official webpage for a bootloader unlock code. RootForge only opens it in the browser and never sends phone data there."),
+        GlossaryEntry("ESP32 helper", "A small Espressif board used here only as a USB-serial bridge for phones you own. Not a screen-lock or FRP tool."),
+        GlossaryEntry("Raspberry Pi helper", "A Pi is a Linux computer running the same host adb/fastboot path as the desktop app, for phones you own."),
         GlossaryEntry("Bootloader", "The tiny program that starts the phone before Android. Unlocking it usually wipes the phone."),
         GlossaryEntry("Recovery", "A small system you boot instead of Android to install updates or wipe data."),
         GlossaryEntry("TWRP", "Team Win Recovery Project: a well-known custom recovery."),

@@ -48,6 +48,8 @@ class ManualLibraryTest {
         assertTrue("unlock portal section missing", "Bootloader unlock portals" in library.raw)
         assertTrue("oem get_unlock_data missing", "oem get_unlock_data" in library.raw)
         assertTrue("never-send unlock data missing", "never sends serial" in library.raw.lowercase())
+        assertTrue("ESP32 & Pi helpers missing", "ESP32 & Pi helpers" in library.raw)
+        assertTrue("FRP refuse missing", "Factory Reset Protection" in library.raw)
         assertTrue("config backup ops missing", "config.export" in text && "config.import" in text)
         assertTrue("config backup remote refuse missing", "not remotely allowed" in text.lowercase())
     }

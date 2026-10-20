@@ -87,6 +87,8 @@ class ManualDocTests(unittest.TestCase):
         self.assertIn("Bootloader unlock portals", text)
         self.assertIn("oem get_unlock_data", text)
         self.assertIn("never sends serial", text.lower())
+        self.assertIn("ESP32 & Pi helpers", text)
+        self.assertIn("Factory Reset Protection", text)
         self.assertIn("05c6:9008", text)
         self.assertIn("••••", text)
 
