@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="assets/logo.png" alt="rootforge-os logo" width="200">
+</p>
+
+<p align="center">
   <img src="assets/logo/rootforge-os-logo.jpg" alt="RootForge OS logo" width="240">
 </p>
 
