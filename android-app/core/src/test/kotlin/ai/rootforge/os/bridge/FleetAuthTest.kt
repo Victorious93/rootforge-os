@@ -10,6 +10,20 @@ import org.junit.Test
 
 class FleetAuthTest {
     @Test
+    fun unpairedCallerIsRefusedForNodeStatusGet() = runTest {
+        val pairing = PairingStore(memoryStore())
+        val r = parseFleet(
+            fleetExec(pairing = pairing).handle(
+                fleetJson(op = FleetOp.NODE_STATUS, nonce = nonce(30), now = NOW),
+                CALLER,
+            ),
+        )
+        assertEquals(false, r.ok)
+        assertEquals(FleetError.NOT_PAIRED, r.error?.code)
+        assertEquals(listOf(CALLER), pairing.pending.value)
+    }
+
+    @Test
     fun unpairedCallerIsRefusedAndQueued() = runTest {
         val pairing = PairingStore(memoryStore())
         val ex = fleetExec(pairing = pairing)

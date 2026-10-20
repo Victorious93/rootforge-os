@@ -50,8 +50,10 @@ internal fun fleetExec(
     enabled: Boolean = true,
     privileged: PrivilegedShell = FakePrivilegedShell(),
     replay: ReplayGuard = ReplayGuard(clock = { NOW }),
+    statusSource: NodeStatusSource = NodeStatusSource.Default,
+    clock: () -> Long = { NOW },
     configBackup: ConfigBackup = ConfigBackup(),
-): FleetExecutor = FleetExecutor(NODE, backend, approvals, pairing, { enabled }, privileged, replay, configBackup)
+): FleetExecutor = FleetExecutor(NODE, backend, approvals, pairing, { enabled }, privileged, replay, statusSource, clock, configBackup)
 
 internal fun parseFleet(line: String) = bridgeJson.decodeFromString<FleetResponse>(line)
 

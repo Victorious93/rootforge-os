@@ -122,16 +122,17 @@ A re-signed DCA (new debug keystore) shows as pending again with a "different si
 
 - App: `android-app/core/src/main/kotlin/ai/rootforge/os/bridge/Protocol.kt` (`BRIDGE_PROTOCOL_MAJOR`, `BRIDGE_PROTOCOL_MINOR = 1`, Messenger constants, `BridgeOp`).
 - Executor + pairing: `BridgeExecutor.kt`, `PairingStore.kt`.
-- Fleet remote-control envelope (minor 1: `op` / `requestId` / nonce): `FleetExecutor.kt`, `docs/MANUAL.md` (Fleet integration). Same Messenger service; `BridgeIngress` routes on a top-level `op` field. `config.export` / `config.import` are advertised (`remoteAllowed=false`); remote callers are refused. Local backup logic is `:core` `config/ConfigBackup` (UNIFIED_BACKUP.md).
+- Fleet remote-control envelope (minor 1: `op` / `requestId` / nonce): `FleetExecutor.kt`, `docs/MANUAL.md` (Fleet integration). Same Messenger service; `BridgeIngress` routes on a top-level `op` field. Envelope ops: `capabilities.get`, `remote.command`, `macro.step`, `macro.run`, `node.status.get` (STATUS-TRAY snapshot; pairing + default-off switch; `kind=read`, `remoteAllowed=true`, `requiresConfirm=false`), `config.export` / `config.import` (`remoteAllowed=false`; remote callers refused; local logic is `:core` `config/ConfigBackup`).
 - Messenger service: `android-app/app/.../bridge/RootForgeBridgeService.kt` (exported, no signature permission). Caller UID is `Message.sendingUid`, with `Binder.getCallingUid()` as fallback.
-- Tests: `BridgeExecutorTest.kt`, `PairingStoreTest.kt`, `FleetEnvelopeTest.kt`, `ReplayGuardTest.kt`, `FleetAuthTest.kt`, `FleetCapabilitiesTest.kt`, `FleetExecutorTest.kt`.
+- Tests: `BridgeExecutorTest.kt`, `PairingStoreTest.kt`, `FleetEnvelopeTest.kt`, `ReplayGuardTest.kt`, `FleetAuthTest.kt`, `FleetCapabilitiesTest.kt`, `FleetExecutorTest.kt`, `NodeStatusSnapshotTest.kt`.
 - DCA: `core-rootforge/.../Protocol.kt`. A vendored schema/fixture set (blueprint §10) is still not done.
 
 ## Honest status
 
 Implemented and unit-tested in `:core` (no phone, no USB):
 
-- Envelope, all eleven operations above, pairing by package+cert, pending queue, cert-change, extra-parameter rejection, library-name images, control prompts, `denied_by_user` when the typed phrase is refused.
+- Envelope, all eleven legacy operations above, pairing by package+cert, pending queue, cert-change, extra-parameter rejection, library-name images, control prompts, `denied_by_user` when the typed phrase is refused.
+- Protocol 1.1 `node.status.get`: frozen `NodeStatusSnapshot` (`node_health` plus an optional `other` root pulse). Unpaired callers are `not_paired`. Detail is capped at 200 characters and refused if it looks like a secret.
 - Messenger service, Settings pairing UI, pending-controller notification.
 
 Still not a live DCA session:

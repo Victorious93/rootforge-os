@@ -26,53 +26,115 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > (stays as-is). Unknown/oversized payloads rejected. `applicationId`,
 > signing and versioning unchanged. Local implementation is `:core`
 > `ai.rootforge.os.config`. Docs: `docs/MANUAL.md` / Help (`cmp` identical).
-> **Tests recorded after the local suite on this branch.** **Not run on a
-> phone.** Another agent may touch the capability registry on
-> `feat/node-status-get`; merge `origin/main` before finishing.
+> Merged `origin/main` (`3737c12` #82 `node.status.get`, plus #81). After
+> that merge: `:core:test` **355/0** (`ConfigBackupTest` 12,
+> `FleetCapabilitiesTest` 2, `FleetEnvelopeTest` 14, `FleetExecutorTest` 16,
+> `NodeStatusSnapshotTest` 9, `NodeStatusFleetOpTest` 6,
+> `ManualLibraryTest` 4); `:desktop:test` 2/0; `:app:testDebugUnitTest`
+> 34/0; `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug`
+> / `versionCode=1` / `versionName=0.1.0-debug`); `bash tests/run-tests.sh`
+> 1056/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run on a phone.**
 
-> **Update 2026-10-20 (Custom RR → Custom Recovery):** branch `feat/custom-rr-install`.
-> Dashboard **Builds for this device** now has **Install with Custom Recovery** on
-> a matching Custom RR TWRP or PitchBlack RECOVERY row. That opens the Custom
-> Recovery screen pre-filled with that project (`CatalogRecoveryBridge`). Official
-> files are looked up from the **probed** phone, not the catalog row. Downloads
-> still pass the installer https host allow-list; `pitchblack.tech` /
-> `www.pitchblack.tech` were added because that is the host Custom RR publishes
-> for PitchBlack (2026-09-12 catalog). ROMs, root solutions, OrangeFox, SHRP and
-> RedWolf stay link-only. Dry-run stays the default; SHA-256 is shown; a
-> published checksum is verified when present; a write still needs typed
-> `FLASH RECOVERY`, backs up first, writes only `recovery` / `recovery_a` /
-> `recovery_b`, never `boot`/`vendor_boot`, never `dd`s a zip, never auto-reboots.
-> The catalog still does not feed `DeviceMatchGate`. `applicationId`, signing
-> and versioning unchanged. Merged `origin/main` (`44716de` #78 how-to + Help,
-> then `988a941` #79 fleet protocol 1.1). The action is in `docs/MANUAL.md` /
-> in-app Help (`cmp` identical to the bundled copy). After that merge:
-> `:core:test` 304/0 (`CatalogRecoveryBridgeTest` 7, `RecoveryCatalogTest` 9,
-> `ManualLibraryTest` 4, plus fleet 1.1 from #79); `:desktop:test` 2/0;
-> `:app:testDebugUnitTest` 31/0; `:app:assembleDebug` (`aapt dump badging`:
-> `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`).
-> `verifyPaparazziDebug` fails only on `modules` (stale on `main` since #69);
-> Help golden still matches. `bash tests/run-tests.sh` 1055/0;
+> **Update 2026-10-20 (fleet `node.status.get`):** branch `feat/node-status-get`.
+> Protocol 1.1 envelope op `node.status.get` on the existing Messenger
+> service. Advertised in `capabilities.get` as `{kind:read,
+> remoteAllowed:true, requiresConfirm:false}`. Returns one frozen
+> `NodeStatusSnapshot` (`nodeId`, `packageName`, `connectionClass:
+> EXTERNAL_NODE`, `updatedAtMs`, `domains[{name,state,detail?}]`): always
+> `node_health`, plus an `other` root pulse on Android (`su` binary
+> present — looked up, never executed — and manager APK via
+> `RootManager.detect`). `detail` ≤ 200 chars; secret-shaped detail is
+> `invalid_parameters`, not stripped. Same package+cert pairing, default-off
+> external control, nonce/ttl/replay as remote control. Protocol minor stays
+> 1. `applicationId`, signing and versioning unchanged. RootForge is a node,
+> not the tray aggregator. Spec: droidcommand-AI
+> `docs/specs/STATUS_TRAY.md`. Documented in `docs/MANUAL.md` / Help.
+> **Not run on a phone.** After local suite: `:core:test` 341/0
+> (`NodeStatusSnapshotTest` 15, `FleetEnvelopeTest` 13, `FleetAuthTest` 8,
+> `FleetCapabilitiesTest` 2); `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 34/0 (Help golden unchanged);
+> `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug` /
+> `versionCode=1` / `versionName=0.1.0-debug`); `bash tests/run-tests.sh`
+> 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+
+> **Update 2026-10-20 (glossary):** branch `feat/local-module-install`
+> (PR #81). In-app **Glossary** drawer screen (`:core` `Glossary`): one
+> short everyday-words line per required term (root, su, Magisk, KernelSU,
+> KernelSU Next, APatch, module, Zygisk, Zygisk Next, ReZygisk, Xposed,
+> LSPosed, Vector, Shizuku, Sui, Dhizuku, ADB, fastboot, EDL, bootloader,
+> recovery, TWRP, PitchBlack, boot image, ROM, flash, dry run,
+> SHA-256/checksum, bootloop). Reachable from Help and Links. Same text in
+> `docs/MANUAL.md` § Glossary (bundled in Help). Links still lists Xposed,
+> LSPosed, Vector and Sui. `:core` `GlossaryTest` requires every entry
+> non-empty and unique. `applicationId`, signing and versioning unchanged.
+> `:core:test` 324/0 (`GlossaryTest` 3); `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 34/0 (Paparazzi `glossary` / `help` / `links`);
+> `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug` /
+> `versionCode=1` / `versionName=0.1.0-debug`); `bash tests/run-tests.sh`
+> 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run:** a phone, the desktop window.
+
+> **Update 2026-10-20 (local module install on this phone):** branch
+> `feat/local-module-install` (PR #81). Merged `origin/main` `ef088d3` (#80
+> Custom RR → Custom Recovery). Modules gains a **This phone** tab on the
+> Android APK: when this phone is rooted, a library zip is installed with
+> Magisk (`magisk --install-module`), KernelSU (`ksud module install`) or
+> APatch (`apd module install`). `RootManager.detect` auto-picks from
+> installed packages and, after List, from `/data/adb` markers; the
+> dropdown overrides. Same safety as USB install: SHA-256 shown, dry-run
+> default (logs the `su` command, does not call su), typed `INSTALL MODULE`
+> via `ApprovalCenter`, never auto-reboot (separate Reboot button).
+> Installed modules listed read-only from `/data/adb/modules`. LSPosed APKs
+> stay on ADB → Install APK. Desktop is a no-op. Same PR: in-app **Links**
+> directory (`DirectoryLinks`) of official https pages (managers, module
+> repos, Shizuku apps); browser only; from Modules, Settings, Help and the
+> drawer. `applicationId`, signing
+> and versioning unchanged. After merging `origin/main` (`ef088d3` / #80):
+> `:core:test` 321/0 (`LocalModulesTest`, `RootManagersTest` detect,
+> `DirectoryLinksTest`, `CatalogRecoveryBridgeTest`); `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 33/0; `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
 > `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
 > **Not run:** a phone, the desktop window.
 
-> **Update 2026-10-20 (fleet bridge v1):** branch `feat/fleet-bridge-v1`
-> (PR #79, on `main` as `988a941`). Protocol 1.1 fleet remote-control envelope
-> on the existing exported Messenger service (`ai.rootforge.os.action.BRIDGE`):
-> `op` `capabilities.get` | `remote.command` | `macro.step` | `macro.run`,
-> nonce/ttl/skew replay cache, pairing by package + cert SHA-256 only (never
-> `trigger.*`). External control still off by default. Destructive ops (flash,
-> recovery names including Custom Recovery `su`/`dd`, `shizuku.pmGrant`) go
-> through `ApprovalCenter` and never auto-approve. Legacy snake_case
-> `rootforge.*` envelope unchanged (`BridgeIngress`). Docs: `docs/MANUAL.md`
-> Fleet integration (same text in in-app Help after merging #78 / `44716de`).
-> `applicationId` / signing / versioning unchanged. After merging `origin/main`
-> (#77 then #78): `:core:test` **296/0** (`FleetEnvelopeTest` 12,
-> `ReplayGuardTest` 8, `FleetAuthTest` 7, `FleetCapabilitiesTest` 2,
-> `FleetExecutorTest` 15, `ManualLibraryTest` 4), `:desktop:test` 2/0,
-> `:app:testDebugUnitTest` 31/0, `:app:assembleDebug` (`aapt`:
-> `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`);
-> `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean
-> (shellcheck 0.11.0 via the repo wheel). **Not run on a phone.**
+> **Update 2026-10-20 (Custom RR → Custom Recovery):** PR #80, on `main` as
+> `ef088d3`. Dashboard **Builds for this device** now has **Install with
+> Custom Recovery** on a matching Custom RR TWRP or PitchBlack RECOVERY row.
+> That opens the Custom Recovery screen pre-filled with that project
+> (`CatalogRecoveryBridge`). Official files are looked up from the **probed**
+> phone, not the catalog row. Downloads still pass the installer https host
+> allow-list; `pitchblack.tech` / `www.pitchblack.tech` were added because
+> that is the host Custom RR publishes for PitchBlack (2026-09-12 catalog).
+> ROMs, root solutions, OrangeFox, SHRP and RedWolf stay link-only. Dry-run
+> stays the default; SHA-256 is shown; a published checksum is verified when
+> present; a write still needs typed `FLASH RECOVERY`, backs up first, writes
+> only `recovery` / `recovery_a` / `recovery_b`, never `boot`/`vendor_boot`,
+> never `dd`s a zip, never auto-reboots. The catalog still does not feed
+> `DeviceMatchGate`. `applicationId`, signing and versioning unchanged.
+> On that PR: `:core:test` 304/0; `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 31/0; `:app:assembleDebug`.
+> **Not run:** a phone, the desktop window.
+
+> **Update 2026-10-20 (fleet bridge v1):** PR #79, on `main` as `988a941`. Protocol 1.1
+> fleet remote-control envelope on the existing exported Messenger service
+> (`ai.rootforge.os.action.BRIDGE`): `op` `capabilities.get` | `remote.command` |
+> `macro.step` | `macro.run`, nonce/ttl/skew replay cache, pairing by package +
+> cert SHA-256 only (never `trigger.*`). External control still off by default.
+> Destructive ops (flash, recovery names including Custom Recovery `su`/`dd`,
+> `shizuku.pmGrant`) go through `ApprovalCenter` and never auto-approve. Legacy
+> snake_case `rootforge.*` envelope unchanged (`BridgeIngress`). Docs:
+> `docs/MANUAL.md` Fleet integration (same text in in-app Help after merging
+> #78 / `44716de`). `applicationId` / signing / versioning unchanged. After
+> merging `origin/main` (#77 then #78): `:core:test` **296/0**
+> (`FleetEnvelopeTest` 12, `ReplayGuardTest` 8, `FleetAuthTest` 7,
+> `FleetCapabilitiesTest` 2, `FleetExecutorTest` 15, `ManualLibraryTest` 4),
+> `:desktop:test` 2/0, `:app:testDebugUnitTest` 31/0, `:app:assembleDebug`
+> (`aapt`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not
+> run on a phone.**
 
 > **Update 2026-10-20 (how-to manual + in-app Help):** branch `docs/manual`
 > (PR #78, on `main` as `44716de`). Added `docs/MANUAL.md` (plain-language how-to:
@@ -286,31 +348,55 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), and Custom RR → Custom Recovery (#80 / `ef088d3`). This branch adds fleet `config.export` / `config.import`. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), and local module install + Links + Glossary (#81 / `b72d214`). On `main`: #82 `node.status.get`. This branch adds fleet `config.export` / `config.import`. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Fleet config backup (this branch): `config.export` / `config.import` advertised
-  with `remoteAllowed=false`; remote callers `capability_off`; export omits
-  secrets; import dry-run / skip / overwrite / merge-by-id; confirm required;
-  never enables `remote.command`. Documented in `docs/MANUAL.md` / Help.
-  **Suite results filled in after the local run.** **Not run on a phone.**
-- Custom RR → Custom Recovery (on `main` as #80 / `ef088d3`): matching TWRP/PitchBlack catalog rows open Custom Recovery
-  pre-filled; official lookup uses the probed phone; `pitchblack.tech` added
-  to the https host allow-list. ROMs and other recoveries stay links.
-  Documented in `docs/MANUAL.md` / Help. `:core:test` 304/0; `:desktop:test`
-  2/0; `:app:testDebugUnitTest` 31/0; `:app:assembleDebug`;
-  `tests/run-tests.sh` 1055/0; `tests/lint.sh` clean. **Not run on a phone.**
-- Fleet protocol 1.1 (PR #79, on `main` as `988a941`): Messenger JSON `op`
-  envelope with nonce replay/expiry, package+cert pairing, default-off
-  external control, and `ApprovalCenter` for destructive remote actions
-  (including Custom Recovery writes). Legacy `rootforge.*` envelope still
-  accepted. Documented in `docs/MANUAL.md` Fleet integration. On that PR:
-  `:core:test` 296/0. Not run on a phone.
-- How-to manual (PR #78, on `main` as `44716de`): `docs/MANUAL.md` plus in-app
-  **Help**. On that head: `:core:test` 252/0, `:desktop:test` 2/0,
-  `:app:testDebugUnitTest` 31/0. **Not run on a phone.**
+- Fleet config backup (this branch, after merging `origin/main` `3737c12` #82):
+  `config.export` / `config.import` advertised with `remoteAllowed=false`;
+  remote callers `capability_off`; export omits secrets; import dry-run /
+  skip / overwrite / merge-by-id; confirm required; never enables
+  `remote.command`. Documented in `docs/MANUAL.md` / Help. After merging
+  `3737c12` #82: `:core:test` 355/0, `:desktop:test` 2/0,
+  `:app:testDebugUnitTest` 34/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1056/0,
+  `tests/lint.sh` clean. **Not run on a phone.**
+- Fleet `node.status.get` (this branch): protocol 1.1 STATUS-TRAY read on the
+  existing Messenger service. Advertised `{kind:read, remoteAllowed:true,
+  requiresConfirm:false}`. Snapshot shape as frozen in droidcommand-AI
+  `docs/specs/STATUS_TRAY.md`. Pairing + default-off switch unchanged.
+  Protocol minor stays 1. `applicationId` / signing / versioning unchanged.
+  Local suite: `:core:test` 341/0, `:desktop:test` 2/0,
+  `:app:testDebugUnitTest` 34/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1055/0,
+  `tests/lint.sh` clean. **Not run on a phone.**
+- Local module install on this phone (PR #81, on `main` as `b72d214`, after merging
+  `origin/main` `ef088d3` / #80): Modules **This phone** tab installs a
+  library zip via `su` (`magisk --install-module` / `ksud module install` /
+  `apd module install`), auto-detects the manager, lists `/data/adb/modules`
+  read-only, dry-run default, typed `INSTALL MODULE`, never reboots. LSPosed
+  APKs unchanged. Desktop no-op. Same PR: **Links** directory of official
+  https pages, browser only; **Glossary** drawer screen (`:core`
+  `Glossary`) from Help and Links, same text in `docs/MANUAL.md`. After
+  merging `ef088d3` / #80 plus Glossary: `:core:test` 324/0,
+  `:desktop:test` 2/0, `:app:testDebugUnitTest` 34/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1055/0,
+  `tests/lint.sh` clean. **Not run on a phone.**
+- Custom RR → Custom Recovery (PR #80, on `main` as `ef088d3`): matching
+  TWRP/PitchBlack catalog rows open Custom Recovery pre-filled; official
+  lookup uses the probed phone; `pitchblack.tech` added to the https host
+  allow-list. ROMs and other recoveries stay links. Documented in
+  `docs/MANUAL.md` / Help. On that PR: `:core:test` 304/0; `:desktop:test`
+  2/0; `:app:testDebugUnitTest` 31/0; `:app:assembleDebug`. **Not run on a phone.**
+- Fleet protocol 1.1 (PR #79, on `main` as `988a941`): Messenger JSON `op` envelope with
+  nonce replay/expiry, package+cert pairing, default-off external control, and
+  `ApprovalCenter` for destructive remote actions (including Custom Recovery writes).
+  Legacy `rootforge.*` envelope still accepted. Documented in `docs/MANUAL.md`
+  Fleet integration (mirrored in in-app Help). After merging #78: `:core:test`
+  296/0. Not run on a phone.
+- How-to manual (PR #78, on `main` as `44716de`): `docs/MANUAL.md` plus in-app **Help**.
+  On that PR: `:core:test` 252/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 31/0.
 - Custom Recovery installer (PR #77, on `main` as `fabc649`): `:core`
   `ai.rootforge.os.recovery` plus Compose **Custom Recovery** screen.
   Dedicated recovery only; dry-run default; `FLASH RECOVERY`; no bundled

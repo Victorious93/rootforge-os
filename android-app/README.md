@@ -14,7 +14,7 @@ Shared rules live in `:core`.
 ./gradlew :desktop:packageExe                   # Windows .exe (on Windows)
 ```
 
-How-to manual: [`docs/MANUAL.md`](../docs/MANUAL.md) (same text as the in-app **Help** screen).
+How-to manual: [`docs/MANUAL.md`](../docs/MANUAL.md) (same text as the in-app **Help** screen). Glossary: in-app **Glossary** screen (from Help and Links) and the same section of that manual.
 Phone install and USB stack: [`docs/ANDROID_APP.md`](../docs/ANDROID_APP.md).
 Linux/Windows/Docker: [`docs/DESKTOP.md`](../docs/DESKTOP.md).
 droidcommand-ai bridge: [`docs/DROIDCOMMAND_INTEGRATION.md`](../docs/DROIDCOMMAND_INTEGRATION.md).

@@ -92,7 +92,7 @@ What that means in practice:
 
 - **It works without DCA.** Removing DCA, or never pairing with it, disables no RootForge feature. RootForge does not check whether DCA is installed.
 - **How they talk.** On the phone, DCA binds to RootForge's Android **Messenger** service (action `ai.rootforge.os.action.BRIDGE`; the debug build's package is `ai.rootforge.os.debug`) and sends one JSON request line per message (`what=1`, key `request`). RootForge answers with one JSON line (`what=2`, key `response`). A Messenger is Android's simple message-passing channel between two apps.
-- **Shared JSON protocol.** Every request and response carries `protocol_major: 1`. A request with a different major version is rejected, not guessed at. The envelope and the 11 operations are specified in [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) and implemented in `android-app/core/.../bridge/`. Protocol **1.1** adds a fleet remote-control envelope (`op`, nonce, replay rules) documented in [docs/MANUAL.md](docs/MANUAL.md) (Fleet integration); the older `rootforge.*` operations stay valid on the same service.
+- **Shared JSON protocol.** Every request and response carries `protocol_major: 1`. A request with a different major version is rejected, not guessed at. The envelope and the 11 operations are specified in [docs/DROIDCOMMAND_INTEGRATION.md](docs/DROIDCOMMAND_INTEGRATION.md) and implemented in `android-app/core/.../bridge/`. Protocol **1.1** adds a fleet remote-control envelope (`op`, nonce, replay rules) documented in [docs/MANUAL.md](docs/MANUAL.md) (Fleet integration), including the STATUS-TRAY read `node.status.get`; the older `rootforge.*` operations stay valid on the same service.
 - **Pairing and trust.** RootForge decides who may control it by the caller's **package name plus signing-certificate hash**, which Android reports for the calling app. It is never a field the caller writes into the JSON. The owner pairs a controller by hand in **Settings → External control**. If the controller app is re-signed with a different certificate, it shows up as pending again and must be re-paired.
 - **No shared signing key.** The Messenger service is exported with no signature permission, so the two apps can be signed with different keys. Binding to the service grants nothing by itself.
 - **Switched off by default.** "Allow external controllers" starts **off**. An unpaired caller is only recorded as pending, and cannot do anything until the owner pairs it.
@@ -139,8 +139,8 @@ PitchBlack lookup. A matching TWRP or PitchBlack catalog row can open that insta
 other recoveries stay links. Device work never uses the network.
 
 Screens: Dashboard (including **Desktop mode** through VictorSuite; see
-[docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Ask**, **Root Guide**, **Help**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
-Modules (creator and repository links), Recovery (USB fastboot), Custom Recovery (rooted TWRP/PitchBlack installer), Logs / Terminal, Settings.
+[docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Ask**, **Root Guide**, **Help**, **Links** (official https directory, browser only), **Glossary** (everyday-words definitions; from Help and Links), **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
+Modules (creator, this-phone su install, and repository links), Recovery (USB fastboot), Custom Recovery (rooted TWRP/PitchBlack installer), Logs / Terminal, Settings.
 
 **Root Guide** is offline rooting documentation inside the app (bootloader unlock, Magisk / KernelSU / APatch,
 device guides, FAQ, troubleshooting) with search. Most pages are adapted from
@@ -194,6 +194,10 @@ Rendered by Paparazzi unit tests with sample data. **These are not captures from
 | Dashboard | Flash Tools | ADB | Fastboot | Modules | Settings | Help |
 |---|---|---|---|---|---|---|
 | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_dashboard.png" alt="Dashboard screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_flashTools.png" alt="Flash Tools screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_adb.png" alt="ADB screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_fastboot.png" alt="Fastboot screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_modules.png" alt="Module Builder screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_settings.png" alt="Settings screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_help.png" alt="Help / how-to manual screen" width="140"> |
+
+| Links | Glossary |
+|---|---|
+| <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_links.png" alt="Links directory screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_glossary.png" alt="Glossary screen" width="140"> |
 
 Live ISO, Calamares installer and Termux screenshots will come after a real boot and install.
 

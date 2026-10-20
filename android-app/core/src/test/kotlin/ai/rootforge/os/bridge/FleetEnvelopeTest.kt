@@ -113,6 +113,15 @@ class FleetEnvelopeTest {
     }
 
     @Test
+    fun nodeStatusGetParsesWithoutActionRef() {
+        val parsed = parseFleetRequest(fleetJson(op = FleetOp.NODE_STATUS, nonce = nonce(90)))
+        val req = (parsed as FleetParseResult.Ok).request
+        assertEquals(FleetOp.NODE_STATUS, req.op)
+        assertNull(req.actionRef)
+        assertTrue(req.params.isEmpty())
+    }
+
+    @Test
     fun configOpsParseAsStandaloneEnvelopeOps() {
         val export = parseFleetRequest(fleetJson(op = FleetOp.CONFIG_EXPORT, nonce = nonce(20)))
         assertTrue(export is FleetParseResult.Ok)

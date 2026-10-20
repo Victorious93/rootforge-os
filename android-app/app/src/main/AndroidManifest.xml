@@ -36,6 +36,11 @@
         <package android:name="ai.victorsuite.app.debug" />
         <package android:name="moe.shizuku.privileged.api" />
         <package android:name="rikka.sui" />
+        <!-- Lets this phone's Modules tab see which root manager APK is installed. -->
+        <package android:name="com.topjohnwu.magisk" />
+        <package android:name="me.weishu.kernelsu" />
+        <package android:name="me.bmax.apatch" />
+        <package android:name="io.github.huskydg.magisk" />
         <!-- Lets the Settings-chosen terminal app be found and launched; its package name is not known in advance. -->
         <intent>
             <action android:name="android.intent.action.MAIN" />

@@ -53,6 +53,18 @@ internal fun previewState(): AppUiState = AppUiState(
     desktopMode = DesktopMode.probe(emptyList(), pinned = null),
     adbFingerprint = "A1:B2:C3:D4:E5:F6:00:11:22:33:44:55:66:77:88:99",
     buildCatalog = previewCatalog(),
+    localSu = true,
+    localManagers = listOf(ai.rootforge.os.root.RootManager.MAGISK),
+    localPreferred = ai.rootforge.os.root.RootManager.MAGISK,
+    localRootNote = "Only Magisk is installed (com.topjohnwu.magisk). Override if this is wrong.",
+    localModules = listOf(
+        ai.rootforge.os.module.InstalledModule(
+            id = "busybox", name = "Busybox", version = "v1.36.1", versionCode = "13601",
+            author = "osm0sis", description = "Busybox binary", enabled = true,
+            removePending = false, updatePending = false,
+        ),
+    ),
+    localListed = true,
 )
 
 /** Placeholder entries for previews and screenshots; not real catalog data. */
@@ -107,6 +119,12 @@ fun PreviewModules() {
     RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Modules) }
 }
 
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Modules this phone")
+@Composable
+fun PreviewModulesThisPhone() {
+    RootForgeTheme { ai.rootforge.os.ui.screens.ModulesScreen(previewState(), NoopActions, startTab = 1) }
+}
+
 @Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Custom Recovery")
 @Composable
 fun PreviewCustomRecovery() {
@@ -129,4 +147,16 @@ fun PreviewRootGuide() {
 @Composable
 fun PreviewHelp() {
     RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Help) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Links")
+@Composable
+fun PreviewLinks() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Links) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Glossary")
+@Composable
+fun PreviewGlossary() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Glossary) }
 }

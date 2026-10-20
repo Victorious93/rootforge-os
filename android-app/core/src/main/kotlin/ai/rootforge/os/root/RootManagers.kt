@@ -67,7 +67,75 @@ enum class RootManager(
             APATCH -> "apatch_patched"
             KITSUNE -> "magisk_patched"
         }
+
+    /**
+     * Binary invoked as root to install a zip. Kitsune is assumed Magisk-like
+     * and unverified. KernelSU/APatch live under `/data/adb` and are often
+     * not on PATH.
+     */
+    val moduleBinary: String
+        get() = when (this) {
+            MAGISK, KITSUNE -> "magisk"
+            KERNELSU -> "/data/adb/ksud"
+            APATCH -> "/data/adb/apd"
+        }
+
+    companion object {
+        /**
+         * Which manager is installed / providing su. [packageNames] come from
+         * PackageManager (no root). [markers] are names from `ls /data/adb`
+         * (`magisk`, `ksud`, `apd`, …) when su is already granted. Markers
+         * win because they are the su provider; otherwise the installed
+         * package list is used. Manual override stays in the UI.
+         */
+        fun detect(packageNames: Collection<String>, markers: Collection<String> = emptyList()): RootDetection {
+            val pkgs = packageNames.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            val installed = entries.filter { it.packageName in pkgs }
+            val marks = markers.map { it.trim().trimStart('/').lowercase() }.filter { it.isNotEmpty() }.toSet()
+            val byMarker = listOf(KERNELSU, APATCH, MAGISK).firstOrNull { markersIndicate(it, marks) }
+            val preferred = when {
+                byMarker == KERNELSU -> KERNELSU
+                byMarker == APATCH -> APATCH
+                byMarker == MAGISK && MAGISK in installed -> MAGISK
+                byMarker == MAGISK && KITSUNE in installed && MAGISK !in installed -> KITSUNE
+                byMarker == MAGISK && installed.isEmpty() -> MAGISK
+                installed.size == 1 -> installed.single()
+                MAGISK in installed -> MAGISK
+                KERNELSU in installed -> KERNELSU
+                APATCH in installed -> APATCH
+                KITSUNE in installed -> KITSUNE
+                else -> null
+            }
+            val reason = when {
+                preferred == null ->
+                    "No Magisk, KernelSU, APatch or Kitsune Mask package was found on this phone."
+                byMarker != null && (preferred == byMarker || (preferred == KITSUNE && byMarker == MAGISK)) ->
+                    "Detected ${preferred.label} from /data/adb (${preferred.moduleBinary}). Override if this is wrong."
+                installed.size == 1 ->
+                    "Only ${preferred.label} is installed (${preferred.packageName}). Override if this is wrong."
+                else ->
+                    "${preferred.label} is installed. Multiple managers are present; override if this is wrong."
+            }
+            return RootDetection(installed, preferred, reason)
+        }
+
+        fun markersIndicate(manager: RootManager, markers: Collection<String>): Boolean {
+            val marks = markers.map { it.trim().trimStart('/').lowercase() }
+            return when (manager) {
+                KERNELSU -> marks.any { it == "ksud" || it == "ksu" }
+                APATCH -> marks.any { it == "apd" || it == "ap" }
+                MAGISK, KITSUNE -> marks.any { it == "magisk" }
+            }
+        }
+    }
 }
+
+/** Result of [RootManager.detect]. [preferred] is null when nothing was found. */
+data class RootDetection(
+    val installed: List<RootManager>,
+    val preferred: RootManager?,
+    val reason: String,
+)
 
 object RootPaths {
     const val DOWNLOAD_DIR = "/sdcard/Download"

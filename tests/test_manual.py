@@ -28,6 +28,7 @@ REQUIRED_HEADINGS = (
     "## Fleet integration",
     "## Troubleshooting and FAQ",
     "## Privacy and data handling",
+    "## Glossary",
 )
 
 
@@ -75,6 +76,12 @@ class ManualDocTests(unittest.TestCase):
         self.assertNotIn("feat/desktop-mode-x11", text)
         self.assertIn("images/manual/header.png", text)
         self.assertNotIn("applicationIdSuffix", text)
+        self.assertIn("**Root.**", text)
+        self.assertIn("node.status.get", text)
+        self.assertIn("NodeStatusSnapshot", text)
+        self.assertIn("**Bootloop.**", text)
+        self.assertIn("**LSPosed.**", text)
+        self.assertIn("**SHA-256 / checksum.**", text)
 
     def test_header_art_is_wide_png_and_copied(self) -> None:
         self.assertTrue(HEADER_DOCS.is_file())
@@ -89,9 +96,22 @@ class ManualDocTests(unittest.TestCase):
         ui = UI.read_text(encoding="utf-8")
         self.assertIn('Help("Help"', ui)
         self.assertIn("ManualScreen", ui)
+        self.assertIn('Links("Links"', ui)
+        self.assertIn("LinksScreen", ui)
+        self.assertIn('Glossary("Glossary"', ui)
+        self.assertIn("GlossaryScreen", ui)
+        self.assertIn("onOpenGlossary", ui)
         settings = SETTINGS.read_text(encoding="utf-8")
         self.assertIn("Open the manual", settings)
         self.assertIn("onOpenHelp", settings)
+        self.assertIn("onOpenLinks", settings)
+        self.assertIn("Links directory", settings)
+        help_screen = (ROOT / "android-app/app/src/main/kotlin/ai/rootforge/os/ui/screens/ManualScreen.kt").read_text(encoding="utf-8")
+        self.assertIn("onOpenGlossary", help_screen)
+        self.assertIn('"Glossary"', help_screen)
+        links_screen = (ROOT / "android-app/app/src/main/kotlin/ai/rootforge/os/ui/screens/LinksScreen.kt").read_text(encoding="utf-8")
+        self.assertIn("onOpenGlossary", links_screen)
+        self.assertIn('"Glossary"', links_screen)
         gradle = GRADLE.read_text(encoding="utf-8")
         self.assertIn('applicationId = "ai.rootforge.os"', gradle)
         self.assertIn('versionCode = 1', gradle)
@@ -102,6 +122,32 @@ class ManualDocTests(unittest.TestCase):
         self.assertIn("android.permission.POST_NOTIFICATIONS", manifest)
         self.assertIn("com.termux.permission.RUN_COMMAND", manifest)
         self.assertIn("ai.victorsuite.permission.DESKTOP_MODE", manifest)
+
+    def test_glossary_entries_are_non_empty_and_unique(self) -> None:
+        text = DOCS.read_text(encoding="utf-8")
+        self.assertIn("## Glossary", text)
+        section = text.split("## Glossary", 1)[1]
+        if "\n---" in section:
+            section = section.split("\n---", 1)[0]
+        terms: list[str] = []
+        for line in section.splitlines():
+            if not line.startswith("**") or ".** " not in line:
+                continue
+            term, body = line[2:].split(".** ", 1)
+            self.assertTrue(term.strip(), "empty glossary term")
+            self.assertTrue(body.strip(), f"empty glossary line for {term}")
+            terms.append(term)
+        required = (
+            "Root", "su", "Magisk", "KernelSU", "KernelSU Next", "APatch", "Module",
+            "Zygisk", "Zygisk Next", "ReZygisk", "Xposed", "LSPosed", "Vector",
+            "Shizuku", "Sui", "Dhizuku", "ADB", "fastboot", "EDL", "Bootloader",
+            "Recovery", "TWRP", "PitchBlack", "Boot image", "ROM", "Flash",
+            "Dry run", "SHA-256 / checksum", "Bootloop",
+        )
+        for needed in required:
+            self.assertIn(needed, terms, f"missing {needed}")
+        self.assertEqual(len(terms), len(set(terms)))
+        self.assertEqual(len(terms), len({t.lower() for t in terms}))
 
 
 if __name__ == "__main__":

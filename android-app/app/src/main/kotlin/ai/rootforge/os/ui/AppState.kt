@@ -13,6 +13,7 @@ import ai.rootforge.os.core.Progress
 import ai.rootforge.os.core.TargetInfo
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.module.BuiltModule
+import ai.rootforge.os.module.InstalledModule
 import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.recovery.RecoveryOffer
 import ai.rootforge.os.recovery.RecoveryProbe
@@ -62,6 +63,14 @@ data class AppUiState(
     val shizukuBusy: Boolean = false,
     /** Last host-phone Shizuku readout. Never written to the shared command log. */
     val shizukuResult: String = "",
+    /** True on the Android APK: this phone can run `su` for local module install. Desktop is false. */
+    val localSu: Boolean = false,
+    val localManagers: List<RootManager> = emptyList(),
+    val localPreferred: RootManager? = null,
+    val localRootNote: String = "",
+    val localModules: List<InstalledModule> = emptyList(),
+    /** True after a successful List on this phone (even if the list is empty). */
+    val localListed: Boolean = false,
 )
 
 /** Every user-triggerable action. The real implementation talks to the target; the preview one does nothing. */
@@ -112,6 +121,14 @@ interface AppActions {
 
     fun buildModule(spec: ModuleSpec, then: (BuiltModule) -> Unit)
     fun installModule(file: LibraryFile, manager: RootManager)
+    /** Package scan only (no su). Android APK; no-op on desktop. */
+    fun refreshLocalRoot()
+    /** Read `/data/adb/modules` via su on this phone. */
+    fun listLocalModules()
+    /** Install [file] on this phone through [manager]. Dry-run logs the command and does not call su. */
+    fun installModuleLocally(file: LibraryFile, manager: RootManager, dryRun: Boolean)
+    /** `su -c reboot` on this phone. Never called from install. */
+    fun rebootThisPhone()
 
     /** Probe this phone (Android) and/or the USB ADB target for root and recovery partitions. */
     fun probeCustomRecovery(then: (List<RecoveryProbe>) -> Unit)
@@ -205,6 +222,10 @@ object NoopActions : AppActions {
     override fun fetchPatched(manager: RootManager, then: (LibraryFile) -> Unit) = Unit
     override fun buildModule(spec: ModuleSpec, then: (BuiltModule) -> Unit) = Unit
     override fun installModule(file: LibraryFile, manager: RootManager) = Unit
+    override fun refreshLocalRoot() = Unit
+    override fun listLocalModules() = Unit
+    override fun installModuleLocally(file: LibraryFile, manager: RootManager, dryRun: Boolean) = Unit
+    override fun rebootThisPhone() = Unit
     override fun probeCustomRecovery(then: (List<RecoveryProbe>) -> Unit) = Unit
     override fun lookupOfficialRecoveries(codenames: List<String>, project: RecoveryProject?, then: (List<RecoveryOffer>) -> Unit) = Unit
     override fun downloadOfficialRecovery(offer: RecoveryOffer, then: (LibraryFile) -> Unit) = Unit

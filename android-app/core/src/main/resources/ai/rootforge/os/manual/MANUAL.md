@@ -6,7 +6,7 @@
 
 This is the full how-to for RootForge OS. It is written in everyday language. When a technical term is needed, it is explained in one short line the first time it appears.
 
-The same text is bundled inside the Android app and the desktop client: open the drawer and tap **Help**, or open **Settings** and tap **Open the manual**. A live copy also lives on GitHub: <https://github.com/Victorious93/rootforge-os/blob/main/docs/MANUAL.md>
+The same text is bundled inside the Android app and the desktop client: open the drawer and tap **Help**, or open **Settings** and tap **Open the manual**. Everyday-words definitions are in [Glossary](#glossary) and in the in-app **Glossary** screen (from Help and Links). A live copy also lives on GitHub: <https://github.com/Victorious93/rootforge-os/blob/main/docs/MANUAL.md>
 
 ::: warning Honest status
 The code and tests exist. **None of this has been run end to end on a real phone, a real computer-and-phone pair, or a booted live disc.** Treat every flash, unlock and write as something that can brick a phone. Keep a known-good backup image before you write anything.
@@ -21,6 +21,7 @@ The code and tests exist. **None of this has been run end to end on a real phone
 5. [Fleet integration](#fleet-integration)
 6. [Troubleshooting and FAQ](#troubleshooting-and-faq)
 7. [Privacy and data handling](#privacy-and-data-handling)
+8. [Glossary](#glossary)
 
 ---
 
@@ -66,6 +67,8 @@ A Debian live disc (an ISO) is in the repository but has **not** been built or b
 | **SHA-256** | A fingerprint of a file's bytes. If it does not match, the file is not the one you thought |
 | **Messenger bridge** | Android's simple message pipe between two apps on the same phone |
 | **Node id** | This install's identity, `rf-` plus 32 hex characters, generated once |
+
+A fuller list of Android-root terms, in the same everyday words as the in-app **Glossary** screen, is in [Glossary](#glossary).
 
 ### Fleet role: EXTERNAL_NODE
 
@@ -349,7 +352,7 @@ Managers you can pick: Magisk, KernelSU, APatch, and **Kitsune** (marked unsuppo
 
 ![Modules](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_modules.png)
 
-Two tabs.
+Three tabs.
 
 **Create a module zip**
 
@@ -357,16 +360,30 @@ Two tabs.
 2. Optionally turn on `boot-completed.sh` or `action.sh`, and type your own script text.
 3. Tap **Build zip**. The zip lands in the library. Compatibility notes are hedged: they are not a guarantee.
 
-**Install a module on the target**
+**Install a module on the USB target**
 
 1. The target must already have a root manager.
 2. Pick the zip (built here or imported).
 3. Type `INSTALL MODULE`. The dialog shows the zip's SHA-256.
 4. RootForge pushes the zip and asks the manager to install it.
 
+**Install a module on this phone** (Android APK, This phone tab)
+
+1. This phone must already be rooted (Magisk, KernelSU or APatch). RootForge auto-detects the manager; override the dropdown if it is wrong.
+2. **List installed modules** is read-only (`/data/adb/modules`). It asks for root once.
+3. Pick a zip. The SHA-256 and the `su` command are shown. Dry-run is on by default: the tap only logs the command.
+4. Turn dry-run off and type `INSTALL MODULE` to run `magisk --install-module`, `ksud module install` or `apd module install`. RootForge does **not** reboot.
+5. **Reboot this phone** is a separate button. LSPosed modules are APKs: use ADB → Install APK.
+
 **Repositories**
 
-This tab only opens known module-repository websites in the browser. RootForge does not fetch, index or vet modules. Some sites were unreachable when the list was written and are marked "not checked".
+This tab only opens known module-repository websites in the browser. RootForge does not fetch, index or vet modules. Some sites were unreachable when the list was written and are marked "not checked". **Links directory** (button on this screen) opens the fuller list.
+
+### Links directory
+
+![Links](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_links.png)
+
+Drawer entry **Links**, also from Modules → **Links directory**, Settings → About, and Help. Official https pages for Magisk / KernelSU / APatch, module repositories (Alt-Repo, MMRL, Xposed-Modules-Repo, LSPosed / Vector, Zygisk Next), and Shizuku apps (Shizuku, Sui, App Ops, Ice Box, Hail, SystemUI Tuner, Canta, Inure, aShell / aShell You, Dhizuku). Each tap opens the system browser. Nothing is downloaded or bundled. URLs that could not be verified as official https pages are omitted. **Glossary** on this screen (and a drawer entry) opens the everyday-words list.
 
 ### Recovery (USB fastboot path)
 
@@ -475,9 +492,9 @@ Useful commands: `help`, `adb shell …`, a limited set of `fastboot` reads. The
 
 **External control.** The remote-control switch, node id, pending and paired controllers. See [Fleet integration](#fleet-integration).
 
-**About.** Version, the one network use (catalog Download), USB stack note, Shizuku status. **Open the manual** opens this Help screen.
+**About.** Version, the one network use (catalog Download), USB stack note, Shizuku status. **Open the manual** opens this Help screen. **Links directory** opens the official-URL list.
 
-**Help** is also a drawer entry. It renders this bundled manual offline and offers **Open on GitHub**.
+**Help** is also a drawer entry. It renders this bundled manual offline and offers **Open on GitHub**, **Links directory**, and **Glossary**.
 
 ![Help](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_help.png)
 
@@ -578,7 +595,7 @@ Desktop / Docker reuse the same JSON on `POST /v1/bridge` (loopback bearer token
 
 | Field | Rule |
 |---|---|
-| `op` | `capabilities.get` \| `remote.command` \| `macro.step` \| `macro.run` \| `config.export` \| `config.import` |
+| `op` | `capabilities.get` \| `remote.command` \| `macro.step` \| `macro.run` \| `node.status.get` \| `config.export` \| `config.import` |
 | `requestId` | Echoed on the reply |
 | `targetNodeRef` | This install's node id (Settings). Mismatch → `not_found` |
 | `actionRef` | Required for `remote.command` and `macro.step` |
@@ -613,10 +630,29 @@ A request is `expired` when `now > timestampMs + ttlMs` **or** `|now - timestamp
 
 Returns `protocolMajor`, `protocolMinor`, `fleetClass: external_node`, node identity, then:
 
-- `ops[]` — envelope ops (`capabilities.get`, `remote.command`, `macro.step`, `macro.run`, plus `config.export` / `config.import`)
+- `ops[]` — envelope ops (`capabilities.get`, `remote.command`, `macro.step`, `macro.run`, `node.status.get`, `config.export`, `config.import`)
 - `actions[]` — `remote.command` action refs that are remotely allowed
 
 Each entry is `{name, kind, remoteAllowed, requiresConfirm}` where `kind` is `read` \| `action` \| `destructive`.
+
+### `node.status.get`
+
+Read. Same pairing, default-off switch, and nonce/ttl/replay as the other protocol 1.1 ops. No confirm. Returns **one** `NodeStatusSnapshot` for this node (the frozen STATUS-TRAY schema from droidcommand-AI `docs/specs/STATUS_TRAY.md`). RootForge is a node, not the tray aggregator, so the reply is the snapshot object itself, not `{ "snapshots": […] }`.
+
+```json
+{
+  "nodeId": "rf-…",
+  "packageName": "ai.rootforge.os.debug",
+  "connectionClass": "EXTERNAL_NODE",
+  "updatedAtMs": 1700000000000,
+  "domains": [
+    { "name": "node_health", "state": "ok", "detail": "process alive" },
+    { "name": "other", "state": "ok", "detail": "su available; Magisk detected" }
+  ]
+}
+```
+
+`packageName` is this app's applicationId on Android and is omitted on the desktop client. `connectionClass` is always `EXTERNAL_NODE`. Domains always include `node_health`. On the Android app an `other` domain is added for root: whether a `su` binary is **present** (looked up on disk, never executed, so no Superuser prompt) and which manager APK was detected (`RootManager.detect`). `detail` is at most 200 characters and contains no secrets; a snapshot that would leak a forbidden name (`password`, `token`, `secret`, `signingKey`, …) is refused as `invalid_parameters`, not stripped. Optional `params.nodeId` must be this node or the reply is `not_found`. Optional `params.snapshot` is ignored.
 
 ### What a remote caller may run
 
@@ -707,7 +743,7 @@ The sidecar / device-match check runs before a flash and again after you confirm
 2. Install a debug droidcommand-AI build. Bind `ai.rootforge.os.action.BRIDGE` and send `capabilities.get` with that `targetNodeRef`, a unique 32-hex `nonce`, and `timestampMs` = now.
 3. The first reply is `not_paired` or `external_control_disabled`. RootForge Settings shows the pending package + cert prefix.
 4. Turn **Allow external controllers** on, then **Pair**.
-5. Repeat `capabilities.get`. Reads run; action ops prompt on the phone; destructive ops need the same typed phrase the GUI uses.
+5. Repeat `capabilities.get`. Reads (`capabilities.get`, `node.status.get`, `rootforge.devices.list`, …) run; action ops prompt on the phone; destructive ops need the same typed phrase the GUI uses.
 
 This path has **not** been run on a phone in this repository.
 
@@ -716,9 +752,10 @@ This path has **not** been run on a phone in this repository.
 - Envelope: `android-app/core/.../bridge/FleetProtocol.kt`, `FleetEnvelope.kt`
 - Replay: `ReplayGuard.kt`
 - Executor: `FleetExecutor.kt`, `RemoteActionCatalog.kt`
+- STATUS-TRAY snapshot: `NodeStatusSnapshot.kt`, `NodeStatusSource.kt`
 - Ingress (fleet vs legacy): `BridgeIngress.kt`
 - Messenger: `android-app/app/.../bridge/RootForgeBridgeService.kt`
-- Tests: `FleetEnvelopeTest`, `ReplayGuardTest`, `FleetAuthTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`, `ConfigBackupTest`
+- Tests: `FleetEnvelopeTest`, `ReplayGuardTest`, `FleetAuthTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`, `NodeStatusSnapshotTest`, `ConfigBackupTest`
 
 ---
 
@@ -798,4 +835,70 @@ No accounts. No cloud. No phone-home. Uninstalling the app (or the one-time v0.2
 
 ---
 
-*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), and **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows. If a line here disagrees with the running app, the app is right — please file an issue.*
+## Glossary
+
+![Glossary](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_glossary.png)
+
+Drawer entry **Glossary**, also from Help and from Links. One short line per term, in everyday words. Official Magisk, LSPosed, Vector, Shizuku and Sui pages stay on **Links**. Nothing here is a how-to or a download.
+
+**Root.** Extra control over the phone so some apps can do things a normal app is not allowed to.
+
+**su.** The small program that actually runs a command with that extra control. RootForge asks you before it uses it.
+
+**Magisk.** A common way to get root by patching the boot image, plus an app that installs modules.
+
+**KernelSU.** Root that lives in the phone's Linux kernel, with its own app.
+
+**KernelSU Next.** A separate KernelSU-family project with its own manager, not the same app as KernelSU.
+
+**APatch.** Another way to get root by patching the kernel, with its own app and a SuperKey you choose.
+
+**Module.** A zip (or, for LSPosed, an APK) that changes the system after the phone is rooted. It runs with high privilege.
+
+**Zygisk.** Magisk's built-in way of slipping extra code into apps as they start.
+
+**Zygisk Next.** A stand-alone Zygisk that also works with KernelSU and APatch (Dr-TSNG). Later releases are not open source.
+
+**ReZygisk.** An open-source fork of Zygisk Next. It is not an official successor.
+
+**Xposed.** An older way to hook app code. People use LSPosed or Vector for that job now.
+
+**LSPosed.** Today's Xposed-style framework. Its modules are APKs you enable inside LSPosed, not Magisk zips.
+
+**Vector.** JingMatrix's maintained successor to LSPosed.
+
+**Shizuku.** Lets apps use a few system APIs without full root, using wireless debugging or root.
+
+**Sui.** Shizuku packaged as a Magisk module, for a phone that is already rooted.
+
+**Dhizuku.** Shares Device Owner powers with other apps, in a Shizuku-like way.
+
+**ADB.** Android Debug Bridge: a USB or Wi-Fi link so a computer or another phone can talk to this one.
+
+**fastboot.** A USB mode in the bootloader for writing partitions before Android starts.
+
+**EDL.** Emergency Download (Qualcomm 9008): a very low-level USB mode. Experimental here; a retail phone only accepts its maker's programmer.
+
+**Bootloader.** The tiny program that starts the phone before Android. Unlocking it usually wipes the phone.
+
+**Recovery.** A small system you boot instead of Android to install updates or wipe data.
+
+**TWRP.** Team Win Recovery Project: a well-known custom recovery.
+
+**PitchBlack.** PitchBlack Recovery Project (PBRP): another custom recovery, based on TWRP.
+
+**Boot image.** The boot.img or init_boot.img file that starts Android. Magisk patches this file.
+
+**ROM.** The Android system the phone runs: the maker's build, or a custom one.
+
+**Flash.** Write an image file onto a partition. Easy to brick a phone; RootForge asks you to type a confirmation.
+
+**Dry run.** Show the command and change nothing. Dangerous actions in this app default to this.
+
+**SHA-256 / checksum.** A fingerprint of a file's bytes. If it matches the published value, you have the file you expected.
+
+**Bootloop.** The phone starts, then restarts, forever. Often from a bad flash or a bad module.
+
+---
+
+*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, and the in-app Glossary. If a line here disagrees with the running app, the app is right — please file an issue.*

@@ -35,8 +35,12 @@ class ManualLibraryTest {
         assertTrue("Custom RR PitchBlack host missing", "pitchblack.tech" in text)
         assertTrue("typed FLASH missing", "FLASH" in text)
         assertTrue("privacy: no analytics missing", "analytics" in text.lowercase())
+        assertTrue("node.status.get missing", "node.status.get" in text)
+        assertTrue("STATUS-TRAY snapshot missing", "NodeStatusSnapshot" in text)
+        assertTrue("glossary missing Root", "**Root.**" in library.raw)
+        assertTrue("glossary missing Bootloop", "**Bootloop.**" in library.raw)
         assertTrue("config backup ops missing", "config.export" in text && "config.import" in text)
-        assertTrue("config backup remote refuse missing", "not** remotely allowed" in text || "not remotely allowed" in text.lowercase())
+        assertTrue("config backup remote refuse missing", "not remotely allowed" in text.lowercase())
     }
 
     @Test
@@ -96,6 +100,7 @@ class ManualLibraryTest {
             "fleet integration",
             "troubleshooting",
             "privacy",
+            "glossary",
         )
     }
 }
