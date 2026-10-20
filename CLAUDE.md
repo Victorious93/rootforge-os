@@ -25,13 +25,38 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > unchanged (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
 > `versionName=0.1.0-debug`). On main this installer did **not** exist: Recovery
 > is USB fastboot (Boot once / Flash) plus browser links; sideload is ADB
-> `sideload-host`. Verified: `:core:test` 210/0 (`recovery/` 41), `:desktop:test`
+> `sideload-host`. Merged `origin/main` after #75 (Shizuku) — docs-only conflicts.
+> Verified: `:core:test` 210/0 (`recovery/` 41), `:desktop:test`
 > 2/0, `:desktop:compileKotlin`, `:app:testDebugUnitTest` 29/0 (Paparazzi
 > `customRecovery` + `settings` recorded), `:app:assembleDebug`. APK contains
 > guide markdown, not recovery images. `bash tests/run-tests.sh` → 1023/0;
 > `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run:** a phone, a live
 > TWRP/PBRP download+write, `:app:verifyPaparazziDebug` full set (fails on
 > `modules`, stale on `main` since #69). Doc: `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+
+> **Update 2026-10-19 (Shizuku fleet alignment):** branch `feat/shizuku` (PR #75).
+> Aligned with droidcommand-AI PR #231 under RootForge packages. Four states
+> `GRANTED`/`DENIED`/`NOT_INSTALLED`/`NOT_RUNNING`; Sui present when
+> `managerInstalled || binderAlive`. Sole API `PrivilegedShell` /
+> `PrivilegedResult` / `PrivilegedResultCodec`; `NullPrivilegedShell` fallback;
+> `PrivilegedProcessRunner` argv `ProcessBuilder`, no stdout/stderr logging,
+> 64 KiB cap. `ShizukuManager.requestPermission()` no-op except from `DENIED`;
+> `onCreate` only starts listeners. Bind UserService lazily after `GRANTED`,
+> off main thread (`daemon false`, `processNameSuffix privileged`,
+> `debuggable false`). `IPrivilegedShell.aidl` destroy=16777114, exec=1,
+> readDeviceState=2, pmGrant=3. Deps 13.1.5, `ShizukuProvider`, `API_V23`,
+> queries for Shizuku + Sui. Every privileged op goes through `ApprovalCenter`;
+> `pmGrant` is interop-only (typed `GRANT PERMISSION`, no UI). No applicationId /
+> signing / versioning change. No flatDir AAR fetch (comment documents the CI
+> gotcha). Verified: `:core:test` **194/0** (`ShizukuStateResolverTest` 8,
+> `ShizukuManagerTest` 5, `PrivilegedShellTest` 7, `PrivilegedCommandsTest` 6),
+> `:desktop:test` 2/0, `:desktop:compileKotlin`, `:app:testDebugUnitTest` 28/0,
+> `:app:assembleDebug` (applicationId still `ai.rootforge.os.debug`; `aapt2`
+> lists `moe.shizuku.manager.permission.API_V23`). `tests/run-tests.sh` 1023/0,
+> `tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run:** a
+> phone, the desktop window, Paparazzi re-record (settings golden unchanged:
+> Shizuku card is hidden when `shizuku == null`). Merged `main` (#74 launcher icon)
+> into this branch (docs-only conflicts).
 
 > **Update 2026-10-19 (launcher icon from logo):** branch `feat/app-icon-from-logo`
 > (PR #74). Replaced the orange anvil vector (`drawable/ic_launcher_foreground.xml`)
@@ -175,7 +200,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), and the Custom RR build catalog with a Dashboard card (#66). Custom Recovery installer is this branch (not on `main` yet). The APK requests `INTERNET` for catalog Download and for Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), and Shizuku/Sui (#75). Custom Recovery installer is this branch (not on `main` yet). The APK requests `INTERNET` for catalog Download and for Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
@@ -187,6 +212,10 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   (`ai.rootforge.os.debug` / `0.1.0-debug`). Paparazzi `customRecovery` and
   `settings` recorded. `tests/run-tests.sh` 1023/0; `tests/lint.sh` clean
   (shellcheck 0.11.0). **Not run on a phone.** Doc: `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+- Shizuku/Sui (PR #75, on `main`): fleet four-state manager + `PrivilegedShell` sole API, bound
+  `IPrivilegedShell` UserService after `GRANTED`, approval-gated read-only Settings
+  lookups; `pmGrant` hidden + typed confirm. Deps 13.1.5. `:core:test` 194/0,
+  `:app:assembleDebug` applicationId `ai.rootforge.os.debug`. **Not run on a phone.**
 - Android launcher icon is the repo-logo emblem (adaptive + legacy mipmaps, navy
   `#0C1D36`). `tests/test_launcher_icons.py` 7/0; `:app:assembleDebug` packaged the
   new mipmaps (2026-10-19). Not installed on a phone.
@@ -284,7 +313,7 @@ Licensing is PR #53 (now on `main`). DroidCommand Messenger is PR #52 (on `main`
 Flash Tools is PR #56 (now on `main`). README accuracy is #57 (on `main`).
 Toolkit API serial pin is #60 (on `main`). Module quoting is #59 (on `main`).
 Sideload seek is #61 (on `main`). Debug signing key is #62 (on `main`).
-The Root Guide, terminal hand-off, Kitsune, module work and the Custom RR build catalog are on `main` (see Updates 2026-10-19). Custom Recovery installer is on `feat/recovery-installer` (not on `main` yet). The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only on a tap. ISO Stage 5 is still blocked
+The Root Guide, terminal hand-off, Kitsune, module work, the Custom RR build catalog and Shizuku/Sui (#75) are on `main` (see Updates 2026-10-19). Custom Recovery installer is on `feat/recovery-installer` (not on `main` yet). The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only on a tap. ISO Stage 5 is still blocked
 and is still the next hardware task. A live host/target USB session
 has not been run.
 

@@ -90,5 +90,8 @@ Not exhaustive; see BUILD.md and config/hooks/ for the pin/verify table:
     under upstream licenses.
   * Kotlin, AndroidX, Jetpack Compose, and other Gradle dependencies —
     their published licenses (typically Apache-2.0).
+  * Shizuku API (`dev.rikka.shizuku:api` / `provider`) — MIT License,
+    https://github.com/RikkaApps/Shizuku-API. Not forked; used as a
+    Maven dependency for optional host-phone privileged reads.
   * Calamares and other installer/desktop packages — Debian/upstream
     licenses; this repo ships branding and config, not a fork.
