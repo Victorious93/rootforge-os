@@ -21,8 +21,14 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > refuse: EDL FRP/screen-lock wipe, Firehose auth bypass, leaked MSM
 > packages, unofficial dump sites. Dry-run / typed confirm / backup /
 > no auto-reboot unchanged. `applicationId`, signing and versioning
-> unchanged. Local suite counts follow the Paparazzi / hermetic run on
-> this head. **Not run on a phone or a desktop window.**
+> unchanged. Local suite: `:core:test` **419/0** (`BrandCatalogTest` 4,
+> `MsmGuidesTest` 5, `WizardDiagramsTest` 2); `:desktop:test` **4/0**;
+> `:app:testDebugUnitTest` **36/0** (Paparazzi `edl` recorded; `devices`
+> re-recorded); `:app:assembleDebug` (`aapt dump badging`:
+> `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`);
+> `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean
+> (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a
+> desktop window.**
 
 > **Update 2026-10-20 (ESP32 & Pi helpers):** branch
 > `feat/multi-device-identify` (same PR). Owner-only bootloader unlock /
@@ -464,11 +470,19 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), fleet `config.export` / `config.import` (#83 / `3f7661d`), and the bug sweep (#84 / `3d05929`). This branch adds the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, and ESP32 / Raspberry Pi owner helpers (no FRP / screen-lock bypass). The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), fleet `config.export` / `config.import` (#83 / `3f7661d`), and the bug sweep (#84 / `3d05929`). This branch (`feat/multi-device-identify`, PR #85) adds the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, ESP32 / Raspberry Pi owner helpers (no FRP / screen-lock bypass), the `BrandCatalog` identity table, the MSM / EDL guide (detect + explain + official links only), and Compose step diagrams. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Brands + MSM/EDL + infographics (this branch, PR #85): `:core`
+  `BrandCatalog` (24 makers), expanded `RootGuides` / `UnlockPortals`,
+  `MsmGuides` explain+link for Qualcomm 9008 (never ships MSM/firmware;
+  guide never writes), Compose `StepDiagram` on wizards / portals / MSM
+  (APK + `:desktop`). Paparazzi `edl` + `devices`. `:core:test` 419/0,
+  `:desktop:test` 4/0, `:app:testDebugUnitTest` 36/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1055/0,
+  `tests/lint.sh` clean. **Not run on a phone or a desktop window.**
 - ESP32 & Pi helpers (this branch): `:core` `BoardHelpers` + Links
   **ESP32 & Pi helpers**. Pi = `:desktop` host adb/fastboot. ESP32 =
   USB-serial bridge. FRP / screen-lock / HID credential injection
