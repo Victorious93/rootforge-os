@@ -22,9 +22,14 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > via `ApprovalCenter`, never auto-reboot (separate Reboot button).
 > Installed modules listed read-only from `/data/adb/modules`. LSPosed APKs
 > stay on ADB → Install APK. Desktop is a no-op. `applicationId`, signing
-> and versioning unchanged. `:core` `LocalModules` + detect tests:
-> `:core:test` 266/0. **Not yet in this update's remaining paragraph:**
-> `:desktop:test`, `:app` tests/assemble, hermetic suite, lint, a phone.
+> and versioning unchanged. Verified on this head (PR #81):
+> `:core:test` 266/0 (`LocalModulesTest` + `RootManagersTest` detect);
+> `:desktop:test` 2/0; `:app:testDebugUnitTest` 32/0 (Paparazzi `modules`
+> re-recorded, `modulesThisPhone` added); `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run:** a phone, the desktop window.
 
 > **Update 2026-10-20 (how-to manual + in-app Help):** branch `docs/manual`
 > (PR #78). Added `docs/MANUAL.md` (plain-language how-to: what it is /
@@ -243,13 +248,14 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Local module install on this phone (this branch): Modules **This phone** tab
+- Local module install on this phone (PR #81, this branch): Modules **This phone** tab
   installs a library zip via `su` (`magisk --install-module` / `ksud module
   install` / `apd module install`), auto-detects the manager, lists
   `/data/adb/modules` read-only, dry-run default, typed `INSTALL MODULE`,
-  never reboots. LSPosed APKs unchanged. Desktop no-op. `:core:test` 266/0
-  (`LocalModulesTest` + `RootManagersTest` detect). Other suites not yet
-  recorded in this bullet. **Not run on a phone.**
+  never reboots. LSPosed APKs unchanged. Desktop no-op. This-head suite:
+  `:core:test` 266/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 32/0,
+  `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`),
+  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a phone.**
 - How-to manual: `docs/MANUAL.md` plus in-app **Help**. After merging
   `origin/main` (`fabc649`, #77) into `docs/manual`, Desktop mode and the
   Custom Recovery installer are documented as landed. This-head suite:
