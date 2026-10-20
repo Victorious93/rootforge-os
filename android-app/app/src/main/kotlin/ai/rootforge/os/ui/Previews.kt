@@ -1,0 +1,254 @@
+package ai.rootforge.os.ui
+
+import ai.rootforge.os.catalog.BuildCatalog
+import ai.rootforge.os.catalog.CatalogDevice
+import ai.rootforge.os.catalog.CatalogEntry
+import ai.rootforge.os.catalog.Freshness
+import ai.rootforge.os.catalog.FreshnessFeed
+import ai.rootforge.os.catalog.LoadedCatalog
+import ai.rootforge.os.core.LinkState
+import ai.rootforge.os.desktopmode.DesktopMode
+import ai.rootforge.os.core.LogLevel
+import ai.rootforge.os.core.LogLine
+import ai.rootforge.os.core.TargetInfo
+import ai.rootforge.os.device.BootloaderLock
+import ai.rootforge.os.device.DeviceIdentity
+import ai.rootforge.os.ui.theme.RootForgeTheme
+import ai.rootforge.os.usb.AttachedTarget
+import ai.rootforge.os.usb.TargetMode
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.tooling.preview.Preview
+
+internal fun previewEdlState(): AppUiState {
+    val edl = AttachedTarget(
+        deviceName = "/dev/bus/usb/001/008",
+        vendorId = 0x05C6,
+        productId = 0x9008,
+        mode = TargetMode.EDL,
+        interfaceId = 0,
+        hasPermission = true,
+        serial = "44332211",
+        product = "9008",
+        manufacturer = "Qualcomm",
+    )
+    val identity = DeviceIdentity(
+        mode = TargetMode.EDL,
+        brand = "OnePlus",
+        model = "CPH2449",
+        codename = "OP594DL1",
+        product = "CPH2449",
+        soc = "Qualcomm 9008",
+        serial = "44332211",
+        note = "EDL (05c6:9008): identify only. RootForge does not write in EDL from Devices.",
+    )
+    return previewState().copy(
+        targets = previewState().targets + edl,
+        link = LinkState.Connected(TargetMode.EDL, "OnePlus CPH2449"),
+        info = TargetInfo(
+            TargetMode.EDL,
+            listOf(
+                "Brand" to "OnePlus",
+                "Model" to "CPH2449",
+                "USB mode" to "EDL (Qualcomm 9008)",
+                "Serial" to "••••2211",
+            ),
+        ),
+        identities = previewState().identities + ("44332211" to identity),
+    )
+}
+
+internal fun previewState(): AppUiState = AppUiState(
+    targets = listOf(
+        AttachedTarget(
+            deviceName = "/dev/bus/usb/001/002",
+            vendorId = 0x18D1,
+            productId = 0x4EE7,
+            mode = TargetMode.ADB,
+            interfaceId = 0,
+            hasPermission = true,
+            serial = "PIXELTEST",
+            product = "Pixel 8",
+            manufacturer = "Google",
+        ),
+        AttachedTarget(
+            deviceName = "/dev/bus/usb/001/004",
+            vendorId = 0x04E8,
+            productId = 0x6860,
+            mode = TargetMode.FASTBOOT,
+            interfaceId = 0,
+            hasPermission = true,
+            serial = "R5CT70TESTSAMS",
+            product = "SM-S911B",
+            manufacturer = "samsung",
+        ),
+    ),
+    link = LinkState.Connected(TargetMode.ADB, "Google Pixel 8"),
+    info = TargetInfo(
+        TargetMode.ADB,
+        listOf(
+            "Model" to "Google Pixel 8",
+            "Codename" to "shiba",
+            "Android" to "15 (SDK 35)",
+            "Bootloader locked" to "no",
+            "Slot" to "_a",
+            "Root managers" to "Magisk",
+        ),
+    ),
+    log = listOf(
+        LogLine(1, LogLevel.COMMAND, "adb shell getprop ro.product.model", 0),
+        LogLine(2, LogLevel.OUTPUT, "Pixel 8", 0),
+        LogLine(3, LogLevel.INFO, "Connected over USB 18d1:4ee7", 0),
+    ),
+    nodeId = "rf-00112233445566778899aabbccddeeff",
+    appVersion = "0.1.0-debug",
+    desktopMode = DesktopMode.probe(emptyList(), pinned = null),
+    adbFingerprint = "A1:B2:C3:D4:E5:F6:00:11:22:33:44:55:66:77:88:99",
+    buildCatalog = previewCatalog(),
+    localSu = true,
+    localManagers = listOf(ai.rootforge.os.root.RootManager.MAGISK),
+    localPreferred = ai.rootforge.os.root.RootManager.MAGISK,
+    localRootNote = "Only Magisk is installed (com.topjohnwu.magisk). Override if this is wrong.",
+    localModules = listOf(
+        ai.rootforge.os.module.InstalledModule(
+            id = "busybox", name = "Busybox", version = "v1.36.1", versionCode = "13601",
+            author = "osm0sis", description = "Busybox binary", enabled = true,
+            removePending = false, updatePending = false,
+        ),
+    ),
+    localListed = true,
+    identities = mapOf(
+        "PIXELTEST" to DeviceIdentity(
+            mode = TargetMode.ADB,
+            brand = "google",
+            model = "Pixel 8",
+            codename = "shiba",
+            product = "shiba",
+            soc = "Google Tensor G3",
+            androidVersion = "15",
+            sdk = "35",
+            securityPatch = "2025-12-05",
+            bootloader = BootloaderLock.UNLOCKED,
+            rootManagers = listOf(ai.rootforge.os.root.RootManager.MAGISK),
+            slot = "a",
+            serial = "PIXELTEST",
+            modelNumber = "Pixel 8",
+        ),
+        "R5CT70TESTSAMS" to DeviceIdentity(
+            mode = TargetMode.FASTBOOT,
+            brand = "samsung",
+            model = "SM-S911B",
+            codename = "dm1q",
+            product = "dm1q",
+            soc = "kalama",
+            bootloader = BootloaderLock.LOCKED,
+            slot = "b",
+            serial = "R5CT70TESTSAMS",
+        ),
+    ),
+)
+
+/** Placeholder entries for previews and screenshots; not real catalog data. */
+private fun previewCatalog(): LoadedCatalog {
+    val shiba = listOf(CatalogDevice(brand = "Google", model = "Pixel 8", codename = "shiba"))
+    return LoadedCatalog(
+        catalog = BuildCatalog(
+            roms = listOf(CatalogEntry("example-rom", "Example ROM", downloadUrl = "https://example.org/rom", devices = shiba)),
+            recoveries = listOf(
+                CatalogEntry("twrp", "TWRP", downloadUrl = "https://twrp.me/Devices/", devices = shiba),
+                CatalogEntry("example-recovery", "Example Recovery", downloadUrl = "https://example.org/recovery", devices = shiba),
+            ),
+            generatedAt = "2026-10-19T00:00:00Z",
+        ),
+        freshness = FreshnessFeed(
+            mapOf(
+                "example-rom" to Freshness(status = "active", lastBuild = "2026-10-18"),
+                "example-recovery" to Freshness(status = "stale", lastBuild = "2026-03-02"),
+            ),
+        ),
+        source = "Downloaded from Custom RR",
+    )
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Dashboard")
+@Composable
+fun PreviewDashboard() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Dashboard, startExpanded = true) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Devices")
+@Composable
+fun PreviewDevices() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Devices) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "MSM / EDL")
+@Composable
+fun PreviewEdl() {
+    RootForgeTheme { RootForgeUi(previewEdlState(), NoopActions, startAt = Destination.Edl) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Flash Tools")
+@Composable
+fun PreviewFlashTools() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.FlashTools) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "ADB")
+@Composable
+fun PreviewAdb() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Adb) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Fastboot")
+@Composable
+fun PreviewFastboot() {
+    RootForgeTheme { RootForgeUi(previewState().copy(link = LinkState.Connected(TargetMode.FASTBOOT, "Pixel 8")), NoopActions, startAt = Destination.Fastboot) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Modules")
+@Composable
+fun PreviewModules() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Modules) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Modules this phone")
+@Composable
+fun PreviewModulesThisPhone() {
+    RootForgeTheme { ai.rootforge.os.ui.screens.ModulesScreen(previewState(), NoopActions, startTab = 1) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Custom Recovery")
+@Composable
+fun PreviewCustomRecovery() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.CustomRecovery) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Settings")
+@Composable
+fun PreviewSettings() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Settings) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Root Guide")
+@Composable
+fun PreviewRootGuide() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.RootGuide) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Help")
+@Composable
+fun PreviewHelp() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Help) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Links")
+@Composable
+fun PreviewLinks() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Links) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Glossary")
+@Composable
+fun PreviewGlossary() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Glossary) }
+}

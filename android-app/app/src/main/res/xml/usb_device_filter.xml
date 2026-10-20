@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ADB interface -->
+    <usb-device class="255" subclass="66" protocol="1" />
+    <!-- Fastboot interface -->
+    <usb-device class="255" subclass="66" protocol="3" />
+    <!-- Qualcomm Emergency Download (05c6:9008) -->
+    <usb-device vendor-id="1478" product-id="36872" />
+</resources>

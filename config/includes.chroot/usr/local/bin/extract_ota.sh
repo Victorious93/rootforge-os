@@ -144,10 +144,18 @@ ensure_payload_dumper
 # unrelated file). Counting every file there used to print "Extraction
 # complete" and exit 0, and the caller would hash the leftover boot.img as if
 # it had come out of this payload.
+#
+# The stamp is the file's SHA-256, not its timestamp. Partition images are
+# padded to a fixed size, and a second extract into the same directory often
+# finishes before the clock ticks. A `stat` format of '%Y.%N' does not carry
+# nanoseconds — in GNU stat %N is the quoted file name — so a same-sized
+# rewrite in that same second looked unchanged. The script then said the
+# payload produced nothing while the previous image had been replaced, which
+# is the image a later patch-and-flash step would write.
 image_stamp() {  # image_stamp <path> — empty unless it is a non-empty regular file
   local f="$1"
   [[ -f "$f" && ! -L "$f" && -s "$f" ]] || return 0
-  stat -c '%Y.%N %s' "$f" 2>/dev/null || true
+  rf_sha256_file "$f"
 }
 
 declare -A IMAGE_STAMP

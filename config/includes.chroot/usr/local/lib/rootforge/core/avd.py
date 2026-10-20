@@ -188,6 +188,9 @@ def cmd_stop(name: str) -> int:
     result = _adb(["-s", serial, "emu", "kill"])
     if result.stdout.strip():
         print(result.stdout.strip())
+    if result.returncode != 0:
+        print(f"`adb emu kill` failed for {serial} (exit {result.returncode}); the emulator may still be running.")
+        return 1
     return 0
 
 

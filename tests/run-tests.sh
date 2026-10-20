@@ -71,7 +71,7 @@ new_sandbox() {
         RF_STUB_FLASH_RC RF_STUB_GETVAR_ALL RF_STUB_ADB_SHELL_OUT \
         RF_STUB_FLASH_FAIL_ON_CALL RF_STUB_ADB_SHELL_RC \
         RF_STUB_DL_BYTES RF_STUB_DL_RC RF_STUB_RELEASE_JSON \
-        RF_STUB_DUMPER_WRITES RF_STUB_PASSWD RF_STUB_USB_POLICY \
+        RF_STUB_DUMPER_WRITES RF_STUB_DUMPER_KEEP_MTIME RF_STUB_PASSWD RF_STUB_USB_POLICY \
         RF_STUB_CURRENT_IME \
         RF_STUB_ADB_STATE RF_STUB_BOOT_COMPLETED RF_STUB_REBOOT_RC RF_STUB_UNLOCKED \
         RF_STUB_PRODUCT RF_STUB_FASTBOOT_RC RF_STUB_FLASH_SLEEP RF_STUB_GETVAR_ALL_2 \
@@ -80,6 +80,11 @@ new_sandbox() {
         ROOTFORGE_USBGUARD_RULES ROOTFORGE_AUDIT_RULES ROOTFORGE_NFT_FILE \
         ROOTFORGE_PROFILE_D ROOTFORGE_WG_CONF ROOTFORGE_WG_ENDPOINT \
         ROOTFORGE_X11_SOCKET_DIR ROOTFORGE_X11_DISPLAY \
+        ROOTFORGE_APT_GET ROOTFORGE_DESKTOP_MODE_STATE ROOTFORGE_TERMUX_PREFIX \
+        ROOTFORGE_CODE_SERVER_URL ROOTFORGE_CODE_SERVER_SHA256 \
+        ROOTFORGE_DESKTOP_SESSION_BIN ROOTFORGE_PROOT_DISTRO \
+        ROOTFORGE_CHROOT_LOGIN ROOTFORGE_TERMUX_WRAPPER_SRC \
+        ROOTFORGE_VNC_DISPLAY ROOTFORGE_DESKTOP_GEOMETRY ROOTFORGE_SKIP_DBUS \
         2>/dev/null || true
 }
 
@@ -1078,6 +1083,14 @@ assert_eq "no devices -> exit 1" "$RC" "1"
 assert_contains "no devices -> says so" "$OUT" "No devices found"
 drop_sandbox
 
+new_sandbox
+# A phone listed by both adb and fastboot (mid-reboot) is one device.
+export RF_STUB_ADB_DEVICES='AAA\tdevice\n'
+export RF_STUB_FASTBOOT_DEVICES='AAA\tfastboot\n'
+run_script bash "$BIN_DIR/fleet_orchestrate.sh" root-detect
+assert_contains "a serial in both adb and fastboot is run once" "$OUT" "Found 1 device(s): AAA"
+drop_sandbox
+
 section "build_matrix.sh — matrix file handling"
 
 new_sandbox
@@ -1710,6 +1723,14 @@ run_script bash "$BIN_DIR/new_module_scaffold.sh" mymod "My Mod" magisk
 assert_eq "scaffolding a magisk module succeeds" "$RC" "0"
 run_script bash "$BIN_DIR/lint_module.sh" "$ROOTFORGE_HOME/modules/mymod"
 assert_eq "a scaffolded magisk module passes lint_module.sh" "$RC" "0"
+# Regression: the shim called grep_prop before sourcing util_functions.sh (so
+# it always demanded "Magisk v20.4+") and never called install_module (so a
+# recovery flash would have installed nothing).
+UB_TEXT="$(cat "$ROOTFORGE_HOME/modules/mymod/META-INF/com/google/android/update-binary")"
+assert_contains "update-binary sources Magisk's util_functions.sh" "$UB_TEXT" ". /data/adb/magisk/util_functions.sh"
+assert_contains "update-binary calls install_module" "$UB_TEXT" "install_module"
+assert_not_contains "update-binary no longer calls grep_prop before it exists" "$UB_TEXT" "grep_prop"
+assert_eq "update-binary parses under sh -n" "$(sh -n "$ROOTFORGE_HOME/modules/mymod/META-INF/com/google/android/update-binary" && echo ok)" "ok"
 
 new_sandbox
 run_script bash "$BIN_DIR/new_module_scaffold.sh" mykmod "My KMod" kernelsu
@@ -1740,6 +1761,40 @@ new_sandbox
 run_script bash "$BIN_DIR/new_module_scaffold.sh" okid "Ok" magsik
 assert_eq "an unknown target is refused" "$RC" "1"
 assert_contains "an unknown target lists the real ones" "$OUT" "expected magisk, kernelsu, apatch, zygisk or xposed"
+drop_sandbox
+
+new_sandbox
+# customize.sh is sourced by Magisk/KernelSU/APatch. The display name used to be
+# spliced into double quotes, so a name containing $(...) or a quote breakout
+# ran as root at install time. Quoting must keep it as data, including an
+# apostrophe, and the file must still parse.
+evil_name="O'Brien \$(touch $SANDBOX/pwned-dollar)\"; touch $SANDBOX/pwned-break"
+run_script bash "$BIN_DIR/new_module_scaffold.sh" evilmod "$evil_name" magisk
+assert_eq "a display name with shell metacharacters still scaffolds" "$RC" "0"
+CUST="$ROOTFORGE_HOME/modules/evilmod/customize.sh"
+assert_eq "quoted customize.sh parses under sh -n" "$(sh -n "$CUST" && echo ok)" "ok"
+run_script sh -c 'ui_print() { printf "%s\n" "$1"; }; . "$1"' sh "$CUST"
+assert_eq "sourcing customize.sh does not run the display name" "$RC" "0"
+assert_contains "the display name is passed to ui_print as text" "$OUT" '$(touch'
+assert_contains "an apostrophe in the display name survives quoting" "$OUT" "O'Brien"
+if [[ -e "$SANDBOX/pwned-dollar" || -e "$SANDBOX/pwned-break" ]]; then
+  fail "a display name is not executed when customize.sh is sourced" "payload file was created"
+else
+  pass "a display name is not executed when customize.sh is sourced"
+fi
+run_script bash "$BIN_DIR/lint_module.sh" "$ROOTFORGE_HOME/modules/evilmod"
+assert_eq "a quoted customize.sh still passes lint_module.sh" "$RC" "0"
+
+new_sandbox
+# A control character in the display name would add keys to module.prop.
+run_script bash "$BIN_DIR/new_module_scaffold.sh" injmod $'Evil\nid=injected' magisk
+assert_eq "a newline in the display name is refused" "$RC" "1"
+assert_contains "the refusal names the display name" "$OUT" "Invalid display name"
+if [[ -e "$ROOTFORGE_HOME/modules/injmod" ]]; then
+  fail "no module is created for a rejected display name" "found modules/injmod"
+else
+  pass "no module is created for a rejected display name"
+fi
 drop_sandbox
 
 section "Termux variants — build flavours"
@@ -1800,9 +1855,125 @@ assert_contains "--check distinguishes an empty socket dir from a missing one" "
 
 new_sandbox
 export ROOTFORGE_X11_SOCKET_DIR="$SANDBOX/nope"
+# A host that really has xfce4-session installed must not change this result.
+export ROOTFORGE_DESKTOP_SESSION_BIN="rootforge-test-no-such-session"
 run_script bash "$DESKTOP" --start
+unset ROOTFORGE_DESKTOP_SESSION_BIN
 assert_eq "starting with no desktop installed fails" "$RC" "1"
 assert_contains "starting with no desktop says how to get one" "$OUT" "--install"
+drop_sandbox
+
+section "Desktop mode — setup and session scripts"
+
+SETUP_DM="$BIN_DIR/setup_desktop_mode.sh"
+SESSION_DM="$BIN_DIR/rootforge_desktop_mode.sh"
+ENTRY_DM="$REPO_ROOT/termux/desktop-mode-entry.sh"
+
+new_sandbox
+run_script bash "$SETUP_DM" --bogus
+assert_eq "setup rejects an unknown argument" "$RC" "1"
+assert_contains "setup names the real flags" "$OUT" "expected --check, --install"
+
+new_sandbox
+export ROOTFORGE_DESKTOP_SESSION_BIN="rootforge-test-no-such-session"
+run_script bash "$SETUP_DM" --check
+assert_eq "setup --check does not fail" "$RC" "0"
+assert_contains "setup --check reports missing XFCE" "$OUT" "missing"
+assert_contains "setup --check mentions the installer" "$OUT" "setup_desktop_mode.sh"
+
+new_sandbox
+mkdir -p "$SANDBOX/fakebin" "$SANDBOX/prefix/bin"
+printf '#!/bin/sh\necho "apt-get $*" >> "%s"\nexit 0\n' "$RF_STUB_LOG" > "$SANDBOX/fakebin/apt-get"
+printf '#!/bin/sh\nexit 0\n' > "$SANDBOX/fakebin/xfce4-session"
+chmod +x "$SANDBOX/fakebin/apt-get" "$SANDBOX/fakebin/xfce4-session"
+export PATH="$SANDBOX/fakebin:$PATH"
+export ROOTFORGE_APT_GET="$SANDBOX/fakebin/apt-get"
+export ROOTFORGE_TERMUX_PREFIX="$SANDBOX/prefix"
+export ROOTFORGE_TERMUX_WRAPPER_SRC="$ENTRY_DM"
+export ROOTFORGE_DESKTOP_MODE_STATE="$SANDBOX/dm-state"
+run_script bash "$SETUP_DM"
+assert_eq "setup succeeds when xfce is already on PATH" "$RC" "0"
+assert_not_contains "setup skips apt when xfce is present" "$(cat "$RF_STUB_LOG")" "apt-get install xfce4"
+assert_eq "Termux wrapper is copied" "$([ -x "$SANDBOX/prefix/bin/rootforge-desktop-mode" ] && echo yes || echo no)" "yes"
+assert_contains "setup prints progress" "$OUT" "progress 1/5"
+run_script bash "$SETUP_DM"
+assert_eq "a second setup is still success" "$RC" "0"
+assert_contains "second setup still skips apt" "$OUT" "already present"
+
+new_sandbox
+mkdir -p "$SANDBOX/fakebin"
+# This host may already have xfce4-session; use a unique session name the fake apt "installs".
+printf '#!/bin/sh\necho "apt-get $*" >> "%s"\nif [ "$1" = install ]; then printf "#!/bin/sh\\nexit 0\\n" > "%s/rootforge-test-xfce"; chmod +x "%s/rootforge-test-xfce"; fi\nexit 0\n' \
+  "$RF_STUB_LOG" "$SANDBOX/fakebin" "$SANDBOX/fakebin" > "$SANDBOX/fakebin/apt-get"
+chmod +x "$SANDBOX/fakebin/apt-get"
+export PATH="$SANDBOX/fakebin:$PATH"
+export ROOTFORGE_APT_GET="$SANDBOX/fakebin/apt-get"
+export ROOTFORGE_DESKTOP_SESSION_BIN="rootforge-test-xfce"
+export ROOTFORGE_DESKTOP_MODE_STATE="$SANDBOX/dm-state"
+run_script bash "$SETUP_DM"
+assert_eq "setup installs xfce when missing" "$RC" "0"
+assert_contains "setup ran apt-get install xfce4" "$(cat "$RF_STUB_LOG")" "install -y --no-install-recommends xfce4"
+assert_eq "xfce stage left a marker" "$([ -f "$SANDBOX/dm-state/xfce.done" ] && echo yes || echo no)" "yes"
+assert_contains "unpinned code-server is skipped" "$OUT" "Skipping code-server download"
+
+new_sandbox
+run_script bash "$SESSION_DM" --bogus
+assert_eq "session rejects an unknown argument" "$RC" "1"
+assert_contains "session lists the real operations" "$OUT" "expected start, stop, setup, status"
+
+new_sandbox
+export ROOTFORGE_X11_SOCKET_DIR="$SANDBOX/nope"
+export ROOTFORGE_DESKTOP_SESSION_BIN="rootforge-test-no-such-session"
+run_script bash "$SESSION_DM" status
+assert_eq "status never fails" "$RC" "0"
+assert_contains "status reports X11 down" "$OUT" "down"
+assert_contains "status tells you to run setup" "$OUT" "setup"
+
+new_sandbox
+export ROOTFORGE_X11_SOCKET_DIR="$SANDBOX/nope"
+export ROOTFORGE_DESKTOP_SESSION_BIN="rootforge-test-no-such-session"
+run_script bash "$SESSION_DM" start
+assert_eq "start without a desktop fails" "$RC" "1"
+assert_contains "start without a desktop points at setup" "$OUT" "setup"
+
+new_sandbox
+mkdir -p "$SANDBOX/x11" "$SANDBOX/fakebin"
+: > "$SANDBOX/x11/X0"
+printf '#!/bin/sh\nexit 0\n' > "$SANDBOX/fakebin/xfce4-session"
+chmod +x "$SANDBOX/fakebin/xfce4-session"
+export PATH="$SANDBOX/fakebin:$PATH"
+export ROOTFORGE_X11_SOCKET_DIR="$SANDBOX/x11"
+export ROOTFORGE_DESKTOP_SESSION_BIN="xfce4-session"
+export ROOTFORGE_DESKTOP_MODE_STATE="$SANDBOX/dm-state"
+export ROOTFORGE_SKIP_DBUS=1
+run_script bash "$SESSION_DM" start
+assert_eq "start with an X11 socket succeeds" "$RC" "0"
+assert_contains "start used X11" "$OUT" "Using X11"
+run_script bash "$SESSION_DM" stop
+assert_eq "stop succeeds" "$RC" "0"
+
+new_sandbox
+export ROOTFORGE_PROOT_DISTRO="$SANDBOX/no-such-proot"
+run_script bash "$ENTRY_DM" wipe
+assert_eq "entry rejects an unknown operation" "$RC" "1"
+assert_contains "entry names the real operations" "$OUT" "expected start, stop, setup, status"
+
+new_sandbox
+mkdir -p "$SANDBOX/fakebin"
+printf '#!/bin/sh\necho "proot-distro $*" >> "%s"\n' "$RF_STUB_LOG" > "$SANDBOX/fakebin/proot-distro"
+chmod +x "$SANDBOX/fakebin/proot-distro"
+export PATH="$SANDBOX/fakebin:$PATH"
+export ROOTFORGE_PROOT_DISTRO="$SANDBOX/fakebin/proot-distro"
+run_script bash "$ENTRY_DM" start
+assert_eq "entry logs into the rootforge distro" "$RC" "0"
+assert_contains "entry uses --shared-tmp" "$(cat "$RF_STUB_LOG")" "--shared-tmp"
+assert_contains "entry runs the in-rootfs launcher" "$(cat "$RF_STUB_LOG")" "rootforge_desktop_mode.sh start"
+
+new_sandbox
+export PATH="$SANDBOX:$ORIGINAL_PATH"
+run_script bash "$ENTRY_DM" status
+assert_eq "entry without proot-distro fails closed" "$RC" "1"
+assert_contains "entry without a rootfs says so" "$OUT" "no RootForge Debian rootfs"
 drop_sandbox
 
 section "Termux variants — rooted chroot launcher"
@@ -2703,6 +2874,17 @@ assert_eq "a short download caches nothing" \
 assert_not_contains "a short download pushes nothing" "$(cat "$RF_STUB_LOG")" "push"
 drop_sandbox
 
+section "install_adb_ime.sh — a truncated cached APK is not trusted"
+
+new_sandbox
+mkdir -p "$ROOTFORGE_HOME/bin"
+printf 'oops' > "$ROOTFORGE_HOME/bin/ADBKeyboard.apk"
+run_script bash "$BIN_DIR/install_adb_ime.sh" install
+assert_not_contains "a 4-byte cached APK is not reported as usable" "$OUT" "Using cached APK"
+assert_contains "the poisoned cache is discarded" "$OUT" "smaller than any real ADBKeyboard APK"
+assert_not_contains "a 4-byte APK is never pushed to adb install" "$(cat "$RF_STUB_LOG")" "install -r"
+drop_sandbox
+
 section "install_adb_ime.sh — text reaches the device intact"
 
 new_sandbox
@@ -3048,7 +3230,14 @@ prev=""
 for a in "$@"; do [ "$prev" = "-o" ] && OUT="$a"; prev="$a"; done
 [ -n "${RF_STUB_LOG:-}" ] && printf 'dumper %s\n' "$*" >> "$RF_STUB_LOG"
 for f in ${RF_STUB_DUMPER_WRITES:-}; do
+  keep=""
+  if [ -n "${RF_STUB_DUMPER_KEEP_MTIME:-}" ] && [ -f "$OUT/$f" ] && [ ! -L "$OUT/$f" ]; then
+    keep="$(stat -c %Y "$OUT/$f")"
+  fi
   head -c 1024 /dev/zero > "$OUT/$f"
+  if [ -n "$keep" ]; then
+    touch -d "@$keep" "$OUT/$f"
+  fi
 done
 exit 0
 EOS
@@ -3111,6 +3300,24 @@ assert_eq "a run that replaces one image and leaves another still succeeds" "$RC
 assert_contains "only the image this run wrote is counted" "$OUT" "Extraction complete (1 file(s))"
 assert_eq "the replaced image is the dumper's, not the leftover" "$(wc -c < "$SANDBOX/out/boot.img" | tr -d ' ')" "1024"
 assert_eq "the image the payload did not contain is left untouched" "$(cat "$SANDBOX/out/vbmeta.img")" "old-vbmeta"
+
+# Same size and the same mtime second. Boot and vbmeta images are padded to a
+# fixed size, and re-extracting into a directory that was just written often
+# lands before the clock ticks. The old stamp was `stat -c '%Y.%N %s'`, and
+# GNU stat's %N is the file name, not nanoseconds — so the rewrite looked
+# unchanged, the script exited 1 saying the payload produced nothing, and the
+# replaced bytes were what a later flash would write.
+new_sandbox
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+mkdir -p "$SANDBOX/out"
+head -c 1024 /dev/zero | tr '\0' 'A' > "$SANDBOX/out/boot.img"
+export RF_STUB_DUMPER_WRITES="boot.img" RF_STUB_DUMPER_KEEP_MTIME=1
+run_script bash "$BIN_DIR/extract_ota.sh" "$SANDBOX/payload.bin" "$SANDBOX/out" --partitions boot
+assert_eq "a same-sized same-second replacement is a successful extraction" "$RC" "0"
+assert_contains "that replacement is counted as produced" "$OUT" "Extraction complete (1 file(s))"
+EXPECT_NEW="$(head -c 1024 /dev/zero | sha256sum | awk '{print $1}')"
+assert_eq "the same-sized replacement is the dumper's bytes" "$(sha256sum "$SANDBOX/out/boot.img" | awk '{print $1}')" "$EXPECT_NEW"
 drop_sandbox
 
 section "rootforge ota — the wrapped path end to end"
@@ -3153,6 +3360,24 @@ assert_contains "the image this run wrote is hashed" "$OUT" "$(sha256sum "$SANDB
 assert_not_contains "a leftover requested image is not hashed" "$OUT" "$STALE_VBMETA_SHA"
 assert_contains "the leftover is reported as not produced" "$OUT" "vbmeta.img  not produced"
 assert_eq "the leftover image is not rewritten" "$(cat "$SANDBOX/out/vbmeta.img")" "old-vbmeta"
+
+# The shell used to exit 1 for this case before the CLI could hash anything.
+# Both layers have to treat the bytes as the identity: a same-sized rewrite
+# whose mtime second did not move is still this extraction.
+new_sandbox
+export PYTHONPATH="$LIB_DIR"
+plant_dumper
+head -c 512 /dev/zero > "$SANDBOX/payload.bin"
+mkdir -p "$SANDBOX/out"
+head -c 1024 /dev/zero | tr '\0' 'A' > "$SANDBOX/out/boot.img"
+OLD_SHA="$(sha256sum "$SANDBOX/out/boot.img" | awk '{print $1}')"
+export RF_STUB_DUMPER_WRITES="boot.img" RF_STUB_DUMPER_KEEP_MTIME=1
+run_script python3 -m rootforge.core.cli ota extract "$SANDBOX/payload.bin" \
+  --partitions boot --output "$SANDBOX/out"
+assert_eq "CLI extract counts a same-sized same-second replacement" "$RC" "0"
+EXPECT_NEW="$(head -c 1024 /dev/zero | sha256sum | awk '{print $1}')"
+assert_contains "the CLI hashes the replacement, not the leftover" "$OUT" "$EXPECT_NEW"
+assert_not_contains "the previous bytes are not presented as this extraction" "$OUT" "$OLD_SHA"
 
 new_sandbox
 export PYTHONPATH="$LIB_DIR"

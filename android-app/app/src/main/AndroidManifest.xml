@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-feature android:name="android.hardware.usb.host" android:required="true" />
+
+    <!-- Only used to tell you a controller app is waiting for approval. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      Used only when you tap a Download / Look up button: Custom RR catalog (raw.githubusercontent.com)
+      and Custom Recovery official indexes/images (twrp.me, dl.twrp.me, pitchblackrecovery.com, GitHub).
+      Device work never uses the network.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      VictorSuite (package com.termux) defines this dangerous permission on its RUN_COMMAND
+      service. RootForge only sends the documented rootforge-desktop-mode command, never a
+      free-form shell. Harmless if VictorSuite is not installed.
+    -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+    <!-- Specified in docs/DESKTOP_MODE.md; VictorSuite does not define this yet. -->
+    <uses-permission android:name="ai.victorsuite.permission.DESKTOP_MODE" />
+    <!--
+      Shizuku/Sui API (runtime, requested via Shizuku.requestPermission, not the
+      platform permission dialog). Same permission for Shizuku and Sui.
+    -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
+    <queries>
+        <package android:name="ai.droidcommand.app" />
+        <package android:name="ai.droidcommand.app.debug" />
+        <package android:name="com.termux" />
+        <package android:name="ai.victorsuite.app" />
+        <package android:name="ai.victorsuite.app.debug" />
+        <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="rikka.sui" />
+        <!-- Lets this phone's Modules tab see which root manager APK is installed. -->
+        <package android:name="com.topjohnwu.magisk" />
+        <package android:name="me.weishu.kernelsu" />
+        <package android:name="me.bmax.apatch" />
+        <package android:name="io.github.huskydg.magisk" />
+        <!-- Lets the Settings-chosen terminal app be found and launched; its package name is not known in advance. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="com.termux.RUN_COMMAND" />
+        </intent>
+        <intent>
+            <action android:name="ai.victorsuite.action.DESKTOP_MODE" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".RootForgeApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.RootForge">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
+        </activity>
+
+        <!--
+          Exported on purpose: this is how droidcommand-ai reaches the app. Binding grants nothing.
+          Every request is checked against the owner's pairing list (package + signing certificate) and
+          the "Allow external controllers" switch, which is off by default.
+        -->
+        <service
+            android:name=".bridge.RootForgeBridgeService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="ai.rootforge.os.action.BRIDGE" />
+            </intent-filter>
+        </service>
+
+        <!--
+          Official Shizuku provider. Sui is initialised from here automatically (API 12.1+).
+          The INTERACT_ACROSS_USERS_FULL permission is how Shizuku documents protecting this
+          exported provider from ordinary apps.
+        -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+    </application>
+</manifest>

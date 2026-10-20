@@ -196,11 +196,15 @@ that Calamares expands `${USER}` in `shellprocess` as documented upstream, that
   what they download — except Ollama's installer (hook 0020), which is unpinned. A static
   check (`tests/check-hooks.sh`) rejects unused pins, "latest" resolution beside a pin,
   `curl | sh`, `curl` without `-f`, and unpinned `npm install -g`.
-- `release.yml` (tag `v*`): `checks` (the lint workflow, same commit) → ISO build and
-  four Termux rootfs builds → `termux/make-release-metadata.sh` generates `install.sh`, the
-  proot-distro plugin, `rootforge-chroot.sh`, `release-metadata.json` and `SHA256SUMS`
-  from the real tarballs → `tests/verify-release-assets.sh` → **draft** release.
-  **[Unverified]** the workflow has not run on GitHub since these changes.
+- `release.yml` (tag `v*`): `checks` (the lint workflow, same commit) → in parallel,
+  (1) debug APK → published release asset `rootforge-os-android-debug.apk`;
+  (2) ISO build and four Termux rootfs builds → `termux/make-release-metadata.sh`
+  generates `install.sh`, the proot-distro plugin, `rootforge-chroot.sh`,
+  `release-metadata.json` and `SHA256SUMS` from the real tarballs →
+  `tests/verify-release-assets.sh` → **draft** ISO/rootfs assets. The APK job
+  does not wait for live-build. **[Unverified]** the ISO/rootfs half has not
+  run on GitHub since these changes. v0.2.0's APK was attached with
+  `gh release create` from the `android-apk.yml` artifact on `e1f84ea`.
 - The live ISO boots **BIOS only** (isolinux). UEFI and Secure Boot are unsupported.
 
 ## 6. Trust boundaries
@@ -223,3 +227,10 @@ stale artifact, unverified download) and makes destructive actions explicit.
 | D8 | Termux installs require a digest; arm64 hosts install only what runs there | Google ships x86-64 SDK/NDK/emulator only; claiming otherwise installed unrunnable binaries |
 | D9 | A failed build must be a failed `make`, and a stale ISO must not survive | `tee` masked the status and `checksum` blessed a leftover image |
 | D10 | Wrap, don't rewrite, working scripts | Their behaviour is proven by real incidents recorded in `common.sh` comments |
+
+## 8. License
+
+Original RootForge OS work is **GPL-3.0-or-later** (`LICENSE`), except the
+shared Kotlin module `android-app/core` (`:core`), which is **Apache-2.0**
+(`android-app/core/LICENSE`). Third-party code is not relicensed. Applying
+notices and third-party attribution: `NOTICE`.

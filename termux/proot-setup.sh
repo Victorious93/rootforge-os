@@ -51,6 +51,22 @@ cat > /etc/motd <<'EOF'
 
 EOF
 
+# The motd above describes the unrooted PRoot variant. A chroot rootfs runs
+# with real root, so the "NOT available without root" block would be wrong.
+FLAVOR="$(sed -n 's/^flavor=//p' /etc/rootforge/build-info 2>/dev/null | head -n 1)"
+if [ "$FLAVOR" = "chroot" ]; then
+  echo "==> Rewriting motd for the rooted chroot flavor"
+  sed -i -e 's/Termux\/PRoot (non-root)/Termux chroot (rooted, via su)/' \
+    -e '/^  NOT available without root on the Android host:$/,/^                             container inside Termux$/d' /etc/motd
+  cat >> /etc/motd <<'EOF'
+  Rooted chroot: real root, with /dev and /proc bind-mounted by the launcher.
+  What /dev/kvm and kernel features can do depends on the Android kernel;
+  harden_kernel.sh, harden_system.sh and setup_vpn.sh are intentionally not
+  shipped in this rootfs (see README, Termux variants).
+
+EOF
+fi
+
 echo "==> Creating rootforge workspace skeleton in /etc/skel and /root"
 for HOME_DIR in /etc/skel /root; do
   mkdir -p \

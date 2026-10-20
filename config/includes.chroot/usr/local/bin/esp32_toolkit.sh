@@ -10,6 +10,11 @@
 # half of PyraClaw resumes later — this doesn't assume that work is active,
 # it just avoids starting from nothing if it is.
 #
+# Ethics: this script flashes firmware onto an ESP32 you own. It is not an
+# Android screen-lock bypass, FRP bypass, or HID key-injection helper.
+# Owner Android unlock/flash helpers are :core BoardHelpers and
+# docs/BOARD_HELPERS.md (USB-serial bridge only; no credential typing).
+#
 # Usage: ./esp32_toolkit.sh install | new-project <name> | flash <firmware.bin> [port]
 
 set -euo pipefail

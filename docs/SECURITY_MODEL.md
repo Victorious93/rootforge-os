@@ -1,6 +1,7 @@
 # RootForge OS — Security model
 
-Status as of 2026-10-07. This document says what the code enforces, what it does not,
+Status as of 2026-10-07. The desktop API-token row was added 2026-10-19; the rest of
+this document was not re-audited then. This document says what the code enforces, what it does not,
 and what depends on the operator. It does not describe a security posture the project
 does not have.
 
@@ -12,6 +13,7 @@ access to the operator's account:
 
 | Threat | Control | Where | Verified by |
 |---|---|---|---|
+| Installing an untrusted module as root | Typed `INSTALL MODULE` approval that shows the zip's name, size, SHA-256 and the manager, before anything is pushed (USB target) or before `su` runs (this phone). Dry-run is the default for this-phone install and only logs the command. RootForge cannot inspect a module's scripts; the creator's custom text is the author's own. This-phone install never reboots. | `TargetController.installModuleOnTarget`, `TargetController.installModuleLocally`, `HostController.installModuleOnTarget`, `:core` `LocalModules` | `:core` unit tests; not run on a device |
 | Flashing the wrong device | Exactly one device selected explicitly; plan shows serial, product, slot; typed `FLASH <serial>` / `RESTORE <serial>` on `/dev/tty` | `flash_patched_boot.sh`, `restore_partitions.sh`, `common.sh:rf_confirm` | Stub tests |
 | Writing to an unknown or locked device | `device check` blocks: probe failed, vendor refused, bootloader locked/unknown (`unlocked` variable only), partition unreported, image too large, slot layout unknown | `core/device.py` | `tests/test_device.py` |
 | Writing the wrong slot | Explicit `--slot`; `--both-slots` needs `--slots-same-build` | flash script | Stub tests |
@@ -27,6 +29,13 @@ access to the operator's account:
 | Unrecorded state-changing commands | `flash`/`backup`/`module`/`avd` and `boot patch`/`flash-last` write start/finish events with exit status and script links | `core/audit.py` | `tests/test_audit.py`, shell audit section |
 | Logs readable by other users | CLI JSON logs and all script logs/reports created `0600` from creation; handed to `$SUDO_USER` under sudo | `core/log.py`, `common.sh:rf_private_file`/`rf_log_init` | Tests, incl. under `umask 000` |
 | Secrets in files | API-key file created 0600 from creation (`rf_write_private`); values shell-quoted (`rf_shell_quote`) | `setup_ai_tools.sh` | Stub tests |
+| Desktop API token readable by other local users | `~/.rootforge/desktop.properties` created `0600` before the bearer token is written; an existing group/world-readable file is tightened before load and before rewrite. The directory keeps the umask | `android-app/desktop` `DesktopSettings` | `:desktop:test` `DesktopSettingsTest` (POSIX). Not run on a phone |
+| Remote build catalog treated as authority | Custom RR catalog is not read by `DeviceMatchGate`/`FlashSafety`; fetched only on a tap, https only, 8 MiB cap, parsed before it replaces the stored copy; links opened only if `https://`. A matching TWRP/PitchBlack row can open Custom Recovery; that path still uses the probed phone, the installer host allow-list, dry-run, SHA-256, published checksums, backup, and typed `FLASH RECOVERY`. ROMs and other recoveries stay links | `:core` `catalog/` | `:core:test` `BuildCatalogTest`, `BuildCatalogStoreTest`, `CatalogRecoveryBridgeTest` |
+| Writing the wrong recovery (or boot) with su | Dedicated `recovery`/`recovery_a`/`recovery_b` only; unknown slot, unknown partition size, and recovery-in-boot refuse the write; dry-run default; backup to app storage; typed `FLASH RECOVERY`; official hosts only; MD5 when TWRP publishes one, SHA-256 always shown | `:core` `recovery/`, Custom Recovery screen | `:core:test` `RecoveryLayoutTest`, `RecoveryCommandsTest`, `RecoveryPlanTest`, `RecoveryInstallerTest`, `RecoveryCatalogTest`. Not run on a phone |
+| A different app pretending to be VictorSuite | Desktop mode pins VictorSuite by package name **and** signing-certificate SHA-256 before any intent is sent. A cert change needs a new pin. The intent is either the dedicated Desktop-mode action or Termux RUN_COMMAND with a fixed `rootforge-desktop-mode <op>` line; the UI never interpolates a shell. No shared signing key. | `:core` `desktopmode/`, Android Dashboard card | `:core:test` `DesktopModeTest`. Not run on a phone |
+| Privileged host-phone reads via Shizuku | Sole API is `PrivilegedShell` (argv `ProcessBuilder`, 64 KiB cap, never logs stdout/stderr). UI ops are read-only (`exec` / `readDeviceState`) and each one goes through `ApprovalCenter`. `pmGrant` exists for fleet interop only: typed `GRANT PERMISSION`, not shown in Settings. No flash/unlock/wipe. Output stays on the Settings card. | `:core` `shizuku/`, `:app` `BoundPrivilegedShell` / `IPrivilegedShell.aidl` | `:core:test` `ShizukuStateResolverTest`, `ShizukuManagerTest`, `PrivilegedShellTest`, `PrivilegedCommandsTest`. Not run on a phone |
+| Fleet remote-control impersonation / replay | Protocol 1.1 authorizes only by caller package + signing-cert SHA-256 (Binder/`Message.sendingUid`, never envelope `trigger` / `sourceNodeRef`). External control default off. Expired (`timestampMs+ttlMs` or >120 s skew) and duplicate nonces keyed `(sourceNodeRef, nonce)` are refused; the seen-nonce cache is kept ≥ 10 minutes and never evicts a still-live nonce (a full cache is `internal`). Destructive ops go through `ApprovalCenter` (typed phrase); a remote trigger never auto-approves. | `:core` `bridge/FleetExecutor`, `ReplayGuard`, `RootForgeBridgeService` | `:core:test` `FleetEnvelopeTest`, `ReplayGuardTest`, `FleetAuthTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`. Not run on a phone |
+| Fleet settings dump / restore | `config.export` / `config.import` are advertised with `remoteAllowed=false`; a remote caller is `capability_off`. Export omits tokens, passwords, signing material and pairing secrets. Import needs on-device confirm, never enables `remote.command` / external control, rejects unknown or oversized payloads, and refuses `autoConnect` / `terminalApp` values that Settings would not accept. | `:core` `config/ConfigBackup`, `bridge/FleetExecutor` | `:core:test` `ConfigBackupTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`. Not run on a phone |
 | Provisioning the wrong account / root | Target user resolved explicitly; refuses rather than defaulting to root; live user removed; live sudo rule deleted; installed name cannot be `root`/`rootforge` | `00_bootstrap_distro.sh`, Calamares configs | Executed in a sandbox; **not** under real Calamares |
 
 ## 2. What it does not protect against
@@ -66,6 +75,13 @@ access to the operator's account:
   redacted. Do not rely on it as a substitute for not printing secrets.
 - **Logs are private only for new files.** An existing log or report keeps the mode it has;
   directories keep the umask default.
+- **The Custom RR catalog is unauthenticated third-party data.** It comes from
+  `monsiu/Custom-RR` on raw.githubusercontent.com over TLS, with no signature or pinned
+  digest, and has no schema version. Whoever controls that repository decides what the
+  "Builds for this device" card lists and which download pages it links. It cannot skip
+  `FLASH RECOVERY` or choose a write target. A TWRP/PitchBlack row can only open
+  Custom Recovery; official files are looked up from the probed phone and must still
+  pass the installer host allow-list. Tapping Download tells GitHub this phone's IP address.
 - **Android-side trust is out of scope**: bootloader unlock wipes data by design; nothing
   here restores a vendor's attestation.
 

@@ -42,10 +42,13 @@ X11_SOCKET_DIR="${ROOTFORGE_X11_SOCKET_DIR:-/tmp/.X11-unix}"
 log() { echo "[desktop] $*"; }
 die() { echo "[desktop] ERROR: $*" >&2; exit 1; }
 
+# Test seam: the session binary to look for. Defaults to the real one.
+DESKTOP_SESSION_BIN="${ROOTFORGE_DESKTOP_SESSION_BIN:-xfce4-session}"
+
 DESKTOP_PACKAGES="xfce4 xfce4-session xfce4-terminal dbus-x11 x11-xserver-utils"
 
 have_desktop() {
-  command -v xfce4-session >/dev/null 2>&1
+  command -v "$DESKTOP_SESSION_BIN" >/dev/null 2>&1
 }
 
 report() {
@@ -67,7 +70,7 @@ report() {
   fi
 
   if have_desktop; then
-    printf '  %-22s %s\n' "xfce4-session" "$(command -v xfce4-session)"
+    printf '  %-22s %s\n' "xfce4-session" "$(command -v "$DESKTOP_SESSION_BIN")"
   else
     printf '  %-22s %s\n' "xfce4-session" "not installed — run: $0 --install"
   fi

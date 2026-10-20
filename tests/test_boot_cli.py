@@ -273,6 +273,16 @@ class TestBootCommandsThroughDispatch(unittest.TestCase):
         self.assertEqual(patch_args[-2:], ["--serial", "ABC123"])
         self.assertEqual(flash_args, ["--flash", "--serial", "ABC123"])
 
+    def test_cpio_refuses_a_ramdisk_path_that_leaves_the_work_dir(self):
+        work = self.root / "work"
+        work.mkdir()
+        (self.root / "outside.cpio").write_bytes(b"CPIO")
+        fake = FakeMagiskboot(self)
+        rc = self.run_boot(fake, ["cpio", str(work), "../outside.cpio", "--", "add 0750 init x"])
+        self.assertEqual(rc, 1)
+        self.assertEqual(fake.calls, [])
+        self.assertIn("outside", self.out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

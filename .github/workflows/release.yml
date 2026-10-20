@@ -3,10 +3,17 @@
 #
 # Builds the amd64 installable/USB-flashable ISO and the Termux/PRoot rootfs
 # tarballs (arm64 + amd64) and attaches them, with sha256 checksums, to a
-# draft GitHub Release — so both delivery paths (README sections 14 and 17)
+# draft GitHub Release — so both delivery paths (ISO and Termux rootfs; see README)
 # have real, downloadable artifacts instead of requiring every user to build
-# from source. The release is left as a draft; a maintainer publishes it
-# after a sanity check.
+# from source. The ISO/rootfs release is left as a draft; a maintainer publishes
+# it after a sanity check.
+#
+# Independently of the ISO path, a debug host-phone APK is built and attached
+# to a published (non-draft) GitHub Release for the same tag. The APK artifact
+# is not named rootforge-* so the ISO verifier never sees it. Desktop/Docker
+# stay on toolkit.yml (7-day CI artifacts). A release-signed APK is produced
+# only when ROOTFORGE_KEYSTORE_* secrets exist (android-apk.yml); this job
+# always attaches the debug APK so a tag has a permanent download link.
 #
 # [Likely] this needs at least one real run to shake out runner-specific
 # issues (disk space during the live-build stage, binfmt_misc registration
@@ -89,13 +96,82 @@ jobs:
         # diagnosable without re-running the whole build.
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           # Not named rootforge-*: the release job downloads rootforge-* only,
           # so a build log can never be published as a release asset.
           name: build-log-iso
           path: rootforge-build-*.log
-          retention-days: 14
+          retention-days: 7
           if-no-files-found: ignore
+
+  # Debug APK is attached even when live-build / rootfs fails. Artifact name
+  # must not match rootforge-* (the ISO release job downloads that pattern).
+  build-apk:
+    needs: checks
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: android-app/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: android-host-debug-apk
+          path: android-app/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  attach-apk:
+    needs: build-apk
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-host-debug-apk
+          path: apk-assets
+
+      - name: Stable asset name and checksum
+        run: |
+          set -euo pipefail
+          cd apk-assets
+          src="$(ls ./*.apk)"
+          mv "$src" rootforge-os-android-debug.apk
+          sha256sum rootforge-os-android-debug.apk > rootforge-os-android-debug.apk.sha256
+
+      - name: Attach APK to a published release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            apk-assets/rootforge-os-android-debug.apk
+            apk-assets/rootforge-os-android-debug.apk.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-termux-rootfs:
     needs: checks
@@ -167,7 +243,11 @@ jobs:
         # Binds this tag, each architecture and flavor, the download URL and
         # the SHA-256 together; fails if a tarball is missing, mismatched or
         # not what its name says. Also publishes the launcher it pins.
-        run: termux/make-release-metadata.sh --tag "$GITHUB_REF_NAME" --dist release-assets --out release-assets
+        # bash: the script was 100644 (not executable). Tag v0.2.0's release
+        # job failed here with "Permission denied" after ISO + four rootfs
+        # builds had already succeeded (run 38682276372). Tests already call
+        # it with bash.
+        run: bash termux/make-release-metadata.sh --tag "$GITHUB_REF_NAME" --dist release-assets --out release-assets
 
       - name: Add the ISO to SHA256SUMS
         run: |

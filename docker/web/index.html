@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RootForge OS — toolkit API</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0e1116; --card:#151a21; --ember:#ffa24c; --text:#e3e7ec; --muted:#b4bdc8; --ok:#6fd18b; --bad:#ff6b6b; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, sans-serif; background:var(--bg); color:var(--text); }
+    main { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; }
+    h1 { color: var(--ember); margin: 0 0 8px; }
+    .muted { color: var(--muted); }
+    label { display:block; margin: 12px 0 4px; font-size: 13px; color: var(--muted); }
+    input, textarea, select { width:100%; box-sizing:border-box; background:#1c232c; color:var(--text); border:1px solid #33404e; border-radius:8px; padding:8px 10px; font-family: ui-monospace, monospace; }
+    textarea { min-height: 140px; }
+    button { background: var(--ember); color:#2a1400; border:0; border-radius:8px; padding:10px 16px; font-weight:600; cursor:pointer; margin-right:8px; margin-top:12px; }
+    button.secondary { background:#252e3a; color:var(--text); }
+    pre { background:#0a0d11; padding:12px; border-radius:8px; overflow:auto; min-height: 8em; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    .row > * { flex:1; min-width: 220px; }
+    .card { background: var(--card); padding: 16px 18px; border-radius: 12px; margin: 16px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>RootForge OS</h1>
+  <p class="muted">Headless toolkit API. Same bridge operations as the Android / desktop apps. Destructive calls need a typed <code>confirmation</code> phrase (for example <code>FLASH boot</code>). Token stays in this browser tab only.</p>
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>API base</label>
+        <input id="base" value="">
+      </div>
+      <div>
+        <label>Bearer token</label>
+        <input id="token" type="password" autocomplete="off" placeholder="ROOTFORGE_API_TOKEN">
+      </div>
+      <div>
+        <label>Node id</label>
+        <input id="node" placeholder="rf-…">
+      </div>
+    </div>
+    <button type="button" onclick="health()">Health</button>
+    <button type="button" class="secondary" onclick="caps()">Capabilities</button>
+    <button type="button" class="secondary" onclick="devices()">Devices</button>
+  </div>
+  <div class="card">
+    <label>Operation</label>
+    <select id="op">
+      <option>rootforge.capabilities.get</option>
+      <option>rootforge.devices.list</option>
+      <option>rootforge.device.info</option>
+      <option>rootforge.adb.shell</option>
+      <option>rootforge.adb.reboot</option>
+      <option>rootforge.fastboot.reboot</option>
+      <option>rootforge.module.build</option>
+      <option>rootforge.fastboot.flash</option>
+      <option>rootforge.fastboot.slot.set</option>
+      <option>rootforge.fastboot.unlock</option>
+      <option>rootforge.fastboot.lock</option>
+    </select>
+    <label>Parameters JSON + optional confirmation</label>
+    <textarea id="params">{ "command": "getprop ro.product.model" }</textarea>
+    <button type="button" onclick="send()">Send</button>
+  </div>
+  <pre id="out">Ready.</pre>
+</main>
+<script>
+  document.getElementById('base').value = location.origin;
+  async function call(path, body) {
+    const token = document.getElementById('token').value.trim();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const r = await fetch(document.getElementById('base').value.replace(/\/$/, '') + path, {
+      method: body ? 'POST' : 'GET',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await r.text();
+    document.getElementById('out').textContent = text;
+    return text;
+  }
+  function health() { return call('/health'); }
+  function envelope(op, parameters) {
+    return {
+      protocol_major: 1,
+      request_id: 'ui-' + Date.now(),
+      target_node_id: document.getElementById('node').value.trim(),
+      operation: op,
+      timeout_ms: 120000,
+      parameters,
+    };
+  }
+  async function caps() {
+    await sendOp('rootforge.capabilities.get', {});
+  }
+  async function devices() {
+    await sendOp('rootforge.devices.list', {});
+  }
+  async function send() {
+    const op = document.getElementById('op').value;
+    let extra = {};
+    try { extra = JSON.parse(document.getElementById('params').value || '{}'); }
+    catch (e) { document.getElementById('out').textContent = 'Parameters are not JSON: ' + e; return; }
+    await sendOp(op, extra);
+  }
+  async function sendOp(op, extra) {
+    const confirmation = extra.confirmation;
+    const parameters = Object.assign({}, extra);
+    delete parameters.confirmation;
+    const body = envelope(op, parameters);
+    if (confirmation) body.confirmation = confirmation;
+    const text = await call('/v1/bridge', body);
+    try {
+      const j = JSON.parse(text);
+      if (j.result && j.result.node_id) document.getElementById('node').value = j.result.node_id;
+    } catch (_) {}
+  }
+</script>
+</body>
+</html>

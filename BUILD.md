@@ -2,15 +2,15 @@
 **Victorious Framework | Origin Source Labs**
 
 Don't need to build it yourself? `.github/workflows/release.yml` is meant to build this
-same ISO (and the Termux/PRoot rootfs — see README section 17) on every
+same ISO (and the Termux/PRoot rootfs — see README, Termux rootfs) on every
 tagged push, after the lint/test workflow passes on that commit, verify the
 whole asset set with `tests/verify-release-assets.sh`, and attach it, with
 checksums, to a **draft** [GitHub Release](https://github.com/Victorious93/rootforge-os/releases).
-**As of 2026-10-07 no release exists** (the repository has tags `v0.1.0` and
-`v0.1.1` but no Release), and the workflow has not been run on GitHub's
-infrastructure after these changes. README section 14 covers flashing a
-downloaded or locally-built ISO to a USB drive (`make list-usb` /
-`sudo make flash USB=/dev/sdX`, both checksum-aware).
+**v0.2.0** is a published GitHub Release with the debug host-phone APK only.
+The ISO / Termux draft path in this workflow has still not produced those
+assets. README Install covers flashing a downloaded or locally-built ISO to
+a USB drive (`make list-usb` / `sudo make flash USB=/dev/sdX`, both
+checksum-aware).
 
 ## Prerequisites
 
@@ -83,3 +83,10 @@ After install, `update-grub` will re-run os-prober and add any existing OS to th
 ## Architecture note
 
 GNOME is the configured desktop. On a machine that simultaneously runs an accelerated Android emulator and a kernel build, budget **16 GB+ RAM**. The same box with XFCE would be comfortable at 8 GB — swap by editing `auto/config` (`--bootappend-live`) and the GNOME entries in `config/package-lists/rootforge.list.chroot`.
+
+## License
+
+Pinned downloads stay under their upstream licenses; this build does not
+relicense them. RootForge OS itself is GPL-3.0-or-later except
+`android-app/core` (Apache-2.0). See `LICENSE`, `android-app/core/LICENSE`,
+and `NOTICE`.

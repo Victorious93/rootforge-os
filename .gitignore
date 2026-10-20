@@ -20,3 +20,16 @@ __pycache__/
 # 0099-system-manifest.hook.chroot — regenerated fresh every build, never
 # committed (see auto/build's header for why it lives under includes.chroot/).
 config/includes.chroot/usr/local/share/rootforge/build-manifest/
+artifacts/
+*.apk
+
+# Android / desktop
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-app/core/build/
+android-app/desktop/build/
+android-app/local.properties
+desktop/.gradle/
+desktop/build/
+**/.kotlin/

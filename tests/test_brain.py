@@ -100,5 +100,24 @@ class TestSlugify(unittest.TestCase):
         self.assertEqual(brain.slugify("  -- notes --  "), "notes")
 
 
+class TestNewNote(unittest.TestCase):
+    def test_a_newline_in_the_title_cannot_add_frontmatter_keys(self):
+        import argparse
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = pathlib.Path(tmp) / "vault"
+            old = brain.VAULT
+            brain.VAULT = vault
+            try:
+                brain.cmd_init(argparse.Namespace())
+                brain.cmd_new(argparse.Namespace(title="safe\ncreated: 2099-01-01", into="inbox"))
+            finally:
+                brain.VAULT = old
+            notes = list(vault.rglob("safe-*.md"))
+            self.assertEqual(len(notes), 1)
+            keys = [l for l in notes[0].read_text().split("\n---\n")[0].splitlines() if l.startswith("created:")]
+            self.assertEqual(len(keys), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

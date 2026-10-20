@@ -148,8 +148,24 @@ def adb_properties(serial: str) -> Dict[str, str]:
     return props
 
 
+def dedupe_by_serial(devices: List[Device]) -> List[Device]:
+    """Keep one entry per serial. A phone that briefly shows in both adb and
+    fastboot (a reboot in flight) would otherwise be "two usable devices" and
+    make automatic selection fail or, worse, run a job on one phone twice.
+    The fastboot entry wins: it is the state a flash would act on."""
+    chosen: dict = {}
+    order: List[str] = []
+    for device in devices:
+        if device.serial not in chosen:
+            order.append(device.serial)
+            chosen[device.serial] = device
+        elif device.mode == "fastboot":
+            chosen[device.serial] = device
+    return [chosen[serial] for serial in order]
+
+
 def list_devices(detailed: bool = False) -> List[Device]:
-    devices = adb_devices() + fastboot_devices()
+    devices = dedupe_by_serial(adb_devices() + fastboot_devices())
     if detailed:
         for device in devices:
             if device.mode == "fastboot":

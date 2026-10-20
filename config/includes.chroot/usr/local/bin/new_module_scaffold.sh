@@ -34,6 +34,23 @@ if [[ ! "$MODULE_ID" =~ ^[a-zA-Z][a-zA-Z0-9_.-]*$ ]]; then
   exit 1
 fi
 
+# The display name lands in module.prop, one key=value per line; a control
+# character (a newline above all) would let it inject further keys.
+# customize.sh is sourced by the root manager, so the name is also
+# shell-quoted before it is written there. Splicing it into double quotes
+# would run a `$()`, backtick, or `"..."` breakout as root at install time.
+if [[ -z "${DISPLAY_NAME//[[:space:]]/}" || "$DISPLAY_NAME" =~ [[:cntrl:]] ]]; then
+  echo "Invalid display name: it must be non-empty and contain no control characters or newlines." >&2
+  exit 1
+fi
+
+# POSIX '...'\''...' quoting. Same shape as rf_shell_quote; this script does
+# not source common.sh, and the generated customize.sh is read by Android sh.
+shell_quote() {
+  local q="'\\''"
+  printf "'%s'" "${1//\'/$q}"
+}
+
 ROOTFORGE_HOME="${ROOTFORGE_HOME:-$HOME/rootforge}"
 MODULE_DIR="$ROOTFORGE_HOME/modules/$MODULE_ID"
 
@@ -158,29 +175,38 @@ EOF
 
 cat > "$MODULE_DIR/META-INF/com/google/android/update-binary" <<'EOF'
 #!/sbin/sh
-# RootForge OS — generated module installer shim
+# RootForge OS — generated module installer shim (recovery / sideload path)
 # Victorious Framework
+#
+# The Magisk, KernelSU and APatch managers install modules with their own
+# installer and ignore this file. A custom recovery runs it, and then it must
+# load Magisk's util_functions.sh and call install_module, which does the
+# real work (unzip, customize.sh, permissions).
 umask 022
 OUTFD=$2
 ZIPFILE=$3
 mount /data 2>/dev/null
-[ -f /data/adb/magisk/util_functions.sh ] && MAGISK_VER_CODE=$(grep_prop MAGISK_VER_CODE /data/adb/magisk/util_functions.sh)
-ui_print() { echo "ui_print $1" >&$OUTFD; echo -en "ui_print\n" >&$OUTFD; }
+ui_print() { echo "ui_print $1" >&$OUTFD; echo "ui_print" >&$OUTFD; }
 require_new_magisk() {
   ui_print "*******************************"
   ui_print " Please install Magisk v20.4+ "
   ui_print "*******************************"
   exit 1
 }
-[ -z "$MAGISK_VER_CODE" ] && require_new_magisk
+[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk
+. /data/adb/magisk/util_functions.sh
+[ "${MAGISK_VER_CODE:-0}" -ge 20400 ] || require_new_magisk
+install_module
+exit 0
 EOF
 
-cat > "$MODULE_DIR/customize.sh" <<EOF
-# RootForge OS — customize.sh (install-time hook)
-# Victorious Framework
-ui_print "- Installing $DISPLAY_NAME"
-# set_perm_recursive \$MODPATH/system 0 0 0755 0644
-EOF
+quoted_install="$(shell_quote "- Installing $DISPLAY_NAME")"
+{
+  echo '# RootForge OS — customize.sh (install-time hook)'
+  echo '# Victorious Framework'
+  printf 'ui_print %s\n' "$quoted_install"
+  echo '# set_perm_recursive $MODPATH/system 0 0 0755 0644'
+} > "$MODULE_DIR/customize.sh"
 
 cat > "$MODULE_DIR/post-fs-data.sh" <<'EOF'
 #!/system/bin/sh

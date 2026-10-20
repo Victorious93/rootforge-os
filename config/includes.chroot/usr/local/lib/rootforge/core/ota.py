@@ -21,7 +21,7 @@ import sys
 import time
 import zipfile
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 from rootforge.core.log import Logger
 from rootforge.core.runner import exec_script
@@ -98,11 +98,17 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _fresh_image_signature(path: Path) -> Optional[Tuple[int, int]]:
-    """mtime and size of a non-empty regular file, or None.
+def _fresh_image_signature(path: Path) -> Optional[str]:
+    """SHA-256 of a non-empty regular file, or None.
 
     Symlinks are ignored: an image the dumper did not write must not be hashed
     and reported as this extraction, including one planted as a link.
+
+    A timestamp is not an identity. Partition images are a fixed size, and a
+    rewrite in the same second — or on a filesystem whose timestamps have
+    one-second resolution — leaves mtime and size unchanged while the bytes
+    belong to a different payload. GNU `stat` `%N` is the file name, not
+    nanoseconds, so a stamp built from it has the same blind spot.
     """
     try:
         st = path.lstat()
@@ -110,7 +116,7 @@ def _fresh_image_signature(path: Path) -> Optional[Tuple[int, int]]:
         return None
     if not stat.S_ISREG(st.st_mode) or st.st_size <= 0:
         return None
-    return (st.st_mtime_ns, st.st_size)
+    return _sha256_file(path)
 
 
 def cmd_inspect(input_path: str) -> int:
@@ -187,8 +193,8 @@ def cmd_extract(input_path: str, output_dir: Optional[str] = None,
         if signature is None or signature == before.get(partition):
             absent.append(partition)
             continue
-        extracted[image.name] = _sha256_file(image)
-        print(f"  {image.name}  SHA-256: {extracted[image.name]}")
+        extracted[image.name] = signature
+        print(f"  {image.name}  SHA-256: {signature}")
     for partition in absent:
         print(f"  {partition}.img  not produced (the package may not contain this partition)")
 

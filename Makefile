@@ -11,9 +11,9 @@
 #   sudo make clean           remove live-build output (keeps cache)
 #   sudo make distclean       remove everything including the package cache
 #
-# Prebuilt ISOs (and the Termux/PRoot rootfs tarballs) are also published to
-# GitHub Releases by .github/workflows/release.yml on tagged pushes — you
-# don't have to build locally just to flash a USB drive.
+# .github/workflows/release.yml attaches the debug APK on v* tags and still
+# drafts the ISO / Termux rootfs after live-build. v0.2.0 published the APK;
+# there is still no prebuilt ISO or rootfs, so those are local builds.
 
 ISO     := rootforge-os-amd64.hybrid.iso
 
