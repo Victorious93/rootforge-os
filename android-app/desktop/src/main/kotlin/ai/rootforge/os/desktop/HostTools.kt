@@ -92,8 +92,8 @@ data class HostToolset(
     }
 }
 
-class ProcessRunner {
-    fun run(
+open class ProcessRunner {
+    open fun run(
         exe: File,
         args: List<String>,
         timeoutMs: Long = 60_000,

@@ -43,7 +43,8 @@ class GlossaryTest {
         val REQUIRED = listOf(
             "Root", "su", "Magisk", "KernelSU", "KernelSU Next", "APatch", "Module",
             "Zygisk", "Zygisk Next", "ReZygisk", "Xposed", "LSPosed", "Vector",
-            "Shizuku", "Sui", "Dhizuku", "ADB", "fastboot", "EDL", "Serial", "SoC", "Slot", "USB mode", "Bootloader",
+            "Shizuku", "Sui", "Dhizuku", "ADB", "fastboot", "EDL", "Serial", "SoC", "Slot", "USB mode",
+            "Download mode", "Odin", "Knox", "Mi Unlock", "Bootloader",
             "Recovery", "TWRP", "PitchBlack", "Boot image", "ROM", "Flash",
             "Dry run", "SHA-256 / checksum", "Bootloop",
         )

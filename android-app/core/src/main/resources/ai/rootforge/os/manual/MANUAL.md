@@ -211,24 +211,28 @@ See [Desktop mode via VictorSuite](#desktop-mode-via-victorsuite) below. The Lin
 
 ![Devices](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_devices.png)
 
-Lists **every** phone plugged into this host at the same time (ADB, fastboot, and Qualcomm EDL 9008). Plug-in is picked up from USB attach and from a short poll of the ADB/fastboot device lists (on a computer) or the USB device list (on the Android app).
+Lists **every** phone plugged into this host at the same time (ADB, fastboot, and Qualcomm EDL 9008). Plug-in is picked up from USB attach and from a short poll of the ADB/fastboot device lists (on a computer) or the USB device list (on the Android app). On a PC the same screen talks to host `adb` and `fastboot` (`adb -s` / `fastboot -s`). A wide window (about 840 dp and up) shows two phone cards side by side; a phone-sized window stays one column.
 
-Each card is a read-only identity plus a **Root plan** for that exact phone:
+Each card is a read-only identity, a **Root plan**, and a brand **Root wizard** for that exact phone:
 
 1. Brand, model, codename (`ro.product.device`), SoC/platform, Android version, security patch, bootloader lock, current root manager, A/B slot, USB mode.
-2. In fastboot the same fields come from `getvar` (`product`, `unlocked`, `current-slot`, and the rest the bootloader reports).
+2. In fastboot the same fields come from `getvar` (`product`, `unlocked`, `current-slot`, and the rest the bootloader reports). USB manufacturer/model fill in if getvar omitted the brand.
 3. Serial numbers are shown as `••••` plus the last four characters, in the app and in the command log.
 4. The Root plan recommends **unlock bootloader → custom recovery → root manager**. Matching Custom RR ROM/recovery/root rows for that codename are listed. A matching TWRP or PitchBlack row can open **Custom Recovery** already aimed at that project. ROMs stay links.
-5. Buttons open the existing ADB, Fastboot, EDL, Root / Patching, Modules or Custom Recovery screens **for that serial**.
+5. The Root wizard is a step list from the identity: **Google Pixel**, **Samsung**, **Xiaomi / Redmi / POCO**, **OnePlus**, **Motorola**, or a **generic fastboot** path. Every step is plain language and says what will be erased. Writes still open the existing Fastboot / Custom Recovery / Root screens: dry-run first, typed confirm, never auto-reboot.
+6. **Samsung:** Download Mode and Odin are explained only. RootForge does not speak Odin and will not flash a tar. Read the Knox warning before any unlock — a tripped Knox flag does not reset. If the phone is actually in fastboot, Unlock is the existing typed-`UNLOCK` path (still a wipe, still trips Knox).
+7. **Xiaomi:** the Mi Unlock wait (often 7 to 30 days) is on Xiaomi's side. RootForge cannot skip it.
+8. **Motorola:** get the unlock code from Motorola's official site, then come back. RootForge does not fetch that code.
+9. Buttons open the existing ADB, Fastboot, EDL, Root / Patching, Modules or Custom Recovery screens **for that serial**. Official https pages (Samsung Knox, Xiaomi support, Motorola unlock) open in the browser.
 
 **EDL is identify only.** Qualcomm `05c6:9008` is recognised so you can see the chip. Devices never starts a Firehose write.
 
 Safety is unchanged: dry-run stays the default where it already was, typed confirm still gates writes, a recovery write still backs up first, nothing reboots by itself, and each serial has its own lock so two phones can work at the same time without sharing one queue.
 
 1. Open **Devices**.
-2. Plug the phones in. Grant USB access if a row asks.
+2. Plug the phones in. Grant USB access if a row asks. On a PC, unlock the phone and allow this computer if adb says unauthorized.
 3. Tap **Identify attached** if a card is still empty.
-4. Read the Root plan. Open the tool you need for that phone.
+4. Read the Root plan and the Root wizard. Open the tool you need for that phone. Do not skip the erase line or the typed phrase.
 
 ### Ask
 
@@ -910,6 +914,14 @@ Drawer entry **Glossary**, also from Help and from Links. One short line per ter
 
 **USB mode.** Whether the cable is talking ADB, fastboot, or EDL right now.
 
+**Download mode.** Samsung's USB mode for its PC flashing tool, not the same as Google fastboot.
+
+**Odin.** Samsung's PC program for Download Mode. RootForge explains it and does not run it or flash a tar.
+
+**Knox.** Samsung's tamper flag. Unlocking or unofficial images usually trip it for good.
+
+**Mi Unlock.** Xiaomi's official unlock process. After you bind an account you often wait days; RootForge cannot skip that wait.
+
 **Bootloader.** The tiny program that starts the phone before Android. Unlocking it usually wipes the phone.
 
 **Recovery.** A small system you boot instead of Android to install updates or wipe data.
@@ -932,4 +944,4 @@ Drawer entry **Glossary**, also from Help and from Links. One short line per ter
 
 ---
 
-*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, the in-app Glossary, and the **Devices** multi-phone identify screen. If a line here disagrees with the running app, the app is right — please file an issue.*
+*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, the in-app Glossary, the **Devices** multi-phone identify screen, brand Root wizards, and the PC Devices grid. If a line here disagrees with the running app, the app is right — please file an issue.*

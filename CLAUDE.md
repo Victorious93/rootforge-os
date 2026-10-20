@@ -11,6 +11,19 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (brand root wizards + PC Devices):** branch
+> `feat/multi-device-identify` (same PR). `RootGuides` table drives a
+> per-identity wizard on Devices: Pixel, Samsung (Odin/Download Mode
+> explained, Knox warning, `odinFlashing=false`), Xiaomi (Mi Unlock wait),
+> OnePlus, Motorola (official unlock-code URL), generic fastboot. Each step
+> names what is erased; writes still go through existing Fastboot / Custom
+> Recovery / Root (dry-run, typed phrase, never auto-reboot). Desktop uses
+> the same screen: host `adb`/`fastboot`, two-column grid at ≥ 840 dp,
+> `HostControllerIdentifyTest`. Glossary: Download mode, Odin, Knox, Mi
+> Unlock. `applicationId`, signing and versioning unchanged. Based on
+> `origin/main` `3f7661d` (#83). Local suite counts will be filled after
+> this head is tested. **Not run on a phone or a desktop window.**
+
 > **Update 2026-10-20 (multi-device identify):** branch
 > `feat/multi-device-identify`. **Devices** drawer screen lists every attached
 > phone (ADB, fastboot, Qualcomm EDL `05c6:9008`) from USB attach plus a 2 s
@@ -370,11 +383,16 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), and fleet `config.export` / `config.import` (#83 / `3f7661d`). This branch adds the **Devices** multi-phone identify screen. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), and fleet `config.export` / `config.import` (#83 / `3f7661d`). This branch adds the **Devices** multi-phone identify screen, brand Root wizards, and the PC Devices grid. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Brand root wizards + PC Devices (this branch): `RootGuides` Pixel /
+  Samsung / Xiaomi / OnePlus / Motorola / generic; Odin is explanation
+  only; same dry-run / typed confirm / no auto-reboot; desktop host
+  adb/fastboot + two-column grid. Suite counts filled after this head.
+  **Not run on a phone or a desktop window.**
 - Multi-device identify (this branch, based on `origin/main` `3f7661d` #83):
   **Devices** lists every attached phone. USB attach + 2 s poll. Read-only
   identity; serials masked to last four characters; Root plan from the

@@ -20,6 +20,7 @@ data class RootPlan(
     val roms: List<BuildMatch> = emptyList(),
     val recoveries: List<BuildMatch> = emptyList(),
     val roots: List<BuildMatch> = emptyList(),
+    val guide: RootGuide? = null,
 ) {
     val writableRecovery: BuildMatch?
         get() = recoveries.firstOrNull { CatalogRecoveryBridge.prefill(it) != null }
@@ -43,6 +44,7 @@ object RootPlanner {
                         done = false,
                     ),
                 ),
+                guide = null,
             )
         }
         if (identity.mode == TargetMode.EDL) {
@@ -57,6 +59,7 @@ object RootPlanner {
                         done = false,
                     ),
                 ),
+                guide = null,
             )
         }
 
@@ -134,6 +137,13 @@ object RootPlanner {
             ),
         )
 
-        return RootPlan(headline, listOf(unlock, recovery, root) + romNote, roms, recoveries, roots)
+        return RootPlan(
+            headline,
+            listOf(unlock, recovery, root) + romNote,
+            roms,
+            recoveries,
+            roots,
+            guide = RootGuides.forIdentity(identity),
+        )
     }
 }

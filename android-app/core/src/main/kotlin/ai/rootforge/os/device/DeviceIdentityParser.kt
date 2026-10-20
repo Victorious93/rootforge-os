@@ -82,8 +82,19 @@ object DeviceIdentityParser {
         )
     }
 
-    fun fromFastboot(vars: Map<String, String>, target: AttachedTarget): DeviceIdentity =
-        fromFastboot(vars, target.serial ?: target.deviceName)
+    fun fromFastboot(vars: Map<String, String>, target: AttachedTarget): DeviceIdentity {
+        val id = fromFastboot(vars, target.serial ?: target.deviceName)
+        val usbBrand = clean(target.manufacturer)
+        val usbModel = clean(target.product)
+        return id.copy(
+            brand = id.brand ?: usbBrand,
+            model = when {
+                id.model != null && id.model != id.product -> id.model
+                usbModel != null -> usbModel
+                else -> id.model
+            },
+        )
+    }
 
     /**
      * Qualcomm 9008 identity only. No Firehose, no programmer, no write.

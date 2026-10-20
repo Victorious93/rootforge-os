@@ -41,6 +41,10 @@ class ManualLibraryTest {
         assertTrue("glossary missing Bootloop", "**Bootloop.**" in library.raw)
         assertTrue("Devices screen missing", "### Devices" in library.raw)
         assertTrue("Root plan missing", "Root plan" in library.raw)
+        assertTrue("Root wizard missing", "Root wizard" in library.raw)
+        assertTrue("Odin link-only missing", "does not speak Odin" in library.raw)
+        assertTrue("Mi Unlock missing", "Mi Unlock" in library.raw)
+        assertTrue("desktop two-column grid missing", "side by side" in library.raw)
         assertTrue("config backup ops missing", "config.export" in text && "config.import" in text)
         assertTrue("config backup remote refuse missing", "not remotely allowed" in text.lowercase())
     }

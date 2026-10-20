@@ -1,5 +1,6 @@
 package ai.rootforge.os.device
 
+import ai.rootforge.os.usb.AttachedTarget
 import ai.rootforge.os.usb.TargetMode
 import ai.rootforge.os.usb.UsbClassifier
 import org.junit.Assert.assertEquals
@@ -101,8 +102,21 @@ class DeviceIdentityParserTest {
     fun samsungFastbootLocked() {
         val id = DeviceIdentityParser.fromFastboot(DeviceIdentityParser.parseGetvarDump(SAMSUNG_GETVAR))
         assertEquals("dm1q", id.codename)
+        assertEquals("samsung", id.brand)
         assertEquals(BootloaderLock.LOCKED, id.bootloader)
         assertNull(id.androidVersion)
+    }
+
+    @Test
+    fun fastbootFillsBrandFromUsbDescriptor() {
+        val target = AttachedTarget(
+            "/dev/bus/usb/001/002", 0x18D1, 0x4EE0, TargetMode.FASTBOOT, 0, true,
+            "3B051FD0H2PIX8", "Pixel 8", "Google",
+        )
+        val id = DeviceIdentityParser.fromFastboot(DeviceIdentityParser.parseGetvarDump(PIXEL_GETVAR), target)
+        assertEquals("Google", id.brand)
+        assertEquals("Pixel 8", id.model)
+        assertEquals(RootGuideKind.PIXEL, RootGuides.forIdentity(id).kind)
     }
 
     @Test
@@ -213,6 +227,7 @@ class DeviceIdentityParserTest {
 
         val SAMSUNG_GETVAR = """
             (bootloader) product: dm1q
+            (bootloader) oem: samsung
             (bootloader) unlocked: no
             (bootloader) current-slot: b
             (bootloader) serialno: R5CT70TESTSAMS

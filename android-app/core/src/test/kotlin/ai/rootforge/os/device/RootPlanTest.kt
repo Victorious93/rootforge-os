@@ -34,6 +34,9 @@ class RootPlanTest {
         assertEquals(listOf("unlock", "recovery", "root"), plan.steps.map { it.id }.take(3))
         assertFalse(plan.steps.first { it.id == "unlock" }.done)
         assertTrue(plan.steps.first { it.id == "unlock" }.detail.contains("wipes"))
+        assertEquals(RootGuideKind.SAMSUNG, plan.guide?.kind)
+        assertFalse(plan.guide!!.odinFlashing)
+        assertNotNull(plan.guide!!.knoxWarning)
     }
 
     @Test
@@ -50,6 +53,7 @@ class RootPlanTest {
         val plan = RootPlanner.plan(id, catalog())
         assertEquals("Recommended: unlock → recovery → root manager", plan.headline)
         assertTrue(plan.steps.first { it.id == "unlock" }.done)
+        assertEquals(RootGuideKind.PIXEL, plan.guide?.kind)
         assertEquals(listOf("lineage"), plan.roms.map { it.entry.id })
         assertEquals(listOf("twrp"), plan.recoveries.map { it.entry.id })
         assertNotNull(CatalogRecoveryBridge.prefill(plan.recoveries.single()))
@@ -85,6 +89,7 @@ class RootPlanTest {
         assertEquals(listOf("edl"), plan.steps.map { it.id })
         assertTrue(plan.steps.single().detail.contains("does not write") || plan.steps.single().detail.contains("No EDL writes"))
         assertTrue(plan.roms.isEmpty())
+        assertNull(plan.guide)
     }
 
     @Test
@@ -92,6 +97,7 @@ class RootPlanTest {
         val plan = RootPlanner.plan(null, null)
         assertEquals("identify", plan.steps.single().id)
         assertFalse(plan.steps.single().done)
+        assertNull(plan.guide)
     }
 
     @Test
