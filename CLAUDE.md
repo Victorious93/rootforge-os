@@ -25,7 +25,13 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > 1. `applicationId`, signing and versioning unchanged. RootForge is a node,
 > not the tray aggregator. Spec: droidcommand-AI
 > `docs/specs/STATUS_TRAY.md`. Documented in `docs/MANUAL.md` / Help.
-> **Not run on a phone.**
+> **Not run on a phone.** After local suite: `:core:test` 341/0
+> (`NodeStatusSnapshotTest` 15, `FleetEnvelopeTest` 13, `FleetAuthTest` 8,
+> `FleetCapabilitiesTest` 2); `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 34/0 (Help golden unchanged);
+> `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug` /
+> `versionCode=1` / `versionName=0.1.0-debug`); `bash tests/run-tests.sh`
+> 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
 
 > **Update 2026-10-20 (glossary):** branch `feat/local-module-install`
 > (PR #81). In-app **Glossary** drawer screen (`:core` `Glossary`): one
@@ -327,8 +333,10 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   requiresConfirm:false}`. Snapshot shape as frozen in droidcommand-AI
   `docs/specs/STATUS_TRAY.md`. Pairing + default-off switch unchanged.
   Protocol minor stays 1. `applicationId` / signing / versioning unchanged.
-  **Not run on a phone.** Local suite numbers are filled in after this
-  session's Gradle / hermetic runs.
+  Local suite: `:core:test` 341/0, `:desktop:test` 2/0,
+  `:app:testDebugUnitTest` 34/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1055/0,
+  `tests/lint.sh` clean. **Not run on a phone.**
 - Local module install on this phone (PR #81, on `main` as `b72d214`, after merging
   `origin/main` `ef088d3` / #80): Modules **This phone** tab installs a
   library zip via `su` (`magisk --install-module` / `ksud module install` /
