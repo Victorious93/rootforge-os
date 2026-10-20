@@ -31,6 +31,8 @@ class ManualLibraryTest {
         assertTrue("Desktop mode RUN_COMMAND missing", "RUN_COMMAND" in text && "VictorSuite" in text)
         assertTrue("Custom Recovery installer missing", "FLASH RECOVERY" in text && "PitchBlack" in text && "TWRP" in text)
         assertTrue("Custom Recovery spec missing", "CUSTOM_RECOVERY_INSTALLER" in text)
+        assertTrue("Custom RR install action missing", "Install with Custom Recovery" in text)
+        assertTrue("Custom RR PitchBlack host missing", "pitchblack.tech" in text)
         assertTrue("typed FLASH missing", "FLASH" in text)
         assertTrue("privacy: no analytics missing", "analytics" in text.lowercase())
     }

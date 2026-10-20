@@ -11,9 +11,11 @@ import kotlinx.serialization.json.Json
  * (https://github.com/monsiu/Custom-RR). RootForge parses that data; it does
  * not bundle or copy it.
  *
- * Informational only. Nothing here feeds [ai.rootforge.os.fastboot.DeviceMatchGate]
- * or authorizes a flash, and the catalog carries no image files or digests,
- * only links to each project's download page.
+ * Nothing here feeds [ai.rootforge.os.fastboot.DeviceMatchGate] or authorizes
+ * a flash. The catalog carries no image files or digests, only links to each
+ * project's download page. A matching TWRP / PitchBlack RECOVERY row may open
+ * Custom Recovery via [CatalogRecoveryBridge]; that path still uses the
+ * installer host allow-list, dry-run, checksums and typed FLASH RECOVERY.
  */
 @Serializable
 data class CatalogDevice(

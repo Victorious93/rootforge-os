@@ -132,9 +132,11 @@ planner, device-match check, approvals and bridge envelope without taking on the
 The app in `android-app/app` runs on a **host** phone and drives a **target** phone plugged into it with a
 USB-C data cable. It needs a phone with USB Host hardware (`android.hardware.usb.host` is a required
 feature) and Android 8.0 or newer (`minSdk 26`). It is not a Termux fork and carries no Linux userspace.
-The app requests the internet permission for one thing only: the **Download** button on the Dashboard's
-"Builds for this device" card, which fetches the Custom RR catalog over https
-([docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md)). Device work never uses the network.
+The app requests the internet permission only for explicit download/lookup taps: the **Download**
+button on the Dashboard's "Builds for this device" card (Custom RR catalog over https;
+[docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md)) and Custom Recovery's official TWRP /
+PitchBlack lookup. A matching TWRP or PitchBlack catalog row can open that installer; ROMs and
+other recoveries stay links. Device work never uses the network.
 
 Screens: Dashboard (including **Desktop mode** through VictorSuite; see
 [docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Ask**, **Root Guide**, **Help**, **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
@@ -423,7 +425,7 @@ Makefile · BUILD.md · HACKING.md · AGENTS.md · CLAUDE.md
 | [docs/MANUAL.md](docs/MANUAL.md) | How-to manual (plain language). Same text is the in-app **Help** screen |
 | [docs/ROOT_GUIDE.md](docs/ROOT_GUIDE.md) | Root Guide: bundled pages, importer, parser, refresh procedure, limits |
 | [docs/FLASH_TOOLS_PLAN.md](docs/FLASH_TOOLS_PLAN.md) | Flash Tools hub, device-match check, manifest format, EDL-Commander plan |
-| [docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md) | "Builds for this device" card: Custom RR ROM/recovery catalog by codename, download or import |
+| [docs/CUSTOM_RR_CATALOG.md](docs/CUSTOM_RR_CATALOG.md) | "Builds for this device" card: Custom RR ROM/recovery catalog by codename; TWRP/PitchBlack rows can open Custom Recovery |
 | [docs/CUSTOM_RECOVERY_INSTALLER.md](docs/CUSTOM_RECOVERY_INSTALLER.md) | Rooted TWRP / PitchBlack installer (`su` / `dd`, dry-run default) |
 | [docs/DESKTOP.md](docs/DESKTOP.md) | Linux/Windows desktop, Windows USB drivers, Docker |
 | [docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md) | Host-phone Desktop mode via VictorSuite (X11 / RUN_COMMAND) |

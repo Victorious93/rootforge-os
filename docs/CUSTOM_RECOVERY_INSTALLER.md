@@ -17,7 +17,9 @@ images are bundled in the APK.
 2. Lists **TWRP** from the official device list (`https://twrp.me/search.json`)
    and directory (`https://dl.twrp.me/<codename>/`), and **PitchBlack** from
    `https://pitchblackrecovery.com/<codename>` plus its GitHub releases /
-   SourceForge files. Lookup and download run only when you tap them.
+   SourceForge files. Lookup and download run only when you tap them, or when
+   Dashboard **Builds for this device** opens this screen for a matching TWRP
+   or PitchBlack Custom RR row (lookup still uses the probed phone).
 3. Lets you pick a local `.img` or `.zip` from the library.
 4. **Dry-run is the default.** It prints the `dd` commands and stats the
    partition. It does not write.
@@ -36,7 +38,10 @@ images are bundled in the APK.
   unknown, it refuses to write.
 - `dd` a zip. Zips are for sideload / an already-running recovery.
 - Bundle third-party images, follow `http://`, or download from hosts outside
-  TWRP's `dl.twrp.me` / `twrp.me` and PitchBlack's site / GitHub / SourceForge.
+  TWRP's `dl.twrp.me` / `twrp.me` and PitchBlack's site (`pitchblackrecovery.com`,
+  `pitchblack.tech` — the host Custom RR publishes) / GitHub / SourceForge.
+  Custom RR's OrangeFox, SHRP and RedWolf pages are not on this list and stay
+  browser links.
 - Skip `ApprovalCenter`. There is no setting that turns the phrase off.
 
 ## Checksums
@@ -49,4 +54,12 @@ is always shown. PGP is **not** verified (the app does not ship a keyring).
 
 `:core` package `ai.rootforge.os.recovery` (Apache-2.0): layout detection,
 command building, catalog parse, https fetch, `RecoveryInstaller` + `RootSession`.
-Android USB ADB and on-device `su` are `:app`; desktop host `adb` is `:desktop`.
+`:core` `ai.rootforge.os.catalog.CatalogRecoveryBridge` maps a Custom RR
+RECOVERY row onto this screen (TWRP / PitchBlack only). Android USB ADB and
+on-device `su` are `:app`; desktop host `adb` is `:desktop`.
+
+The Custom RR card never writes. A prefilled visit still defaults to dry-run,
+shows SHA-256, verifies a published MD5/SHA-256 when the official listing has
+one, needs typed `FLASH RECOVERY`, backs up first, writes only
+`recovery` / `recovery_a` / `recovery_b`, never `dd`s a zip, and never
+reboots by itself.

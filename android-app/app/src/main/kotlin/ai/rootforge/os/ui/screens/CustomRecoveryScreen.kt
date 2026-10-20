@@ -1,5 +1,7 @@
 package ai.rootforge.os.ui.screens
 
+import ai.rootforge.os.catalog.CatalogRecoveryBridge
+import ai.rootforge.os.catalog.CatalogRecoveryPrefill
 import ai.rootforge.os.core.LibraryFile
 import ai.rootforge.os.recovery.InstallFlow
 import ai.rootforge.os.recovery.RecoveryKind
@@ -46,13 +48,14 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun CustomRecoveryScreen(state: AppUiState, actions: AppActions) {
+fun CustomRecoveryScreen(state: AppUiState, actions: AppActions, prefill: CatalogRecoveryPrefill? = null) {
     var probes by remember { mutableStateOf<List<RecoveryProbe>>(emptyList()) }
     var selectedSource by rememberSaveable { mutableStateOf<String?>(null) }
     var offers by remember { mutableStateOf<List<RecoveryOffer>>(emptyList()) }
     var image by remember { mutableStateOf<LibraryFile?>(null) }
     var fromOffer by remember { mutableStateOf<RecoveryOffer?>(null) }
     var dryRun by rememberSaveable { mutableStateOf(true) }
+    var lookedUpPrefill by rememberSaveable { mutableStateOf<String?>(null) }
 
     val probe = probes.firstOrNull { it.source.name == selectedSource } ?: probes.firstOrNull()
     val idle = state.busy == null
@@ -66,12 +69,21 @@ fun CustomRecoveryScreen(state: AppUiState, actions: AppActions) {
         }
     }
 
+    val lookupNames = CatalogRecoveryBridge.lookupNames(probe?.identity?.lookupNames().orEmpty())
+    LaunchedEffect(prefill?.encode(), lookupNames, idle) {
+        val p = prefill ?: return@LaunchedEffect
+        if (!idle || lookupNames.isEmpty() || lookedUpPrefill == p.encode()) return@LaunchedEffect
+        lookedUpPrefill = p.encode()
+        actions.lookupOfficialRecoveries(lookupNames, p.project) { offers = it }
+    }
+
     ScreenColumn {
         NoticeCard(
             "This screen installs a custom recovery on a rooted phone with su, not through fastboot. " +
                 "Nothing is downloaded until you tap Look up or Download, and nothing is written until you turn dry-run off and type FLASH RECOVERY. " +
                 "Images are not bundled in the APK. USB fastboot flash / Boot once stay on the Recovery screen.",
         )
+        prefill?.let { PrefillCard(it, probe, actions) }
 
         ForgeCard("Device and partitions", "Root (su), A/B vs A-only, recovery vs recovery-in-boot", Icons.Filled.Security) {
             if (probes.isEmpty()) {
@@ -106,8 +118,12 @@ fun CustomRecoveryScreen(state: AppUiState, actions: AppActions) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionButton("Look up TWRP & PitchBlack", Icons.Filled.Search, enabled = idle && names.isNotEmpty()) {
-                    actions.lookupOfficialRecoveries(names) { offers = it }
+                ActionButton(
+                    if (prefill != null) "Look up ${projectLabel(prefill.project)}" else "Look up TWRP & PitchBlack",
+                    Icons.Filled.Search,
+                    enabled = idle && names.isNotEmpty(),
+                ) {
+                    actions.lookupOfficialRecoveries(names, prefill?.project) { offers = it }
                 }
                 ActionButton("TWRP devices", kind = ActionKind.Outline) { actions.openUrl("https://twrp.me/Devices/") }
                 ActionButton("PitchBlack", kind = ActionKind.Outline) { actions.openUrl("https://pitchblackrecovery.com/") }
@@ -180,6 +196,32 @@ fun CustomRecoveryScreen(state: AppUiState, actions: AppActions) {
             Text("Uses su reboot recovery (or adb reboot recovery on a USB target). It does not run after a write unless you tap this.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+@Composable
+private fun PrefillCard(prefill: CatalogRecoveryPrefill, probe: RecoveryProbe?, actions: AppActions) {
+    val probed = CatalogRecoveryBridge.lookupNames(probe?.identity?.lookupNames().orEmpty())
+    val catalogNames = prefill.catalogCodenames
+    val overlap = probed.any { it in catalogNames.toSet() }
+    ForgeCard("From Custom RR", "Opens the installer for this catalog recovery; does not skip a check", Icons.Filled.SystemUpdateAlt) {
+        KeyValueRow("Project", projectLabel(prefill.project))
+        KeyValueRow("Catalog", prefill.catalogName)
+        KeyValueRow("Catalog lists", catalogNames.joinToString(" / ").ifBlank { "no codename" })
+        prefill.viaModelNumber?.let { KeyValueRow("Matched model", it) }
+        KeyValueRow("Lookup uses", probed.joinToString(" / ").ifBlank { "detect a device first" })
+        if (probed.isNotEmpty() && catalogNames.isNotEmpty() && !overlap) {
+            NoticeCard(
+                "Custom RR lists this project for ${catalogNames.joinToString(" / ")}, which is not what this phone reports (${probed.joinToString(" / ")}). Lookup still uses the phone. A listing is not permission to flash.",
+            )
+        }
+        NoticeCard("Dry-run stays on. A write still needs typed FLASH RECOVERY, a backup first, and only recovery / recovery_a / recovery_b. A zip is never written with dd. The phone is not rebooted after a write.")
+        ActionButton("Project page", kind = ActionKind.Outline) { actions.openUrl(prefill.pageUrl) }
+    }
+}
+
+private fun projectLabel(project: RecoveryProject): String = when (project) {
+    RecoveryProject.TWRP -> "TWRP"
+    RecoveryProject.PITCHBLACK -> "PitchBlack"
 }
 
 @Composable
