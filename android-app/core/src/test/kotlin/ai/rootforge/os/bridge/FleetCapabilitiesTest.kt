@@ -27,6 +27,10 @@ class FleetCapabilitiesTest {
             assertTrue(cap.containsKey("remoteAllowed"))
             assertTrue(cap.containsKey("requiresConfirm"))
         }
+        val status = ops.single { it.getValue("name").jsonPrimitive.content == FleetOp.NODE_STATUS }
+        assertEquals(FleetKind.READ, status.getValue("kind").jsonPrimitive.content)
+        assertTrue(status.getValue("remoteAllowed").jsonPrimitive.content.toBoolean())
+        assertFalse(status.getValue("requiresConfirm").jsonPrimitive.content.toBoolean())
 
         val actions = r.result!!.getValue("actions").jsonArray.map { it.jsonObject }
         val names = actions.map { it.getValue("name").jsonPrimitive.content }.toSet()

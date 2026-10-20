@@ -113,6 +113,15 @@ class FleetEnvelopeTest {
     }
 
     @Test
+    fun nodeStatusGetParsesWithoutActionRef() {
+        val parsed = parseFleetRequest(fleetJson(op = FleetOp.NODE_STATUS, nonce = nonce(90)))
+        val req = (parsed as FleetParseResult.Ok).request
+        assertEquals(FleetOp.NODE_STATUS, req.op)
+        assertNull(req.actionRef)
+        assertTrue(req.params.isEmpty())
+    }
+
+    @Test
     fun unknownOpIsUnsupported() {
         val err = parseFleetRequest(fleetJson(op = "root.secret", nonce = nonce(9))) as FleetParseResult.Err
         assertEquals(FleetError.UNSUPPORTED_OP, err.code)

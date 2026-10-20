@@ -13,6 +13,7 @@ object RemoteActionCatalog {
         RemoteCapability(FleetOp.REMOTE_COMMAND, FleetKind.ACTION, remoteAllowed = true, requiresConfirm = true, description = "Run one named action. Per-action confirm still applies."),
         RemoteCapability(FleetOp.MACRO_STEP, FleetKind.ACTION, remoteAllowed = true, requiresConfirm = true, description = "Run one step of a controller-owned macro."),
         RemoteCapability(FleetOp.MACRO_RUN, FleetKind.ACTION, remoteAllowed = true, requiresConfirm = true, description = "Run or dry-run a list of steps. Destructive steps never auto-approve."),
+        RemoteCapability(FleetOp.NODE_STATUS, FleetKind.READ, remoteAllowed = true, requiresConfirm = false, description = "This node's STATUS-TRAY snapshot (node_health, optional root)."),
     )
 
     val ACTIONS: List<RemoteCapability> = listOf(
