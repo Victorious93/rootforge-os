@@ -7,6 +7,14 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Broad brand coverage, MSM / EDL guide, infographics (2026-10-20)
+- Device-identity table (`:core` `BrandCatalog`) covers Pixel, Samsung, Xiaomi/Redmi/POCO, OnePlus, Oppo, realme, Motorola, Sony, HTC, Fairphone, Nothing/CMF, ASUS, LG, Huawei/Honor, vivo/iQOO, HMD/Nokia, Lenovo, Meizu, ZTE/nubia/REDMAGIC, TECNO, Infinix, itel, TCL/Alcatel, SHIFT. Matching is whole-word tokens (`lg` does not match `google`).
+- Brand **Root wizards** and **bootloader unlock portals** follow that table. Live official unlock pages stay Motorola / Sony / Xiaomi / HTCdev / OnePlus / Fairphone. Pixel has no token page. Nothing, Oppo, realme, HMD, Lenovo, Transsion, TCL and SHIFT have no token webpage (in-phone Deep Testing or OEM unlocking). Samsung, ASUS, LG, Huawei, vivo, Meizu and ZTE are noted as no longer offering official unlocking — no invented URL.
+- **MSM / EDL** drawer screen (was EDL): when a phone is Qualcomm `05c6:9008`, a plain-language guide explains MSM Download Tool and an EDL restore, with official https firmware/support links for that brand (or the MSM OEM list if the chip did not name a maker). **Never ships** MSM / QFIL / RSA / Mi Flash / firmware. The guide **never writes**. Experimental Sahara/Firehose stays below, still typed `EDL`, still ships no programmer. EDL as FRP/screen-lock wipe and Firehose auth bypass are refused (`MsmGuides.REFUSED`).
+- Compose-drawn step diagrams (`WizardDiagrams` + `StepDiagram`) on root wizards, unlock portal cards, and the MSM / EDL guide. Same UI is compiled into the Android app and `:desktop`. No bitmaps, no runtime downloads.
+- Links gains **Official firmware and EDL tools**. Glossary: Qualcomm 9008, MSM Download Tool. Ask: `msm-edl-guide`.
+- Safety unchanged: dry-run, typed confirm, backup-first, no auto-reboot. `applicationId`, signing and versioning unchanged. Suite counts recorded after Paparazzi / hermetic runs on this head.
+
 ### ESP32 and Raspberry Pi helpers (2026-10-20)
 - Owner-only bootloader unlock / flash helpers: `:core` `BoardHelpers` plus **Links → ESP32 & Pi helpers** (official https: Raspberry Pi documentation on GitHub, Espressif USB Serial/JTAG and ESP32-S3, Android platform-tools and AOSP locking/unlocking). A Raspberry Pi reuses `:desktop` `HostController` / `HostToolset` (`LinuxBoard` reads `/proc/device-tree/model`). An ESP32 is documented as a USB-serial CDC bridge only.
 - **Refused on ethics grounds (not implemented):** screen-lock bypass, FRP bypass, HID/key injection to type credentials. Shared refuse list in `BoardHelpers.REFUSED`; Ask topic `frp-screen-lock-refused`; comments in `esp32_toolkit.sh` / `rpi_fleet_tools.sh`. Dry-run, typed confirm, backup-first, no auto-reboot unchanged. `applicationId`, signing and versioning unchanged.

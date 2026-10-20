@@ -12,7 +12,11 @@ does not reimplement the USB wire protocol the Android app uses. The
 **Devices** screen is the same Compose UI as the APK: identify every
 plugged-in phone, show the Root plan and brand Root wizard, and pin later
 actions to that serial (`adb -s` / `fastboot -s`). A wide window shows two
-cards. EDL stays identify-only; Samsung Odin is not implemented.
+cards. Compose step diagrams on the wizards, unlock portals, and MSM / EDL
+guide are the same code as the APK (no bitmaps, no runtime downloads).
+EDL stays identify-only from Devices; the MSM / EDL guide explains MSM
+Download Tool and links official firmware pages only — this app never
+ships that tool or any firmware. Samsung Odin is not implemented.
 
 A **Raspberry Pi** (Raspberry Pi OS 64-bit, JDK 17) is this same Linux
 host path — `/proc/device-tree/model` sets the caption to “this Raspberry

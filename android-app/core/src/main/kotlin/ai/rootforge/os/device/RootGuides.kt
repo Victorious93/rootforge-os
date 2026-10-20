@@ -8,6 +8,19 @@ enum class RootGuideKind {
     XIAOMI,
     ONEPLUS,
     MOTOROLA,
+    SONY,
+    HTC,
+    FAIRPHONE,
+    NOTHING,
+    OPPO,
+    REALME,
+    VIVO,
+    NOKIA,
+    LENOVO,
+    ASUS,
+    LG,
+    HUAWEI,
+    TRANSSION,
     GENERIC,
 }
 
@@ -64,6 +77,8 @@ object RootGuides {
 
     fun forIdentity(identity: DeviceIdentity?): RootGuide {
         if (identity == null || identity.mode == TargetMode.EDL) return GENERIC
+        val kind = BrandCatalog.forIdentity(identity)?.guideKind
+        if (kind != null) return all.first { it.kind == kind }
         val tokens = identity.brandTokens()
         return all.firstOrNull { guide ->
             guide.kind != RootGuideKind.GENERIC && guide.brands.any { token -> token.lowercase() in tokens }
@@ -240,6 +255,124 @@ object RootGuides {
         ),
     )
 
+    private val SONY = oemPortalGuide(
+        id = "sony",
+        kind = RootGuideKind.SONY,
+        title = "Sony Xperia",
+        summary = "Sony Open Devices issues an unlock code from IMEI 1, then fastboot unlock.",
+        brands = listOf("sony", "xperia"),
+        portal = UnlockPortals.SONY,
+    )
+
+    private val HTC = oemPortalGuide(
+        id = "htc",
+        kind = RootGuideKind.HTC,
+        title = "HTC",
+        summary = "HTCdev identifier token, then fastboot unlock — only for models HTCdev still lists.",
+        brands = listOf("htc"),
+        portal = UnlockPortals.HTC,
+    )
+
+    private val FAIRPHONE_GUIDE = oemPortalGuide(
+        id = "fairphone",
+        kind = RootGuideKind.FAIRPHONE,
+        title = "Fairphone",
+        summary = "OEM unlocking, then fastboot unlock. Older software used Fairphone's code page.",
+        brands = listOf("fairphone"),
+        portal = UnlockPortals.FAIRPHONE,
+    )
+
+    private val NOTHING_GUIDE = oemPortalGuide(
+        id = "nothing",
+        kind = RootGuideKind.NOTHING,
+        title = "Nothing / CMF",
+        summary = "Nothing has no token webpage. OEM unlocking, then fastboot unlock.",
+        brands = listOf("nothing", "cmf"),
+        portal = UnlockPortals.NOTHING,
+    )
+
+    private val OPPO = oemPortalGuide(
+        id = "oppo",
+        kind = RootGuideKind.OPPO,
+        title = "Oppo",
+        summary = "ColorOS Deep Testing is in-phone. No public token webpage. Then fastboot unlock if Oppo allows it.",
+        brands = listOf("oppo"),
+        portal = UnlockPortals.OPPO,
+    )
+
+    private val REALME = oemPortalGuide(
+        id = "realme",
+        kind = RootGuideKind.REALME,
+        title = "realme",
+        summary = "Realme UI Deep Testing is in-phone. No public token webpage. Then fastboot unlock if realme allows it.",
+        brands = listOf("realme"),
+        portal = UnlockPortals.REALME,
+    )
+
+    private val VIVO = closedGuide(
+        id = "vivo",
+        kind = RootGuideKind.VIVO,
+        title = "vivo / iQOO",
+        summary = "vivo does not publish an official unlock programme.",
+        brands = listOf("vivo", "iqoo"),
+        portal = UnlockPortals.VIVO,
+    )
+
+    private val NOKIA = oemPortalGuide(
+        id = "nokia",
+        kind = RootGuideKind.NOKIA,
+        title = "HMD / Nokia",
+        summary = "OEM unlocking, then fastboot unlock. HMD has no token webpage.",
+        brands = listOf("nokia", "hmd"),
+        portal = UnlockPortals.NOKIA,
+    )
+
+    private val LENOVO_GUIDE = oemPortalGuide(
+        id = "lenovo",
+        kind = RootGuideKind.LENOVO,
+        title = "Lenovo",
+        summary = "No public token webpage. OEM unlocking, then fastboot unlock if this model allows it. Motorola has its own portal.",
+        brands = listOf("lenovo"),
+        portal = UnlockPortals.LENOVO,
+    )
+
+    private val ASUS_GUIDE = closedGuide(
+        id = "asus",
+        kind = RootGuideKind.ASUS,
+        title = "ASUS",
+        summary = "ASUS shut its unlock servers. There is no live official portal.",
+        brands = listOf("asus", "zenfone"),
+        portal = UnlockPortals.ASUS,
+    )
+
+    private val LG_GUIDE = closedGuide(
+        id = "lg",
+        kind = RootGuideKind.LG,
+        title = "LG",
+        summary = "LG shut its official unlock-code site. LG no longer offers unlocking.",
+        brands = listOf("lge", "lg"),
+        portal = UnlockPortals.LG,
+    )
+
+    private val HUAWEI_GUIDE = closedGuide(
+        id = "huawei",
+        kind = RootGuideKind.HUAWEI,
+        title = "Huawei / Honor",
+        summary = "Huawei stopped issuing unlock codes in 2018.",
+        brands = listOf("huawei", "honor"),
+        portal = UnlockPortals.HUAWEI,
+    )
+
+    private val TRANSSION = oemPortalGuide(
+        id = "transsion",
+        kind = RootGuideKind.TRANSSION,
+        title = "TECNO / Infinix / itel",
+        summary = "Transsion brands usually unlock with OEM unlocking then fastboot. No maker token page.",
+        brands = listOf("tecno", "infinix", "itel"),
+        portal = UnlockPortals.TECNO,
+        extraNote = "TECNO, Infinix and itel share this path. The Root plan still shows that exact brand's official page when one exists.",
+    )
+
     private val GENERIC = RootGuide(
         id = "generic",
         kind = RootGuideKind.GENERIC,
@@ -267,7 +400,85 @@ object RootGuides {
         ),
     )
 
-    val all: List<RootGuide> = listOf(PIXEL, SAMSUNG, XIAOMI, ONEPLUS, MOTOROLA, GENERIC)
+    val all: List<RootGuide> = listOf(
+        PIXEL, SAMSUNG, XIAOMI, ONEPLUS, MOTOROLA, SONY, HTC, FAIRPHONE_GUIDE, NOTHING_GUIDE,
+        OPPO, REALME, VIVO, NOKIA, LENOVO_GUIDE, ASUS_GUIDE, LG_GUIDE, HUAWEI_GUIDE, TRANSSION, GENERIC,
+    )
+
+    private fun oemPortalGuide(
+        id: String,
+        kind: RootGuideKind,
+        title: String,
+        summary: String,
+        brands: List<String>,
+        portal: UnlockPortal,
+        extraNote: String? = null,
+    ) = RootGuide(
+        id = id,
+        kind = kind,
+        title = title,
+        summary = summary,
+        brands = brands,
+        steps = listOfNotNull(
+            officialPortalStep(portal),
+            readUnlockDataStep(portal),
+            extraNote?.let {
+                step("brand-note", "This brand family", it, erases = "Nothing yet.")
+            },
+            step(
+                "oem", "Turn on OEM unlocking",
+                "Developer options → OEM unlocking and USB debugging. Some ColorOS / Realme UI / HMD builds also need an in-phone Deep Testing app. RootForge does not apply for that token.",
+                erases = "Nothing yet.",
+                action = RootGuideAction.OPEN_ADB,
+            ),
+            step(
+                "unlock", "Unlock the bootloader",
+                "Reboot to the bootloader yourself. On Fastboot tap Unlock and type UNLOCK. The plan is shown first. The phone is not rebooted for you.",
+                erases = "All user data (factory reset).",
+                dryRunFirst = true,
+                confirmPhrase = "UNLOCK",
+                action = RootGuideAction.OPEN_FASTBOOT,
+                write = true,
+            ),
+            recoveryStep(),
+            rootStep(),
+        ),
+    )
+
+    private fun closedGuide(
+        id: String,
+        kind: RootGuideKind,
+        title: String,
+        summary: String,
+        brands: List<String>,
+        portal: UnlockPortal,
+    ) = RootGuide(
+        id = id,
+        kind = kind,
+        title = title,
+        summary = summary,
+        brands = brands,
+        steps = listOf(
+            officialPortalStep(portal),
+            readUnlockDataStep(portal),
+            step(
+                "closed", "Official unlocking is not offered",
+                "${portal.note} RootForge will not invent a portal or an unofficial tool. Firmware/support links, when shown, are official https only.",
+                erases = "Nothing. This step is explanation only.",
+            ),
+            step(
+                "fastboot-optional", "If this phone is actually in fastboot and still accepts unlock",
+                "A closed programme does not always mean the bootloader refuses `flashing unlock`. If you still choose Unlock, type UNLOCK, expect a wipe, and know the maker will not help. RootForge never auto-reboots.",
+                erases = "All user data if you confirm UNLOCK.",
+                dryRunFirst = true,
+                confirmPhrase = "UNLOCK",
+                action = RootGuideAction.OPEN_FASTBOOT,
+                write = true,
+            ),
+            recoveryStep(),
+            rootStep(),
+        ),
+    )
 
     private fun officialPortalStep(portal: UnlockPortal) = step(
         "portal",

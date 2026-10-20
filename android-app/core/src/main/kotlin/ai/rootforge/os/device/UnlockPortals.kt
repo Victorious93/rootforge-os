@@ -168,14 +168,138 @@ object UnlockPortals {
         unlockData = "No official identifier to read. RootForge will not invent a Huawei unlock site.",
     )
 
+    val OPPO = UnlockPortal(
+        id = "oppo",
+        name = "Oppo",
+        brands = listOf("oppo"),
+        url = null,
+        offered = true,
+        note = "Oppo does not publish a public unlock-token webpage (checked 2026-10-20). ColorOS Deep Testing is an in-phone app. RootForge does not apply for that token.",
+        unlockData = "No oem get_unlock_data. If Deep Testing on the phone succeeds, Fastboot Unlock (typed UNLOCK) is the existing wipe path. RootForge never sends serials to Oppo.",
+    )
+
+    val REALME = UnlockPortal(
+        id = "realme",
+        name = "realme",
+        brands = listOf("realme"),
+        url = null,
+        offered = true,
+        note = "realme does not publish a public unlock-token webpage (checked 2026-10-20). Realme UI Deep Testing is an in-phone app. RootForge does not apply for that token.",
+        unlockData = "No oem get_unlock_data. If Deep Testing on the phone succeeds, Fastboot Unlock (typed UNLOCK) is the existing wipe path. RootForge never sends serials to realme.",
+    )
+
+    val VIVO = UnlockPortal(
+        id = "vivo",
+        name = "vivo / iQOO",
+        brands = listOf("vivo", "iqoo"),
+        url = null,
+        offered = false,
+        note = "vivo / iQOO does not publish an official consumer unlock programme. There is no live official portal to link.",
+        unlockData = "No official identifier to read. RootForge will not invent a vivo unlock site.",
+    )
+
+    val NOKIA = UnlockPortal(
+        id = "nokia",
+        name = "HMD / Nokia",
+        brands = listOf("nokia", "hmd"),
+        url = null,
+        offered = true,
+        note = "HMD does not publish an unlock-token webpage (hmd.com has support only; checked 2026-10-20). Unlocking is usually OEM unlocking then fastboot.",
+        unlockData = "No maker token to read. Turn on OEM unlocking, then Fastboot Unlock (typed UNLOCK). RootForge never sends serials to HMD.",
+    )
+
+    val LENOVO = UnlockPortal(
+        id = "lenovo",
+        name = "Lenovo",
+        brands = listOf("lenovo"),
+        url = null,
+        offered = true,
+        note = "Lenovo does not publish a phone unlock-token webpage (checked 2026-10-20). Motorola (also Lenovo) has its own portal.",
+        unlockData = "No oem get_unlock_data on Lenovo-branded devices. If OEM unlocking is on, Fastboot Unlock (typed UNLOCK) is the existing wipe path.",
+    )
+
+    val MEIZU = UnlockPortal(
+        id = "meizu",
+        name = "Meizu",
+        brands = listOf("meizu"),
+        url = null,
+        offered = false,
+        note = "Meizu does not publish a live official unlock-token webpage. There is no portal to open.",
+        unlockData = "No official identifier to read. RootForge will not invent a Meizu unlock site.",
+    )
+
+    val ZTE = UnlockPortal(
+        id = "zte",
+        name = "ZTE / nubia",
+        brands = listOf("zte", "nubia", "redmagic"),
+        url = null,
+        offered = false,
+        note = "ZTE / nubia / REDMAGIC does not publish a consumer unlock-token webpage. There is no portal to open.",
+        unlockData = "No official identifier to read. RootForge will not invent a ZTE unlock site.",
+    )
+
+    val TECNO = UnlockPortal(
+        id = "tecno",
+        name = "TECNO",
+        brands = listOf("tecno"),
+        url = null,
+        offered = true,
+        note = "TECNO does not publish an unlock-token webpage (checked 2026-10-20). Unlocking is usually OEM unlocking then fastboot.",
+        unlockData = "No maker token to read. Turn on OEM unlocking, then Fastboot Unlock (typed UNLOCK). RootForge never sends serials to TECNO.",
+    )
+
+    val INFINIX = UnlockPortal(
+        id = "infinix",
+        name = "Infinix",
+        brands = listOf("infinix"),
+        url = null,
+        offered = true,
+        note = "Infinix does not publish an unlock-token webpage (checked 2026-10-20). Unlocking is usually OEM unlocking then fastboot.",
+        unlockData = "No maker token to read. Turn on OEM unlocking, then Fastboot Unlock (typed UNLOCK). RootForge never sends serials to Infinix.",
+    )
+
+    val ITEL = UnlockPortal(
+        id = "itel",
+        name = "itel",
+        brands = listOf("itel"),
+        url = null,
+        offered = true,
+        note = "itel does not publish an unlock-token webpage (checked 2026-10-20). Unlocking is usually OEM unlocking then fastboot.",
+        unlockData = "No maker token to read. Turn on OEM unlocking, then Fastboot Unlock (typed UNLOCK). RootForge never sends serials to itel.",
+    )
+
+    val TCL = UnlockPortal(
+        id = "tcl",
+        name = "TCL / Alcatel",
+        brands = listOf("tcl", "alcatel"),
+        url = null,
+        offered = true,
+        note = "TCL / Alcatel does not publish an unlock-token webpage (checked 2026-10-20). Some models allow OEM unlocking then fastboot.",
+        unlockData = "No maker token to read. Turn on OEM unlocking, then Fastboot Unlock (typed UNLOCK). RootForge never sends serials to TCL.",
+    )
+
+    val SHIFT = UnlockPortal(
+        id = "shift",
+        name = "SHIFT",
+        brands = listOf("shift", "shiftphone"),
+        url = null,
+        offered = true,
+        note = "SHIFT does not publish a separate unlock-token webpage (checked 2026-10-20). Follow SHIFT's own docs on shiftphones.com / shift.eco.",
+        unlockData = "No oem get_unlock_data. If OEM unlocking is on, Fastboot Unlock (typed UNLOCK) is the existing wipe path. RootForge never sends serials to SHIFT.",
+    )
+
     val all: List<UnlockPortal> = listOf(
         MOTOROLA, SONY, XIAOMI, HTC, ONEPLUS, FAIRPHONE, GOOGLE, SAMSUNG, NOTHING, ASUS, LG, HUAWEI,
+        OPPO, REALME, VIVO, NOKIA, LENOVO, MEIZU, ZTE, TECNO, INFINIX, ITEL, TCL, SHIFT,
     )
 
     fun urls(): List<String> = all.mapNotNull { it.url }
 
+    fun byId(id: String): UnlockPortal? = all.firstOrNull { it.id == id }
+
     fun forIdentity(identity: DeviceIdentity?): UnlockPortal? {
         if (identity == null || identity.mode == TargetMode.EDL) return null
+        BrandCatalog.forIdentity(identity)?.let { record -> return byId(record.portalId) }
         val tokens = identity.brandTokens()
         return all.firstOrNull { portal -> portal.brands.any { token -> token.lowercase() in tokens } }
     }

@@ -105,24 +105,43 @@ object DeviceIdentityParser {
         chipSerial: String? = null,
         msmHwId: String? = null,
         serialFallback: String? = null,
+        previous: DeviceIdentity? = null,
     ): DeviceIdentity {
         val serial = clean(chipSerial) ?: clean(serialFallback)
         val vidPid = "%04x:%04x".format(vendorId, productId)
+        val keep = previous?.takeIf { prev ->
+            prev.mode != TargetMode.EDL &&
+                !prev.brand.isNullOrBlank() &&
+                prev.brand!!.lowercase() != "qualcomm" &&
+                (prev.serial == null || serial == null || prev.serial == serial)
+        }
+        val note = buildString {
+            append("EDL ($vidPid): identify only. RootForge does not write in EDL from Devices. ")
+            append("Reboot to ADB or fastboot to continue a root plan. ")
+            append("The MSM / EDL guide explains MSM Download Tool and links official firmware pages only.")
+            if (keep != null) {
+                append(" Brand/model remembered from the last ADB/fastboot identify of this serial.")
+            }
+        }
         return DeviceIdentity(
             mode = TargetMode.EDL,
-            brand = "Qualcomm",
-            model = "9008",
-            codename = null,
-            product = "9008",
-            soc = clean(msmHwId)?.let { "MSM $it" } ?: "Qualcomm 9008",
+            brand = keep?.brand ?: "Qualcomm",
+            model = keep?.model ?: "9008",
+            codename = keep?.codename,
+            product = keep?.product ?: "9008",
+            soc = clean(msmHwId)?.let { "MSM $it" } ?: keep?.soc ?: "Qualcomm 9008",
             serial = serial,
-            note = "EDL ($vidPid): identify only. RootForge does not write in EDL from Devices. " +
-                "Reboot to ADB or fastboot to continue a root plan.",
+            note = note,
         )
     }
 
-    fun fromEdl(target: AttachedTarget, chipSerial: String? = null, msmHwId: String? = null): DeviceIdentity =
-        fromEdl(target.vendorId, target.productId, chipSerial, msmHwId, target.serial ?: target.deviceName)
+    fun fromEdl(
+        target: AttachedTarget,
+        chipSerial: String? = null,
+        msmHwId: String? = null,
+        previous: DeviceIdentity? = null,
+    ): DeviceIdentity =
+        fromEdl(target.vendorId, target.productId, chipSerial, msmHwId, target.serial ?: target.deviceName, previous)
 
     fun stub(target: AttachedTarget, note: String? = null): DeviceIdentity = DeviceIdentity(
         mode = target.mode,

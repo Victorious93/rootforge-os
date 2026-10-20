@@ -196,7 +196,8 @@ class TargetController(
         linkState.value = LinkState.Connected(TargetMode.EDL, target.publicLabel())
         log.command("sahara: read device identity")
         val d = client.readDeviceInfo()
-        val identity = DeviceIdentityParser.fromEdl(target, d.serial, d.msmHwId)
+        val previous = identityState.value[target.rosterKey()]
+        val identity = DeviceIdentityParser.fromEdl(target, d.serial, d.msmHwId, previous)
         publishIdentity(identity)
         infoState.value = identity.toTargetInfo()
         logMasked("serial=${d.serial} hwid=${d.msmHwId} sbl=${d.sblVersion}")
@@ -260,7 +261,7 @@ class TargetController(
                     }
                     TargetMode.EDL -> sahara?.first?.let { client ->
                         val d = client.readDeviceInfo()
-                        val identity = DeviceIdentityParser.fromEdl(target, d.serial, d.msmHwId)
+                        val identity = DeviceIdentityParser.fromEdl(target, d.serial, d.msmHwId, identityState.value[key])
                         publishIdentity(identity)
                         infoState.value = identity.toTargetInfo()
                     }
@@ -288,7 +289,7 @@ class TargetController(
                     TargetMode.EDL -> {
                         val client = SaharaClient(transport)
                         val d = client.readDeviceInfo()
-                        publishIdentity(DeviceIdentityParser.fromEdl(target, d.serial, d.msmHwId))
+                        publishIdentity(DeviceIdentityParser.fromEdl(target, d.serial, d.msmHwId, identityState.value[key]))
                         transport.close()
                     }
                     TargetMode.UNKNOWN -> transport.close()

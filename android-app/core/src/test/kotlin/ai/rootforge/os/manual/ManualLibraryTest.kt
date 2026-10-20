@@ -50,6 +50,9 @@ class ManualLibraryTest {
         assertTrue("never-send unlock data missing", "never sends serial" in library.raw.lowercase())
         assertTrue("ESP32 & Pi helpers missing", "ESP32 & Pi helpers" in library.raw)
         assertTrue("FRP refuse missing", "Factory Reset Protection" in library.raw)
+        assertTrue("MSM / EDL guide missing", "MSM Download Tool" in library.raw)
+        assertTrue("EDL no bundled tool missing", "never ships" in library.raw.lowercase() && "MSM" in library.raw)
+        assertTrue("official firmware links missing", "Official firmware" in library.raw)
         assertTrue("config backup ops missing", "config.export" in text && "config.import" in text)
         assertTrue("config backup remote refuse missing", "not remotely allowed" in text.lowercase())
     }

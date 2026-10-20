@@ -1,6 +1,8 @@
 package ai.rootforge.os.links
 
 import ai.rootforge.os.device.BoardHelpers
+import ai.rootforge.os.device.BrandCatalog
+import ai.rootforge.os.device.MsmGuides
 import ai.rootforge.os.device.UnlockPortals
 
 enum class LinkSection(val label: String) {
@@ -8,6 +10,7 @@ enum class LinkSection(val label: String) {
     MODULE_SOURCES("Module repositories and sources"),
     SHIZUKU_APPS("Shizuku apps"),
     BOOTLOADER_UNLOCK_PORTALS("Bootloader unlock portals"),
+    OFFICIAL_FIRMWARE("Official firmware and EDL tools"),
     ESP32_PI_HELPERS("ESP32 & Pi helpers"),
 }
 
@@ -244,6 +247,23 @@ object DirectoryLinks {
         )
     }
 
+    private val FIRMWARE_LINKS: List<DirectoryLink> = buildList {
+        val pages = (
+            BrandCatalog.officialPages() + listOf(MsmGuides.QUALCOMM_SUPPORT)
+            ).distinctBy { it.url }
+        for (page in pages) {
+            add(
+                DirectoryLink(
+                    id = "firmware-${page.label.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')}",
+                    name = page.label,
+                    url = page.url,
+                    section = LinkSection.OFFICIAL_FIRMWARE,
+                    description = page.note + " Browser only. RootForge never ships MSM Download Tool, QFIL, RSA, Mi Flash or firmware.",
+                ),
+            )
+        }
+    }
+
     private val HELPER_LINKS: List<DirectoryLink> = BoardHelpers.all.map { helper ->
         DirectoryLink(
             id = "helper-${helper.id}",
@@ -255,7 +275,7 @@ object DirectoryLinks {
         )
     }
 
-    val all: List<DirectoryLink> = PROJECT_LINKS + PORTAL_LINKS + HELPER_LINKS
+    val all: List<DirectoryLink> = PROJECT_LINKS + PORTAL_LINKS + FIRMWARE_LINKS + HELPER_LINKS
 
     /** Every URL this directory will offer to the browser, including extras. Null portal urls are omitted. */
     fun urls(): List<String> = all.flatMap { listOfNotNull(it.url) + it.extras.map { extra -> extra.url } }

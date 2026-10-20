@@ -22,6 +22,7 @@ data class RootPlan(
     val roots: List<BuildMatch> = emptyList(),
     val guide: RootGuide? = null,
     val portal: UnlockPortal? = null,
+    val msm: MsmGuide? = null,
 ) {
     val writableRecovery: BuildMatch?
         get() = recoveries.firstOrNull { CatalogRecoveryBridge.prefill(it) != null }
@@ -50,8 +51,9 @@ object RootPlanner {
             )
         }
         if (identity.mode == TargetMode.EDL) {
+            val msm = MsmGuides.forIdentity(identity)
             return RootPlan(
-                headline = "EDL identify only",
+                headline = "EDL identify only — MSM / EDL guide",
                 steps = listOf(
                     RootPlanStep(
                         "edl",
@@ -60,9 +62,16 @@ object RootPlanner {
                             "Reboot to Android (ADB) or fastboot to continue. No EDL writes from Devices.",
                         done = false,
                     ),
+                    RootPlanStep(
+                        "msm",
+                        msm.title,
+                        "${msm.summary} Opens official https pages only. RootForge never ships MSM Download Tool or firmware, and never writes from this guide.",
+                        done = false,
+                    ),
                 ),
                 guide = null,
                 portal = null,
+                msm = msm,
             )
         }
 

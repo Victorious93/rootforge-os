@@ -133,6 +133,42 @@ class DeviceIdentityParserTest {
         assertTrue(id.note!!.contains("identify only"))
         assertTrue(id.note!!.contains("does not write"))
         assertEquals("05c6:9008", "%04x:%04x".format(UsbClassifier.QUALCOMM_VID, UsbClassifier.EDL_PID))
+        val previous = DeviceIdentity(mode = TargetMode.ADB, brand = "OnePlus", model = "CPH2449", serial = "44332211")
+        val remembered = DeviceIdentityParser.fromEdl(
+            UsbClassifier.QUALCOMM_VID,
+            UsbClassifier.EDL_PID,
+            chipSerial = "44332211",
+            previous = previous,
+        )
+        assertEquals("OnePlus", remembered.brand)
+        assertEquals("CPH2449", remembered.model)
+        assertEquals(RootGuideKind.ONEPLUS, BrandCatalog.forIdentity(remembered)?.guideKind)
+        assertTrue(MsmGuides.forIdentity(remembered).usesMsm)
+    }
+
+    @Test
+    fun sonyAndOppoGetpropMatchTheIdentityTable() {
+        val sony = DeviceIdentityParser.fromAdb(
+            mapOf(
+                "ro.product.brand" to "sony",
+                "ro.product.model" to "Xperia 1 V",
+                "ro.product.device" to "pdx234",
+                "ro.serialno" to "SONYTESTXXXX",
+            ),
+        )
+        assertEquals("sony", sony.brand)
+        assertEquals(RootGuideKind.SONY, RootGuides.forIdentity(sony).kind)
+        assertEquals("sony", UnlockPortals.forIdentity(sony)?.id)
+        val oppo = DeviceIdentityParser.fromAdb(
+            mapOf(
+                "ro.product.brand" to "oppo",
+                "ro.product.model" to "CPH1234",
+                "ro.product.device" to "OP4E2F",
+                "ro.serialno" to "OPPOTESTXXXX",
+            ),
+        )
+        assertEquals("oppo", BrandCatalog.forIdentity(oppo)?.id)
+        assertTrue(BrandCatalog.forIdentity(oppo)!!.usesMsm)
     }
 
     private companion object {

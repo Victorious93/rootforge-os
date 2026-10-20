@@ -19,6 +19,44 @@ import ai.rootforge.os.usb.TargetMode
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 
+internal fun previewEdlState(): AppUiState {
+    val edl = AttachedTarget(
+        deviceName = "/dev/bus/usb/001/008",
+        vendorId = 0x05C6,
+        productId = 0x9008,
+        mode = TargetMode.EDL,
+        interfaceId = 0,
+        hasPermission = true,
+        serial = "44332211",
+        product = "9008",
+        manufacturer = "Qualcomm",
+    )
+    val identity = DeviceIdentity(
+        mode = TargetMode.EDL,
+        brand = "OnePlus",
+        model = "CPH2449",
+        codename = "OP594DL1",
+        product = "CPH2449",
+        soc = "Qualcomm 9008",
+        serial = "44332211",
+        note = "EDL (05c6:9008): identify only. RootForge does not write in EDL from Devices.",
+    )
+    return previewState().copy(
+        targets = previewState().targets + edl,
+        link = LinkState.Connected(TargetMode.EDL, "OnePlus CPH2449"),
+        info = TargetInfo(
+            TargetMode.EDL,
+            listOf(
+                "Brand" to "OnePlus",
+                "Model" to "CPH2449",
+                "USB mode" to "EDL (Qualcomm 9008)",
+                "Serial" to "••••2211",
+            ),
+        ),
+        identities = previewState().identities + ("44332211" to identity),
+    )
+}
+
 internal fun previewState(): AppUiState = AppUiState(
     targets = listOf(
         AttachedTarget(
@@ -141,6 +179,12 @@ fun PreviewDashboard() {
 @Composable
 fun PreviewDevices() {
     RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Devices) }
+}
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "MSM / EDL")
+@Composable
+fun PreviewEdl() {
+    RootForgeTheme { RootForgeUi(previewEdlState(), NoopActions, startAt = Destination.Edl) }
 }
 
 @Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Flash Tools")

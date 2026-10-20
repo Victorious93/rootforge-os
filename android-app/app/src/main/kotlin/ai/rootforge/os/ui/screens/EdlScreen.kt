@@ -1,6 +1,8 @@
 package ai.rootforge.os.ui.screens
 
 import ai.rootforge.os.core.LibraryFile
+import ai.rootforge.os.device.MsmGuides
+import ai.rootforge.os.device.WizardDiagrams
 import ai.rootforge.os.ui.ActionButton
 import ai.rootforge.os.ui.ActionKind
 import ai.rootforge.os.ui.AppActions
@@ -11,16 +13,19 @@ import ai.rootforge.os.ui.ForgeCard
 import ai.rootforge.os.ui.KeyValueRow
 import ai.rootforge.os.ui.NoticeCard
 import ai.rootforge.os.ui.ScreenColumn
+import ai.rootforge.os.ui.StepDiagram
 import ai.rootforge.os.usb.TargetMode
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,25 +51,47 @@ fun EdlScreen(state: AppUiState, actions: AppActions) {
     val lunInt = lun.toIntOrNull()
     val startLong = start.toLongOrNull()
     val sectorInt = sector.toIntOrNull()
+    val identity = remember(state.identities, state.info) {
+        state.identities.values.firstOrNull { it.mode == TargetMode.EDL }
+    }
+    val msm = remember(identity) { MsmGuides.forIdentity(identity) }
 
     ScreenColumn {
+        ForgeCard("MSM / EDL guide", msm.detected, Icons.Filled.Memory) {
+            StepDiagram(WizardDiagrams.forMsm())
+            Text(msm.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            NoticeCard(
+                "Detect + explain + official https only. RootForge never ships MSM Download Tool, QFIL, Rescue and Smart Assistant, Mi Flash, a Firehose programmer, or firmware, and this guide never writes. " +
+                    "EDL as an FRP or screen-lock wipe, and Qualcomm auth bypass, are refused.",
+            )
+            msm.steps.forEachIndexed { index, step ->
+                Text("${index + 1}. ${step.title}", style = MaterialTheme.typography.bodyMedium)
+                Text(step.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            msm.sources.forEach { source ->
+                Text(source.label, style = MaterialTheme.typography.bodySmall)
+                Text(source.note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                ActionButton("Official page", Icons.Filled.OpenInBrowser, ActionKind.Outline) { actions.openUrl(source.url) }
+            }
+        }
+
         NoticeCard(
-            "EDL support is experimental. Reading the chip identity (Sahara) and uploading a programmer are implemented and " +
+            "EDL support below is experimental Sahara/Firehose, not MSM Download Tool. Reading the chip identity (Sahara) and uploading a programmer are implemented and " +
                 "tested against a simulated device only. No real EDL device was available. Most retail phones accept only the " +
                 "OEM-signed programmer for that exact model; RootForge ships none and cannot bypass Secure Boot.",
         )
-        ModeNotice(state, TargetMode.EDL, "A device in Qualcomm EDL shows up as 05c6:9008 on the Dashboard.")
+        ModeNotice(state, TargetMode.EDL, "A device in Qualcomm EDL shows up as 05c6:9008 on the Dashboard and Devices.")
 
         state.info?.takeIf { it.mode == TargetMode.EDL }?.let { info ->
             ForgeCard("Chip identity (Sahara)", icon = Icons.Filled.Memory) { info.rows.forEach { (k, v) -> KeyValueRow(k, v) } }
         }
 
-        ForgeCard("Programmer", "Firehose loader (.mbn / .elf) for this exact device", Icons.Filled.Upload) {
+        ForgeCard("Programmer", "Firehose loader (.mbn / .elf) for this exact device — you supply it. Not MSM.", Icons.Filled.Upload) {
             FilePickerField("Programmer", state.library, programmer, actions, { programmer = it }, listOf(".mbn", ".elf", ".bin"))
             ActionButton("Upload programmer", Icons.Filled.Upload, ActionKind.Danger, enabled = ready && programmer != null) { programmer?.let(actions::edlUpload) }
         }
 
-        ForgeCard("Firehose", "After the programmer is running", Icons.Filled.Science) {
+        ForgeCard("Firehose", "After the programmer is running. Separate from the MSM guide above.", Icons.Filled.Science) {
             DropdownField("Storage type", listOf("ufs", "emmc"), memory, { it }, { memory = it })
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionButton("Configure", enabled = ready) { actions.firehoseConfigure(memory) }
@@ -87,7 +114,7 @@ fun EdlScreen(state: AppUiState, actions: AppActions) {
                 "Some bootloaders accept: fastboot oem edl.",
                 "Otherwise use the model's hardware key combo or test points; this varies per device.",
                 "Over USB-C to USB-C the host phone must supply power; if the target never enumerates as 9008, try a powered hub.",
-            ).forEach { Text(it, style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
+            ).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }

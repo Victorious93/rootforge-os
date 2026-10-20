@@ -93,12 +93,16 @@ class RootPlanTest {
             chipSerial = "44332211",
         )
         val plan = RootPlanner.plan(id, catalog())
-        assertEquals("EDL identify only", plan.headline)
-        assertEquals(listOf("edl"), plan.steps.map { it.id })
-        assertTrue(plan.steps.single().detail.contains("does not write") || plan.steps.single().detail.contains("No EDL writes"))
+        assertEquals("EDL identify only — MSM / EDL guide", plan.headline)
+        assertEquals(listOf("edl", "msm"), plan.steps.map { it.id })
+        assertTrue(plan.steps.first { it.id == "edl" }.detail.contains("does not write") || plan.steps.first { it.id == "edl" }.detail.contains("No EDL writes"))
+        assertTrue(plan.steps.first { it.id == "msm" }.detail.contains("never ships") || plan.steps.first { it.id == "msm" }.detail.contains("MSM"))
         assertTrue(plan.roms.isEmpty())
         assertNull(plan.guide)
         assertNull(plan.portal)
+        assertNotNull(plan.msm)
+        assertFalse(plan.msm!!.writes)
+        assertFalse(plan.msm!!.shipsTool)
     }
 
     @Test
@@ -135,7 +139,7 @@ class RootPlanTest {
     fun sonyGenericWizardStillGetsTheOfficialPortal() {
         val id = DeviceIdentity(mode = TargetMode.ADB, brand = "sony", model = "Xperia 1 V", codename = "pdx234")
         val plan = RootPlanner.plan(id, catalog())
-        assertEquals(RootGuideKind.GENERIC, plan.guide?.kind)
+        assertEquals(RootGuideKind.SONY, plan.guide?.kind)
         assertEquals("sony", plan.portal?.id)
         assertTrue(plan.portal!!.url!!.startsWith("https://developer.sony.com/"))
         assertTrue(plan.steps.any { it.id == "unlock-data" && it.detail.contains("IMEI") })
@@ -154,7 +158,7 @@ class RootPlanTest {
         assertEquals("Flash boot", cards[0].busy)
         assertEquals("shiba", cards[0].identity?.codename)
         assertNull(cards[1].identity)
-        assertEquals("edl", RootPlanner.plan(DeviceIdentityParser.fromEdl(edl, "44332211"), null).steps.single().id)
+        assertEquals(listOf("edl", "msm"), RootPlanner.plan(DeviceIdentityParser.fromEdl(edl, "44332211"), null).steps.map { it.id })
         assertTrue(DeviceRoster.needsIdentify(edl, identities))
         assertFalse(DeviceRoster.needsIdentify(pixel, identities))
         assertEquals(1, DeviceRoster.prune(identities + ("GONE" to identities.values.first()), listOf(pixel)).size)

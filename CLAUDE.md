@@ -11,6 +11,19 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-20 (brands + MSM/EDL + infographics):** branch
+> `feat/multi-device-identify` (same PR #85). `:core` `BrandCatalog`
+> identity table (24 makers), matching Root wizards / unlock portals,
+> MSM / EDL explain+link guide (`MsmGuides`; never ships MSM/firmware;
+> no writes from the guide), Compose step diagrams on wizards / portals
+> / MSM (Android + `:desktop`). Official https firmware pages in Links.
+> Closed unlock programmes stay noted with no invented URL. Ethics
+> refuse: EDL FRP/screen-lock wipe, Firehose auth bypass, leaked MSM
+> packages, unofficial dump sites. Dry-run / typed confirm / backup /
+> no auto-reboot unchanged. `applicationId`, signing and versioning
+> unchanged. Local suite counts follow the Paparazzi / hermetic run on
+> this head. **Not run on a phone or a desktop window.**
+
 > **Update 2026-10-20 (ESP32 & Pi helpers):** branch
 > `feat/multi-device-identify` (same PR). Owner-only bootloader unlock /
 > flash helpers: `:core` `BoardHelpers` + Links **ESP32 & Pi helpers**

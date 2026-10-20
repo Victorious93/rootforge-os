@@ -216,6 +216,15 @@ object AskTopics {
             caveat = "These helpers are for phones you own. They do not bypass a screen lock or Factory Reset Protection.",
         ),
         AskTopic(
+            id = "msm-edl-guide",
+            title = "MSM Download Tool and Qualcomm EDL",
+            keywords = listOf("msm", "edl", "9008", "qualcomm 9008", "download tool", "unbrick", "edl restore", "firehose", "qfil"),
+            answer = "Qualcomm EDL (USB 05c6:9008) is a low-level restore port. MSM Download Tool is an OEM Windows program (often OnePlus, Oppo, realme) that writes factory firmware over that port. " +
+                "Open Devices or MSM / EDL when the phone enumerates as 9008. RootForge only identifies the chip and opens the maker's official https support/firmware page. " +
+                "It never ships MSM, QFIL, Rescue and Smart Assistant, Mi Flash, or firmware, and the guide never writes.",
+            caveat = "An EDL restore that wipes Factory Reset Protection or a screen lock is refused. Use the maker's official account-recovery flow.",
+        ),
+        AskTopic(
             id = "frp-screen-lock-refused",
             title = "Screen lock and FRP are not supported",
             keywords = listOf("frp", "factory reset protection", "google account lock", "bypass screen lock", "remove screen lock", "unlock pattern", "forgot pin", "crack pin"),

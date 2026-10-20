@@ -30,6 +30,15 @@ class ScreenshotTest {
     fun devices() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.Devices) }
 
     @Test
+    fun edl() = snap {
+        RootForgeUi(
+            previewEdlState(),
+            NoopActions,
+            startAt = Destination.Edl,
+        )
+    }
+
+    @Test
     fun flashTools() = snap { RootForgeUi(previewState(), NoopActions, startAt = Destination.FlashTools) }
 
     @Test

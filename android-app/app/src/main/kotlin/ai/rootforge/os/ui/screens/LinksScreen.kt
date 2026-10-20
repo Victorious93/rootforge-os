@@ -45,6 +45,12 @@ fun LinksScreen(actions: AppActions, onOpenGlossary: () -> Unit = {}) {
                             "and it does not inject keys.",
                     )
                 }
+                if (section == LinkSection.OFFICIAL_FIRMWARE) {
+                    NoticeCard(
+                        "Official maker firmware and support pages only. RootForge never ships MSM Download Tool, QFIL, " +
+                            "Rescue and Smart Assistant, Mi Flash, or any firmware image. The MSM / EDL guide is detect + explain + link.",
+                    )
+                }
                 links.forEach { LinkCard(it, actions) }
             }
         }

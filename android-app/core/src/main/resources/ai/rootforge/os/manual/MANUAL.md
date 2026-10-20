@@ -219,16 +219,16 @@ Each card is a read-only identity, a **Root plan**, and a brand **Root wizard** 
 2. In fastboot the same fields come from `getvar` (`product`, `unlocked`, `current-slot`, and the rest the bootloader reports). USB manufacturer/model fill in if getvar omitted the brand.
 3. Serial numbers are shown as `••••` plus the last four characters, in the app and in the command log.
 4. The Root plan recommends **unlock bootloader → custom recovery → root manager**. Matching Custom RR ROM/recovery/root rows for that codename are listed. A matching TWRP or PitchBlack row can open **Custom Recovery** already aimed at that project. ROMs stay links.
-5. The Root wizard is a step list from the identity: **Google Pixel**, **Samsung**, **Xiaomi / Redmi / POCO**, **OnePlus**, **Motorola**, or a **generic fastboot** path. Every step is plain language and says what will be erased. Writes still open the existing Fastboot / Custom Recovery / Root screens: dry-run first, typed confirm, never auto-reboot.
-6. The Root plan also shows that brand's official **bootloader unlock portal** when one exists (Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev, OnePlus, Fairphone). Pixel has no token page (OEM unlocking, then typed `UNLOCK`). Nothing has no token webpage. Samsung, ASUS, LG and Huawei no longer offer official unlocking — the card says so and does not invent a site. Sony / HTC / Fairphone still get their portal even when the wizard is the generic fastboot path.
+5. The Root wizard is a step list from the identity (the **device-identity** table in `:core` `BrandCatalog`): **Google Pixel**, **Samsung**, **Xiaomi / Redmi / POCO**, **OnePlus**, **Motorola**, **Sony**, **HTC**, **Fairphone**, **Nothing / CMF**, **Oppo**, **realme**, **vivo / iQOO**, **HMD / Nokia**, **Lenovo**, **ASUS**, **LG**, **Huawei / Honor**, **TECNO / Infinix / itel**, or a **generic fastboot** path. Each wizard has a small step diagram. Every step is plain language and says what will be erased. Writes still open the existing Fastboot / Custom Recovery / Root screens: dry-run first, typed confirm, never auto-reboot.
+6. The Root plan also shows that brand's official **bootloader unlock portal** when one exists (Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev, OnePlus, Fairphone). Pixel has no token page (OEM unlocking, then typed `UNLOCK`). Nothing, Oppo, realme, HMD / Nokia, Lenovo, TECNO / Infinix / itel, TCL and SHIFT have no token webpage (in-phone Deep Testing or OEM unlocking only). Samsung, ASUS, LG, Huawei, vivo / iQOO, Meizu and ZTE / nubia no longer offer official unlocking — the card says so and does not invent a site. A small diagram sits above the portal copy.
 7. **Read unlock data** is a plain-words step (for Motorola: `fastboot oem get_unlock_data`). Dry-run first; a later Unlock still needs typed `UNLOCK`. Copy the lines yourself if a maker asks. **RootForge never sends serial, IMEI or unlock data to any site.** Official pages open in the system browser only.
 8. **Samsung:** Download Mode and Odin are explained only. RootForge does not speak Odin and will not flash a tar. Read the Knox warning before any unlock — a tripped Knox flag does not reset. If the phone is actually in fastboot, Unlock is the existing typed-`UNLOCK` path (still a wipe, still trips Knox).
 9. **Xiaomi:** the Mi Unlock wait (often 7 to 30 days) is on Xiaomi's side. RootForge cannot skip it. The official page is Xiaomi's Mi Unlock site.
 10. **Motorola:** read `oem get_unlock_data` on Fastboot, then open Motorola's official unlock portal in the browser. RootForge does not fetch that code.
-11. Buttons open the existing ADB, Fastboot, EDL, Root / Patching, Modules or Custom Recovery screens **for that serial**. Official https pages open in the browser.
+11. Buttons open the existing ADB, Fastboot, **MSM / EDL**, Root / Patching, Modules or Custom Recovery screens **for that serial**. Official https pages open in the browser.
 12. **ESP32 and Raspberry Pi helpers** are owner unlock/flash only. A Pi is the same Linux host `adb`/`fastboot` path as the desktop app. An ESP32 may be a USB-serial bridge. RootForge does **not** bypass a screen lock or Factory Reset Protection. Official pages: **Links → ESP32 & Pi helpers**. Full notes: [docs/BOARD_HELPERS.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/BOARD_HELPERS.md).
 
-**EDL is identify only.** Qualcomm `05c6:9008` is recognised so you can see the chip. Devices never starts a Firehose write.
+**EDL is identify only.** Qualcomm `05c6:9008` is recognised so you can see the chip. Devices never starts a Firehose write. When a phone is in EDL, the card opens the **MSM / EDL** guide: what MSM Download Tool is, what an EDL restore does, and official https firmware/support links for that brand. RootForge **never ships** the MSM tool or any firmware, and the guide **never writes**.
 
 Safety is unchanged: dry-run stays the default where it already was, typed confirm still gates writes, a recovery write still backs up first, nothing reboots by itself, and each serial has its own lock so two phones can work at the same time without sharing one queue.
 
@@ -352,15 +352,25 @@ Needs the target in the bootloader.
 
 Unlock also shows a large warning. A USB device appearing is never treated as permission to write.
 
-### EDL (experimental)
+### MSM / EDL
 
-**EDL** is Qualcomm's emergency download mode. The screen talks Sahara then Firehose. It has only been tested against a fake device.
+![MSM / EDL](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_edl.png)
 
-1. Put the target in EDL (`adb reboot edl` on some phones, or that model's test points / key combo).
-2. **Upload programmer** — you must supply the maker-signed programmer for *that* model. RootForge ships none. Type `EDL`.
-3. **Configure** memory type, then **Storage info**.
-4. **Write raw sectors** needs `WRITE LUN <lun> SECTOR <start>`.
-5. **Reset** leaves EDL.
+**EDL** is Qualcomm's emergency download mode (USB `05c6:9008`). The top of this screen is a plain-language **MSM / EDL guide** with a small step diagram.
+
+**MSM Download Tool** is a Windows program some makers (especially OnePlus, Oppo and realme) used to restore a Qualcomm phone that will not boot. An **EDL restore** is that OEM program talking to 9008 until factory firmware is written. RootForge does **not** run that restore.
+
+1. Put the target in EDL (`adb reboot edl` on some phones, or that model's test points / key combo). Devices lists it as 9008.
+2. Read the guide. Official firmware / support pages for that brand (or, if the chip did not name a maker, the Qualcomm OEM support list) open in the system browser only.
+3. Get MSM Download Tool, Rescue and Smart Assistant, Mi Flash, or factory images **from the maker**, never from this app. RootForge never ships those programs or any firmware image.
+4. RootForge never pastes serial, IMEI or Sahara ids into a site. EDL as an FRP or screen-lock wipe is refused.
+
+Below the guide, an **experimental** Sahara / Firehose pane still exists. It is **not** MSM Download Tool. It has only been tested against a fake device.
+
+1. **Upload programmer** — you must supply the maker-signed programmer for *that* model. RootForge ships none. Type `EDL`.
+2. **Configure** memory type, then **Storage info**.
+3. **Write raw sectors** needs `WRITE LUN <lun> SECTOR <start>`.
+4. **Reset** leaves EDL.
 
 Retail phones accept only the OEM-signed programmer. A planned native (JNI) reuse of EDL-Commander is **not implemented**.
 
@@ -413,7 +423,7 @@ This tab only opens known module-repository websites in the browser. RootForge d
 
 ![Links](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_links.png)
 
-Drawer entry **Links**, also from Modules → **Links directory**, Settings → About, and Help. Official https pages for Magisk / KernelSU / APatch, module repositories (Alt-Repo, MMRL, Xposed-Modules-Repo, LSPosed / Vector, Zygisk Next), Shizuku apps (Shizuku, Sui, App Ops, Ice Box, Hail, SystemUI Tuner, Canta, Inure, aShell / aShell You, Dhizuku), **Bootloader unlock portals** (Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev, OnePlus, Fairphone; Pixel / Nothing have no token page; Samsung / ASUS / LG / Huawei no longer offer official unlocking), and **ESP32 & Pi helpers** (Raspberry Pi documentation, Espressif USB Serial/JTAG, Android platform-tools; owner unlock/flash only — no screen-lock or FRP bypass). Each live tap opens the system browser. Nothing is downloaded or bundled. RootForge never sends serial, IMEI or unlock data to these sites. URLs that could not be verified as official https pages are omitted. **Glossary** on this screen (and a drawer entry) opens the everyday-words list.
+Drawer entry **Links**, also from Modules → **Links directory**, Settings → About, and Help. Official https pages for Magisk / KernelSU / APatch, module repositories (Alt-Repo, MMRL, Xposed-Modules-Repo, LSPosed / Vector, Zygisk Next), Shizuku apps (Shizuku, Sui, App Ops, Ice Box, Hail, SystemUI Tuner, Canta, Inure, aShell / aShell You, Dhizuku), **Bootloader unlock portals** (Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev, OnePlus, Fairphone; Pixel / Nothing / Oppo / realme / HMD / Lenovo / Transsion / TCL / SHIFT have no token page; Samsung / ASUS / LG / Huawei / vivo / Meizu / ZTE no longer offer official unlocking), **Official firmware and EDL tools** (maker support / factory-image pages plus Qualcomm support; never MSM binaries), and **ESP32 & Pi helpers** (Raspberry Pi documentation, Espressif USB Serial/JTAG, Android platform-tools; owner unlock/flash only — no screen-lock or FRP bypass). Each live tap opens the system browser. Nothing is downloaded or bundled. RootForge never sends serial, IMEI or unlock data to these sites. URLs that could not be verified as official https pages are omitted. **Glossary** on this screen (and a drawer entry) opens the everyday-words list.
 
 ### ESP32 and Raspberry Pi helpers
 
@@ -917,7 +927,11 @@ Drawer entry **Glossary**, also from Help and from Links. One short line per ter
 
 **fastboot.** A USB mode in the bootloader for writing partitions before Android starts.
 
-**EDL.** Emergency Download (Qualcomm 9008): a very low-level USB mode. Experimental here; a retail phone only accepts its maker's programmer.
+**EDL.** Emergency Download (Qualcomm 9008): a very low-level USB mode. The MSM / EDL guide explains it and links official pages; a retail phone only accepts its maker's programmer.
+
+**Qualcomm 9008.** The USB id of a phone in Qualcomm EDL. RootForge identifies it and does not write from the MSM / EDL guide.
+
+**MSM Download Tool.** An OEM Windows program that restores some Qualcomm phones over EDL. RootForge never ships it or any firmware; it only links the maker's official page.
 
 **Serial.** The USB id of a phone. RootForge shows only the last four characters in the app and in logs.
 
@@ -963,4 +977,4 @@ Drawer entry **Glossary**, also from Help and from Links. One short line per ter
 
 ---
 
-*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, the in-app Glossary, the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, and ESP32 / Raspberry Pi owner helpers (no FRP or screen-lock bypass). If a line here disagrees with the running app, the app is right — please file an issue.*
+*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, the in-app Glossary, the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, ESP32 / Raspberry Pi owner helpers (no FRP or screen-lock bypass), the device-identity brand table, the MSM / EDL guide (detect + explain + official links only), and Compose step diagrams. If a line here disagrees with the running app, the app is right — please file an issue.*

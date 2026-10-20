@@ -10,6 +10,8 @@ import ai.rootforge.os.device.RootGuideKind
 import ai.rootforge.os.device.RootGuideStep
 import ai.rootforge.os.device.RootGuides
 import ai.rootforge.os.device.SerialMask
+import ai.rootforge.os.device.WizardDiagrams
+import ai.rootforge.os.ui.StepDiagram
 import ai.rootforge.os.device.publicLabel
 import ai.rootforge.os.ui.ActionButton
 import ai.rootforge.os.ui.ActionKind
@@ -107,7 +109,7 @@ fun DevicesScreen(
             }
 
             if (state.targets.isEmpty()) CableSetupCard()
-            NoticeCard("EDL (Qualcomm 05c6:9008) is identified only. Devices never starts a Firehose write. Samsung Download Mode / Odin is explained only — RootForge does not speak Odin. Unlock, flash, recovery write and module install keep the same confirms as their own screens. ESP32 and Raspberry Pi helpers (Links) are owner unlock/flash only: a Pi is this Linux host path; an ESP32 may be a USB-serial bridge. RootForge does not bypass a screen lock or FRP.")
+            NoticeCard("EDL (Qualcomm 05c6:9008) is identified only. Devices never starts a Firehose write. The MSM / EDL guide explains MSM Download Tool and links official firmware pages; this app never ships that tool or any firmware. Samsung Download Mode / Odin is explained only — RootForge does not speak Odin. Unlock, flash, recovery write and module install keep the same confirms as their own screens. ESP32 and Raspberry Pi helpers (Links) are owner unlock/flash only: a Pi is this Linux host path; an ESP32 may be a USB-serial bridge. RootForge does not bypass a screen lock or FRP.")
         }
     }
 }
@@ -160,8 +162,21 @@ private fun DevicePhoneCard(
             )
         }
 
+        card.plan.msm?.let { msm ->
+            Text(msm.title, style = MaterialTheme.typography.titleSmall)
+            Text(msm.detected, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            StepDiagram(WizardDiagrams.forMsm())
+            Text(msm.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            NoticeCard("Detect + explain + link only. RootForge never ships MSM Download Tool, QFIL, Rescue and Smart Assistant, Mi Flash, or firmware, and never writes in EDL from this guide.")
+            msm.sources.forEach { source ->
+                Text(source.label, style = MaterialTheme.typography.bodySmall)
+                ActionButton("Official page", Icons.Filled.OpenInBrowser, ActionKind.Outline) { actions.openUrl(source.url) }
+            }
+        }
+
         card.plan.portal?.let { portal ->
             Text("Unlock portal · ${portal.name}", style = MaterialTheme.typography.titleSmall)
+            StepDiagram(WizardDiagrams.forUnlock(portal.offered))
             Text(portal.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (!portal.offered) {
                 NoticeCard("This brand no longer offers official unlocking. There is no portal to open.")
@@ -187,6 +202,7 @@ private fun DevicePhoneCard(
 
         card.plan.guide?.let { guide ->
             Text("Root wizard · ${guide.title}", style = MaterialTheme.typography.titleSmall)
+            StepDiagram(WizardDiagrams.forGuide(guide.kind))
             Text(guide.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             guide.knoxWarning?.let { NoticeCard(it, danger = true) }
             if (guide.kind == RootGuideKind.SAMSUNG && !guide.odinFlashing) {
@@ -233,7 +249,7 @@ private fun DevicePhoneCard(
                     }
                 }
                 TargetMode.EDL -> {
-                    ActionButton("Open EDL (identify)", enabled = card.busy == null) { onOpenEdl(card.target) }
+                    ActionButton("MSM / EDL guide", enabled = card.busy == null) { onOpenEdl(card.target) }
                 }
                 TargetMode.UNKNOWN -> Unit
             }

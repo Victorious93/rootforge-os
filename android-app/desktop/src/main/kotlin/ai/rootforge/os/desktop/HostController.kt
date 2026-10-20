@@ -188,11 +188,11 @@ class HostController(
                         linkState.value = LinkState.Connected(TargetMode.FASTBOOT, target.publicLabel())
                     }
                     TargetMode.EDL -> {
-                        val identity = DeviceIdentityParser.fromEdl(target)
+                        val identity = DeviceIdentityParser.fromEdl(target, previous = identityState.value[target.rosterKey()])
                         publishIdentity(identity)
                         infoState.value = identity.toTargetInfo()
                         linkState.value = LinkState.Connected(TargetMode.EDL, target.publicLabel())
-                        log.info("EDL on desktop is identify-only here. The host `edl` binary is not invoked from Devices.")
+                        log.info("EDL on desktop is identify-only here. The host `edl` binary is not invoked from Devices. MSM / EDL guide is explain-and-link only.")
                     }
                     TargetMode.UNKNOWN -> throw IOException("${target.publicLabel()} is not an ADB, fastboot or EDL device.")
                 }
@@ -737,7 +737,7 @@ class HostController(
                     if (active?.rosterKey() == key) infoState.value = identity.toTargetInfo()
                 }
                 TargetMode.EDL -> {
-                    val identity = DeviceIdentityParser.fromEdl(target)
+                    val identity = DeviceIdentityParser.fromEdl(target, previous = identityState.value[key])
                     publishIdentity(identity)
                     if (active?.rosterKey() == key) infoState.value = identity.toTargetInfo()
                 }

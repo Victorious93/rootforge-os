@@ -82,7 +82,7 @@ enum class Destination(val title: String, val icon: ImageVector) {
     FlashTools("Flash Tools", Icons.Filled.Build),
     Adb("ADB", Icons.Filled.Android),
     Fastboot("Fastboot", Icons.Filled.FlashOn),
-    Edl("EDL", Icons.Filled.Memory),
+    Edl("MSM / EDL", Icons.Filled.Memory),
     Root("Root / Patching", Icons.Filled.Security),
     Modules("Modules", Icons.Filled.Extension),
     Recovery("Recovery", Icons.Filled.SettingsBackupRestore),

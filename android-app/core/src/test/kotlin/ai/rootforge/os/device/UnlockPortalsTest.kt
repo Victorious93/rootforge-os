@@ -63,11 +63,16 @@ class UnlockPortalsTest {
         assertNull(byId.getValue("samsung").url)
         assertTrue(byId.getValue("nothing").offered)
         assertNull(byId.getValue("nothing").url)
-        for (closed in listOf("asus", "lg", "huawei")) {
+        for (closed in listOf("asus", "lg", "huawei", "vivo", "meizu", "zte")) {
             assertFalse(closed, byId.getValue(closed).offered)
             assertNull(closed, byId.getValue(closed).url)
             assertTrue(closed, byId.getValue(closed).note.lowercase().contains("no") || byId.getValue(closed).note.lowercase().contains("stop"))
         }
+        for (noPage in listOf("oppo", "realme", "nokia", "lenovo", "tecno", "infinix", "itel", "tcl", "shift")) {
+            assertTrue(noPage, byId.getValue(noPage).offered)
+            assertNull(noPage, byId.getValue(noPage).url)
+        }
+        assertTrue("need many makers in the identity table", UnlockPortals.all.size >= 20)
     }
 
     @Test

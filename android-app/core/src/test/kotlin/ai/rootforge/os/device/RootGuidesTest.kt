@@ -108,9 +108,14 @@ class RootGuidesTest {
 
     @Test
     fun unknownBrandUsesGenericFastboot() {
-        val id = DeviceIdentity(mode = TargetMode.ADB, brand = "fairphone", model = "FP5", codename = "FP5")
+        val id = DeviceIdentity(mode = TargetMode.ADB, brand = "acme", model = "Toaster", codename = "bread")
         assertEquals(RootGuideKind.GENERIC, RootGuides.forIdentity(id).kind)
         assertEquals(RootGuideKind.GENERIC, RootGuides.forIdentity(null).kind)
+        assertEquals(RootGuideKind.FAIRPHONE, RootGuides.forIdentity(DeviceIdentity(mode = TargetMode.ADB, brand = "fairphone", model = "FP5")).kind)
+        assertEquals(RootGuideKind.OPPO, RootGuides.forIdentity(DeviceIdentity(mode = TargetMode.ADB, brand = "oppo", model = "CPH")).kind)
+        assertEquals(RootGuideKind.VIVO, RootGuides.forIdentity(DeviceIdentity(mode = TargetMode.ADB, brand = "iqoo", model = "Neo")).kind)
+        assertEquals(RootGuideKind.TRANSSION, RootGuides.forIdentity(DeviceIdentity(mode = TargetMode.ADB, brand = "infinix", model = "Hot")).kind)
+        assertFalse(RootGuides.forIdentity(DeviceIdentity(mode = TargetMode.ADB, brand = "asus", model = "Zenfone")).steps.any { it.autoReboot })
     }
 
     @Test
