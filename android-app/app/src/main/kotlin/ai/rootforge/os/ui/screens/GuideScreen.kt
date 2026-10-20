@@ -225,7 +225,7 @@ private fun GuidePage(doc: GuideDocument, anchor: String?, onBack: () -> Unit, o
                 }
             }
         }
-        items(doc.blocks.size) { index -> BlockView(doc.blocks[index], onLink) }
+        items(doc.blocks.size) { index -> MarkdownBlock(doc.blocks[index], onLink) }
         item { Box(Modifier.height(24.dp)) }
     }
 }
@@ -239,7 +239,7 @@ private fun containsAnchor(block: Block, anchor: String): Boolean = when (block)
 }
 
 @Composable
-private fun BlockView(block: Block, onLink: (String) -> Unit) {
+internal fun MarkdownBlock(block: Block, onLink: (String) -> Unit) {
     when (block) {
         is Block.Heading -> Text(
             rich(block.spans, onLink),
@@ -264,14 +264,14 @@ private fun BlockView(block: Block, onLink: (String) -> Unit) {
                         modifier = Modifier.width(if (block.ordered) 28.dp else 14.dp),
                     )
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        item.forEach { BlockView(it, onLink) }
+                        item.forEach { MarkdownBlock(it, onLink) }
                     }
                 }
             }
         }
         is Block.Quote -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.width(3.dp).height(20.dp).background(MaterialTheme.colorScheme.outline))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) { block.blocks.forEach { BlockView(it, onLink) } }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) { block.blocks.forEach { MarkdownBlock(it, onLink) } }
         }
         is Block.Callout -> CalloutView(block, onLink)
         is Block.Table -> TableView(block, onLink)
@@ -323,7 +323,7 @@ private fun CalloutView(callout: Block.Callout, onLink: (String) -> Unit) {
             Text(title, style = MaterialTheme.typography.titleSmall, color = color, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             if (collapsible) Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = color)
         }
-        if (open) callout.blocks.forEach { BlockView(it, onLink) }
+        if (open) callout.blocks.forEach { MarkdownBlock(it, onLink) }
     }
 }
 

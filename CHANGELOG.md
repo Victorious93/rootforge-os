@@ -7,6 +7,10 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### How-to manual and in-app Help (2026-10-20)
+- New `docs/MANUAL.md`: plain-language how-to covering what RootForge is and its `EXTERNAL_NODE` fleet role, install and first-run (including the v0.2.0 debug-key uninstall), every current screen, every manifest permission, fleet pairing and the default-off remote-control switch, troubleshooting, and privacy. Desktop mode (#76) and the Custom Recovery installer (#77 / `fabc649`) are documented as landed. Header art is the repo emblem inside a neon cyan-to-magenta ring (`docs/images/manual/header.png`; regenerator `android-app/tools/generate_manual_header.py`). Paparazzi goldens are reused as screenshots.
+- The same markdown is bundled on the `:core` classpath and rendered offline by a **Help** drawer screen (and Settings → Open the manual) with a GitHub link. `applicationId`, signing and versioning were not changed.
+
 ### Custom Recovery installer for rooted phones (2026-10-20)
 - New drawer screen **Custom Recovery** on Android and desktop. It lists official TWRP (`twrp.me` search.json + `dl.twrp.me/<codename>/`) and PitchBlack Recovery (`pitchblackrecovery.com`, GitHub releases, SourceForge) for `ro.product.device` / `ro.build.product`, and accepts a local `.img`/`.zip`. Images are not bundled.
 - Detects root (`su -c id`), A/B vs A-only, and whether a dedicated `recovery` / `recovery_a` / `recovery_b` exists. Recovery-in-boot / vendor_boot devices get the installer-zip and “Boot once” paths only; `boot` is never written.

@@ -121,3 +121,9 @@ fun PreviewSettings() {
 fun PreviewRootGuide() {
     RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.RootGuide) }
 }
+
+@Preview(showBackground = true, widthDp = 412, heightDp = 892, name = "Help")
+@Composable
+fun PreviewHelp() {
+    RootForgeTheme { RootForgeUi(previewState(), NoopActions, startAt = Destination.Help) }
+}
