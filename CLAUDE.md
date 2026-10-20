@@ -25,8 +25,15 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `recovery_b`, never `boot`/`vendor_boot`, never `dd`s a zip, never auto-reboots.
 > The catalog still does not feed `DeviceMatchGate`. `applicationId`, signing
 > and versioning unchanged. Merged `origin/main` (`44716de`, #78 how-to + Help)
-> and documented the action in `docs/MANUAL.md` / in-app Help. Local suite
-> re-run after that merge is recorded below when finished.
+> and documented the action in `docs/MANUAL.md` / in-app Help (`cmp` identical
+> to the bundled copy). Verified after that merge: `:core:test` 260/0
+> (`CatalogRecoveryBridgeTest` 7, `RecoveryCatalogTest` 9, `ManualLibraryTest`
+> 4); `:desktop:test` 2/0; `:app:testDebugUnitTest` 31/0; `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`). `verifyPaparazziDebug` fails only on `modules`
+> (stale on `main` since #69); Help golden still matches. `bash tests/run-tests.sh`
+> 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run:** a phone, the desktop window.
 
 > **Update 2026-10-20 (how-to manual + in-app Help):** branch `docs/manual`
 > (PR #78, on `main` as `44716de`). Added `docs/MANUAL.md` (plain-language how-to:
@@ -245,11 +252,13 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Custom RR → Custom Recovery (this branch): matching TWRP/PitchBlack catalog
-  rows open Custom Recovery pre-filled; official lookup uses the probed phone;
-  `pitchblack.tech` added to the https host allow-list. ROMs and other recoveries
-  stay links. Documented in `docs/MANUAL.md` / Help after merging #78.
-  Local suite after that merge is recorded when re-run.
+- Custom RR → Custom Recovery (this branch, after merging #78 `44716de`):
+  matching TWRP/PitchBlack catalog rows open Custom Recovery pre-filled;
+  official lookup uses the probed phone; `pitchblack.tech` added to the https
+  host allow-list. ROMs and other recoveries stay links. Documented in
+  `docs/MANUAL.md` / Help. `:core:test` 260/0; `:desktop:test` 2/0;
+  `:app:testDebugUnitTest` 31/0; `:app:assembleDebug`; `tests/run-tests.sh`
+  1055/0; `tests/lint.sh` clean. **Not run on a phone.**
 - How-to manual (PR #78, on `main` as `44716de`): `docs/MANUAL.md` plus in-app
   **Help**. On that head: `:core:test` 252/0, `:desktop:test` 2/0,
   `:app:testDebugUnitTest` 31/0. **Not run on a phone.**
