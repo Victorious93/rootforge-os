@@ -23,6 +23,8 @@ import ai.rootforge.os.recovery.RecoveryProject
 import ai.rootforge.os.root.BootImageParser
 import ai.rootforge.os.root.RootManager
 import ai.rootforge.os.ui.AppActions
+import ai.rootforge.os.device.SerialMask
+import ai.rootforge.os.device.publicLabel
 import ai.rootforge.os.usb.AttachedTarget
 import java.awt.Desktop
 import java.awt.FileDialog
@@ -49,6 +51,10 @@ class DesktopActions(
     override fun connect(target: AttachedTarget) { scope.launch { controller.connect(target) } }
     override fun disconnect() = controller.disconnect()
     override fun refreshInfo() { scope.launch { controller.refreshInfo() } }
+    override fun identifyDevices() {
+        controller.scan()
+        scope.launch { controller.identifyAttached(force = true) }
+    }
 
     override fun importFile(then: (LibraryFile) -> Unit) {
         scope.launch {
@@ -219,7 +225,9 @@ class DesktopActions(
             TerminalCommand.Clear -> log.clear()
             TerminalCommand.Devices -> {
                 val t = controller.targets.value
-                if (t.isEmpty()) log.out("No devices (adb/fastboot/edl).") else t.forEach { log.out("${it.serial ?: it.vidPid}  ${it.mode.label}  ${it.displayName}") }
+                if (t.isEmpty()) log.out("No devices (adb/fastboot/edl).") else t.forEach {
+                    log.out("${SerialMask.mask(it.serial)}  ${it.mode.label}  ${it.publicLabel()}")
+                }
             }
             is TerminalCommand.Refused -> log.warn(cmd.reason)
             is TerminalCommand.AdbShell -> adbShell(cmd.command)

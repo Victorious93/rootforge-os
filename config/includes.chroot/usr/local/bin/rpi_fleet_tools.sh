@@ -7,6 +7,10 @@
 # however many Pis answer. Built for a small homelab fleet, not a
 # datacenter — no inventory database, just an nmap/arp-scan pass each time.
 #
+# Ethics: this script manages Raspberry Pi boards on a LAN. Using a Pi as a
+# USB host for Android bootloader unlock/flash is the :desktop HostController
+# path (docs/BOARD_HELPERS.md). Not a screen-lock or FRP bypass.
+#
 # Usage: ./rpi_fleet_tools.sh scan | push-key <host> | run "<command>" [host...]
 
 set -euo pipefail

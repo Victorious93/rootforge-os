@@ -8,7 +8,21 @@ Docker** clients of the same contract.
 Status: **compiles / packages in CI. Not run against a real phone.**
 Desktop talks to a target through **host** `adb` / `fastboot` / optional
 `edl` binaries (detected on `PATH` or `$ANDROID_HOME/platform-tools`). It
-does not reimplement the USB wire protocol the Android app uses.
+does not reimplement the USB wire protocol the Android app uses. The
+**Devices** screen is the same Compose UI as the APK: identify every
+plugged-in phone, show the Root plan and brand Root wizard, and pin later
+actions to that serial (`adb -s` / `fastboot -s`). A wide window shows two
+cards. Compose step diagrams on the wizards, unlock portals, and MSM / EDL
+guide are the same code as the APK (no bitmaps, no runtime downloads).
+EDL stays identify-only from Devices; the MSM / EDL guide explains MSM
+Download Tool and links official firmware pages only — this app never
+ships that tool or any firmware. Samsung Odin is not implemented.
+
+A **Raspberry Pi** (Raspberry Pi OS 64-bit, JDK 17) is this same Linux
+host path — `/proc/device-tree/model` sets the caption to “this Raspberry
+Pi”. CI `.deb` builds are amd64; on a Pi run `./gradlew :desktop:run` from
+source. An ESP32 may be a USB-serial bridge only. Screen-lock and FRP
+bypass are refused. See `docs/BOARD_HELPERS.md`.
 
 ## Linux desktop
 
@@ -100,7 +114,7 @@ local user to call unlock or flash with the confirmation phrase.
 | Piece | Where |
 |---|---|
 | Flash planner, module zip, terminal parser, approvals, bridge ops | `android-app/core` |
-| Compose screens (Dashboard, Flash Tools … Settings) | `android-app/app/.../ui`, compiled into both APK and desktop. Flash uses the same sidecar device-match gate as the phone app. Modules → This phone (su install on the host) is Android-only; desktop keeps USB-target install. |
+| Compose screens (Dashboard, **Devices**, Flash Tools … Settings) | `android-app/app/.../ui`, compiled into both APK and desktop. **Devices** identify/plan/wizard logic is `:core`; desktop talks to host `adb`/`fastboot` (`HostController`). Wide windows show two phone cards. Flash uses the same sidecar device-match gate as the phone app. Modules → This phone (su install on the host) is Android-only; desktop keeps USB-target install. |
 | Android USB ADB/fastboot/Sahara | `android-app/app` only |
 | Host `adb`/`fastboot`/`edl` | `android-app/desktop` |
 | Python headless API | `docker/api/rootforge_api.py` (same operation names) |

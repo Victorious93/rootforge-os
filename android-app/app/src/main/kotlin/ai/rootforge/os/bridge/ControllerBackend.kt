@@ -1,6 +1,7 @@
 package ai.rootforge.os.bridge
 
 import ai.rootforge.os.core.TargetController
+import ai.rootforge.os.device.publicLabel
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.usb.TargetMode
@@ -20,7 +21,7 @@ class ControllerBackend(private val controller: TargetController, override val a
                 },
                 state = if (linked != null && linked.mode == t.mode) "connected" else if (t.hasPermission) "authorized" else "needs_usb_permission",
                 usable = t.mode != TargetMode.UNKNOWN && t.hasPermission,
-                note = "${t.vidPid} ${t.displayName}".trim(),
+                note = "${t.vidPid} ${t.publicLabel()}".trim(),
             )
         }
     }

@@ -46,6 +46,24 @@ class UsbScanFilterTest {
     }
 
     @Test
+    fun describeMasksASerialWhenThereIsNoProductName() {
+        val serialOnly = AttachedTarget(
+            deviceName = "/dev/bus/usb/001/002",
+            vendorId = 0x18D1,
+            productId = 0x4EE7,
+            mode = TargetMode.ADB,
+            interfaceId = 0,
+            hasPermission = true,
+            serial = "PIXELTEST",
+            product = null,
+            manufacturer = null,
+        )
+        val line = UsbScanFilter.describe(UsbScanFilter.partition(listOf(serialOnly))).single()
+        assertFalse(line.contains("PIXELTEST"))
+        assertTrue(line.contains("••••TEST"))
+    }
+
+    @Test
     fun aDeviceNeedingPermissionIsStillAFlashTarget() {
         val locked = target(0x18D1, 0x4EE7, TargetMode.ADB, "Pixel 8", hasPermission = false)
         val scan = UsbScanFilter.partition(listOf(locked))

@@ -33,6 +33,9 @@ class AskEngineTest {
         assertEquals("check-root", top("am I rooted?"))
         assertEquals("wireless-adb", top("adb over wifi without cable"))
         assertEquals("integrity", top("banking app detects root, play integrity fails"))
+        assertEquals("esp32-pi-helpers", top("can I use a raspberry pi as an unlock helper"))
+        assertEquals("frp-screen-lock-refused", top("how do I bypass FRP"))
+        assertEquals("msm-edl-guide", top("phone stuck in EDL 9008 need MSM download tool"))
     }
 
     @Test

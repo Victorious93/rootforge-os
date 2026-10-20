@@ -35,6 +35,7 @@ import ai.rootforge.os.recovery.RecoveryProject
 import ai.rootforge.os.root.BootImageParser
 import ai.rootforge.os.root.RootManager
 import ai.rootforge.os.ui.AppActions
+import ai.rootforge.os.device.publicLabel
 import ai.rootforge.os.usb.AttachedTarget
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -60,6 +61,10 @@ class AppActionsImpl(
     override fun connect(target: AttachedTarget) { scope.launch { controller.connect(target) } }
     override fun disconnect() = controller.disconnect()
     override fun refreshInfo() { scope.launch { controller.refreshInfo() } }
+    override fun identifyDevices() {
+        app.usb.refresh()
+        scope.launch { controller.identifyAttached(force = true) }
+    }
 
     override fun importFile(then: (LibraryFile) -> Unit) {
         pickDocument { uri ->
@@ -246,7 +251,9 @@ class AppActionsImpl(
             TerminalCommand.Clear -> log.clear()
             TerminalCommand.Devices -> {
                 val t = controller.targets.value
-                if (t.isEmpty()) log.out("No USB devices attached.") else t.forEach { log.out("${it.vidPid}  ${it.mode.label}  ${it.displayName}") }
+                if (t.isEmpty()) log.out("No USB devices attached.") else t.forEach {
+                    log.out("${it.vidPid}  ${it.mode.label}  ${it.publicLabel()}")
+                }
             }
             is TerminalCommand.Refused -> log.warn(cmd.reason)
             is TerminalCommand.AdbShell -> adbShell(cmd.command)

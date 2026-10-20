@@ -1,9 +1,17 @@
 package ai.rootforge.os.links
 
+import ai.rootforge.os.device.BoardHelpers
+import ai.rootforge.os.device.BrandCatalog
+import ai.rootforge.os.device.MsmGuides
+import ai.rootforge.os.device.UnlockPortals
+
 enum class LinkSection(val label: String) {
     ROOT_MANAGERS("Root managers"),
     MODULE_SOURCES("Module repositories and sources"),
     SHIZUKU_APPS("Shizuku apps"),
+    BOOTLOADER_UNLOCK_PORTALS("Bootloader unlock portals"),
+    OFFICIAL_FIRMWARE("Official firmware and EDL tools"),
+    ESP32_PI_HELPERS("ESP32 & Pi helpers"),
 }
 
 data class NamedUrl(val label: String, val url: String)
@@ -11,15 +19,28 @@ data class NamedUrl(val label: String, val url: String)
 /**
  * One browser destination in the in-app Links directory. RootForge never
  * downloads or bundles these; callers open https in the system browser.
+ * [url] is null when the brand has no live official portal (closed or
+ * never published a token page).
  */
 data class DirectoryLink(
     val id: String,
     val name: String,
-    val url: String,
+    val url: String?,
     val section: LinkSection,
     val description: String,
     val extras: List<NamedUrl> = emptyList(),
-)
+) {
+    init {
+        require(id.isNotBlank() && name.isNotBlank() && description.isNotBlank()) { id }
+        if (url != null) {
+            require(url.startsWith("https://")) { "$id: directory urls must be https" }
+            require(!url.contains(' ')) { "$id: directory url has whitespace" }
+        }
+        for (extra in extras) {
+            require(extra.url.startsWith("https://")) { "$id extra must be https" }
+        }
+    }
+}
 
 /**
  * Curated https-only directory of official project pages. Checked 2026-10-20
@@ -27,7 +48,7 @@ data class DirectoryLink(
  * live Play / F-Droid listing pages. Sites that were not reachable are omitted.
  */
 object DirectoryLinks {
-    val all: List<DirectoryLink> = listOf(
+    private val PROJECT_LINKS: List<DirectoryLink> = listOf(
         DirectoryLink(
             id = "magisk",
             name = "Magisk",
@@ -216,6 +237,46 @@ object DirectoryLinks {
         ),
     )
 
-    /** Every URL this directory will offer to the browser, including extras. */
-    fun urls(): List<String> = all.flatMap { listOf(it.url) + it.extras.map { extra -> extra.url } }
+    private val PORTAL_LINKS: List<DirectoryLink> = UnlockPortals.all.map { portal ->
+        DirectoryLink(
+            id = "unlock-${portal.id}",
+            name = portal.name,
+            url = portal.url,
+            section = LinkSection.BOOTLOADER_UNLOCK_PORTALS,
+            description = portal.note,
+        )
+    }
+
+    private val FIRMWARE_LINKS: List<DirectoryLink> = buildList {
+        val pages = (
+            BrandCatalog.officialPages() + listOf(MsmGuides.QUALCOMM_SUPPORT)
+            ).distinctBy { it.url }
+        for (page in pages) {
+            add(
+                DirectoryLink(
+                    id = "firmware-${page.label.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')}",
+                    name = page.label,
+                    url = page.url,
+                    section = LinkSection.OFFICIAL_FIRMWARE,
+                    description = page.note + " Browser only. RootForge never ships MSM Download Tool, QFIL, RSA, Mi Flash or firmware.",
+                ),
+            )
+        }
+    }
+
+    private val HELPER_LINKS: List<DirectoryLink> = BoardHelpers.all.map { helper ->
+        DirectoryLink(
+            id = "helper-${helper.id}",
+            name = helper.name,
+            url = helper.page.url,
+            section = LinkSection.ESP32_PI_HELPERS,
+            description = helper.summary + " " + helper.inScope,
+            extras = helper.extras.map { extra -> NamedUrl(extra.label, extra.url) },
+        )
+    }
+
+    val all: List<DirectoryLink> = PROJECT_LINKS + PORTAL_LINKS + FIRMWARE_LINKS + HELPER_LINKS
+
+    /** Every URL this directory will offer to the browser, including extras. Null portal urls are omitted. */
+    fun urls(): List<String> = all.flatMap { listOfNotNull(it.url) + it.extras.map { extra -> extra.url } }
 }

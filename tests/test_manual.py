@@ -82,6 +82,15 @@ class ManualDocTests(unittest.TestCase):
         self.assertIn("**Bootloop.**", text)
         self.assertIn("**LSPosed.**", text)
         self.assertIn("**SHA-256 / checksum.**", text)
+        self.assertIn("### Devices", text)
+        self.assertIn("Root plan", text)
+        self.assertIn("Bootloader unlock portals", text)
+        self.assertIn("oem get_unlock_data", text)
+        self.assertIn("never sends serial", text.lower())
+        self.assertIn("ESP32 & Pi helpers", text)
+        self.assertIn("Factory Reset Protection", text)
+        self.assertIn("05c6:9008", text)
+        self.assertIn("••••", text)
 
     def test_header_art_is_wide_png_and_copied(self) -> None:
         self.assertTrue(HEADER_DOCS.is_file())
@@ -101,6 +110,8 @@ class ManualDocTests(unittest.TestCase):
         self.assertIn('Glossary("Glossary"', ui)
         self.assertIn("GlossaryScreen", ui)
         self.assertIn("onOpenGlossary", ui)
+        self.assertIn('Devices("Devices"', ui)
+        self.assertIn("DevicesScreen", ui)
         settings = SETTINGS.read_text(encoding="utf-8")
         self.assertIn("Open the manual", settings)
         self.assertIn("onOpenHelp", settings)
@@ -140,7 +151,7 @@ class ManualDocTests(unittest.TestCase):
         required = (
             "Root", "su", "Magisk", "KernelSU", "KernelSU Next", "APatch", "Module",
             "Zygisk", "Zygisk Next", "ReZygisk", "Xposed", "LSPosed", "Vector",
-            "Shizuku", "Sui", "Dhizuku", "ADB", "fastboot", "EDL", "Bootloader",
+            "Shizuku", "Sui", "Dhizuku", "ADB", "fastboot", "EDL", "Serial", "SoC", "Slot", "USB mode", "Bootloader",
             "Recovery", "TWRP", "PitchBlack", "Boot image", "ROM", "Flash",
             "Dry run", "SHA-256 / checksum", "Bootloop",
         )

@@ -89,6 +89,8 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
     val shizukuBusy = app.shizukuBusy.collectAsStateWithLifecycle().value
     val shizukuResult = app.shizukuResult.collectAsStateWithLifecycle().value
     val localRoot = c.localRoot.collectAsStateWithLifecycle().value
+    val identities = c.identities.collectAsStateWithLifecycle().value
+    val serialBusy = c.serialBusy.collectAsStateWithLifecycle().value
     val nodeId = remember { app.settings.nodeId }
     return AppUiState(
         targets = targets, link = link, info = info, busy = busy, progress = progress, library = library, buildCatalog = buildCatalog,
@@ -102,5 +104,7 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
         localRootNote = localRoot.detection.reason,
         localModules = localRoot.modules,
         localListed = localRoot.listed,
+        identities = identities,
+        serialBusy = serialBusy,
     )
 }

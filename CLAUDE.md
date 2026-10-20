@@ -11,28 +11,127 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-20 (bug sweep):** branch `fix/bug-sweep-2026-10-20`
-> (PR #84). Four confirmed bugs on `main` `3f7661d` (#76–#83): (1)
-> fleet `ReplayGuard` evicted the oldest live nonce after 4,096
-> distinct `(source, nonce)` pairs, so a reused envelope inside the
-> 10-minute retain window could return `OK` — the cap now refuses
-> the new request (`internal`) and never evicts a live nonce; (2)
-> Custom Recovery allowed a `dd` write when `blockdev --getsize64`
-> failed or was unreadable — unknown size is now a blocker; (3)
+> **Update 2026-10-20 (brands + MSM/EDL + infographics):** branch
+> `feat/multi-device-identify` (same PR #85). `:core` `BrandCatalog`
+> identity table (24 makers), matching Root wizards / unlock portals,
+> MSM / EDL explain+link guide (`MsmGuides`; never ships MSM/firmware;
+> no writes from the guide), Compose step diagrams on wizards / portals
+> / MSM (Android + `:desktop`). Official https firmware pages in Links.
+> Closed unlock programmes stay noted with no invented URL. Ethics
+> refuse: EDL FRP/screen-lock wipe, Firehose auth bypass, leaked MSM
+> packages, unofficial dump sites. Dry-run / typed confirm / backup /
+> no auto-reboot unchanged. `applicationId`, signing and versioning
+> unchanged. Local suite: `:core:test` **419/0** (`BrandCatalogTest` 4,
+> `MsmGuidesTest` 5, `WizardDiagramsTest` 2); `:desktop:test` **4/0**;
+> `:app:testDebugUnitTest` **36/0** (Paparazzi `edl` recorded; `devices`
+> re-recorded); `:app:assembleDebug` (`aapt dump badging`:
+> `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`);
+> `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean
+> (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a
+> desktop window.**
+
+> **Update 2026-10-20 (ESP32 & Pi helpers):** branch
+> `feat/multi-device-identify` (same PR). Owner-only bootloader unlock /
+> flash helpers: `:core` `BoardHelpers` + Links **ESP32 & Pi helpers**
+> (official https: Raspberry Pi docs on GitHub, Espressif USB Serial/JTAG
+> + ESP32-S3, Android platform-tools / AOSP locking). A Pi reuses
+> `:desktop` `HostController` (`LinuxBoard` / `/proc/device-tree/model`).
+> ESP32 is a USB-serial CDC bridge only. **Refused:** screen-lock bypass,
+> FRP bypass, HID credential injection (`BoardHelpers.REFUSED`, Ask
+> `frp-screen-lock-refused`). Dry-run / typed confirm / backup / no
+> auto-reboot unchanged. `applicationId`, signing and versioning
+> unchanged. Local suite: `:core:test` **407/0** (`BoardHelpersTest` 4);
+> `:desktop:test` **4/0** (`LinuxBoardTest` 1); `:app:testDebugUnitTest`
+> 35/0; `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug`
+> / `versionCode=1` / `versionName=0.1.0-debug`); `bash tests/run-tests.sh`
+> 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo
+> wheel). **Not run on a Pi, an ESP32, a phone, or a desktop window.**
+
+> **Update 2026-10-20 (bootloader unlock portals):** branch
+> `feat/multi-device-identify` (same PR). Official maker unlock-token
+> pages (`:core` `UnlockPortals`) on the Devices Root plan and in Links
+> (**Bootloader unlock portals**). Live https vendor pages checked
+> 2026-10-20: Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev,
+> OnePlus, Fairphone. Pixel has no token page; Nothing has no token
+> webpage; Samsung / ASUS / LG / Huawei no longer offer official
+> unlocking (in-app note, no invented URL). Plan shows matching portal
+> plus a plain-words unlock-data step (`oem get_unlock_data` for
+> Motorola) with dry-run first; typed `UNLOCK` still gates a later
+> unlock. System browser only; never sends serial/IMEI/unlock data.
+> `DirectoryLink.url` may be null. Glossary: Unlock portal.
+> `applicationId`, signing and versioning unchanged. Local suite:
+> `:core:test` **403/0** (`UnlockPortalsTest` 5, `RootPlanTest` 9,
+> `RootGuidesTest` 9, `DirectoryLinksTest` 3); `:desktop:test` **3/0**;
+> `:app:testDebugUnitTest` 35/0 (Paparazzi `devices` / `links` /
+> `glossary` / `help` still match); `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run on a phone or a desktop window.**
+
+> **Update 2026-10-20 (brand root wizards + PC Devices):** branch
+> `feat/multi-device-identify` (same PR). `RootGuides` table drives a
+> per-identity wizard on Devices: Pixel, Samsung (Odin/Download Mode
+> explained, Knox warning, `odinFlashing=false`), Xiaomi (Mi Unlock wait),
+> OnePlus, Motorola (official unlock-code URL), generic fastboot. Each step
+> names what is erased; writes still go through existing Fastboot / Custom
+> Recovery / Root (dry-run, typed phrase, never auto-reboot). Desktop uses
+> the same screen: host `adb`/`fastboot`, two-column grid at ≥ 840 dp,
+> `HostControllerIdentifyTest`. Glossary: Download mode, Odin, Knox, Mi
+> Unlock. Merged `origin/main` `3d05929` (#84). `applicationId`, signing
+> and versioning unchanged. Local suite: `:core:test` **396/0**
+> (`RootGuidesTest` 9, `DeviceIdentityParserTest` 10, `RootPlanTest` 7);
+> `:desktop:test` **3/0** (`HostControllerIdentifyTest` 1);
+> `:app:testDebugUnitTest` 35/0; `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run on a phone or a desktop window.**
+
+> **Update 2026-10-20 (multi-device identify):** branch
+> `feat/multi-device-identify`. **Devices** drawer screen lists every attached
+> phone (ADB, fastboot, Qualcomm EDL `05c6:9008`) from USB attach plus a 2 s
+> poll. Read-only identity (brand, model, `ro.product.device`, SoC, Android
+> version, security patch, bootloader lock, Magisk/KernelSU/APatch/none, slot,
+> USB mode). Fastboot `getvar`; EDL identify only (no Firehose). Serials
+> masked to last four characters in UI and logs. Root plan
+> unlock → recovery → root manager from the Custom RR catalog; actions open
+> existing tools for that serial. `SerialOpLock` is one mutex per serial
+> (devices can work in parallel). Dry-run, typed confirm, backup-first, no
+> auto-reboot unchanged. `applicationId`, signing and versioning unchanged.
+> Docs: `docs/MANUAL.md` / Help / Glossary (Serial, SoC, Slot, USB mode).
+> Local suite (before #84 merge): `:core:test` **378/0**
+> (`DeviceIdentityParserTest` 9, `SerialMaskTest` 3, `RootPlanTest` 7,
+> `SerialOpLockTest` 3, `UsbScanFilterTest` 6); `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 35/0 (Paparazzi `devices`; `dashboard` /
+> `glossary` re-recorded); `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run on a phone.**
+
+> **Update 2026-10-20 (bug sweep):** PR #84, on `main` as `3d05929`.
+> Four confirmed bugs on `main` `3f7661d` (#76–#83): (1) fleet
+> `ReplayGuard` evicted the oldest live nonce after 4,096 distinct
+> `(source, nonce)` pairs, so a reused envelope inside the 10-minute
+> retain window could return `OK` — the cap now refuses the new
+> request (`internal`) and never evicts a live nonce; (2) Custom
+> Recovery allowed a `dd` write when `blockdev --getsize64` failed
+> or was unreadable — unknown size is now a blocker; (3)
 > `config.import` accepted any `terminalApp` / `autoConnect` string
 > — import now requires `true`/`false` and a valid package name
 > (empty terminal app still clears it); (4) Android
 > `FileInputStream.readNBytes` (API 33) was used on minSdk 26 for
 > image-header reads and would crash on API 26–32 — now `:core`
 > `readPrefix`. External control stays off; `applicationId` /
-> signing / versioning unchanged. Local suite: `:core:test` 363/0;
-> `:desktop:test` 2/0; `:app:testDebugUnitTest` 34/0;
-> `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug`
-> / `versionCode=1` / `versionName=0.1.0-debug`); `:app:lintDebug`
-> 0 errors (24 pre-existing warnings); `bash tests/run-tests.sh`
-> 1055/0; `bash tests/lint.sh` clean (shellcheck 0.11.0 via the
-> repo wheel). **Not run on a phone.** This VM has KVM but no
-> emulator system image.
+> signing / versioning unchanged. Local suite on that PR:
+> `:core:test` 363/0; `:desktop:test` 2/0; `:app:testDebugUnitTest`
+> 34/0; `:app:assembleDebug` (`aapt dump badging`:
+> `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `:app:lintDebug` 0 errors (24
+> pre-existing warnings); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo
+> wheel). **Not run on a phone.**
 
 > **Update 2026-10-20 (fleet config.export / config.import):** branch
 > `feat/config-backup`. Protocol 1.1 standalone Bridge ops `config.export` and
@@ -366,25 +465,68 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-20 · **Branch:** `fix/bug-sweep-2026-10-20`
+**Last updated:** 2026-10-20 · **Branch:** `feat/multi-device-identify`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), and `config.export` / `config.import` (#83 / `3f7661d`). This branch is a bug sweep of that head. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), fleet `config.export` / `config.import` (#83 / `3f7661d`), and the bug sweep (#84 / `3d05929`). This branch (`feat/multi-device-identify`, PR #85) adds the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, ESP32 / Raspberry Pi owner helpers (no FRP / screen-lock bypass), the `BrandCatalog` identity table, the MSM / EDL guide (detect + explain + official links only), and Compose step diagrams. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Bug sweep on `main` `3f7661d` (this branch, PR #84): replay cache
-  never evicts a live nonce; Custom Recovery refuses unknown
-  partition size; config import validates `autoConnect` /
-  `terminalApp`; Android header reads use `readPrefix` (minSdk 26).
-  External control stays off. `:core:test` 363/0, `:desktop:test` 2/0,
+- Brands + MSM/EDL + infographics (this branch, PR #85): `:core`
+  `BrandCatalog` (24 makers), expanded `RootGuides` / `UnlockPortals`,
+  `MsmGuides` explain+link for Qualcomm 9008 (never ships MSM/firmware;
+  guide never writes), Compose `StepDiagram` on wizards / portals / MSM
+  (APK + `:desktop`). Paparazzi `edl` + `devices`. `:core:test` 419/0,
+  `:desktop:test` 4/0, `:app:testDebugUnitTest` 36/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1055/0,
+  `tests/lint.sh` clean. **Not run on a phone or a desktop window.**
+- ESP32 & Pi helpers (this branch): `:core` `BoardHelpers` + Links
+  **ESP32 & Pi helpers**. Pi = `:desktop` host adb/fastboot. ESP32 =
+  USB-serial bridge. FRP / screen-lock / HID credential injection
+  refused. `:core:test` 407/0, `:desktop:test` 4/0,
+  `:app:testDebugUnitTest` 35/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1055/0,
+  `tests/lint.sh` clean. **Not run on a Pi, ESP32, phone, or desktop
+  window.**
+- Bootloader unlock portals (this branch): `:core` `UnlockPortals` on
+  the Devices Root plan and Links **Bootloader unlock portals**. Live
+  https: Motorola, Sony Open Devices, Xiaomi Mi Unlock, HTCdev, OnePlus,
+  Fairphone. Pixel / Nothing have no token page; Samsung / ASUS / LG /
+  Huawei closed (in-app note). Unlock-data step with dry-run first;
+  browser only; never auto-sends device data. `:core:test` 403/0,
+  `:desktop:test` 3/0, `:app:testDebugUnitTest` 35/0,
+  `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`),
+  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a
+  phone or a desktop window.**
+- Brand root wizards + PC Devices (this branch): `RootGuides` Pixel /
+  Samsung / Xiaomi / OnePlus / Motorola / generic; Odin is explanation
+  only; same dry-run / typed confirm / no auto-reboot; desktop host
+  adb/fastboot + two-column grid. Merged `origin/main` `3d05929` (#84).
+  `:core:test` 396/0, `:desktop:test` 3/0, `:app:testDebugUnitTest` 35/0,
+  `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`),
+  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a
+  phone or a desktop window.**
+- Multi-device identify (this branch): **Devices** lists every attached
+  phone. USB attach + 2 s poll. Read-only identity; serials masked to
+  last four characters; Root plan from the Custom RR catalog;
+  `SerialOpLock` per serial; EDL identify only. Dry-run, typed confirm,
+  backup-first, no auto-reboot unchanged. `applicationId` / signing /
+  versioning unchanged. Pre-#84 local suite: `:core:test` 378/0,
+  `:desktop:test` 2/0, `:app:testDebugUnitTest` 35/0, `:app:assembleDebug`
+  (`ai.rootforge.os.debug` / `0.1.0-debug`), `tests/run-tests.sh` 1055/0,
+  `tests/lint.sh` clean. **Not run on a phone.**
+- Bug sweep (PR #84, on `main` as `3d05929`): replay cache never
+  evicts a live nonce; Custom Recovery refuses unknown partition size;
+  config import validates `autoConnect` / `terminalApp`; Android header
+  reads use `readPrefix` (minSdk 26). External control stays off. On
+  that PR: `:core:test` 363/0, `:desktop:test` 2/0,
   `:app:testDebugUnitTest` 34/0, `:app:assembleDebug`
   (`ai.rootforge.os.debug` / `0.1.0-debug`), `:app:lintDebug` 0
   errors, `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not
-  run on a phone.** No emulator system image here.
+  run on a phone.**
 - Fleet config backup (`main` `3f7661d` #83):
   `config.export` / `config.import` advertised with `remoteAllowed=false`;
   remote callers `capability_off`; export omits secrets; import dry-run /

@@ -1,5 +1,6 @@
 package ai.rootforge.os.desktop
 
+import ai.rootforge.os.device.HostPlatform
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -55,6 +56,9 @@ data class HostToolset(
                 File(home, "AppData/Local/Android/Sdk/platform-tools"),
                 File(home, "Library/Android/sdk/platform-tools"),
                 File("/usr/lib/android-sdk/platform-tools"),
+                // Raspberry Pi OS / Debian: apt platform-tools live on PATH; keep the
+                // SDK default too so a Pi with a local SDK still resolves.
+                File("/opt/android-sdk/platform-tools"),
             )
             return (extra + platformTools + bundled + pathDirs).filter { it.isDirectory }
         }
@@ -92,8 +96,8 @@ data class HostToolset(
     }
 }
 
-class ProcessRunner {
-    fun run(
+open class ProcessRunner {
+    open fun run(
         exe: File,
         args: List<String>,
         timeoutMs: Long = 60_000,
@@ -124,4 +128,20 @@ class ProcessRunner {
         errThread.join(5_000)
         return CmdResult(proc.exitValue(), stdout.toString(), stderr.toString())
     }
+}
+
+/**
+ * Reads `/proc/device-tree/model` so a Raspberry Pi can reuse [HostController]
+ * as an ordinary Linux host. Not an FRP or screen-lock helper.
+ */
+object LinuxBoard {
+    fun deviceTreeModel(file: File = File("/proc/device-tree/model")): String? {
+        if (!file.isFile) return null
+        return runCatching {
+            file.readBytes().toString(Charsets.UTF_8).trim { it <= ' ' || it == '\u0000' }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
+    fun hostCaption(file: File = File("/proc/device-tree/model")): String =
+        HostPlatform.hostCaption(deviceTreeModel(file), androidHost = false)
 }

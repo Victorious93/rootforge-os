@@ -207,6 +207,31 @@ object AskTopics {
             caveat = "Do not lock a bootloader on a phone running a custom ROM or a patched boot image.",
         ),
         AskTopic(
+            id = "esp32-pi-helpers",
+            title = "ESP32 or Raspberry Pi as an unlock helper",
+            keywords = listOf("esp32", "raspberry pi", "rpi helper", "pi host", "usb serial bridge", "usb-serial"),
+            answer = "A Raspberry Pi is a Linux computer: install adb/fastboot (or run the desktop client) and use the same dry-run, typed-confirm, backup-first, no-auto-reboot path as a PC. " +
+                "An ESP32-S3 can be Espressif's USB Serial/JTAG CDC bridge so you have a serial console. " +
+                "Open Links → ESP32 & Pi helpers for official https pages. Wait until the phone enumerates in fastboot before Unlock; the volume-key confirm on the phone is yours.",
+            caveat = "These helpers are for phones you own. They do not bypass a screen lock or Factory Reset Protection.",
+        ),
+        AskTopic(
+            id = "msm-edl-guide",
+            title = "MSM Download Tool and Qualcomm EDL",
+            keywords = listOf("msm", "edl", "9008", "qualcomm 9008", "download tool", "unbrick", "edl restore", "firehose", "qfil"),
+            answer = "Qualcomm EDL (USB 05c6:9008) is a low-level restore port. MSM Download Tool is an OEM Windows program (often OnePlus, Oppo, realme) that writes factory firmware over that port. " +
+                "Open Devices or MSM / EDL when the phone enumerates as 9008. RootForge only identifies the chip and opens the maker's official https support/firmware page. " +
+                "It never ships MSM, QFIL, Rescue and Smart Assistant, Mi Flash, or firmware, and the guide never writes.",
+            caveat = "An EDL restore that wipes Factory Reset Protection or a screen lock is refused. Use the maker's official account-recovery flow.",
+        ),
+        AskTopic(
+            id = "frp-screen-lock-refused",
+            title = "Screen lock and FRP are not supported",
+            keywords = listOf("frp", "factory reset protection", "google account lock", "bypass screen lock", "remove screen lock", "unlock pattern", "forgot pin", "crack pin"),
+            answer = "RootForge will not help bypass a screen lock or Factory Reset Protection. Those locks mean this app must not flash or unlock the phone. " +
+                "Use the maker's official account-recovery flow. Bootloader unlock and flashing here are only for devices you already own, after OEM unlocking.",
+        ),
+        AskTopic(
             id = "kernelsu-apatch",
             title = "KernelSU, APatch or Magisk: which one?",
             keywords = listOf("kernelsu", "apatch", "magisk or", "which root", "best root", "difference between"),
