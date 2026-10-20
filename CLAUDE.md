@@ -21,7 +21,12 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > by a **Help** drawer screen (also Settings → Open the manual) with a GitHub
 > link. Merged `origin/main` (`b8e7708` #76, then `fabc649` #77): Desktop mode
 > and the Custom Recovery installer are documented as landed. `applicationId`,
-> signing and versioning unchanged.
+> signing and versioning unchanged (`aapt dump badging`: `ai.rootforge.os.debug`
+> / `versionCode=1` / `versionName=0.1.0-debug`). Verified on this head:
+> `:core:test` 252/0 (`ManualLibraryTest` 4, `recovery/` 41, `DesktopModeTest`
+> 12); `:desktop:test` 2/0; `:app:testDebugUnitTest` 31/0; `:app:assembleDebug`;
+> `bash tests/run-tests.sh` 1055/0; `bash tests/lint.sh` clean
+> (shellcheck 0.11.0). **Not run:** a phone, the desktop window.
 
 > **Update 2026-10-20 (Custom Recovery installer):** branch `feat/recovery-installer`
 > (PR #77, on `main` as `fabc649`). New drawer screen **Custom Recovery**
@@ -225,7 +230,9 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
 - How-to manual: `docs/MANUAL.md` plus in-app **Help**. After merging
   `origin/main` (`fabc649`, #77) into `docs/manual`, Desktop mode and the
-  Custom Recovery installer are documented as landed.
+  Custom Recovery installer are documented as landed. This-head suite:
+  `:core:test` 252/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 31/0,
+  `:app:assembleDebug`, `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean.
 - Custom Recovery installer (PR #77, on `main` as `fabc649`): `:core`
   `ai.rootforge.os.recovery` plus Compose **Custom Recovery** screen.
   Dedicated recovery only; dry-run default; `FLASH RECOVERY`; no bundled
