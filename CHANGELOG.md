@@ -7,6 +7,13 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Custom Recovery installer for rooted phones (2026-10-20)
+- New drawer screen **Custom Recovery** on Android and desktop. It lists official TWRP (`twrp.me` search.json + `dl.twrp.me/<codename>/`) and PitchBlack Recovery (`pitchblackrecovery.com`, GitHub releases, SourceForge) for `ro.product.device` / `ro.build.product`, and accepts a local `.img`/`.zip`. Images are not bundled.
+- Detects root (`su -c id`), A/B vs A-only, and whether a dedicated `recovery` / `recovery_a` / `recovery_b` exists. Recovery-in-boot / vendor_boot devices get the installer-zip and “Boot once” paths only; `boot` is never written.
+- Writes via `su` + `dd` (this phone on Android, USB ADB target on Android and desktop). Dry-run is the default. A real write uses `ApprovalCenter` with typed `FLASH RECOVERY`, backs up the current partition into the library first, and never reboots by itself.
+- Verifies TWRP `.md5` when present; SHA-256 is always shown. https only, official hosts only. `applicationId`, signing and versioning unchanged.
+- Tests: new `:core` `recovery/` unit tests (layout, commands, plan, catalog, installer). **Not run on a phone.** Doc: `docs/CUSTOM_RECOVERY_INSTALLER.md`.
+
 ### Desktop mode (VictorSuite X11) (2026-10-20)
 - Android Dashboard **Desktop mode** card. VictorSuite’s package is `com.termux` (read from Victorious93/VictorSuite on 2026-10-20). RootForge detects it with PackageManager + `<queries>`, pins it by package + signing-certificate SHA-256 (no shared key), and then sends either the dedicated `ai.victorsuite.action.DESKTOP_MODE` intent (specified, not implemented in VictorSuite yet) or Termux `RUN_COMMAND` with only `rootforge-desktop-mode <start|stop|setup|status>`. Missing VictorSuite is a hint, not a crash. Desktop JVM client hides the card. `applicationId`, signing and versioning unchanged.
 - Toolkit: `setup_desktop_mode.sh` (idempotent XFCE + tigervnc + VS Code-if-present + launchers), `rootforge_desktop_mode.sh` (X11 or VNC fallback), `termux/desktop-mode-entry.sh`. Unpinned code-server downloads are refused. Spec: `docs/DESKTOP_MODE.md`.

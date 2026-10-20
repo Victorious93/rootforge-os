@@ -19,6 +19,13 @@ import ai.rootforge.os.fastboot.TargetIdentity
 import ai.rootforge.os.usb.UsbScanFilter
 import ai.rootforge.os.host.HostDevices
 import ai.rootforge.os.module.BuiltModule
+import ai.rootforge.os.recovery.RecoveryCommands
+import ai.rootforge.os.recovery.RecoveryInstallResult
+import ai.rootforge.os.recovery.RecoveryInstaller
+import ai.rootforge.os.recovery.RecoveryProbe
+import ai.rootforge.os.recovery.RecoverySource
+import ai.rootforge.os.recovery.RootSession
+import ai.rootforge.os.recovery.RootShellResult
 import ai.rootforge.os.module.ModuleBuilder
 import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.root.BootImageInfo
@@ -573,6 +580,73 @@ class HostController(
             if (!r.ok) throw IOException("Module install exited with ${r.exit}. Is ${manager.label} active and root granted to shell?")
             r.output
         }
+
+    suspend fun probeAdbRecovery(): Result<RecoveryProbe> = operation("Probe recovery (USB target)") {
+        val installer = RecoveryInstaller(log, library, approvals)
+        val props = recoveryProps()
+        val id = adb(listOf("shell", RecoveryCommands.suShell(RecoveryCommands.rootId())), 15_000)
+        val rooted = installer.parseRoot(id.output, id.exit)
+        val listing = if (rooted) {
+            adb(listOf("shell", RecoveryCommands.suShell(RecoveryCommands.listPartitions())), 15_000).output
+        } else {
+            adb(listOf("shell", RecoveryCommands.listPartitions()), 15_000).output
+        }
+        installer.probe(RecoverySource.ADB_TARGET, props, listing, id.output, id.exit).also {
+            log.info("USB target ${it.identity.device ?: "unknown"}: rooted=${it.rooted}, ${it.layout.kind}, write=${it.layout.writePath ?: "none"}")
+        }
+    }
+
+    suspend fun installCustomRecovery(
+        probe: RecoveryProbe,
+        image: LibraryFile,
+        dryRun: Boolean,
+        publishedMd5: String? = null,
+        publishedSha256: String? = null,
+    ): Result<RecoveryInstallResult> = operation(if (dryRun) "Recovery dry-run" else "Write recovery") {
+        if (probe.source != RecoverySource.ADB_TARGET) {
+            throw IOException("Desktop writes recovery only on a USB-connected rooted target, not on this computer.")
+        }
+        RecoveryInstaller(log, library, approvals).install(HostAdbRootSession(), probe, image, dryRun, publishedMd5, publishedSha256)
+    }
+
+    suspend fun rebootCustomRecovery(probe: RecoveryProbe): Result<Unit> = operation("Reboot to recovery") {
+        if (probe.source != RecoverySource.ADB_TARGET) throw IOException("Connect the target over ADB first.")
+        RecoveryInstaller(log, library, approvals).rebootToRecovery(HostAdbRootSession())
+    }
+
+    private fun recoveryProps(): Map<String, String> {
+        val keys = listOf(
+            "ro.product.device", "ro.build.product", "ro.product.name", "ro.product.model",
+            "ro.boot.slot_suffix", "ro.build.ab_update",
+        )
+        val p = mutableMapOf<String, String>()
+        for (k in keys) p[k] = adb(listOf("shell", "getprop", k), 10_000).stdout.trim()
+        return p
+    }
+
+    private inner class HostAdbRootSession : RootSession {
+        override fun su(command: String, timeoutMs: Long): RootShellResult {
+            val r = adb(listOf("shell", RecoveryCommands.suShell(command)), timeoutMs)
+            return RootShellResult(r.output, r.exit)
+        }
+
+        override fun push(local: File, remote: String) {
+            require(remote == RecoveryCommands.IMAGE_REMOTE)
+            val r = adb(listOf("push", local.absolutePath, remote), 300_000)
+            if (!r.ok) throw IOException(r.output.ifBlank { "adb push failed" })
+        }
+
+        override fun pull(remote: String, local: File) {
+            require(remote == RecoveryCommands.BACKUP_REMOTE || remote == RecoveryCommands.IMAGE_REMOTE)
+            local.parentFile?.mkdirs()
+            val r = adb(listOf("pull", remote, local.absolutePath), 300_000)
+            if (!r.ok) throw IOException(r.output.ifBlank { "adb pull failed" })
+        }
+
+        override fun rebootRecovery() {
+            adb(listOf("reboot", "recovery"), 30_000)
+        }
+    }
 
     private fun loadAdbInfo() {
         val keys = listOf(

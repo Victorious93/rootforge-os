@@ -91,7 +91,7 @@ fun SettingsScreen(state: AppUiState, actions: AppActions) {
 
         ForgeCard("About", icon = Icons.Filled.Info) {
             KeyValueRow("Version", state.appVersion)
-            KeyValueRow("Network", "Only the build-catalog Download button (https, raw.githubusercontent.com)")
+            KeyValueRow("Network", "Catalog Download, plus Custom Recovery lookup/download (https, only when tapped)")
             KeyValueRow("USB", state.transportCaption)
             if (state.shizuku != null) {
                 KeyValueRow("Shizuku", "${ShizukuCopy.statusTitle(state.shizuku)} — optional, this phone only, read-only")

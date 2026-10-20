@@ -73,6 +73,8 @@ fun RecoveryScreen(state: AppUiState, actions: AppActions) {
             Text("Then choose Apply update > Apply from ADB and use the ADB screen's Sideload to install a zip.", style = MaterialTheme.typography.bodySmall)
         }
 
+        NoticeCard("On a rooted phone, Custom Recovery can download an official TWRP/PitchBlack image and write it with su. This screen stays the USB fastboot path (Boot once / Flash).")
+
         ForgeCard("Where to get a recovery", "Opens your browser; this app does not download images", Icons.Filled.OpenInNew) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionButton("TWRP devices", kind = ActionKind.Outline) { actions.openUrl("https://twrp.me/Devices/") }

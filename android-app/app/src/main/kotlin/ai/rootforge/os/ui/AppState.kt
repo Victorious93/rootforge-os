@@ -14,6 +14,8 @@ import ai.rootforge.os.core.TargetInfo
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.module.BuiltModule
 import ai.rootforge.os.module.ModuleSpec
+import ai.rootforge.os.recovery.RecoveryOffer
+import ai.rootforge.os.recovery.RecoveryProbe
 import ai.rootforge.os.root.BootImageParser
 import ai.rootforge.os.root.RootManager
 import ai.rootforge.os.desktopmode.DesktopModeOp
@@ -110,6 +112,14 @@ interface AppActions {
     fun buildModule(spec: ModuleSpec, then: (BuiltModule) -> Unit)
     fun installModule(file: LibraryFile, manager: RootManager)
 
+    /** Probe this phone (Android) and/or the USB ADB target for root and recovery partitions. */
+    fun probeCustomRecovery(then: (List<RecoveryProbe>) -> Unit)
+    /** Official TWRP + PitchBlack listings for these codenames. Network, only on tap. */
+    fun lookupOfficialRecoveries(codenames: List<String>, then: (List<RecoveryOffer>) -> Unit)
+    fun downloadOfficialRecovery(offer: RecoveryOffer, then: (LibraryFile) -> Unit)
+    fun installCustomRecovery(probe: RecoveryProbe, file: LibraryFile, dryRun: Boolean, publishedMd5: String?, publishedSha256: String?)
+    fun rebootCustomRecovery(probe: RecoveryProbe)
+
     fun answerApproval(id: Long, approve: Boolean, typed: String)
 
     fun scanUsb()
@@ -194,6 +204,11 @@ object NoopActions : AppActions {
     override fun fetchPatched(manager: RootManager, then: (LibraryFile) -> Unit) = Unit
     override fun buildModule(spec: ModuleSpec, then: (BuiltModule) -> Unit) = Unit
     override fun installModule(file: LibraryFile, manager: RootManager) = Unit
+    override fun probeCustomRecovery(then: (List<RecoveryProbe>) -> Unit) = Unit
+    override fun lookupOfficialRecoveries(codenames: List<String>, then: (List<RecoveryOffer>) -> Unit) = Unit
+    override fun downloadOfficialRecovery(offer: RecoveryOffer, then: (LibraryFile) -> Unit) = Unit
+    override fun installCustomRecovery(probe: RecoveryProbe, file: LibraryFile, dryRun: Boolean, publishedMd5: String?, publishedSha256: String?) = Unit
+    override fun rebootCustomRecovery(probe: RecoveryProbe) = Unit
     override fun answerApproval(id: Long, approve: Boolean, typed: String) = Unit
     override fun scanUsb() = Unit
     override fun adbDeviceCheck() = Unit
