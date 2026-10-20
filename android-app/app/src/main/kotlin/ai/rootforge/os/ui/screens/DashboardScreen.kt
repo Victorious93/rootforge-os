@@ -82,6 +82,8 @@ fun DashboardScreen(state: AppUiState, actions: AppActions) {
 
         BuildCatalogCard(state.buildCatalog, state.info, busy = state.busy != null, actions)
 
+        DesktopModeCard(state.desktopMode, actions)
+
         val mode = (state.link as? LinkState.Connected)?.mode
         if (mode == TargetMode.ADB || mode == TargetMode.FASTBOOT) {
             ForgeCard("Reboot target", "Switch the target to another mode", Icons.Filled.PowerSettingsNew) {
