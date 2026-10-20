@@ -26,8 +26,14 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > directory (`DirectoryLinks`) of official https pages (managers, module
 > repos, Shizuku apps); browser only; from Modules, Settings, Help and the
 > drawer. `applicationId`, signing
-> and versioning unchanged. Post-merge suite counts are in the
-> "What is true now" bullet below. **Not run:** a phone, the desktop window.
+> and versioning unchanged. After merging `origin/main` (`ef088d3` / #80):
+> `:core:test` 321/0 (`LocalModulesTest`, `RootManagersTest` detect,
+> `DirectoryLinksTest`, `CatalogRecoveryBridgeTest`); `:desktop:test` 2/0;
+> `:app:testDebugUnitTest` 33/0; `:app:assembleDebug`
+> (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1` /
+> `versionName=0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run:** a phone, the desktop window.
 
 > **Update 2026-10-20 (Custom RR → Custom Recovery):** PR #80, on `main` as
 > `ef088d3`. Dashboard **Builds for this device** now has **Install with
@@ -289,8 +295,10 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   `apd module install`), auto-detects the manager, lists `/data/adb/modules`
   read-only, dry-run default, typed `INSTALL MODULE`, never reboots. LSPosed
   APKs unchanged. Desktop no-op. Same PR: **Links** directory of official
-  https pages, browser only. Post-merge suite counts: see the session
-  that recorded them after this merge. **Not run on a phone.**
+  https pages, browser only. After merging `ef088d3` / #80: `:core:test`
+  321/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` 33/0,
+  `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`),
+  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a phone.**
 - Custom RR → Custom Recovery (PR #80, on `main` as `ef088d3`): matching
   TWRP/PitchBlack catalog rows open Custom Recovery pre-filled; official
   lookup uses the probed phone; `pitchblack.tech` added to the https host
