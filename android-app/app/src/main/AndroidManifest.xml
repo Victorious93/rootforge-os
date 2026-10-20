@@ -13,9 +13,17 @@
     -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+      Shizuku/Sui API (runtime, requested via Shizuku.requestPermission, not the
+      platform permission dialog). Same permission for Shizuku and Sui.
+    -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
     <queries>
         <package android:name="ai.droidcommand.app" />
         <package android:name="ai.droidcommand.app.debug" />
+        <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="rikka.sui" />
         <!-- Lets the Settings-chosen terminal app be found and launched; its package name is not known in advance. -->
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -61,5 +69,18 @@
                 <action android:name="ai.rootforge.os.action.BRIDGE" />
             </intent-filter>
         </service>
+
+        <!--
+          Official Shizuku provider. Sui is initialised from here automatically (API 12.1+).
+          The INTERACT_ACROSS_USERS_FULL permission is how Shizuku documents protecting this
+          exported provider from ordinary apps.
+        -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 </manifest>
