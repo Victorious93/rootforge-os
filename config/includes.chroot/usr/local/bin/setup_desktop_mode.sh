@@ -146,10 +146,11 @@ if have code-oss || have code || have code-server; then
   log "A VS Code-class editor is already on PATH"
   stage_done vscode || mark_done vscode
 else
-  if "$APT_GET" install -y --no-install-recommends code-oss; then
+  log "trying apt-get install code-oss"
+  if "$APT_GET" install -y --no-install-recommends code-oss && have code-oss; then
     log "Installed code-oss from apt"
   else
-    log "code-oss is not in this apt source (common on stock Debian)"
+    log "code-oss is not on PATH after apt (common on stock Debian)"
     if [ -n "${ROOTFORGE_CODE_SERVER_URL:-}" ] && [ -n "${ROOTFORGE_CODE_SERVER_SHA256:-}" ]; then
       dest="$ROOTFORGE_HOME/desktop-mode/code-server.tgz"
       mkdir -p "$(dirname "$dest")"

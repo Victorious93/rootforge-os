@@ -17,8 +17,10 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `ai.victorsuite.action.DESKTOP_MODE` is specified in `docs/DESKTOP_MODE.md` and is **not**
 > in VictorSuite yet). Setup scripts `setup_desktop_mode.sh` /
 > `rootforge_desktop_mode.sh` / `termux/desktop-mode-entry.sh`. Missing companion is a
-> hint, never a crash. Signing / `applicationId` / versioning unchanged. **Not run on a
-> phone.**
+> hint, never a crash. Signing / `applicationId` / versioning unchanged. Verified:
+> `:core:test` 180/0, `:desktop:test` 2/0, `:app:testDebugUnitTest` + `assembleDebug`
+> (`aapt`: `ai.rootforge.os.debug` / `0.1.0-debug`); `bash tests/run-tests.sh` 1055/0;
+> `bash tests/lint.sh` clean. **Not run on a phone.**
 
 > **Update 2026-10-19 (launcher icon from logo):** branch `feat/app-icon-from-logo`
 > (PR #74). Replaced the orange anvil vector (`drawable/ic_launcher_foreground.xml`)

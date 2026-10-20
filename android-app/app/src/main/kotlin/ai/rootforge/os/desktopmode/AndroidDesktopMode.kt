@@ -69,7 +69,8 @@ class AndroidCompanionLookup(private val packageManager: PackageManager) {
 
 fun IntentSpec.toAndroidIntent(): Intent {
     val intent = Intent(action).setPackage(packageName)
-    if (className != null) intent.setClassName(packageName, className)
+    val component = className
+    if (component != null) intent.setClassName(packageName, component)
     stringExtras.forEach { (k, v) -> intent.putExtra(k, v) }
     stringArrayExtras.forEach { (k, v) -> intent.putExtra(k, v.toTypedArray()) }
     booleanExtras.forEach { (k, v) -> intent.putExtra(k, v) }

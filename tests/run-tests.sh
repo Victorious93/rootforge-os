@@ -1902,18 +1902,17 @@ assert_contains "second setup still skips apt" "$OUT" "already present"
 
 new_sandbox
 mkdir -p "$SANDBOX/fakebin"
-printf '#!/bin/sh\necho "apt-get $*" >> "%s"\nexit 0\n' "$RF_STUB_LOG" > "$SANDBOX/fakebin/apt-get"
-# Pretend apt put xfce4-session on PATH after install by writing it on first apt-get install.
-printf '#!/bin/sh\necho "apt-get $*" >> "%s"\nif [ "$1" = install ]; then printf "#!/bin/sh\\nexit 0\\n" > "%s/xfce4-session"; chmod +x "%s/xfce4-session"; fi\nexit 0\n' \
+# This host may already have xfce4-session; use a unique session name the fake apt "installs".
+printf '#!/bin/sh\necho "apt-get $*" >> "%s"\nif [ "$1" = install ]; then printf "#!/bin/sh\\nexit 0\\n" > "%s/rootforge-test-xfce"; chmod +x "%s/rootforge-test-xfce"; fi\nexit 0\n' \
   "$RF_STUB_LOG" "$SANDBOX/fakebin" "$SANDBOX/fakebin" > "$SANDBOX/fakebin/apt-get"
 chmod +x "$SANDBOX/fakebin/apt-get"
 export PATH="$SANDBOX/fakebin:$PATH"
 export ROOTFORGE_APT_GET="$SANDBOX/fakebin/apt-get"
-export ROOTFORGE_DESKTOP_SESSION_BIN="xfce4-session"
+export ROOTFORGE_DESKTOP_SESSION_BIN="rootforge-test-xfce"
 export ROOTFORGE_DESKTOP_MODE_STATE="$SANDBOX/dm-state"
 run_script bash "$SETUP_DM"
 assert_eq "setup installs xfce when missing" "$RC" "0"
-assert_contains "setup ran apt-get install xfce4" "$(cat "$RF_STUB_LOG")" "apt-get install xfce4"
+assert_contains "setup ran apt-get install xfce4" "$(cat "$RF_STUB_LOG")" "install -y --no-install-recommends xfce4"
 assert_eq "xfce stage left a marker" "$([ -f "$SANDBOX/dm-state/xfce.done" ] && echo yes || echo no)" "yes"
 assert_contains "unpinned code-server is skipped" "$OUT" "Skipping code-server download"
 
