@@ -21,7 +21,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -80,7 +80,7 @@ fun ManualScreen(
                 )
                 ActionButton(
                     "Open on GitHub",
-                    Icons.Filled.OpenInNew,
+                    Icons.AutoMirrored.Filled.OpenInNew,
                     ActionKind.Outline,
                 ) { actions.openUrl(ManualLibrary.GITHUB_URL) }
             }

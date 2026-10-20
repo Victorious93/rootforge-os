@@ -428,6 +428,8 @@ Useful commands: `help`, `adb shell …`, a limited set of `fastboot` reads. The
 
 **Help** is also a drawer entry. It renders this bundled manual offline and offers **Open on GitHub**.
 
+![Help](../android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_help.png)
+
 ### Shizuku / Sui (this phone, optional)
 
 **Shizuku** is an app that lets another app run a few privileged *read* commands without full root, using wireless debugging. **Sui** is the Magisk-module form of the same API.

@@ -188,9 +188,9 @@ connection until stopped. More in [docs/ANDROID_APP.md](docs/ANDROID_APP.md).
 
 Rendered by Paparazzi unit tests with sample data. **These are not captures from a real phone.**
 
-| Dashboard | Flash Tools | ADB | Fastboot | Modules | Settings |
-|---|---|---|---|---|---|
-| <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_dashboard.png" alt="Dashboard screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_flashTools.png" alt="Flash Tools screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_adb.png" alt="ADB screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_fastboot.png" alt="Fastboot screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_modules.png" alt="Module Builder screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_settings.png" alt="Settings screen" width="140"> |
+| Dashboard | Flash Tools | ADB | Fastboot | Modules | Settings | Help |
+|---|---|---|---|---|---|---|
+| <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_dashboard.png" alt="Dashboard screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_flashTools.png" alt="Flash Tools screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_adb.png" alt="ADB screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_fastboot.png" alt="Fastboot screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_modules.png" alt="Module Builder screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_settings.png" alt="Settings screen" width="140"> | <img src="android-app/screenshots/ai.rootforge.os.ui_ScreenshotTest_help.png" alt="Help / how-to manual screen" width="140"> |
 
 Live ISO, Calamares installer and Termux screenshots will come after a real boot and install.
 

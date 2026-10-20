@@ -21,7 +21,15 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > by a **Help** drawer screen (also Settings → Open the manual) with a GitHub
 > link. Desktop mode (#76) and the rooted TWRP/PitchBlack installer (#77) are
 > marked coming in the next update. `applicationId`, signing and versioning
-> unchanged. Tests and CI recorded in this session's later notes.
+> unchanged (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode=1`
+> / `versionName=0.1.0-debug`; APK lists `POST_NOTIFICATIONS`, `INTERNET`,
+> `API_V23`). Verified: `:core:test` 198/0 (`ManualLibraryTest` 4),
+> `:desktop:test` 2/0, `:desktop:compileKotlin`, `:app:testDebugUnitTest`
+> 29/0 (Paparazzi includes `help`), `:app:assembleDebug`.
+> `tests/test_manual.py` 4/0 inside `bash tests/run-tests.sh` 1023/0;
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> PR #78 CI: 9/9 green on the first push. **Not run:** a phone, the
+> desktop window.
 
 > **Update 2026-10-19 (Shizuku fleet alignment):** branch `feat/shizuku` (PR #75).
 > Aligned with droidcommand-AI PR #231 under RootForge packages. Four states

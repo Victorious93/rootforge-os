@@ -30,7 +30,7 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.Help
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Menu
@@ -78,7 +78,7 @@ enum class Destination(val title: String, val icon: ImageVector) {
     Recovery("Recovery", Icons.Filled.SettingsBackupRestore),
     Logs("Logs / Terminal", Icons.Filled.Terminal),
     Settings("Settings", Icons.Filled.Settings),
-    Help("Help", Icons.Filled.Help),
+    Help("Help", Icons.AutoMirrored.Filled.Help),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
