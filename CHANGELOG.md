@@ -7,6 +7,10 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Custom Recovery: do not write over a missing or short backup (2026-10-22)
+- A recovery `dd` whose shell closed before the exit trailer (`RootShellResult.exitCode == null`) was treated as success. The installer then pulled whatever was at the backup path and wrote the new image. A missing status is now a failed backup, and a pulled backup whose length is not the partition size is deleted and the write is refused.
+- Tests: `RecoveryInstallerTest` (missing exit, short backup, full backup still written). `:core:test` 427/0. `bash tests/run-tests.sh` 1055/0. `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a desktop window.**
+
 ### Custom RR catalog: OnePlus alias table, phone checklist (2026-10-20)
 - `:core` `CodenameAliases`: 48 stock-name aliases (OnePlus 3T–9R, Nord / N10 / N200, newer `OP…L1` names) so e.g. `OnePlus6T` finds the catalog's `fajita` rows. RootForge-written from Google's Play supported-devices list joined to the catalog's own model numbers; Custom RR's GPL `codename_aliases.dart` was not copied. Aliases only add lookup names; display-only, never feeds `DeviceMatchGate`. OnePlus 5/5T/6/6T/One match by marketing name (weaker, [Likely]).
 - `docs/CUSTOM_RR_CATALOG.md`: alias section and an 8-step owner phone checklist (Download, Import file, real target, fallbacks). Not run on a phone.
