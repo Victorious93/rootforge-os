@@ -11,6 +11,16 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-22 (recovery backup gate):** branch `cursor/critical-bug-scan-921d`.
+> Custom Recovery treated a missing `su` exit status as success and wrote
+> the new image even when the pulled backup was shorter than the partition.
+> `RootShellResult.ok` is now exit code 0 only. After the pull, the backup
+> file must be exactly `blockdev --getsize64` bytes or it is deleted and
+> nothing is written. `:core:test` **427/0** (`RecoveryInstallerTest` 10).
+> `bash tests/run-tests.sh` 1055/0. `bash tests/lint.sh` clean (shellcheck
+> 0.11.0 via the repo wheel). **Not run on a phone or a desktop window.**
+> `:desktop:test` and `:app` were not re-run (no desktop or app code change).
+
 > **Update 2026-10-20 (catalog aliases):** branch `feat/catalog-aliases`.
 > `:core` `CodenameAliases` (48 OnePlus stock names -> catalog codenames,
 > RootForge-written from Google's Play supported-devices list + the
@@ -480,7 +490,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-20 · **Branch:** `feat/multi-device-identify`
+**Last updated:** 2026-10-22 · **Branch:** `cursor/critical-bug-scan-921d`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
@@ -490,6 +500,11 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Custom Recovery backup gate (this branch): a missing `su` exit status is
+  not success, and a pulled backup that is not exactly the partition size
+  is discarded. The new image is not written. `:core:test` 427/0,
+  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a phone
+  or a desktop window.**
 - Brands + MSM/EDL + infographics (this branch, PR #85): `:core`
   `BrandCatalog` (24 makers), expanded `RootGuides` / `UnlockPortals`,
   `MsmGuides` explain+link for Qualcomm 9008 (never ships MSM/firmware;
