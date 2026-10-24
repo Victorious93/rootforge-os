@@ -70,7 +70,7 @@ Messenger constants (also in `Protocol.kt`): `BRIDGE_ACTION`, `BRIDGE_MSG_REQUES
 6. Caller is **paired**: same package name **and** same cert hash the owner approved. A package that was paired and then re-signed shows up as pending again (`not_paired` / "different signing certificate").
 7. Operation exists. EDL, sideload-zip, raw `fastboot oem`, erase, boot-once, logcat, APK install, push/pull, recovery install, and Firehose are **not** operations. They return `unknown_operation`.
 8. Parameters parse; only the keys listed for that operation are accepted (any other key is `bad_parameters`). Images are **library file names**, not paths. A request cannot raise its own tier or skip a prompt.
-9. **Read** operations run. **Control** operations prompt the person at the host ("Allow `rootforge.adb.shell`?"). **Destructive** operations run the same typed-confirmation path the GUI uses (`FLASH boot`, `UNLOCK`, …) inside `TargetController`, not a second executor prompt. A timeout or Cancel is `denied_by_user`.
+9. **Read** operations run. **Control** operations prompt the person at the host ("Allow `rootforge.adb.shell`?"). The prompt lists every parameter in full; a nested value or one too long to show (over 12,100 JSON characters) is refused with `bad_parameters` before anyone is asked. **Destructive** operations run the same typed-confirmation path the GUI uses (`FLASH boot`, `UNLOCK`, …) inside `TargetController`, not a second executor prompt. A timeout or Cancel is `denied_by_user`.
 10. The operation runs under `timeout_ms` (clamped: reads 1 s–15 min; control/destructive at least 120 s).
 
 Pairing happens only in the RootForge UI. The first request from an unknown caller is recorded as pending and refused. Pending is in memory (lost if the process dies); the paired list is persisted.
@@ -85,7 +85,7 @@ Pairing happens only in the RootForge UI. The first request from an unknown call
 | `rootforge.adb.shell` | control | `command` | `{ "exit_code", "output", "truncated" }` |
 | `rootforge.adb.reboot` | control | `target?` (`""`/`bootloader`/`recovery`/`sideload`/`fastboot`/`edl`) | `{ "requested" }` — reboot **to** that mode; this is not sideload-of-a-zip |
 | `rootforge.fastboot.reboot` | control | `target?` (`system`/`bootloader`/`recovery`/`fastbootd`) | `{ "requested" }` |
-| `rootforge.module.build` | control | `id`, `name`, `version?`, `version_code?`, `author?`, `description?`, `target?` | `{ "library_file", "sha256" }` — zip is stored in the app library, no device is touched. Extra module fields (`files`, `webroot`, …) are rejected. |
+| `rootforge.module.build` | control | `id`, `name`, `version?`, `version_code?`, `author?`, `description?`, `target?` | `{ "library_file", "sha256" }` — zip is stored in the app library (`library_file` is the stored name: characters outside `A-Za-z0-9._-` in `version` become `_`), no device is touched. Extra module fields (`files`, `webroot`, …) are rejected. |
 | `rootforge.fastboot.flash` | destructive | `partition`, `image` (library name) | `{ "flashed", "image" }` |
 | `rootforge.fastboot.slot.set` | destructive | `slot` = `a`\|`b` | `{ "active_slot" }` |
 | `rootforge.fastboot.unlock` | destructive | — | `{ "requested": "unlock" }` |
