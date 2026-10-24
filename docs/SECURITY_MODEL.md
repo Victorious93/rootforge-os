@@ -1,6 +1,7 @@
 # RootForge OS — Security model
 
-Status as of 2026-10-07. The desktop API-token row was added 2026-10-19; the rest of
+Status as of 2026-10-07. The desktop API-token row was added 2026-10-19; the approval-prompt,
+USB-length and toolkit-API rows, and the redaction gap in §2, were added 2026-10-24; the rest of
 this document was not re-audited then. This document says what the code enforces, what it does not,
 and what depends on the operator. It does not describe a security posture the project
 does not have.
@@ -36,6 +37,9 @@ access to the operator's account:
 | Privileged host-phone reads via Shizuku | Sole API is `PrivilegedShell` (argv `ProcessBuilder`, 64 KiB cap, never logs stdout/stderr). UI ops are read-only (`exec` / `readDeviceState`) and each one goes through `ApprovalCenter`. `pmGrant` exists for fleet interop only: typed `GRANT PERMISSION`, not shown in Settings. No flash/unlock/wipe. Output stays on the Settings card. | `:core` `shizuku/`, `:app` `BoundPrivilegedShell` / `IPrivilegedShell.aidl` | `:core:test` `ShizukuStateResolverTest`, `ShizukuManagerTest`, `PrivilegedShellTest`, `PrivilegedCommandsTest`. Not run on a phone |
 | Fleet remote-control impersonation / replay | Protocol 1.1 authorizes only by caller package + signing-cert SHA-256 (Binder/`Message.sendingUid`, never envelope `trigger` / `sourceNodeRef`). External control default off. Expired (`timestampMs+ttlMs` or >120 s skew) and duplicate nonces keyed `(sourceNodeRef, nonce)` are refused; the seen-nonce cache is kept ≥ 10 minutes and never evicts a still-live nonce (a full cache is `internal`). Destructive ops go through `ApprovalCenter` (typed phrase); a remote trigger never auto-approves. | `:core` `bridge/FleetExecutor`, `ReplayGuard`, `RootForgeBridgeService` | `:core:test` `FleetEnvelopeTest`, `ReplayGuardTest`, `FleetAuthTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`. Not run on a phone |
 | Fleet settings dump / restore | `config.export` / `config.import` are advertised with `remoteAllowed=false`; a remote caller is `capability_off`. Export omits tokens, passwords, signing material and pairing secrets. Import needs on-device confirm, never enables `remote.command` / external control, rejects unknown or oversized payloads, and refuses `autoConnect` / `terminalApp` values that Settings would not accept. | `:core` `config/ConfigBackup`, `bridge/FleetExecutor` | `:core:test` `ConfigBackupTest`, `FleetCapabilitiesTest`, `FleetExecutorTest`. Not run on a phone |
+| A paired controller shows less than it runs | Approval prompts for control-tier actions list every parameter whole. A value over 12,100 JSON characters, or any nested value, is refused (`invalid_parameters` / `bad_parameters`) before anyone is asked, so nothing is cut off and nothing deep is stringified | `:core` `bridge/ApprovalPrompt`, `FleetExecutor`, `BridgeExecutor` | `:core:test` `ApprovalPromptTest`, `FleetExecutorTest`, `BridgeExecutorTest`. Not run on a phone |
+| A faulty or hostile USB target sizes a buffer | Main ADB payloads are bounded to 256 KiB; sync `DATA` / `FAIL` lengths (1 MiB / 64 KiB) and Sahara command-response lengths (64 KiB) are checked before they size an allocation | `:app` `AdbConnection`, `SaharaClient` | `:app:testDebugUnitTest` `AdbConnectionTest`, `SaharaFirehoseTest` (in-memory pipes). Not run on a phone |
+| Toolkit / desktop API token read by timing or by other local users | Docker toolkit API: token compared with `hmac.compare_digest`; a generated token file is created `0600` with `O_EXCL` and never through a symlink (a stale file is replaced); a bad `Content-Length` or over-deep JSON is a `400`. Desktop `HeadlessApi` compares in constant time | `docker/api/rootforge_api.py`, `android-app/desktop` `HeadlessApi` | `tests/test_toolkit_api.py`, `:desktop:test` `HeadlessApiAuthTest`. The container was not built |
 | Provisioning the wrong account / root | Target user resolved explicitly; refuses rather than defaulting to root; live user removed; live sudo rule deleted; installed name cannot be `root`/`rootforge` | `00_bootstrap_distro.sh`, Calamares configs | Executed in a sandbox; **not** under real Calamares |
 
 ## 2. What it does not protect against
@@ -73,6 +77,11 @@ access to the operator's account:
   name passes through; the rules over-redact on purpose; the terminal is not redacted; the
   secret is in the `0600` file until exit; and a script SIGKILLed outside the CLI is never
   redacted. Do not rely on it as a substitute for not printing secrets.
+- **Redaction misses a name glued to a non-ASCII letter.** The `NAME=value` rule needs a word
+  boundary before the name. Under a UTF-8 locale neither the Python nor the sed engine redacts
+  `密码password=hunter2` or `éapi_key=abc` (sed under `LC_ALL=C` does). The Python pattern is also
+  quadratic on long runs of `[A-Za-z0-9_.-]` (40 KB of `a-a-a-…` took 63 s; sed 0.03 s). Reproduced
+  2026-10-24, not fixed: a verified replacement is described in `docs/REVIEW.md`.
 - **Logs are private only for new files.** An existing log or report keeps the mode it has;
   directories keep the umask default.
 - **The Custom RR catalog is unauthenticated third-party data.** It comes from

@@ -29,6 +29,24 @@ class ModuleBuilderTest {
         assertTrue(!shim.contains("grep_prop"))
     }
 
+    /**
+     * The built zip is stored through `Library.fileFor`, which sanitizes the name, and found again by
+     * exact name (Modules screen, `module.build` result, flash `image`). `fileName` must therefore
+     * already be a library name, whatever the free-text version contains.
+     */
+    @Test
+    fun theFileNameIsAlreadyALibraryName() {
+        val versions = listOf("v1.0", "1.0 beta", "1.0+5", "2.0/rc1", "..", "1.0 (ünï)", "x".repeat(200))
+        for (version in versions) {
+            val built = ModuleBuilder.build(spec().copy(version = version))
+            val name = built.fileName
+            assertEquals("'$version' gave '$name'", ai.rootforge.os.core.Library.sanitize(name), name)
+            assertTrue("'$name'", name.endsWith(".zip") && name.length <= 96 && name.startsWith("my_mod-"))
+        }
+        assertEquals("my_mod-1.0_beta.zip", ModuleBuilder.build(spec().copy(version = "1.0 beta")).fileName)
+        assertEquals("my_mod-v1.0.zip", ModuleBuilder.build(spec()).fileName)
+    }
+
     @Test
     fun aNewlineInTheNameIsRejected() {
         val problems = ModuleBuilder.validate(spec(name = "Evil\nid=injected"))

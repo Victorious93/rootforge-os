@@ -56,6 +56,47 @@ class BridgeExecutorTest {
         return pending.await()
     }
 
+    /** What the person approves must be everything that runs: a 2000-character command is allowed, so show all of it. */
+    @Test
+    fun theApprovalPromptShowsTheWholeShellCommand() = runTest(UnconfinedTestDispatcher()) {
+        val approvals = ApprovalCenter()
+        val (ex, _, backend) = exec(approvals = approvals)
+        val command = "echo ok;" + " ".repeat(600) + "touch /sdcard/TAIL_MARKER"
+        val pending = async {
+            parse(ex.handle(req(BridgeOp.ADB_SHELL, buildJsonObject { put("command", JsonPrimitive(command)) }), caller))
+        }
+        val request = approvals.pending.value.single()
+        assertTrue(
+            "the prompt must contain the end of the command",
+            request.lines.any { it.contains("TAIL_MARKER") },
+        )
+        approvals.answer(request.id, false)
+        assertEquals(ErrorCategory.DENIED, pending.await().error?.category)
+        assertTrue(backend.shells.isEmpty())
+    }
+
+    @Test
+    fun aParameterTooLongToShowInFullIsRefusedBeforeAnyPrompt() = runTest(UnconfinedTestDispatcher()) {
+        val approvals = ApprovalCenter()
+        val (ex, _, backend) = exec(approvals = approvals)
+        val r = parse(
+            ex.handle(req(BridgeOp.ADB_SHELL, buildJsonObject { put("command", JsonPrimitive("x".repeat(30_000))) }), caller),
+        )
+        assertEquals(ErrorCategory.BAD_PARAMETERS, r.error?.category)
+        assertTrue("nobody should be asked to approve a command they cannot read", approvals.pending.value.isEmpty())
+        assertTrue(backend.shells.isEmpty())
+    }
+
+    @Test
+    fun aNestedParameterIsRefusedBeforeAnyPrompt() = runTest(UnconfinedTestDispatcher()) {
+        val approvals = ApprovalCenter()
+        val (ex, _, backend) = exec(approvals = approvals)
+        val r = parse(ex.handle(req(BridgeOp.ADB_SHELL, buildJsonObject { put("command", nestedArray(20)) }), caller))
+        assertEquals(ErrorCategory.BAD_PARAMETERS, r.error?.category)
+        assertTrue(approvals.pending.value.isEmpty())
+        assertTrue(backend.shells.isEmpty())
+    }
+
     @Test
     fun unpairedCallerIsRefusedAndQueued() = runTest {
         val pairing = PairingStore(memory)

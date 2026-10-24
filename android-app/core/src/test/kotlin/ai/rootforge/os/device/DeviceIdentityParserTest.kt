@@ -120,6 +120,82 @@ class DeviceIdentityParserTest {
     }
 
     @Test
+    fun getvarDumpKeepsEveryPartitionSizeAsItsOwnKey() {
+        val vars = DeviceIdentityParser.parseGetvarDump(
+            """
+            (bootloader) has-slot:boot: yes
+            (bootloader) partition-size:boot_a: 0x4000000
+            (bootloader) partition-size:boot_b: 0x4000000
+            (bootloader) partition-size:init_boot_a: 0x800000
+            (bootloader) slot-successful:a: yes
+            (bootloader) current-slot: a
+            Finished. Total time: 0.001s
+            """.trimIndent(),
+        )
+        assertEquals("0x4000000", vars["partition-size:boot_a"])
+        assertEquals("0x4000000", vars["partition-size:boot_b"])
+        assertEquals("0x800000", vars["partition-size:init_boot_a"])
+        assertEquals("yes", vars["has-slot:boot"])
+        assertEquals("yes", vars["slot-successful:a"])
+        assertEquals("a", vars["current-slot"])
+        assertNull("a bare 'partition-size' key means the argument was split off", vars["partition-size"])
+    }
+
+    /**
+     * The roster looks an identity up by the attached target's key (USB or `adb devices` serial,
+     * else the device name). An identity published under any other key is pruned on the next pass
+     * and the phone is identified again forever.
+     */
+    @Test
+    fun aWirelessAdbPhoneIsKeyedByItsAdbSerialNotByItsRoSerialno() {
+        val target = AttachedTarget(
+            "192.168.1.50:5555", 0, 0, TargetMode.ADB, null, true, "192.168.1.50:5555", "Pixel 8", null,
+        )
+        val id = DeviceIdentityParser.fromAdb(DeviceIdentityParser.parseGetpropDump(PIXEL_GETPROP), "", target)
+        assertEquals("the displayed serial is still the phone's own", "••••PIX8", id.maskedSerial)
+        assertEquals("192.168.1.50:5555", id.rosterKey())
+        assertRosterKeepsIt(target, id)
+    }
+
+    @Test
+    fun anEdlPhoneIsKeyedByItsUsbTargetNotBySaharaChipSerial() {
+        val target = AttachedTarget(
+            "/dev/bus/usb/001/007", UsbClassifier.QUALCOMM_VID, UsbClassifier.EDL_PID, TargetMode.EDL, 0, true,
+            null, null, null,
+        )
+        val id = DeviceIdentityParser.fromEdl(target, chipSerial = "44332211", msmHwId = "001230e1")
+        assertEquals("••••2211", id.maskedSerial)
+        assertEquals("/dev/bus/usb/001/007", id.rosterKey())
+        assertRosterKeepsIt(target, id)
+    }
+
+    @Test
+    fun aFastbootPhoneWhoseGetvarSerialDiffersFromItsUsbSerialKeepsTheTargetKey() {
+        val target = AttachedTarget(
+            "/dev/bus/usb/001/002", 0x18D1, 0x4EE0, TargetMode.FASTBOOT, 0, true, "0123456789ABCDEF", null, null,
+        )
+        val id = DeviceIdentityParser.fromFastboot(DeviceIdentityParser.parseGetvarDump(SAMSUNG_GETVAR), target)
+        assertEquals("••••SAMS", id.maskedSerial)
+        assertEquals("0123456789ABCDEF", id.rosterKey())
+        assertRosterKeepsIt(target, id)
+    }
+
+    @Test
+    fun aFailedIdentifyStubUsesTheSameKeyAsItsTarget() {
+        val target = AttachedTarget("/dev/bus/usb/001/009", 0x18D1, 0x4EE7, TargetMode.ADB, 1, true, "unknown", null, null)
+        val stub = DeviceIdentityParser.stub(target, "boom")
+        assertEquals(target.rosterKey(), stub.rosterKey())
+        assertRosterKeepsIt(target, stub)
+    }
+
+    private fun assertRosterKeepsIt(target: AttachedTarget, id: DeviceIdentity) {
+        val identities = mapOf(id.rosterKey() to id)
+        assertEquals("prune must not drop it", identities, DeviceRoster.prune(identities, listOf(target)))
+        assertEquals(id, DeviceRoster.cards(listOf(target), identities, emptyMap(), null).single().identity)
+        assertFalse("must not be identified again", DeviceRoster.needsIdentify(target, identities))
+    }
+
+    @Test
     fun edlIsIdentifyOnlyForQualcomm9008() {
         val id = DeviceIdentityParser.fromEdl(
             UsbClassifier.QUALCOMM_VID,

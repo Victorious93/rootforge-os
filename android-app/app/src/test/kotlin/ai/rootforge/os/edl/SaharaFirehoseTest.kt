@@ -5,6 +5,7 @@ import ai.rootforge.os.core.asLe
 import ai.rootforge.os.core.leBuffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import kotlin.concurrent.thread
@@ -33,6 +34,27 @@ class SaharaFirehoseTest {
         val info = client.readDeviceInfo()
         assertEquals(2, info.protocolVersion)
         assertEquals("44332211", info.serial)
+    }
+
+    /** The response length is the device's word; it sizes a buffer, so an absurd one must be refused, not allocated. */
+    @Test
+    fun anAbsurdIdentityLengthIsRefusedInsteadOfAllocated() {
+        val pipe = Pipe()
+        val client = SaharaClient(pipe.host)
+        thread(isDaemon = true) {
+            pipe.device.send(sahara(0x01, ByteArray(40).also { it[0] = 2 }))
+            pipe.device.nextPacket() // HELLO_RESP
+            pipe.device.send(sahara(0x0B, ByteArray(0))) // CMD_READY
+            pipe.device.nextPacket() // CMD_EXEC
+            pipe.device.send(sahara(0x0E, leBuffer(8).putInt(0).putInt(300_000_000).array()))
+            pipe.device.nextPacket() // CMD_EXEC_DATA; nothing follows
+        }
+        try {
+            client.readDeviceInfo()
+            fail("a 300 MB identity answer must be refused")
+        } catch (e: SaharaException) {
+            assertTrue(e.message, e.message!!.contains("Implausible"))
+        }
     }
 
     @Test
