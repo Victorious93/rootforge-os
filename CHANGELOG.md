@@ -7,6 +7,12 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Android app version 0.3.0 / versionCode 2 (2026-10-24)
+- `android-app/app/build.gradle.kts`: `versionCode` 1 -> 2, `versionName` `0.1.0` -> `0.3.0` (debug builds report `0.3.0-debug`). Every APK since v0.2.0 still said `0.1.0`, so builds could not be told apart. Prepares a `v0.3.0` tag; nothing is tagged or published by this change. `applicationId` and signing unchanged. The desktop package (`0.1.0`) and Docker API `app_version` are not bumped.
+- **Upgrading from the v0.2.0 APK needs one uninstall:** v0.2.0 was signed with CI's throwaway debug key, and later builds use the committed `app/debug.keystore` (#62, cert SHA-256 `77:7A:C7:00:…:64:6F`).
+- Version tripwires in `tests/test_launcher_icons.py` and `tests/test_manual.py` now expect the new values.
+- Tests: `:core:test` **453/0**, `:app:testDebugUnitTest` **39/0**, `:app:verifyPaparazziDebug` passes, `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode='2'` / `versionName='0.3.0-debug'`; `apksigner` cert SHA-256 `777ac700…86646f`, the committed key), `bash tests/run-tests.sh` **1057/0**, `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not installed on a phone.**
+
 ### Bug sweep 2026-10-24
 Each item was reproduced first, and its regression test was run against the old code and failed before the fix.
 - **`getvar all` names with an argument were mangled (Kotlin).** `FlashPlanner.parseVarLine` split on the first `:`, so `partition-size:boot_a: 0x4000000` became key `partition-size` / value `boot_a: 0x4000000` and `putIfAbsent` kept only the first partition; Partition info listed one. It now splits on the first `": "`, as `core/device.py` and `docs/ARCHITECTURE.md` §3.1 already say. Affects the USB client, the desktop controller and device identify.

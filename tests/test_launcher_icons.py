@@ -85,8 +85,8 @@ class LauncherIconTests(unittest.TestCase):
     def test_signing_application_id_and_version_untouched(self) -> None:
         text = GRADLE.read_text()
         self.assertIn('applicationId = "ai.rootforge.os"', text)
-        self.assertIn("versionCode = 1", text)
-        self.assertIn('versionName = "0.1.0"', text)
+        self.assertIn("versionCode = 2", text)
+        self.assertIn('versionName = "0.3.0"', text)
         self.assertIn('storeFile = file("debug.keystore")', text)
         self.assertIn('id("com.android.application")', text)
 
