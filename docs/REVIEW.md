@@ -102,15 +102,21 @@ Nothing is cryptographically signed (ISO, APK, modules). README previously said 
 - Scaffolded `update-binary` sources Magisk's `util_functions.sh` and calls `install_module`.
 - Desktop launcher test no longer depends on the host lacking `xfce4-session`.
 
-## Bug sweep 2026-10-24: open findings
+## Bug sweep 2026-10-24: findings (two fixed later the same day, the rest open)
 
-Found while probing untrusted-input code on `main` `5652d24`. The nine defects that were fixed are in `CHANGELOG.md` (each reproduced, then fixed with a test that failed first). What follows was **not** changed. Tags: **[Certain]** reproduced or read in the code, **[Likely]** inferred, **[Guessing]** not verified.
+Found while probing untrusted-input code on `main` `5652d24`. The nine defects that were fixed are in `CHANGELOG.md` (each reproduced, then fixed with a test that failed first). What follows was **not** changed when the sweep ended; the first block below records the two redaction findings that were fixed afterwards. Tags: **[Certain]** reproduced or read in the code, **[Likely]** inferred, **[Guessing]** not verified.
 
-**Needs the owner's decision (touches secret redaction, ASK FIRST in `CLAUDE.md`)**
+**Secret redaction: fixed after the owner's go-ahead (2026-10-24, `ccr-4237cfad-065fob`)**
 
-- **[Certain] Redaction leaks a name glued to a non-ASCII letter.** `redact_text` (Python) and `rf_redact` (sed) both print `密码password=hunter2`, `éapi_key=abc` and `клюapi_key=abc` unredacted under a UTF-8 locale; the `NAME=value` rule needs a `\b` before the name and none exists between a non-ASCII letter and an ASCII one. `LC_ALL=C` redacts them (the shell, not Python). CJK text often has no space before ASCII.
-- **[Certain] The Python `_SECRET_ASSIGNMENT` pattern is quadratic.** `redact_text("a-" * 20000)` (40 KB) took 63 s and `"a-" * 50000` took 395 s; `"-----BEGIN PRIVATE KEY-----" * 5000` took 3.6 s. The sed engine took 0.03 s on the same input. `redact_file` runs it at exit over logs up to 64 MiB. Realistic logs rarely have such runs, so this is a hang on odd input, not a daily cost.
-- **Proposed fix, verified in scratch only:** start only at the beginning of an identifier run (`(?<![A-Za-z0-9_.-])`), look ahead once per run for a keyword followed by `[_.-]` or the end of the run, then take the whole run. Output was byte-identical to the current pattern on 250,000 random ASCII inputs (`hypothesis`, keyword-rich alphabet); 3.9 ms on the 40 KB case; it also redacts the Unicode cases above. The sed rule needs the equivalent change and `tests/test_redaction_parity.py` samples for non-ASCII. Not applied.
+- **[Certain] Redaction leaked a name glued to a non-ASCII letter.** `redact_text` (Python) and `rf_redact` (sed) both printed `密码password=hunter2`, `éapi_key=abc` and `клюapi_key=abc` unredacted under a UTF-8 locale: the `NAME=value` rule needed a `\b` before the name and none exists between a non-ASCII letter and an ASCII one. Python's own locale coercion (`LC_CTYPE=C.UTF-8` for a child process) is enough to trigger it, so `tests/test_redaction_parity.py` reproduced it with no special setup. Now: the Python rule starts a match only where a `[A-Za-z0-9_.-]` run starts, and `rf_redact` runs sed with `LC_ALL=C` (byte semantics, so the result no longer depends on the caller's locale; UTF-8 text and invalid bytes pass through unchanged).
+- **[Certain] The Python `_SECRET_ASSIGNMENT` pattern was quadratic.** `redact_text("a-" * 20000)` took 63 s and `"a-" * 50000` took 395 s (12 KB took 5.3 s). Now 40 KB takes 6 ms, 100 KB 14 ms, 1 MB of `x` 105 ms. The replacement matched the old rule's output on 250,000 random ASCII inputs (`hypothesis`, keyword-rich alphabet) in scratch; `tests/test_log.py` keeps the old pattern and checks agreement on 20,000 seeded ASCII inputs, plus a timing guard.
+- **Evidence for the two engines agreeing:** 90,000 random lines (ASCII and non-ASCII neighbours) through the fixed Python and the fixed sed gave no difference. A Python `\s` still spans a newline where sed (line by line) cannot, and Python's `(?i)` folds a few exotic code points (`K` Kelvin sign, `ſ`) that C-locale sed does not; neither was changed.
+
+**Open: the private-key block rules are quadratic on odd input (measured 2026-10-24, not changed)**
+
+- **[Certain] Python:** `redact_text("-----BEGIN PRIVATE KEY-----" * 5000)` (131 KB) takes 3.2 s; 1,000 markers take 0.12 s and 2,500 take 0.83 s. `_PEM_BLOCK` scans to the end for each unterminated marker.
+- **[Certain] sed:** one `-----BEGIN PRIVATE KEY-----` line followed by 20,000 lines (1.6 MB) takes 6.5 s and by 5,000 lines (0.4 MB) 0.39 s: the `:pem` loop joins lines until an END marker appears and re-tests the whole pattern space each time. At that rate a 64 MiB log with an early unterminated marker would take hours in `rf_redact_file` at script exit; `rf_redact_file` has no size cap (Python's `redact_file` caps at 64 MiB).
+- **Proposed fix, not applied (touches secret redaction, so it needs a go-ahead):** Python: find BEGIN, find the first END after it with `re.search(..., pos)`, and when none exists redact to the end and stop (one pass). sed: stop joining lines once the END marker is found by testing only the newly appended line, or hand the file to the Python engine. Either needs the parity table extended with multi-block and unterminated samples.
 
 **Unverified**
 
@@ -129,4 +135,4 @@ Found while probing untrusted-input code on `main` `5652d24`. The nine defects t
 - **[Certain]** `RecoveryCatalogClient.lookupTwrp` tolerates a failed `search.json` fetch but a malformed one fails the whole lookup.
 - **[Certain]** `CatalogRecoveryPrefill.encode` escapes `|` in the id and name but not in `pageUrl` or the codenames, so `decode` returns null for such a row and the button does nothing.
 - **[Certain]** `HostDevices.parseAdb` ignores the `no permissions` state, so a phone blocked by udev is absent instead of explained.
-- **[Certain]** `GuideMarkdown.parse` overflows the stack on 20,000 repeated `*` or `_`; it only parses bundled text. `FirehoseClient.programRaw` zero-fills if its stream ends before `dataSize` (the class is marked untested). `_PEM_BLOCK` is quadratic with thousands of unterminated `BEGIN` markers.
+- **[Certain]** `GuideMarkdown.parse` overflows the stack on 20,000 repeated `*` or `_`; it only parses bundled text. `FirehoseClient.programRaw` zero-fills if its stream ends before `dataSize` (the class is marked untested). (`_PEM_BLOCK` is now measured under "Open" above.)

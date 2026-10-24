@@ -11,6 +11,22 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-24 (secret redaction fixed):** branch `ccr-4237cfad-065fob`, on `main` `500a0a3`. The owner said
+> go ahead to the two findings the bug sweep held back (they touch secret redaction, ASK FIRST). (1) The `NAME=value`
+> rule missed a name glued to a non-ASCII letter (`密码password=hunter2`, `éapi_key=abc`) in both engines under a UTF-8
+> locale; Python's own locale coercion is enough to trigger it for the sed child, so the parity test reproduced it with
+> no setup. The Python rule now starts a match only where a `[A-Za-z0-9_.-]` run starts, and `rf_redact` runs sed with
+> `LC_ALL=C` (UTF-8 text and invalid bytes pass through unchanged). (2) The Python rule was quadratic (12 KB 5.3 s,
+> 40 KB 63 s, 100 KB 395 s); 40 KB now takes 6 ms and 100 KB 14 ms. Old and new rules agree on 250k random ASCII inputs
+> (`hypothesis`, scratch) and on 20k seeded ones in `tests/test_log.py`, which keeps the old pattern as the reference;
+> fixed Python and sed agree on 90k random lines. **Measured, not changed (needs a go-ahead):** the private-key block
+> rules are quadratic too: Python 3.2 s for 5,000 unterminated `-----BEGIN PRIVATE KEY-----` markers; sed 6.5 s for one
+> such line followed by 1.6 MB of log, so a 64 MiB log would take hours at script exit (`rf_redact_file` has no size
+> cap). Proposed fix in `docs/REVIEW.md`. Against the old code the new parity rows failed in both engines and so did
+> the non-ASCII test and the timing guard. `bash tests/run-tests.sh` **1057/0** (Python unittest 419, was 415),
+> `bash tests/lint.sh` clean. No Kotlin change, so the Gradle suites were not re-run for this commit (the branch's last
+> full run is in the update below). **Not run on a phone or a desktop window.**
+
 > **Update 2026-10-24 (Custom Recovery lookup vs the live sites):** branch `ccr-4237cfad-065fob`, on `main`
 > `500a0a3` (merged in twice, after #87 and after #89 / #92 / #93 / #90; the only conflicts were docs, both
 > sides kept). The owner allowed `twrp.me`, `dl.twrp.me` and `pitchblackrecovery.com` (and `sourceforge.net` was
@@ -74,7 +90,8 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `hmac.compare_digest`; `HeadlessApi` compares in constant time. (9) `lint_module.sh` wrote
 > `sh -n` errors to the fixed `/tmp/lint_module_syntax_err` and wrote through a planted symlink
 > (reproduced); now `mktemp`.
-> **Found, NOT fixed — needs the owner (touches secret redaction, ASK FIRST):** `redact_text`
+> **Found, NOT fixed at the time — needs the owner (touches secret redaction, ASK FIRST; fixed later the same day, see
+> the redaction update above):** `redact_text`
 > (Python) and `rf_redact` (sed) both leave `密码password=hunter2` and `éapi_key=abc` unredacted under a
 > UTF-8 locale (`\b` cannot match between a non-ASCII letter and the name; `LC_ALL=C` redacts), and the
 > Python pattern is quadratic: 40 KB of `a-a-a-…` took **63 s**, 100 KB **395 s** (sed: 0.03 s) while
@@ -627,6 +644,9 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Secret redaction (this branch): a name glued to non-ASCII text is redacted by both engines, and the Python
+  `NAME=value` rule is linear (100 KB in 14 ms). The private-key block rules are still quadratic on odd input
+  (measured; fix proposed in `docs/REVIEW.md`, waiting for a go-ahead). `tests/run-tests.sh` 1057/0.
 - Custom Recovery lookup (this branch): read against the live TWRP and PitchBlack sites on 2026-10-24 and
   fixed (see the 2026-10-24 update above). A lookup and a download ran end to end through the real
   `RecoveryCatalogClient` / `RecoveryFetcher`; nothing was flashed. TWRP checksums are not fetched yet.
