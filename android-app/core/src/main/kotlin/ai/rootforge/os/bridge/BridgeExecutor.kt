@@ -160,9 +160,14 @@ class BridgeExecutor(
         }
 
         if (op.tier == Tier.CONTROL) {
+            val shown = try {
+                approvalParamLines(request.parameters)
+            } catch (e: IllegalArgumentException) {
+                return error(id, ErrorCategory.BAD_PARAMETERS, e.message ?: "invalid parameters")
+            }
             val ok = approvals.request(
                 title = "Allow ${op.name}?",
-                lines = listOf("Requested by ${caller.packageName}", op.description) + request.parameters.entries.map { "${it.key} = ${it.value.toString().take(300)}" },
+                lines = listOf("Requested by ${caller.packageName}", op.description) + shown,
                 source = caller.packageName,
             )
             if (!ok) return error(id, ErrorCategory.DENIED, "the person at the host phone did not approve ${op.name}")
