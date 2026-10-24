@@ -61,6 +61,25 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > (the CLI is present, no daemon), the live TWRP / PitchBlack pages. Every open observation, with its
 > evidence and confidence, is in `docs/REVIEW.md` § Bug sweep 2026-10-24.
 
+
+> **Update 2026-10-22 (recovery backup gate):** branch `cursor/critical-bug-scan-921d`.
+> Custom Recovery treated a missing `su` exit status as success and wrote
+> the new image even when the pulled backup was shorter than the partition.
+> `RootShellResult.ok` is now exit code 0 only. After the pull, the backup
+> file must be exactly `blockdev --getsize64` bytes or it is deleted and
+> nothing is written. `:core:test` **427/0** (`RecoveryInstallerTest` 10).
+> `bash tests/run-tests.sh` 1055/0. `bash tests/lint.sh` clean (shellcheck
+> 0.11.0 via the repo wheel). **Not run on a phone or a desktop window.**
+> `:desktop:test` and `:app` were not re-run on this branch before the merge below
+> (no desktop or app code change).
+> **Merged with `main` `4337dbd` on 2026-10-24** (after #91 and #87). The only conflicts
+> were `CHANGELOG.md` and this file, where both sides added a block at the top: both are
+> kept, newest first. On the merged tree: `:core:test` **448/0**, `:desktop:test` 8/0,
+> `:app:testDebugUnitTest` 39/0, `:app:assembleDebug` built, `bash tests/run-tests.sh`
+> **1058/0** (1057/0 on an earlier run of the same tree: one check loops over
+> `ai_tools_*.log`, named to the second, so it runs once or twice), `bash tests/lint.sh`
+> clean (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a desktop window.**
+
 > **Update 2026-10-20 (catalog aliases):** branch `feat/catalog-aliases`.
 > `:core` `CodenameAliases` (48 OnePlus stock names -> catalog codenames,
 > RootForge-written from Google's Play supported-devices list + the
@@ -563,7 +582,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-24 · **Branch:** `cursor/critical-bug-inspection-8120`
+**Last updated:** 2026-10-24 · **Branch:** `ccr-5ef71a53-ef6iwi`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),

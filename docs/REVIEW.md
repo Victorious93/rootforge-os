@@ -123,7 +123,7 @@ Found while probing untrusted-input code on `main` `5652d24`. The nine defects t
 - **[Likely]** A target that reports no USB serial keeps its "USB permission needed" stub after the grant: `DeviceRoster.needsIdentify` only checks that an identity of the same mode exists. The Identify button forces it.
 - **[Likely]** `AdbConnection.shell` keeps all output in memory until its timeout; an approved command such as `yes` can exhaust the heap.
 - **[Certain]** `HostToolset` searches `./platform-tools` (the working directory) before `PATH`, so a launch from a directory with a hostile `platform-tools/adb` runs it.
-- **[Certain]** Custom Recovery does not compare the pulled backup's size with the partition size before it overwrites the partition.
+- **[Certain]** ~~Custom Recovery does not compare the pulled backup's size with the partition size before it overwrites the partition.~~ Fixed in #90: `RootShellResult.ok` is exit code 0 only, and the pulled backup must be exactly `blockdev --getsize64` bytes or it is deleted and nothing is written.
 - **[Certain]** `RecoveryCatalogClient.lookupTwrp` tolerates a failed `search.json` fetch but a malformed one fails the whole lookup.
 - **[Certain]** `CatalogRecoveryPrefill.encode` escapes `|` in the id and name but not in `pageUrl` or the codenames, so `decode` returns null for such a row and the button does nothing.
 - **[Certain]** `HostDevices.parseAdb` ignores the `no permissions` state, so a phone blocked by udev is absent instead of explained.
