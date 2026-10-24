@@ -4109,6 +4109,29 @@ mkdir -p "$MOD"
 printf 'id=incomplete\n' > "$MOD/module.prop"
 run_script bash "$BIN_DIR/lint_module.sh" "$MOD"
 assert_eq "a genuinely broken module still exits 1" "$RC" "1"
+
+# Regression: the syntax check wrote `sh -n` errors to the fixed name
+# /tmp/lint_module_syntax_err. A symlink planted there by another process was
+# followed, so the linter overwrote whatever it pointed at. The error text now
+# goes to a private mktemp file.
+new_sandbox
+MOD="$SANDBOX/mod"
+mkdir -p "$MOD/META-INF/com/google/android"
+printf 'id=badsyntax\nname=B\nversion=1\nversionCode=1\nauthor=a\ndescription=d\n' > "$MOD/module.prop"
+touch "$MOD/META-INF/com/google/android/update-binary" "$MOD/META-INF/com/google/android/updater-script"
+printf '#!/system/bin/sh\nif then\n' > "$MOD/customize.sh"
+VICTIM="$SANDBOX/victim.txt"
+printf 'precious\n' > "$VICTIM"
+DECOY=/tmp/lint_module_syntax_err
+if [[ -e "$DECOY" || -L "$DECOY" ]]; then
+  pass "(skipped: $DECOY already exists on this machine)"
+else
+  ln -s "$VICTIM" "$DECOY"
+  run_script bash "$BIN_DIR/lint_module.sh" "$MOD"
+  rm -f "$DECOY"
+  assert_contains "the syntax error is still reported" "$OUT" "shell syntax error"
+  assert_eq "a planted /tmp symlink is not written through" "$(cat "$VICTIM")" "precious"
+fi
 drop_sandbox
 
 }
