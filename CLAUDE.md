@@ -595,7 +595,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-24 · **Branch:** `ccr-d6eee520-ln03s1`
+**Last updated:** 2026-10-24 · **Branch:** `cursor/critical-bug-scan-921d`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
@@ -605,6 +605,11 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Custom Recovery backup gate (this branch): a missing `su` exit status is
+  not success, and a pulled backup that is not exactly the partition size
+  is discarded. The new image is not written. `:core:test` 427/0,
+  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a phone
+  or a desktop window.**
 - Confirmations stay on the phone they started on (this branch): desktop
   `DeviceSerialPin` keeps `adb -s` / `fastboot -s` on the serial captured
   when the action started; `SerialOpLock.connectRefusal` blocks a connect
