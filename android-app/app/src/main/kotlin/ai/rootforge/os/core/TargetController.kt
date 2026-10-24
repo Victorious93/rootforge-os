@@ -93,10 +93,17 @@ class TargetController(
     val identities: StateFlow<Map<String, ai.rootforge.os.device.DeviceIdentity>> = identityState.asStateFlow()
     private val serialLock = SerialOpLock()
     val serialBusy: StateFlow<Map<String, String>> = serialLock.busyMap
+    private val transportGate = Any()
+    @Volatile private var transportEpochValue = 0L
     private var adb: AdbConnection? = null
     private var fastboot: FastbootClient? = null
     private var sahara: Pair<SaharaClient, BulkTransport>? = null
-    private var activeTarget: AttachedTarget? = null
+    @Volatile private var activeTarget: AttachedTarget? = null
+
+    fun activeSerial(): String? = activeTarget?.rosterKey()
+
+    /** Bumps when the connected phone changes. Fleet confirm dialogs compare this before and after Allow. */
+    fun transportEpoch(): Long = transportEpochValue
     private var logcatJob: Job? = null
     @Volatile private var logcatStop = false
 
@@ -110,6 +117,11 @@ class TargetController(
     }
 
     fun disconnect() {
+        synchronized(transportGate) { disconnectUnlocked() }
+    }
+
+    private fun disconnectUnlocked() {
+        val live = activeTarget != null || adb != null || fastboot != null || sahara != null
         logcatStop = true
         adb?.close(); adb = null
         fastboot?.close(); fastboot = null
@@ -118,6 +130,7 @@ class TargetController(
         firehoseClient = null
         infoState.value = null
         linkState.value = LinkState.Disconnected
+        if (live) transportEpochValue++
     }
 
     /** Drops the link if the connected device was unplugged or re-enumerated (a reboot). */
@@ -137,18 +150,28 @@ class TargetController(
             return Result.failure(IOException("USB permission needed: accept the Android prompt, then connect again."))
         }
         val key = target.rosterKey()
-        val activeKey = activeTarget?.rosterKey()
-        if (!activeKey.isNullOrEmpty() && activeKey != key && serialLock.isBusy(activeKey)) {
-            val msg = "Finish the current action on ${SerialMask.mask(activeKey)} first."
+        val blocked = serialLock.connectRefusal(key)
+        if (blocked != null) {
+            val msg = "Finish the current action ($blocked) before connecting another device."
             log.error(msg)
             return Result.failure(IOException(msg))
         }
         return operationOn(key, "Connecting to ${target.publicLabel()}") {
-            disconnect()
             linkState.value = LinkState.Connecting("Opening ${target.vidPid}")
+            var published = false
             try {
                 val transport = openTransport(target)
-                activeTarget = target
+                synchronized(transportGate) {
+                    val other = serialLock.otherBusyAction(key)
+                    if (other != null) {
+                        transport.close()
+                        throw IOException("Finish the current action ($other) before connecting another device.")
+                    }
+                    disconnectUnlocked()
+                    activeTarget = target
+                    transportEpochValue++
+                    published = true
+                }
                 when (target.mode) {
                     TargetMode.ADB -> connectAdb(transport, target)
                     TargetMode.FASTBOOT -> connectFastboot(transport, target)
@@ -159,7 +182,7 @@ class TargetController(
                     }
                 }
             } catch (e: Exception) {
-                disconnect()
+                if (published) disconnect()
                 linkState.value = LinkState.Failed(e.message ?: e.javaClass.simpleName)
                 throw e
             }
@@ -173,7 +196,14 @@ class TargetController(
             log.warn("Look at the target screen: tap Allow USB debugging (tick Always allow to remember this host).")
             linkState.value = LinkState.Connecting("Waiting for you to allow USB debugging on the target")
         })
-        adb = conn
+        synchronized(transportGate) {
+            val other = serialLock.otherBusyAction(target.rosterKey())
+            if (other != null) {
+                conn.close()
+                throw IOException("Finish the current action ($other) before connecting another device.")
+            }
+            adb = conn
+        }
         log.out(conn.banner.ifBlank { "connected" })
         linkState.value = LinkState.Connected(TargetMode.ADB, target.publicLabel())
         loadAdbInfo(conn, target)
@@ -181,7 +211,14 @@ class TargetController(
 
     private fun connectFastboot(transport: BulkTransport, target: AttachedTarget) {
         val fb = FastbootClient(transport)
-        fastboot = fb
+        synchronized(transportGate) {
+            val other = serialLock.otherBusyAction(target.rosterKey())
+            if (other != null) {
+                transport.close()
+                throw IOException("Finish the current action ($other) before connecting another device.")
+            }
+            fastboot = fb
+        }
         linkState.value = LinkState.Connected(TargetMode.FASTBOOT, target.publicLabel())
         log.command("fastboot getvar all")
         val vars = fb.getvarAll { logMasked(it) }
@@ -192,7 +229,14 @@ class TargetController(
 
     private fun connectEdl(transport: BulkTransport, target: AttachedTarget) {
         val client = SaharaClient(transport)
-        sahara = client to transport
+        synchronized(transportGate) {
+            val other = serialLock.otherBusyAction(target.rosterKey())
+            if (other != null) {
+                transport.close()
+                throw IOException("Finish the current action ($other) before connecting another device.")
+            }
+            sahara = client to transport
+        }
         linkState.value = LinkState.Connected(TargetMode.EDL, target.publicLabel())
         log.command("sahara: read device identity")
         val d = client.readDeviceInfo()
@@ -248,7 +292,7 @@ class TargetController(
             return
         }
         val key = target.rosterKey()
-        serialLock.withLock(key, "Identify") {
+        serialLock.withLock(key, SerialOpLock.IDENTIFY_LABEL) {
             val active = activeTarget
             if (active?.rosterKey() == key) {
                 when (target.mode) {
@@ -349,16 +393,17 @@ class TargetController(
 
     // ----- ADB ----------------------------------------------------------------------------------------
 
-    suspend fun adbShell(command: String): Result<ShellOutcome> = operation("adb shell") {
+    suspend fun adbShell(command: String, boundEpoch: Long? = null): Result<ShellOutcome> = operation("adb shell", boundEpoch) {
         log.command("adb shell $command")
-        val r = requireAdb().shell(command, timeoutMs = 120_000) { logMasked(it) }
+        val conn = captureAdb(boundEpoch)
+        val r = conn.shell(command, timeoutMs = 120_000) { logMasked(it) }
         if (r.exitCode != null && r.exitCode != 0) log.warn("exit status ${r.exitCode}")
         ShellOutcome(r.output, r.exitCode)
     }
 
-    suspend fun adbReboot(target: String): Result<Unit> = operation("Reboot ${target.ifBlank { "system" }}") {
+    suspend fun adbReboot(target: String, boundEpoch: Long? = null): Result<Unit> = operation("Reboot ${target.ifBlank { "system" }}", boundEpoch) {
         log.command("adb reboot $target")
-        requireAdb().reboot(target)
+        captureAdb(boundEpoch).reboot(target)
         log.info("Reboot requested; the target will reappear in a moment.")
     }
 
@@ -482,9 +527,9 @@ class TargetController(
         }
     }
 
-    suspend fun fastbootReboot(target: RebootTarget): Result<Unit> = operation("Reboot ${target.label}") {
+    suspend fun fastbootReboot(target: RebootTarget, boundEpoch: Long? = null): Result<Unit> = operation("Reboot ${target.label}", boundEpoch) {
         log.command("fastboot ${target.command}")
-        requireFastboot().reboot(target)
+        captureFastboot(boundEpoch).reboot(target)
         log.info("Reboot requested.")
     }
 
@@ -565,14 +610,16 @@ class TargetController(
 
     suspend fun fastbootErase(partition: String): Result<Unit> = operation("Erase $partition") {
         FastbootClient.requirePartitionName(partition)
+        val fb = captureFastboot(null)
         val ok = approvals.request(
             title = "Erase $partition",
             lines = listOf("Partition: $partition", "Erasing destroys its contents permanently.", if (partition == "userdata") "All user data on the target will be lost." else "Make sure you have a backup."),
             phrase = "ERASE $partition",
         )
         if (!ok) throw IOException("Not confirmed; nothing erased.")
+        if (fastboot !== fb) throw IOException("The connected device changed after you confirmed; nothing was erased.")
         log.command("fastboot erase $partition")
-        requireFastboot().erase(partition)
+        fb.erase(partition)
     }
 
     suspend fun fastbootUnlock(source: String = "RootForge OS"): Result<Unit> = operation("Unlock bootloader") {
@@ -652,15 +699,20 @@ class TargetController(
     }
 
     suspend fun firehoseProgram(lun: Int, startSector: Long, sectorSize: Int, image: LibraryFile): Result<Unit> = operation("Firehose program") {
+        val fh = firehose()
+        val transport = sahara?.second
         val ok = approvals.request(
             title = "Write raw sectors via Firehose",
             lines = listOf("LUN $lun, start sector $startSector, sector size $sectorSize", "File: ${image.name} (${humanSize(image.size)})", "This overwrites storage at that exact location with no partition awareness."),
             phrase = "WRITE LUN $lun SECTOR $startSector",
         )
         if (!ok) throw IOException("Not confirmed; nothing was written.")
+        if (sahara?.second !== transport || firehoseClient !== fh) {
+            throw IOException("The connected device changed after you confirmed; nothing was written.")
+        }
         log.command("firehose program lun=$lun start=$startSector")
         image.file.inputStream().buffered().use {
-            firehose().programRaw(lun, startSector, sectorSize, it, image.size, { l -> log.out(l) }) { d, t -> setProgress("Writing", d, t) }
+            fh.programRaw(lun, startSector, sectorSize, it, image.size, { l -> log.out(l) }) { d, t -> setProgress("Writing", d, t) }
         }
         clearProgress()
     }
@@ -926,6 +978,20 @@ class TargetController(
     private fun requireAdb(): AdbConnection = adb?.takeIf { it.connected } ?: throw IOException("The target is not connected over ADB (current mode: ${currentMode?.label ?: "none"}).")
     private fun requireFastboot(): FastbootClient = fastboot ?: throw IOException("The target is not in fastboot mode (current mode: ${currentMode?.label ?: "none"}). Use Reboot > Bootloader first.")
 
+    private fun captureAdb(boundEpoch: Long?): AdbConnection = synchronized(transportGate) {
+        if (boundEpoch != null && boundEpoch != transportEpochValue) {
+            throw IOException("The connected device changed while you were confirming; nothing was run.")
+        }
+        requireAdb()
+    }
+
+    private fun captureFastboot(boundEpoch: Long?): FastbootClient = synchronized(transportGate) {
+        if (boundEpoch != null && boundEpoch != transportEpochValue) {
+            throw IOException("The connected device changed while you were confirming; nothing was run.")
+        }
+        requireFastboot()
+    }
+
     private fun setProgress(label: String, done: Long, total: Long) {
         progressState.value = Progress(label, done, total)
     }
@@ -934,8 +1000,20 @@ class TargetController(
         progressState.value = null
     }
 
-    private suspend fun <T> operation(label: String, block: suspend () -> T): Result<T> =
-        operationOn(activeTarget?.rosterKey(), label, block)
+    private suspend fun <T> operation(label: String, boundEpoch: Long? = null, block: suspend () -> T): Result<T> {
+        val serial = try {
+            synchronized(transportGate) {
+                if (boundEpoch != null && boundEpoch != transportEpochValue) {
+                    throw IOException("The connected device changed while you were confirming; nothing was run.")
+                }
+                activeTarget?.rosterKey()
+            }
+        } catch (e: IOException) {
+            log.error(e.message ?: "device changed")
+            return Result.failure(e)
+        }
+        return operationOn(serial, label, block)
+    }
 
     private fun refreshBusy() {
         if (logcatState.value) {
