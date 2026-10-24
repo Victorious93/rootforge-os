@@ -277,10 +277,14 @@ class FleetExecutor(
         }
 
         if (cap.kind == FleetKind.ACTION) {
+            val shown = try {
+                approvalParamLines(params)
+            } catch (e: IllegalArgumentException) {
+                throw FleetBadParameters(e.message ?: "invalid parameters")
+            }
             val ok = approvals.request(
                 title = "Allow $actionRef?",
-                lines = listOf("Requested by ${caller.packageName}", cap.description) +
-                    params.entries.map { "${it.key} = ${it.value.toString().take(300)}" },
+                lines = listOf("Requested by ${caller.packageName}", cap.description) + shown,
                 source = caller.packageName,
             )
             if (!ok) {

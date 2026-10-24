@@ -10,6 +10,7 @@ Does not flash anything on its own in tests: the runner is injectable.
 """
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import re
@@ -327,17 +328,23 @@ def make_handler(toolkit: Toolkit, token: str) -> Callable:
         def log_message(self, fmt: str, *args) -> None:  # noqa: A003
             sys.stderr.write("api: " + (fmt % args) + "\n")
 
-        def _send(self, code: int, body: bytes, content_type: str) -> None:
+        def _send(self, code: int, body: bytes, content_type: str, close: bool = False) -> None:
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
+            if close:
+                # The request body was not read; on a kept-alive connection its bytes would be taken
+                # for the start of the next request.
+                self.send_header("Connection", "close")
+                self.close_connection = True
             self.end_headers()
             self.wfile.write(body)
 
         def _auth_ok(self) -> bool:
             header = self.headers.get("Authorization", "")
             got = header[7:].strip() if header.lower().startswith("bearer ") else ""
-            return bool(token) and got == token
+            # Constant time, on bytes: compare_digest refuses a non-ASCII str.
+            return bool(token) and hmac.compare_digest(got.encode("utf-8"), token.encode("utf-8"))
 
         def do_GET(self) -> None:  # noqa: N802
             path = urlparse(self.path).path
@@ -353,19 +360,27 @@ def make_handler(toolkit: Toolkit, token: str) -> Callable:
         def do_POST(self) -> None:  # noqa: N802
             path = urlparse(self.path).path
             if path != "/v1/bridge":
-                self._send(404, b'{"ok":false,"error":"not found"}', "application/json")
+                self._send(404, b'{"ok":false,"error":"not found"}', "application/json", close=True)
                 return
             if not self._auth_ok():
-                self._send(401, b'{"ok":false,"error":"bearer token required"}', "application/json")
+                self._send(401, b'{"ok":false,"error":"bearer token required"}', "application/json", close=True)
                 return
-            length = int(self.headers.get("Content-Length") or "0")
+            try:
+                length = int(self.headers.get("Content-Length") or "0")
+            except ValueError:
+                length = -1
+            if length < 0:
+                # A negative length would make rfile.read() wait for EOF, holding this thread forever.
+                self._send(400, b'{"ok":false,"error":"bad Content-Length"}', "application/json", close=True)
+                return
             if length > MAX_BODY:
-                self._send(413, b'{"ok":false,"error":"too large"}', "application/json")
+                self._send(413, b'{"ok":false,"error":"too large"}', "application/json", close=True)
                 return
             raw = self.rfile.read(length)
             try:
                 request = json.loads(raw.decode("utf-8"))
-            except (ValueError, UnicodeDecodeError):
+            except (ValueError, UnicodeDecodeError, RecursionError):
+                # RecursionError: a 60 KB run of "[" is under MAX_BODY and deeper than the JSON decoder allows.
                 self._send(400, b'{"ok":false,"error":"not JSON"}', "application/json")
                 return
             if not isinstance(request, dict):
@@ -384,6 +399,24 @@ def serve(host: str, port: int, toolkit: Toolkit, token: str) -> ThreadingHTTPSe
     return httpd
 
 
+def _write_token_file(path: Path, token: str) -> None:
+    """Create `path` mode 0600 before any byte is written, and never write through a symlink.
+
+    write_text() then chmod() left the token readable under the process umask until the chmod ran,
+    and followed a symlink planted at the (default /tmp) path: it overwrote the file the link pointed
+    at and then re-moded it. A stale file from an earlier run is replaced, not reused. O_EXCL makes
+    open() fail on any existing path, including a symlink that appears after the unlink.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(token + "\n")
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     host = os.environ.get("ROOTFORGE_API_BIND", "0.0.0.0")
@@ -400,9 +433,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         # Print a hint without the token so logs are safe; write token to a 0600 file.
         token_file = Path(os.environ.get("ROOTFORGE_HOME", "/tmp")) / "api.token"
         try:
-            token_file.parent.mkdir(parents=True, exist_ok=True)
-            token_file.write_text(token + "\n")
-            token_file.chmod(0o600)
+            _write_token_file(token_file, token)
             sys.stderr.write(f"Token written to {token_file}\n")
         except OSError as exc:
             sys.stderr.write(f"Could not write token file: {exc}\n")

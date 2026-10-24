@@ -78,9 +78,16 @@ object FlashPlanner {
         return FlashPlan(partition, imageName, imageSize, lines, blockers, risk)
     }
 
-    /** `(bootloader) unlocked: yes` → `unlocked` to `yes`. */
+    /**
+     * `(bootloader) unlocked: yes` → `unlocked` to `yes`. Splits on the first `": "`, so a name may
+     * carry an argument (`partition-size:boot_a: 0x4000000`) and a value may contain colons — the
+     * rule `_parse_fastboot` in core/device.py and docs/ARCHITECTURE.md §3.1 already state. A line
+     * with no `": "` still yields a plain `name:value` or `name:`.
+     */
     fun parseVarLine(line: String): Pair<String, String>? {
-        val body = line.removePrefix("(bootloader)").trim()
+        val body = line.trim().removePrefix("(bootloader)").trim()
+        val sep = body.indexOf(": ")
+        if (sep > 0) return body.substring(0, sep).trim() to body.substring(sep + 2).trim()
         val i = body.indexOf(':')
         if (i <= 0) return null
         return body.substring(0, i).trim() to body.substring(i + 1).trim()

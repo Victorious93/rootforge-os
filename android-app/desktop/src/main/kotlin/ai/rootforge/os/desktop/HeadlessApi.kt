@@ -80,11 +80,7 @@ class HeadlessApi(
         return (tree["confirmation"] as? JsonPrimitive)?.takeIf { it.isString }?.content
     }
 
-    private fun authorized(ex: HttpExchange): Boolean {
-        val header = ex.requestHeaders.getFirst("Authorization").orEmpty()
-        val got = header.removePrefix("Bearer ").trim()
-        return got.isNotEmpty() && got == token
-    }
+    private fun authorized(ex: HttpExchange): Boolean = tokenMatches(ex.requestHeaders.getFirst("Authorization"), token)
 
     private fun json(ex: HttpExchange, code: Int, body: String) {
         val bytes = body.toByteArray(StandardCharsets.UTF_8)
@@ -103,6 +99,16 @@ class HeadlessApi(
     companion object {
         fun sha256(s: String): String =
             MessageDigest.getInstance("SHA-256").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
+
+        /**
+         * Whether an `Authorization` header carries [token]. Compared in constant time: loopback is
+         * shared by every local account, and `==` stops at the first differing character.
+         */
+        internal fun tokenMatches(header: String?, token: String): Boolean {
+            val got = header.orEmpty().removePrefix("Bearer ").trim()
+            return got.isNotEmpty() && token.isNotEmpty() &&
+                MessageDigest.isEqual(got.toByteArray(StandardCharsets.UTF_8), token.toByteArray(StandardCharsets.UTF_8))
+        }
 
         fun capabilitiesHint(nodeId: String, port: Int): JsonObject = buildJsonObject {
             put("listen", "127.0.0.1:$port")

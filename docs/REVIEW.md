@@ -101,3 +101,30 @@ Nothing is cryptographically signed (ISO, APK, modules). README previously said 
 - Chroot rootfs hostname/motd no longer claim to be unrooted PRoot.
 - Scaffolded `update-binary` sources Magisk's `util_functions.sh` and calls `install_module`.
 - Desktop launcher test no longer depends on the host lacking `xfce4-session`.
+
+## Bug sweep 2026-10-24: open findings
+
+Found while probing untrusted-input code on `main` `5652d24`. The nine defects that were fixed are in `CHANGELOG.md` (each reproduced, then fixed with a test that failed first). What follows was **not** changed. Tags: **[Certain]** reproduced or read in the code, **[Likely]** inferred, **[Guessing]** not verified.
+
+**Needs the owner's decision (touches secret redaction, ASK FIRST in `CLAUDE.md`)**
+
+- **[Certain] Redaction leaks a name glued to a non-ASCII letter.** `redact_text` (Python) and `rf_redact` (sed) both print `密码password=hunter2`, `éapi_key=abc` and `клюapi_key=abc` unredacted under a UTF-8 locale; the `NAME=value` rule needs a `\b` before the name and none exists between a non-ASCII letter and an ASCII one. `LC_ALL=C` redacts them (the shell, not Python). CJK text often has no space before ASCII.
+- **[Certain] The Python `_SECRET_ASSIGNMENT` pattern is quadratic.** `redact_text("a-" * 20000)` (40 KB) took 63 s and `"a-" * 50000` took 395 s; `"-----BEGIN PRIVATE KEY-----" * 5000` took 3.6 s. The sed engine took 0.03 s on the same input. `redact_file` runs it at exit over logs up to 64 MiB. Realistic logs rarely have such runs, so this is a hang on odd input, not a daily cost.
+- **Proposed fix, verified in scratch only:** start only at the beginning of an identifier run (`(?<![A-Za-z0-9_.-])`), look ahead once per run for a keyword followed by `[_.-]` or the end of the run, then take the whole run. Output was byte-identical to the current pattern on 250,000 random ASCII inputs (`hypothesis`, keyword-rich alphabet); 3.9 ms on the 40 KB case; it also redacts the Unicode cases above. The sed rule needs the equivalent change and `tests/test_redaction_parity.py` samples for non-ASCII. Not applied.
+
+**Unverified**
+
+- **[Guessing] TWRP / PitchBlack page formats.** The session's network policy denied `twrp.me`, `dl.twrp.me` and `pitchblackrecovery.com`, so `parseTwrpDirectory` (it drops any href starting with `/` and keeps only `.img`/`.zip` names) was checked only against the test fixtures. If dl.twrp.me links root-relative `…img.html` landing pages, the TWRP lookup would return nothing. Check against the live pages with those hosts allowed.
+
+**Observations (read in the code; not run on hardware)**
+
+- **[Certain]** `HeadlessApi` auto-confirms with a thread that gives up after 5 s. An operation that raises its prompt later (a slow `getvar all`, hashing a large image) times out into a denial after 120 s. It fails safe. The thread also answers *any* pending prompt, including one the person raised in the window: a prompt without a phrase is approved outright, a typed-phrase one when the request's `confirmation` equals it.
+- **[Likely]** `DeviceIdentityParser.fromEdl(previous = …)` cannot find the phone's earlier ADB/fastboot identity through the roster: that identity is pruned when its device disappears, and the 9008 port is a different target key. The "brand remembered from the last identify" note is only reachable from the unit test.
+- **[Likely]** A target that reports no USB serial keeps its "USB permission needed" stub after the grant: `DeviceRoster.needsIdentify` only checks that an identity of the same mode exists. The Identify button forces it.
+- **[Likely]** `AdbConnection.shell` keeps all output in memory until its timeout; an approved command such as `yes` can exhaust the heap.
+- **[Certain]** `HostToolset` searches `./platform-tools` (the working directory) before `PATH`, so a launch from a directory with a hostile `platform-tools/adb` runs it.
+- **[Certain]** Custom Recovery does not compare the pulled backup's size with the partition size before it overwrites the partition.
+- **[Certain]** `RecoveryCatalogClient.lookupTwrp` tolerates a failed `search.json` fetch but a malformed one fails the whole lookup.
+- **[Certain]** `CatalogRecoveryPrefill.encode` escapes `|` in the id and name but not in `pageUrl` or the codenames, so `decode` returns null for such a row and the button does nothing.
+- **[Certain]** `HostDevices.parseAdb` ignores the `no permissions` state, so a phone blocked by udev is absent instead of explained.
+- **[Certain]** `GuideMarkdown.parse` overflows the stack on 20,000 repeated `*` or `_`; it only parses bundled text. `FirehoseClient.programRaw` zero-fills if its stream ends before `dataSize` (the class is marked untested). `_PEM_BLOCK` is quadratic with thousands of unterminated `BEGIN` markers.

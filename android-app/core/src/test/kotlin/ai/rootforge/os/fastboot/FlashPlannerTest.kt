@@ -2,6 +2,7 @@ package ai.rootforge.os.fastboot
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -69,5 +70,34 @@ class FlashPlannerTest {
     fun parseVarLineStripsTheBootloaderPrefix() {
         assertEquals("unlocked" to "yes", FlashPlanner.parseVarLine("(bootloader) unlocked: yes"))
         assertEquals(256L * 1024 * 1024, FlashPlanner.parseNumber("0x10000000"))
+    }
+
+    /** `getvar all` names can carry an argument; docs/ARCHITECTURE.md §3.1 and core/device.py keep it in the name. */
+    @Test
+    fun parseVarLineKeepsArgumentBearingNamesIntact() {
+        assertEquals(
+            "partition-size:boot_a" to "0x4000000",
+            FlashPlanner.parseVarLine("(bootloader) partition-size:boot_a: 0x4000000"),
+        )
+        assertEquals("has-slot:boot" to "yes", FlashPlanner.parseVarLine("(bootloader) has-slot:boot: yes"))
+        assertEquals("slot-successful:a" to "no", FlashPlanner.parseVarLine("slot-successful:a: no"))
+    }
+
+    @Test
+    fun parseVarLineSplitsOnTheFirstColonSpaceSoValuesMayContainColons() {
+        assertEquals(
+            "version-bootloader" to "MBM-3.0:abc: def",
+            FlashPlanner.parseVarLine("(bootloader) version-bootloader: MBM-3.0:abc: def"),
+        )
+    }
+
+    @Test
+    fun parseVarLineStillAcceptsAPlainNameWithoutASpaceAndRejectsNonVariables() {
+        assertEquals("unlocked" to "yes", FlashPlanner.parseVarLine("unlocked:yes"))
+        assertEquals("version-baseband" to "", FlashPlanner.parseVarLine("(bootloader) version-baseband: "))
+        assertEquals("unlocked" to "yes", FlashPlanner.parseVarLine("  (bootloader) unlocked: yes  "))
+        assertNull(FlashPlanner.parseVarLine("no separator here"))
+        assertNull(FlashPlanner.parseVarLine(": a value with no name"))
+        assertNull(FlashPlanner.parseVarLine(""))
     }
 }

@@ -173,7 +173,9 @@ class AdbConnection(
             val reply = stream.readExactly(8, System.currentTimeMillis() + 60_000)
             val id = String(reply, 0, 4, Charsets.US_ASCII)
             val len = reply.asLe().getInt(4)
-            if (id == "FAIL") throw AdbException("push failed: " + String(stream.readExactly(len, System.currentTimeMillis() + 5000)))
+            if (id == "FAIL") {
+                throw AdbException("push failed: " + String(stream.readExactly(syncLength(len, SYNC_FAIL_LIMIT, id), System.currentTimeMillis() + 5000)))
+            }
             if (id != "OKAY") throw AdbException("Unexpected sync reply '$id' after push")
             stream.write(syncFrame("QUIT", 0))
         } finally {
@@ -193,12 +195,12 @@ class AdbConnection(
                 val len = head.asLe().getInt(4)
                 when (id) {
                     "DATA" -> {
-                        out.write(stream.readExactly(len, System.currentTimeMillis() + 60_000))
+                        out.write(stream.readExactly(syncLength(len, SYNC_DATA_LIMIT, id), System.currentTimeMillis() + 60_000))
                         received += len
                         progress(received)
                     }
                     "DONE" -> break
-                    "FAIL" -> throw AdbException("pull failed: " + String(stream.readExactly(len, System.currentTimeMillis() + 5000)))
+                    "FAIL" -> throw AdbException("pull failed: " + String(stream.readExactly(syncLength(len, SYNC_FAIL_LIMIT, id), System.currentTimeMillis() + 5000)))
                     else -> throw AdbException("Unexpected sync reply '$id' during pull")
                 }
             }
@@ -351,6 +353,16 @@ class AdbConnection(
 
     // ----- sync helpers ------------------------------------------------------------------------------
 
+    /**
+     * A length the target put in a sync frame, checked before it sizes a buffer. A plausible DATA chunk
+     * is 64 KiB and a FAIL is a short message; an absurd value from a faulty or hostile target would
+     * otherwise be allocated whole (an OutOfMemoryError is an Error, which the app's handlers miss).
+     */
+    private fun syncLength(len: Int, limit: Int, frame: String): Int {
+        if (len < 0 || len > limit) throw AdbException("Implausible sync length $len in a $frame frame")
+        return len
+    }
+
     private fun syncFrame(id: String, value: Int): ByteArray =
         leBuffer(8).apply { put(id.toByteArray(Charsets.US_ASCII)); putInt(value) }.array()
 
@@ -398,6 +410,8 @@ class AdbConnection(
         private val EXIT_REGEX = Regex("__RF_EXIT__(\\d+)\\s*$")
         private val PROP_REGEX = Regex("\\[(.+?)]: \\[(.*)]")
         private const val SYNC_DATA_MAX = 64 * 1024
+        private const val SYNC_DATA_LIMIT = 1024 * 1024
+        private const val SYNC_FAIL_LIMIT = 64 * 1024
         const val SIDELOAD_BLOCK = 64 * 1024
     }
 }

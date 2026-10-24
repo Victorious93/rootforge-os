@@ -191,5 +191,126 @@ class ToolkitApiTests(unittest.TestCase):
             httpd.server_close()
 
 
+class ToolkitHttpHardeningTests(unittest.TestCase):
+    """Authenticated-client edge cases and the generated-token file, against the real HTTP handler."""
+
+    TOKEN = "secret-token"
+
+    def setUp(self):
+        runner = FakeRunner()
+        self.tk = api.Toolkit(runner=runner, node_id="rf-test")
+        self.tk.adb = "/stub/adb"
+        self.tk.fastboot = "/stub/fastboot"
+        self.httpd = api.serve("127.0.0.1", 0, self.tk, self.TOKEN)
+        self.port = self.httpd.server_address[1]
+        threading = __import__("threading")
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.addCleanup(self._stop)
+
+    def _stop(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+    def raw(self, headers: str, body: bytes = b"", wait: float = 3.0, auth: bool = True):
+        """One request on its own connection; returns (status line, header block lowercased) or (None, None) on a hang."""
+        import socket
+
+        head = "POST /v1/bridge HTTP/1.1\r\nHost: x\r\n"
+        if auth:
+            head += f"Authorization: Bearer {self.TOKEN}\r\n"
+        sock = socket.create_connection(("127.0.0.1", self.port), timeout=wait)
+        try:
+            sock.sendall((head + headers + "\r\n").encode("latin-1") + body)
+            data = b""
+            try:
+                while b"\r\n\r\n" not in data:
+                    chunk = sock.recv(4096)
+                    if not chunk:
+                        break
+                    data += chunk
+            except socket.timeout:
+                return None, None
+            if not data:
+                return "", ""
+            status, _, rest = data.partition(b"\r\n")
+            return status.decode("latin-1"), rest.partition(b"\r\n\r\n")[0].decode("latin-1").lower()
+        finally:
+            sock.close()
+
+    def test_a_negative_content_length_is_a_400_not_a_hung_thread(self):
+        status, _ = self.raw("Content-Length: -1\r\n")
+        self.assertIsNotNone(status, "the handler thread hung reading until EOF")
+        self.assertIn(" 400 ", status)
+
+    def test_a_non_numeric_content_length_is_a_400(self):
+        status, _ = self.raw("Content-Length: abc\r\n")
+        self.assertIn(" 400 ", status or "(no response)")
+
+    def test_json_nested_deeper_than_the_decoder_allows_is_a_400(self):
+        body = b"[" * 30000 + b"]" * 30000
+        self.assertLess(len(body), api.MAX_BODY)
+        status, _ = self.raw(f"Content-Length: {len(body)}\r\n", body)
+        self.assertIn(" 400 ", status or "(no response)")
+
+    def test_the_server_keeps_working_after_those_requests(self):
+        self.raw("Content-Length: abc\r\n")
+        body = json.dumps({"protocol_major": 1, "operation": "rootforge.capabilities.get"}).encode()
+        status, _ = self.raw(f"Content-Length: {len(body)}\r\n", body)
+        self.assertIn(" 200 ", status or "(no response)")
+
+    def test_a_non_ascii_token_is_a_401_not_a_crash(self):
+        # hmac.compare_digest raises TypeError on a non-ASCII str, so the comparison must be on bytes.
+        status, _ = self.raw("Authorization: Bearer caf\xe9\r\nContent-Length: 0\r\n", auth=False)
+        self.assertIn(" 401 ", status or "(no response)")
+
+    def test_an_unread_body_closes_the_connection(self):
+        status, headers = self.raw("Content-Length: 5\r\n", b"hello", auth=False)
+        self.assertIn(" 401 ", status or "(no response)")
+        self.assertIn("connection: close", headers or "")
+
+    def test_the_token_file_is_created_0600_even_under_a_loose_umask(self):
+        import os
+        import stat
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sub" / "api.token"
+            old = os.umask(0o022)
+            try:
+                api._write_token_file(path, "abc123")
+            finally:
+                os.umask(old)
+            self.assertEqual(path.read_text(), "abc123\n")
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_the_token_file_is_never_written_through_a_symlink(self):
+        import os
+        import stat
+
+        with tempfile.TemporaryDirectory() as tmp:
+            victim = Path(tmp) / "victim.txt"
+            victim.write_text("precious\n")
+            victim.chmod(0o644)
+            path = Path(tmp) / "api.token"
+            path.symlink_to(victim)
+            api._write_token_file(path, "abc123")
+            self.assertEqual(victim.read_text(), "precious\n")
+            self.assertEqual(stat.S_IMODE(victim.stat().st_mode), 0o644)
+            self.assertFalse(path.is_symlink())
+            self.assertEqual(path.read_text(), "abc123\n")
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_a_stale_token_file_is_replaced_with_a_private_one(self):
+        import os
+        import stat
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "api.token"
+            path.write_text("old\n")
+            path.chmod(0o644)
+            api._write_token_file(path, "new")
+            self.assertEqual(path.read_text(), "new\n")
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+
 if __name__ == "__main__":
     unittest.main()
