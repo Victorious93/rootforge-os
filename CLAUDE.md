@@ -11,6 +11,16 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-24 (merge of #89 and #90):** branch `ccr-5ef71a53-ef6iwi`, on `main` `4337dbd`.
+> Merged both open PR heads (`cursor/critical-bug-scan-921d` #90, then `cursor/critical-bug-inspection-8120`
+> #89), which conflicted with `main` in `CHANGELOG.md` / `CLAUDE.md` (kept both sides) and, for #89, in
+> `BridgeExecutor.kt` / `FleetExecutor.kt`: #89 added its own private `approvalParamLines` (4,096-char
+> cap) while `main` (#91) has `bridge/ApprovalPrompt.kt` (12,100 JSON chars, nested values refused).
+> Kept #91's helper (stricter) and #89's transport-epoch/serial re-check after Allow; removed the
+> duplicates. **Not run:** `:core:test`, `:desktop:test`, `:app` (this agent's Maven mirror refused
+> Gradle plugin artifacts, 429/404 on every retry), so the merged Kotlin is only read, not compiled.
+> `bash tests/run-tests.sh` **1057/0**; `tests/lint.sh` not run (shellcheck not installed here).
+
 > **Update 2026-10-24 (bug sweep 2):** branch `ccr-4237cfad-065fob`, on `main` `5652d24`. Ran every
 > suite, then probed untrusted-input code (mutation fuzzing of every parser, `hypothesis` on the
 > Python parsers, hostile-length frames, a reproduction of each finding before its fix). Fixed, each
@@ -85,6 +95,27 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > wheel). Android SDK installed at `/opt/android-sdk` on this agent only
 > (Maven Central rate-limits with 429; retry with `--max-workers=1`).
 > **Not run on a phone or a desktop window.**
+
+> **Update 2026-10-20 (confirm stays on the original phone):** branch
+> `cursor/critical-bug-inspection-8120`. While a confirm dialog was open,
+> dropping that phone let auto-connect publish another one, and the write
+> or shell followed the new phone (desktop `adb`/`fastboot` sampled
+> `active` per call; Android erase/Firehose re-read the client after
+> Allow; fleet/bridge ACTION approval ran before `SerialOpLock`).
+> Desktop ops now pin `-s` to the serial captured at start
+> (`DeviceSerialPin`). `connect` is refused while any non-identify action
+> is in flight. Fleet/bridge shell and reboots snapshot transport epoch +
+> serial and refuse if either changed. Host `edl` refuses unless that
+> 9008 device is the only one. Approval lines are shown in full (refuse
+> nested or over-long, per `ApprovalPrompt`). Docker `adb.shell` uses `_select_serial`.
+> Dry-run / typed confirm / backup / no auto-reboot unchanged.
+> `applicationId`, signing and versioning unchanged. Local suite:
+> `:core:test` **424/0**; `:desktop:test` **5/0**
+> (`HostControllerSerialPinTest`); `:desktop:compileKotlin`;
+> `bash tests/run-tests.sh` 1055/0 (Python unittest 406/0);
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run:** `:app` tests or assemble (no Android SDK here), a phone,
+> or a desktop window.
 
 > **Update 2026-10-20 (brands + MSM/EDL + infographics):** branch
 > `feat/multi-device-identify` (same PR #85). `:core` `BrandCatalog`
@@ -541,11 +572,13 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > is still plan-only.
 
 **Last updated:** 2026-10-22 · **Branch:** `cursor/critical-bug-scan-921d`
+
+**Last updated:** 2026-10-20 · **Branch:** `cursor/critical-bug-inspection-8120`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), fleet `config.export` / `config.import` (#83 / `3f7661d`), and the bug sweep (#84 / `3d05929`). This branch (`feat/multi-device-identify`, PR #85) adds the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, ESP32 / Raspberry Pi owner helpers (no FRP / screen-lock bypass), the `BrandCatalog` identity table, the MSM / EDL guide (detect + explain + official links only), and Compose step diagrams. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), fleet `config.export` / `config.import` (#83 / `3f7661d`), and the bug sweep (#84 / `3d05929`). PR #85 (`feat/multi-device-identify`, now on `main`) adds the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, ESP32 / Raspberry Pi owner helpers (no FRP / screen-lock bypass), the `BrandCatalog` identity table, the MSM / EDL guide (detect + explain + official links only), and Compose step diagrams. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
@@ -556,6 +589,20 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a phone
   or a desktop window.**
 - Brands + MSM/EDL + infographics (this branch, PR #85): `:core`
+
+- Confirmations stay on the phone they started on (this branch): desktop
+  `DeviceSerialPin` keeps `adb -s` / `fastboot -s` on the serial captured
+  when the action started; `SerialOpLock.connectRefusal` blocks a connect
+  while any non-identify action is in flight; fleet/bridge shell and
+  reboots compare transport epoch and serial across Allow; Android erase
+  and Firehose keep the client captured before the dialog; host `edl`
+  refuses unless that 9008 device is alone; approval lines are shown in
+  full (nested or over-long refused, per `ApprovalPrompt`); Docker `adb.shell` uses
+  `_select_serial`. `:core:test` 424/0, `:desktop:test` 5/0,
+  `tests/run-tests.sh` 1055/0 (Python unittest 406/0), `tests/lint.sh`
+  clean. **Not run:** `:app` (no Android SDK here), a phone, or a desktop
+  window.
+- Brands + MSM/EDL + infographics (PR #85, on `main`): `:core`
   `BrandCatalog` (24 makers), expanded `RootGuides` / `UnlockPortals`,
   `MsmGuides` explain+link for Qualcomm 9008 (never ships MSM/firmware;
   guide never writes), Compose `StepDiagram` on wizards / portals / MSM

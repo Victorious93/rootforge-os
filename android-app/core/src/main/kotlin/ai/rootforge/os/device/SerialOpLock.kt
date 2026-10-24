@@ -23,6 +23,28 @@ class SerialOpLock {
 
     fun busyLabel(serial: String?): String? = busyState.value[key(serial)]
 
+    /**
+     * Label of an in-flight action that must keep this connection.
+     * Identify is background and does not block a connect. A connect to
+     * [targetSerial] is refused when that device, or any other device, is
+     * already inside a real action — otherwise a scan can drop the active
+     * phone and the next connect publishes a different one under a dialog
+     * that was opened for the first.
+     */
+    fun connectRefusal(targetSerial: String?): String? {
+        val own = busyState.value[key(targetSerial)]
+        if (own != null && own != IDENTIFY_LABEL) return own
+        return otherBusyAction(targetSerial)
+    }
+
+    /** Non-identify action on a device other than [targetSerial]. */
+    fun otherBusyAction(targetSerial: String?): String? {
+        val mine = key(targetSerial)
+        return busyState.value.entries.firstOrNull { (k, label) ->
+            k != mine && label != IDENTIFY_LABEL
+        }?.value
+    }
+
     suspend fun <T> withLock(serial: String?, label: String, block: suspend () -> T): T {
         val k = Companion.key(serial)
         val mutex = locks.getOrPut(k) { Mutex() }
@@ -38,6 +60,7 @@ class SerialOpLock {
 
     companion object {
         const val UNKNOWN_KEY = "unknown"
+        const val IDENTIFY_LABEL = "Identify"
 
         fun key(serial: String?): String =
             serial?.trim()?.takeIf { it.isNotEmpty() } ?: UNKNOWN_KEY

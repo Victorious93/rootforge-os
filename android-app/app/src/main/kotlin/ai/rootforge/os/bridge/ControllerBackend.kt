@@ -26,20 +26,24 @@ class ControllerBackend(private val controller: TargetController, override val a
         }
     }
 
+    override fun activeSerial(): String? = controller.activeSerial()
+
+    override fun transportEpoch(): Long = controller.transportEpoch()
+
     override suspend fun deviceInfo(): Result<Map<String, String>> {
         val info = controller.info.value ?: return Result.failure(IllegalStateException("No target is connected in the app."))
         return Result.success(info.rows.toMap())
     }
 
-    override suspend fun adbShell(command: String) =
-        controller.adbShell(command).map { it.output to it.exitCode }
+    override suspend fun adbShell(command: String, boundEpoch: Long?) =
+        controller.adbShell(command, boundEpoch).map { it.output to it.exitCode }
 
-    override suspend fun adbReboot(target: String) = controller.adbReboot(target)
+    override suspend fun adbReboot(target: String, boundEpoch: Long?) = controller.adbReboot(target, boundEpoch)
 
-    override suspend fun fastbootReboot(target: String): Result<Unit> {
+    override suspend fun fastbootReboot(target: String, boundEpoch: Long?): Result<Unit> {
         val t = RebootTarget.entries.firstOrNull { it.name.equals(target, true) || (target == "fastbootd" && it == RebootTarget.FASTBOOTD) }
             ?: return Result.failure(IllegalArgumentException("unknown reboot target"))
-        return controller.fastbootReboot(t)
+        return controller.fastbootReboot(t, boundEpoch)
     }
 
     override suspend fun moduleBuild(spec: ModuleSpec) =
