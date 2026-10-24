@@ -11,6 +11,17 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-24 (Publish release workflow):** branch `ccr-d6eee520-ln03s1`, on `main` `500a0a3`.
+> PR #93 (APK 0.3.0 / versionCode 2) and #90 are merged. The `v0.3.0` tag does **not** exist: this
+> session's git push of a tag gets HTTP 403 from its own network policy (branch pushes work), the
+> GitHub tools here cannot create tags, and the owner's web-form attempt said it could not create the
+> tag (cause not established; anonymous `rulesets` API shows none). New `publish-release.yml`
+> (manual): validates tag = `v`+`versionName`, tag new, ref `main`; runs `:core:test
+> :app:testDebugUnitTest :app:assembleDebug`; creates tag + published release with the debug APK +
+> `.sha256` via `softprops/action-gh-release@v2`. Does not start `release.yml` (GITHUB_TOKEN events).
+> Checked: duplicate-key YAML loader and `actionlint` (shellcheck on run steps) clean. **Not run on
+> GitHub yet.**
+
 > **Update 2026-10-24 (APK version bump):** branch `ccr-d6eee520-ln03s1`, on `main` `a8eb53b`.
 > APK `versionCode` 1 -> 2, `versionName` `0.1.0` -> `0.3.0`, to replace the v0.2.0 debug APK
 > (built from `e1f84ea`, 34 merged PRs behind). Plan: after the PR merges, tag `v0.3.0` on `main`;
@@ -595,7 +606,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-24 · **Branch:** `cursor/critical-bug-scan-921d`
+**Last updated:** 2026-10-24 · **Branch:** `ccr-d6eee520-ln03s1`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
@@ -926,6 +937,8 @@ assuming a regression.
   only when the `ROOTFORGE_KEYSTORE_*` repository secrets exist.
 - `toolkit.yml` ("Toolkit packages"): PRs, pushes to `main`, `v*` tags, manual. Jobs
   linux-desktop, windows-desktop, docker.
+- `publish-release.yml` ("Publish release"): manual only, from `main`, input `tag`. Creates the
+  tag + a published release with the debug APK; refuses unless tag == `v`+`versionName` and new.
 - `release.yml`: only on `v*` tags or manual dispatch (`contents: write`); builds a
   debug APK and attaches it to a published release; ISO and Termux rootfs still
   generate and verify assets into a draft. Never trigger the ISO half without being asked.
