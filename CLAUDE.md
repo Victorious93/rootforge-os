@@ -11,6 +11,19 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-24 (APK version bump):** branch `ccr-d6eee520-ln03s1`, on `main` `a8eb53b`.
+> APK `versionCode` 1 -> 2, `versionName` `0.1.0` -> `0.3.0`, to replace the v0.2.0 debug APK
+> (built from `e1f84ea`, 34 merged PRs behind). Plan: after the PR merges, tag `v0.3.0` on `main`;
+> `release.yml` then publishes the debug APK and builds the ISO/rootfs into a **draft** (its first
+> run since the `make-release-metadata.sh` mode fix). Not tagged by this session. v0.2.0 users must
+> uninstall once (debug key changed in #62). Version tripwires in `tests/test_launcher_icons.py` /
+> `tests/test_manual.py` updated. Local: `:core:test` **453/0**, `:app:testDebugUnitTest` **39/0**,
+> `verifyPaparazziDebug` passes, `:app:assembleDebug` (`ai.rootforge.os.debug` / `versionCode='2'` /
+> `versionName='0.3.0-debug'`, committed debug cert), `tests/run-tests.sh` **1057/0**,
+> `tests/lint.sh` clean. Maven Central answered 429 repeatedly; the build resolved through a
+> session-local Gradle init script adding Google's Central mirror
+> (`maven-central.storage-download.googleapis.com/maven2/`), not committed. **Not run on a phone.**
+
 > **Update 2026-10-24 (bug sweep 2):** branch `ccr-4237cfad-065fob`, on `main` `5652d24`. Ran every
 > suite, then probed untrusted-input code (mutation fuzzing of every parser, `hypothesis` on the
 > Python parsers, hostile-length frames, a reproduction of each finding before its fix). Fixed, each
@@ -582,7 +595,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-24 · **Branch:** `ccr-5ef71a53-ef6iwi`
+**Last updated:** 2026-10-24 · **Branch:** `ccr-d6eee520-ln03s1`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
