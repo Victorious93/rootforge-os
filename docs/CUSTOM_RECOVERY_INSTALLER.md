@@ -5,8 +5,9 @@ The **Custom Recovery** drawer screen installs a custom recovery with `su` and
 **Recovery** screen, which is the USB fastboot path (`fastboot boot` /
 `fastboot flash`) to a target in the bootloader.
 
-**Status:** compiles and unit-tested. **Not run on a phone.** No recovery
-images are bundled in the APK.
+**Status:** compiles and unit-tested. The lookup and download chain was run
+against the live TWRP and PitchBlack sites on 2026-10-24 (see "What the sites
+serve"). **Not run on a phone.** No recovery images are bundled in the APK.
 
 ## What it does
 
@@ -15,9 +16,17 @@ images are bundled in the APK.
    reports `uid=0`, A/B vs A-only, and whether `/dev/block/by-name` (or
    `bootdevice/by-name`) has `recovery` / `recovery_a` / `recovery_b`.
 2. Lists **TWRP** from the official device list (`https://twrp.me/search.json`)
-   and directory (`https://dl.twrp.me/<codename>/`), and **PitchBlack** from
-   `https://pitchblackrecovery.com/<codename>` plus its GitHub releases /
-   SourceForge files. Lookup and download run only when you tap them, or when
+   and directory (`https://dl.twrp.me/<codename>/`), and **PitchBlack** from the
+   build list its device page loads
+   (`https://pitchblackrecovery.com/assets/json/builds-<codename>.json`), then
+   the SourceForge folder and the device repo's GitHub releases if that list is
+   missing. Both sites keep a device under one exact spelling
+   (`dl.twrp.me/AI2201/` and `pitchblackrecovery.com/X00P/` are pages; the
+   lower-case spellings are 404s) and the app passes lower-cased codenames, so
+   TWRP is asked for the spelling in its own search title, and PitchBlack is
+   tried as given, then in lower case, then in the spelling its home page's
+   device list uses (one extra read, only when the first two miss). Lookup and
+   download run only when you tap them, or when
    Dashboard **Builds for this device** opens this screen for a matching TWRP
    or PitchBlack Custom RR row (lookup still uses the probed phone).
 3. Lets you pick a local `.img` or `.zip` from the library.
@@ -46,11 +55,36 @@ images are bundled in the APK.
   browser links.
 - Skip `ApprovalCenter`. There is no setting that turns the phrase off.
 
+## What the sites serve (read on 2026-10-24)
+
+- `twrp.me/search.json`: a JSON list of `{title, desc, url}`; the codename is in
+  the last parentheses of the title.
+- `dl.twrp.me/<codename>/`: a table whose rows link each file as
+  `/<codename>/<file>.html`, the file's own download page. The image is
+  `/<codename>/<file>`. The host serves it only to a request whose Referer is a
+  dl.twrp.me page; without one it returns that page's HTML. The app sends the
+  file's own page, which is the route TWRP asks for, downloads to the person's own
+  library for their own phone, and never mirrors or republishes a file. `.img.tar`
+  rows (Odin, Samsung) are skipped.
+- `pitchblackrecovery.com/<codename>/`: the page's HTML has no download links. A
+  script loads `/assets/json/builds-<codename>.json` (`latest` and
+  `older_builds`, each with a `download_link` such as
+  `https://sourceforge.net/projects/pbrp/files/<codename>/<file>.zip/download`,
+  which redirects to a mirror).
+- `sourceforge.net/projects/pbrp/files/<codename>/`: links each build as
+  `<file>.zip/download`; its folder, stats and info links are not downloads.
+
 ## Checksums
 
-TWRP publishes `.img.md5` (and often a `.asc` PGP file) next to the image. When
-that MD5 is fetched, a mismatch refuses the write/download. SHA-256 of the file
-is always shown. PGP is **not** verified (the app does not ship a keyring).
+TWRP publishes `<file>.md5`, `<file>.sha256` and `<file>.asc` next to every
+image (read on 2026-10-24: for `twrp-3.2.1-0-enchilada.img` the published `.md5`
+matched the downloaded file), but the directory page lists none of them; only
+each file's own page links them. The lookup does not fetch them, so a TWRP offer
+carries no published checksum yet. The older form, a directory that links a
+`.img.md5`, is still read, and a mismatch there refuses the download. A
+download is always checked for being an image or a zip, and its SHA-256 is
+always shown. PitchBlack builds carry no published checksum in the build list.
+PGP is **not** verified (the app does not ship a keyring).
 
 ## Code
 

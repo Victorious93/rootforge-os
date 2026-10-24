@@ -3,7 +3,10 @@ import contextlib
 import io
 import json
 import os
+import random
+import re
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -66,6 +69,14 @@ class TestLogger(LogTestCase):
         self.assertEqual(out.getvalue(), "")
 
 
+# The `NAME=VALUE` rule as it stood before it was made linear. On a long identifier run it takes
+# quadratic time and it misses a name glued to a non-ASCII letter, but on short ASCII input it is the
+# specification the current rule has to agree with.
+_EARLIER_ASSIGNMENT = re.compile(
+    r"""(?i)\b([A-Za-z0-9_.-]*(?:key|token|secret|password|passwd|credential|psk)(?:[_.-][A-Za-z0-9_.-]*)?["']?\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s"']+)"""
+)
+
+
 class TestRedaction(LogTestCase):
     def logged(self, **fields):
         logger = Logger("t", execution_id="00000000", echo=False)
@@ -122,6 +133,44 @@ class TestRedaction(LogTestCase):
         record = self.logged(count=3, ok=True, path="/tmp/x", note=None)
         self.assertEqual((record["count"], record["ok"], record["path"], record["note"]),
                          (3, True, "/tmp/x", None))
+
+    def test_a_long_identifier_run_is_redacted_in_linear_time(self):
+        # The earlier form re-scanned a long `a-a-a-...` run from every word boundary inside it (12 KB took
+        # about 5 s, 40 KB took 63 s). This runs over script logs at exit, and a device chooses some of the text.
+        run = "a-" * 6000
+        started = time.perf_counter()
+        secret = rflog.redact_text(run + "key=abc")
+        plain = rflog.redact_text(run + "=abc")
+        elapsed = time.perf_counter() - started
+        self.assertEqual(secret, run + "key=" + rflog._REDACTED)
+        self.assertEqual(plain, run + "=abc")
+        self.assertLess(elapsed, 1.0, f"redact_text took {elapsed:.2f}s on a 12 KB identifier run")
+
+    def test_a_name_glued_to_non_ascii_text_is_redacted(self):
+        for given, expected in [
+            ("密码password=hunter2", "密码password=" + rflog._REDACTED),
+            ("éapi_key=abc", "éapi_key=" + rflog._REDACTED),
+            ("клюapi_key=abc", "клюapi_key=" + rflog._REDACTED),
+        ]:
+            with self.subTest(given=given):
+                self.assertEqual(rflog.redact_text(given), expected)
+
+    def test_the_assignment_rule_agrees_with_the_earlier_form_on_ascii(self):
+        rng = random.Random(20261024)
+        chars = list("abkeyKEYtokenTOKENsecretpswdcrilPSK0189_.-=: \t\n\"'(),;/x")
+        pieces = ["key", "token", "secret", "password", "passwd", "credential", "psk", "api_key", "x.key",
+                  "keyboard", "tokenizer", "monkey", "my-token", "a.b.c", "--api-key", "=", ":", " = ", ": ",
+                  '"', "'", " ", "\n", "val", '"v w"', "'v w'"]
+
+        def redact_with(pattern, text):
+            return pattern.sub(lambda m: m.group(1) + rflog._REDACTED, text)
+
+        for i in range(20000):
+            if i % 2:
+                text = "".join(rng.choice(chars) for _ in range(rng.randint(0, 60)))
+            else:
+                text = "".join(rng.choice(pieces) for _ in range(rng.randint(0, 14)))
+            self.assertEqual(redact_with(rflog._SECRET_ASSIGNMENT, text), redact_with(_EARLIER_ASSIGNMENT, text), repr(text))
 
 
 class TestExecutionId(LogTestCase):

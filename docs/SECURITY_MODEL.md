@@ -77,11 +77,13 @@ access to the operator's account:
   name passes through; the rules over-redact on purpose; the terminal is not redacted; the
   secret is in the `0600` file until exit; and a script SIGKILLed outside the CLI is never
   redacted. Do not rely on it as a substitute for not printing secrets.
-- **Redaction misses a name glued to a non-ASCII letter.** The `NAME=value` rule needs a word
-  boundary before the name. Under a UTF-8 locale neither the Python nor the sed engine redacts
-  `密码password=hunter2` or `éapi_key=abc` (sed under `LC_ALL=C` does). The Python pattern is also
-  quadratic on long runs of `[A-Za-z0-9_.-]` (40 KB of `a-a-a-…` took 63 s; sed 0.03 s). Reproduced
-  2026-10-24, not fixed: a verified replacement is described in `docs/REVIEW.md`.
+- **Redaction of the private-key rules is quadratic on odd input.** The `NAME=value` rule
+  was fixed 2026-10-24 (a name glued to a non-ASCII letter, such as `密码password=hunter2`, is
+  now redacted by both engines, and the Python rule is linear: 100 KB takes 14 ms where it took
+  395 s). The private-key-block rules were measured and not changed: Python takes 3.2 s for
+  5,000 unterminated `-----BEGIN PRIVATE KEY-----` markers, and sed takes 6.5 s for one such
+  line followed by 1.6 MB of log (quadratic; a 64 MiB log would take hours). `docs/REVIEW.md`
+  has the numbers and a proposed fix.
 - **Logs are private only for new files.** An existing log or report keeps the mode it has;
   directories keep the umask default.
 - **The Custom RR catalog is unauthenticated third-party data.** It comes from

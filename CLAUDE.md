@@ -11,6 +11,44 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-24 (secret redaction fixed):** branch `ccr-4237cfad-065fob`, on `main` `0240ec4`. The owner said
+> go ahead to the two findings the bug sweep held back (they touch secret redaction, ASK FIRST). (1) The `NAME=value`
+> rule missed a name glued to a non-ASCII letter (`密码password=hunter2`, `éapi_key=abc`) in both engines under a UTF-8
+> locale; Python's own locale coercion is enough to trigger it for the sed child, so the parity test reproduced it with
+> no setup. The Python rule now starts a match only where a `[A-Za-z0-9_.-]` run starts, and `rf_redact` runs sed with
+> `LC_ALL=C` (UTF-8 text and invalid bytes pass through unchanged). (2) The Python rule was quadratic (12 KB 5.3 s,
+> 40 KB 63 s, 100 KB 395 s); 40 KB now takes 6 ms and 100 KB 14 ms. Old and new rules agree on 250k random ASCII inputs
+> (`hypothesis`, scratch) and on 20k seeded ones in `tests/test_log.py`, which keeps the old pattern as the reference;
+> fixed Python and sed agree on 90k random lines. **Measured, not changed (needs a go-ahead):** the private-key block
+> rules are quadratic too: Python 3.2 s for 5,000 unterminated `-----BEGIN PRIVATE KEY-----` markers; sed 6.5 s for one
+> such line followed by 1.6 MB of log, so a 64 MiB log would take hours at script exit (`rf_redact_file` has no size
+> cap). Proposed fix in `docs/REVIEW.md`. Against the old code the new parity rows failed in both engines and so did
+> the non-ASCII test and the timing guard. `bash tests/run-tests.sh` **1057/0** (Python unittest 419, was 415),
+> `bash tests/lint.sh` clean. No Kotlin change, so the Gradle suites were not re-run for this commit (the branch's last
+> full run is in the update below). **Not run on a phone or a desktop window.**
+
+> **Update 2026-10-24 (Custom Recovery lookup vs the live sites):** branch `ccr-4237cfad-065fob`, on `main`
+> `0240ec4` (merged in three times: after #87, after #89 / #92 / #93 / #90, and after #94; the only conflicts
+> were docs, both sides kept). The owner allowed `twrp.me`, `dl.twrp.me` and `pitchblackrecovery.com` (and `sourceforge.net` was
+> reachable), so the lookup was run against the real pages. **[Certain] The old parsers returned no offer for
+> any device tried**: the unit fixtures matched layouts the sites do not use. (1) `dl.twrp.me/<codename>/` links
+> every file as a root-relative `/<codename>/<file>.html` page, which `parseTwrpDirectory` dropped; it now reads
+> those rows and uses the file's page as the offer's page and Referer (the image host returns that page's HTML
+> without a dl.twrp.me Referer). (2) The sites are case-sensitive (`/AI2201/` 200, `/ai2201/` 404) and the app
+> passes lower-cased names: TWRP now keeps its search title's spelling, PitchBlack tries the name as given, lower
+> case, then the spelling in its home page's device list. (3) PitchBlack device pages have no download links in
+> their HTML (a script loads `/assets/json/builds-<codename>.json`) and SourceForge's links end in `/download`;
+> both are read now (`parsePbrpBuilds`, `parseSourceForgeFiles`). Run through the real `RecoveryCatalogClient` and
+> `RecoveryFetcher` from this JVM: TWRP `enchilada` 36 offers, `x00p` 11; PitchBlack `enchilada` 12, `x00p` 3; a
+> 27 MB TWRP image (`ANDROID!`, its published `.md5` matched) and a 54 MB PitchBlack zip (`PK`, through the
+> SourceForge redirect) downloaded. **Not done:** TWRP's `.md5`/`.sha256` are linked only from each file's own page
+> and are still not fetched; the GitHub-release route was not run (`api.github.com` is denied by this session's
+> gateway). 11 new tests; the 8 that can run on the old code failed there. `:core:test` **464/0** (was 453 on `main`),
+> `:desktop:test` 9/0, `:app:testDebugUnitTest` 39/0, `:app:assembleDebug` builds, `bash tests/run-tests.sh`
+> **1057/0**, `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a desktop
+> window.** The same session also cleared the merge conflicts on the bot PRs #89 and #90 (both merged since);
+> neither is part of this branch.
+
 > **Update 2026-10-24 (Publish release workflow):** branch `ccr-d6eee520-ln03s1`, on `main` `500a0a3`.
 > PR #93 (APK 0.3.0 / versionCode 2) and #90 are merged. The `v0.3.0` tag does **not** exist: this
 > session's git push of a tag gets HTTP 403 from its own network policy (branch pushes work), the
@@ -63,7 +101,8 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `hmac.compare_digest`; `HeadlessApi` compares in constant time. (9) `lint_module.sh` wrote
 > `sh -n` errors to the fixed `/tmp/lint_module_syntax_err` and wrote through a planted symlink
 > (reproduced); now `mktemp`.
-> **Found, NOT fixed — needs the owner (touches secret redaction, ASK FIRST):** `redact_text`
+> **Found, NOT fixed at the time — needs the owner (touches secret redaction, ASK FIRST; fixed later the same day, see
+> the redaction update above):** `redact_text`
 > (Python) and `rf_redact` (sed) both leave `密码password=hunter2` and `éapi_key=abc` unredacted under a
 > UTF-8 locale (`\b` cannot match between a non-ASCII letter and the name; `LC_ALL=C` redacts), and the
 > Python pattern is quadratic: 40 KB of `a-a-a-…` took **63 s**, 100 KB **395 s** (sed: 0.03 s) while
@@ -72,7 +111,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > leak in Python (the sed rule would need the same change and parity samples). Also unverified: the
 > TWRP / PitchBlack page formats — this session's network policy denies `twrp.me`, `dl.twrp.me` and
 > `pitchblackrecovery.com`, so `parseTwrpDirectory` (which drops root-relative hrefs) was not checked
-> against the live pages.
+> against the live pages (checked and fixed later the same day: see the update above).
 > Local suite on this head: `:core:test` **445/0** (was 424), `:desktop:test` **8/0** (was 4),
 > `:app:testDebugUnitTest` **39/0** (was 36; `verifyPaparazziDebug` passes), `:app:assembleDebug`
 > (`aapt2 dump badging`: `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`),
@@ -84,7 +123,6 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > only on resolution errors, `--max-workers=1`. **Not run:** a phone, a desktop window, a Docker build
 > (the CLI is present, no daemon), the live TWRP / PitchBlack pages. Every open observation, with its
 > evidence and confidence, is in `docs/REVIEW.md` § Bug sweep 2026-10-24.
-
 
 > **Update 2026-10-22 (recovery backup gate):** branch `cursor/critical-bug-scan-921d`.
 > Custom Recovery treated a missing `su` exit status as success and wrote
@@ -606,7 +644,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-24 · **Branch:** `ccr-d6eee520-ln03s1`
+**Last updated:** 2026-10-24 · **Branch:** `ccr-4237cfad-065fob`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
@@ -616,6 +654,13 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
+- Secret redaction (this branch): a name glued to non-ASCII text is redacted by both engines, and the Python
+  `NAME=value` rule is linear (100 KB in 14 ms). The private-key block rules are still quadratic on odd input
+  (measured; fix proposed in `docs/REVIEW.md`, waiting for a go-ahead). `tests/run-tests.sh` 1057/0.
+- Custom Recovery lookup (this branch): read against the live TWRP and PitchBlack sites on 2026-10-24 and
+  fixed (see the 2026-10-24 update above). A lookup and a download ran end to end through the real
+  `RecoveryCatalogClient` / `RecoveryFetcher`; nothing was flashed. TWRP checksums are not fetched yet.
+  `:core:test` 464/0. **Not run on a phone or a desktop window.**
 - Custom Recovery backup gate (this branch): a missing `su` exit status is
   not success, and a pulled backup that is not exactly the partition size
   is discarded. The new image is not written. `:core:test` 427/0,
