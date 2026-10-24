@@ -7,6 +7,12 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Android app version 0.3.0 / versionCode 2 (2026-10-24)
+- `android-app/app/build.gradle.kts`: `versionCode` 1 -> 2, `versionName` `0.1.0` -> `0.3.0` (debug builds report `0.3.0-debug`). Every APK since v0.2.0 still said `0.1.0`, so builds could not be told apart. Prepares a `v0.3.0` tag; nothing is tagged or published by this change. `applicationId` and signing unchanged. The desktop package (`0.1.0`) and Docker API `app_version` are not bumped.
+- **Upgrading from the v0.2.0 APK needs one uninstall:** v0.2.0 was signed with CI's throwaway debug key, and later builds use the committed `app/debug.keystore` (#62, cert SHA-256 `77:7A:C7:00:…:64:6F`).
+- Version tripwires in `tests/test_launcher_icons.py` and `tests/test_manual.py` now expect the new values.
+- Tests: `:core:test` **453/0**, `:app:testDebugUnitTest` **39/0**, `:app:verifyPaparazziDebug` passes, `:app:assembleDebug` (`aapt dump badging`: `ai.rootforge.os.debug` / `versionCode='2'` / `versionName='0.3.0-debug'`; `apksigner` cert SHA-256 `777ac700…86646f`, the committed key), `bash tests/run-tests.sh` **1057/0**, `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not installed on a phone.**
+
 ### Bug sweep 2026-10-24
 Each item was reproduced first, and its regression test was run against the old code and failed before the fix.
 - **`getvar all` names with an argument were mangled (Kotlin).** `FlashPlanner.parseVarLine` split on the first `:`, so `partition-size:boot_a: 0x4000000` became key `partition-size` / value `boot_a: 0x4000000` and `putIfAbsent` kept only the first partition; Partition info listed one. It now splits on the first `": "`, as `core/device.py` and `docs/ARCHITECTURE.md` §3.1 already say. Affects the USB client, the desktop controller and device identify.
@@ -20,6 +26,7 @@ Each item was reproduced first, and its regression test was run against the old 
 - **`lint_module.sh`** wrote `sh -n` errors to the fixed `/tmp/lint_module_syntax_err` and wrote through a planted symlink (reproduced). It uses `mktemp`, removed by the existing EXIT trap.
 - **Found and not fixed** (touches secret redaction, so left for the owner): `redact_text` and `rf_redact` leave `密码password=hunter2` and `éapi_key=abc` unredacted under a UTF-8 locale, and the Python pattern is quadratic (40 KB of `a-a-a-…` took 63 s; sed 0.03 s). A verified fix and the other open observations are in `docs/REVIEW.md` § Bug sweep 2026-10-24 and `docs/SECURITY_MODEL.md` §2.
 - Tests: `:core:test` **445/0** (was 424), `:desktop:test` **8/0** (was 4), `:app:testDebugUnitTest` **39/0** (was 36; `verifyPaparazziDebug` passes), `:app:assembleDebug` (`ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`), `:app:lintDebug` 0 errors, `bash tests/run-tests.sh` **1057/0** (Python unittest 414, was 405), `bash tests/lint.sh` clean. `applicationId`, signing and versioning unchanged. **Not run on a phone, a desktop window, a Docker build (no daemon), or the live TWRP / PitchBlack pages (network policy).**
+
 
 ### Custom Recovery: do not write over a missing or short backup (2026-10-22)
 - A recovery `dd` whose shell closed before the exit trailer (`RootShellResult.exitCode == null`) was treated as success. The installer then pulled whatever was at the backup path and wrote the new image. A missing status is now a failed backup, and a pulled backup whose length is not the partition size is deleted and the write is refused.
