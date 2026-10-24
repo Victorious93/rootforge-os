@@ -176,14 +176,14 @@ class BridgeExecutor(
         val deviceEpoch = if (deviceBound) backend.transportEpoch() else null
         val deviceSerial = if (deviceBound) backend.activeSerial() else null
         if (op.tier == Tier.CONTROL) {
-            val paramLines = try {
+            val shown = try {
                 approvalParamLines(request.parameters)
-            } catch (e: BadParameters) {
-                return error(id, ErrorCategory.BAD_PARAMETERS, e.message ?: "bad parameters")
+            } catch (e: IllegalArgumentException) {
+                return error(id, ErrorCategory.BAD_PARAMETERS, e.message ?: "invalid parameters")
             }
             val ok = approvals.request(
                 title = "Allow ${op.name}?",
-                lines = listOf("Requested by ${caller.packageName}", op.description) + paramLines,
+                lines = listOf("Requested by ${caller.packageName}", op.description) + shown,
                 source = caller.packageName,
             )
             if (!ok) return error(id, ErrorCategory.DENIED, "the person at the host phone did not approve ${op.name}")
@@ -245,16 +245,6 @@ class BridgeExecutor(
 
     private suspend fun boundEpoch(): Long? = currentCoroutineContext()[BoundTransport]?.epoch
 
-    /** Every parameter is shown in full. A line past this cap is refused instead of clipped. */
-    private fun approvalParamLines(params: JsonObject): List<String> =
-        params.entries.map { (key, value) ->
-            val rendered = "$key = $value"
-            if (rendered.length > MAX_APPROVAL_LINE) {
-                throw BadParameters("$key is too long to show in full on the approval screen")
-            }
-            rendered
-        }
-
     private class BoundTransport(val epoch: Long) : kotlin.coroutines.AbstractCoroutineContextElement(Key) {
         companion object Key : CoroutineContext.Key<BoundTransport>
     }
@@ -280,7 +270,6 @@ class BridgeExecutor(
     companion object {
         private const val MAX_REQUEST = 64 * 1024
         private const val MAX_OUTPUT = 64 * 1024
-        private const val MAX_APPROVAL_LINE = 4_096
         private const val MAX_TIMEOUT = 15 * 60_000L
         private const val MIN_ACTION_TIMEOUT = 120_000L
         private val ADB_REBOOT_TARGETS = listOf("", "bootloader", "recovery", "sideload", "fastboot", "edl")

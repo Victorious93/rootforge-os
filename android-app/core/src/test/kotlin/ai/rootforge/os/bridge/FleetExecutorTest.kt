@@ -149,6 +149,77 @@ class FleetExecutorTest {
         assertTrue(backend.reboots.isEmpty())
     }
 
+    /** What the person approves must be everything that runs: a 2000-character command is allowed, so show all of it. */
+    @Test
+    fun theApprovalPromptShowsTheWholeShellCommand() = runTest(UnconfinedTestDispatcher()) {
+        val approvals = ApprovalCenter()
+        val backend = RecordingBackend()
+        val ex = fleetExec(approvals = approvals, backend = backend)
+        val command = "echo ok;" + " ".repeat(600) + "touch /sdcard/TAIL_MARKER"
+        val pending = async {
+            parseFleet(
+                ex.handle(
+                    fleetJson(
+                        op = FleetOp.REMOTE_COMMAND,
+                        nonce = nonce(40),
+                        extra = buildJsonObject { put("actionRef", JsonPrimitive(BridgeOp.ADB_SHELL)) },
+                        params = buildJsonObject { put("command", JsonPrimitive(command)) },
+                    ),
+                    CALLER,
+                ),
+            )
+        }
+        val request = approvals.pending.value.single()
+        assertTrue(
+            "the prompt must contain the end of the command",
+            request.lines.any { it.contains("TAIL_MARKER") },
+        )
+        approvals.answer(request.id, false)
+        assertEquals(FleetError.CONFIRMATION_REQUIRED, pending.await().error?.code)
+        assertTrue(backend.shells.isEmpty())
+    }
+
+    @Test
+    fun aParameterTooLongToShowInFullIsRefusedBeforeAnyPrompt() = runTest(UnconfinedTestDispatcher()) {
+        val approvals = ApprovalCenter()
+        val backend = RecordingBackend()
+        val ex = fleetExec(approvals = approvals, backend = backend)
+        val r = parseFleet(
+            ex.handle(
+                fleetJson(
+                    op = FleetOp.REMOTE_COMMAND,
+                    nonce = nonce(41),
+                    extra = buildJsonObject { put("actionRef", JsonPrimitive(BridgeOp.ADB_SHELL)) },
+                    params = buildJsonObject { put("command", JsonPrimitive("x".repeat(30_000))) },
+                ),
+                CALLER,
+            ),
+        )
+        assertEquals(FleetError.INVALID_PARAMETERS, r.error?.code)
+        assertTrue("nobody should be asked to approve a command they cannot read", approvals.pending.value.isEmpty())
+        assertTrue(backend.shells.isEmpty())
+    }
+
+    @Test
+    fun aNestedParameterIsRefusedBeforeAnyPrompt() = runTest(UnconfinedTestDispatcher()) {
+        val approvals = ApprovalCenter()
+        val backend = RecordingBackend()
+        val r = parseFleet(
+            fleetExec(approvals = approvals, backend = backend).handle(
+                fleetJson(
+                    op = FleetOp.REMOTE_COMMAND,
+                    nonce = nonce(42),
+                    extra = buildJsonObject { put("actionRef", JsonPrimitive(BridgeOp.ADB_SHELL)) },
+                    params = buildJsonObject { put("command", nestedArray(20)) },
+                ),
+                CALLER,
+            ),
+        )
+        assertEquals(FleetError.INVALID_PARAMETERS, r.error?.code)
+        assertTrue(approvals.pending.value.isEmpty())
+        assertTrue(backend.shells.isEmpty())
+    }
+
     @Test
     fun destructiveFalseDoesNotSkipAFlashConfirmFailure() = runTest {
         val backend = RecordingBackend().also {

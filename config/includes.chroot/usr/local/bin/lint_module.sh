@@ -27,6 +27,7 @@ done
 [[ -n "$TARGET" ]] || { echo "Usage: lint_module.sh [--json] <module_dir_or_zip>" >&2; exit 1; }
 
 WORKDIR=""
+SYNTAX_ERR=""
 # [Certain] under `set -e`, an EXIT trap whose last command evaluates false
 # overrides the script's own explicit exit code with 1 — reproduced
 # directly: `set -euo pipefail; trap 'cmd_that_returns_false' EXIT; exit 0`
@@ -34,7 +35,11 @@ WORKDIR=""
 # zip), so `[[ -n "$WORKDIR" ]]` is false here on every directory lint —
 # meaning a passing `lint_module.sh some_dir` has always actually exited 1.
 # The trailing `true` keeps cleanup's own exit status from leaking out.
-cleanup() { [[ -n "$WORKDIR" ]] && rm -rf "$WORKDIR"; true; }
+cleanup() {
+  [[ -n "$WORKDIR" ]] && rm -rf "$WORKDIR"
+  [[ -n "$SYNTAX_ERR" ]] && rm -f "$SYNTAX_ERR"
+  true
+}
 trap cleanup EXIT
 
 ISSUES=0
@@ -168,12 +173,15 @@ say "== Checking shell syntax =="
 for script in customize.sh post-fs-data.sh service.sh uninstall.sh; do
   f="$MODULE_DIR/$script"
   [[ -f "$f" ]] || continue
-  if sh -n "$f" 2>/tmp/lint_module_syntax_err; then
+  # A private temp file, not a fixed name in /tmp: a symlink planted at a fixed
+  # name would be written through. Created once, truncated by each `2>`, and
+  # removed by the EXIT trap.
+  if [[ -z "$SYNTAX_ERR" ]]; then SYNTAX_ERR="$(mktemp)"; fi
+  if sh -n "$f" 2>"$SYNTAX_ERR"; then
     ok "$script parses cleanly under sh -n"
   else
-    note "$script has a shell syntax error: $(tr '\n' ' ' < /tmp/lint_module_syntax_err)"
+    note "$script has a shell syntax error: $(tr '\n' ' ' < "$SYNTAX_ERR")"
   fi
-  rm -f /tmp/lint_module_syntax_err
 done
 
 # Native Zygisk lib presence — only applies to modules that ship a zygisk/

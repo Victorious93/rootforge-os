@@ -101,7 +101,9 @@ object BuildLookup {
      * then recoveries, then root solutions; official before unofficial within
      * each kind, otherwise catalog order. Matching is exact and
      * case-insensitive against each catalog codename (combined pages are
-     * split on `/`, `,`, `&` and spaces). When an entry has no codename match,
+     * split on `/`, `,`, `&` and spaces). Stock names such as OnePlus's
+     * `OnePlus6T` also look up their catalog codename (`fajita`) through
+     * [CodenameAliases]. When an entry has no codename match,
      * [modelNumber] (`ro.product.model`) is tried against the row's `models`
      * list. An unknown target yields an empty list: unknown is not a wildcard.
      */
@@ -111,7 +113,7 @@ object BuildLookup {
         freshness: FreshnessFeed? = null,
         modelNumber: String? = null,
     ): List<BuildMatch> {
-        val names = target.names()
+        val names = CodenameAliases.expand(target.names())
         val model = TargetIdentity.clean(modelNumber)?.lowercase()
         if (names.isEmpty() && model == null) return emptyList()
 

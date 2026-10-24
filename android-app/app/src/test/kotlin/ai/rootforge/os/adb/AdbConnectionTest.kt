@@ -40,6 +40,30 @@ class AdbConnectionTest {
         }
     }
 
+    /**
+     * The sync sub-protocol carries its own lengths, which the target controls. They size a buffer, so
+     * an absurd one must be refused rather than allocated (a 2 GB request is an OutOfMemoryError, an
+     * Error that no `catch (e: Exception)` in the app sees).
+     */
+    @Test
+    fun pullRefusesAnAbsurdOrNegativeSyncLengthInsteadOfAllocatingIt() {
+        for ((id, length) in listOf("DATA" to 300_000_000, "DATA" to -5, "FAIL" to 300_000_000, "FAIL" to -1)) {
+            val pipe = Pipe()
+            val adbd = FakeAdbd(pipe.device)
+            adbd.hostileSyncReply = id to length
+            adbd.start()
+            AdbConnection(pipe.host, SoftwareAdbKey.generate()).use { conn ->
+                conn.connect(promptTimeoutMs = 5_000)
+                try {
+                    conn.pull("/sdcard/a.txt", ByteArrayOutputStream())
+                    fail("$id with length $length must be refused")
+                } catch (e: AdbException) {
+                    assertTrue("$id $length: ${e.message}", e.message!!.contains("Implausible sync length"))
+                }
+            }
+        }
+    }
+
     @Test
     fun sideloadServesTheEndOfThePackageBeforeTheStartAndRereadsABlock() {
         // Recovery reads the zip central directory (the end) before the

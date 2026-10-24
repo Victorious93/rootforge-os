@@ -7,6 +7,7 @@ import ai.rootforge.os.device.DeviceRoster
 import ai.rootforge.os.device.RootGuideKind
 import ai.rootforge.os.device.RootGuides
 import ai.rootforge.os.device.UnlockPortals
+import ai.rootforge.os.device.rosterKey
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlinx.coroutines.CoroutineScope
@@ -73,6 +74,52 @@ class HostControllerIdentifyTest {
         assertTrue(text.contains("••••SAMS"))
     }
 
+    /**
+     * `adb connect` lists a Wi-Fi phone as `ip:port`, never as its hardware serial, so `ro.serialno`
+     * differs from the target's key. The identity must still land on that target's card and must not
+     * be dropped and re-read on every 2-second tick of the desktop loop.
+     */
+    @Test
+    fun aWirelessAdbPhoneIsIdentifiedOnceAndShownOnItsCard() = runBlocking {
+        val dir = createTempDirectory("rf-host-wireless").toFile()
+        val adb = File(dir, "adb").apply { writeText("#!/bin/true\n"); setExecutable(true) }
+        val runner = WirelessRunner()
+        val controller = HostController(
+            HostToolset(adb, null, null),
+            runner,
+            OutputLog(),
+            Library(File(dir, "library")),
+            ApprovalCenter(),
+            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+        )
+
+        controller.scan()
+        controller.identifyAttached()
+        val target = controller.targets.value.single()
+        assertEquals(WIRELESS_SERIAL, target.rosterKey())
+        val card = DeviceRoster.cards(controller.targets.value, controller.identities.value, emptyMap(), null).single()
+        assertEquals("google", card.identity?.brand)
+        assertEquals("the phone's own serial is still what is shown", "••••PIX8", card.identity?.maskedSerial)
+        assertEquals(1, runner.getpropRuns)
+
+        // The 2-second tick: scan, then identify anything that still needs it.
+        controller.scan()
+        controller.identifyAttached()
+        controller.scan()
+        controller.identifyAttached()
+        assertEquals("identified again although nothing changed", 1, runner.getpropRuns)
+    }
+
+    private class WirelessRunner : ProcessRunner() {
+        var getpropRuns = 0
+        override fun run(exe: File, args: List<String>, timeoutMs: Long, stdinBytes: ByteArray?): CmdResult = when {
+            args == listOf("devices", "-l") -> CmdResult(0, "List of devices attached\n$WIRELESS_SERIAL device product:shiba model:Pixel_8 device:shiba transport_id:3\n", "")
+            args.contains("getprop") -> { getpropRuns++; CmdResult(0, PIXEL_GETPROP, "") }
+            args.contains("packages") -> CmdResult(0, "package:com.android.settings\n", "")
+            else -> CmdResult(0, "", "")
+        }
+    }
+
     private class ScriptedRunner : ProcessRunner() {
         override fun run(exe: File, args: List<String>, timeoutMs: Long, stdinBytes: ByteArray?): CmdResult {
             return when {
@@ -89,6 +136,7 @@ class HostControllerIdentifyTest {
     private companion object {
         const val PIXEL_SERIAL = "3B051FD0H2PIX8"
         const val SAMSUNG_SERIAL = "R5CT70TESTSAMS"
+        const val WIRELESS_SERIAL = "192.168.1.50:5555"
 
         val ADB_DEVICES = """
             List of devices attached

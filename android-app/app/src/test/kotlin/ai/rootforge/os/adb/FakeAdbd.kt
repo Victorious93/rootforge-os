@@ -26,6 +26,8 @@ class FakeAdbd(
     var sideloadTerminal: String = "DONEDONE"
     var sideloadSource: ByteArray? = null
     var lastRebootTarget: String? = null
+    /** When set, a RECV is answered with one sync frame of this id and length (and no data), then the stream closes. */
+    var hostileSyncReply: Pair<String, Int>? = null
     var authSignatureValid: Boolean? = null
     var publicKeyOffered: ByteArray? = null
     @Volatile var knownKey: RSAPublicKey? = null
@@ -183,7 +185,11 @@ class FakeAdbd(
                     if (buf.size < 8 + n) return
                     val path = String(buf, 8, n); consume(8 + n)
                     val data = files[path]
-                    if (data == null) {
+                    val hostile = hostileSyncReply
+                    if (hostile != null) {
+                        reply(AdbProtocol.A_WRTE, localId, remoteId, hostile.first.toByteArray() + leBuffer(4).putInt(hostile.second).array())
+                        reply(AdbProtocol.A_CLSE, localId, remoteId)
+                    } else if (data == null) {
                         val msg = "no such file".toByteArray()
                         reply(AdbProtocol.A_WRTE, localId, remoteId, "FAIL".toByteArray() + leBuffer(4).putInt(msg.size).array() + msg)
                     } else {

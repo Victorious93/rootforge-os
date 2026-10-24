@@ -292,9 +292,13 @@ class RecoveryCatalogClient(
         private val HREF = Regex("""(?i)href\s*=\s*["']([^"']+)["']""")
         private val SAFE_FILE = Regex("""^[A-Za-z0-9._+-]+$""")
         private val TITLE_CODE = Regex("""\(([^)]+)\)\s*$""")
+        private const val MAX_TITLE_CHARS = 300
         private val TWRP_VER = Regex("""twrp-([0-9][A-Za-z0-9._-]*)-""", RegexOption.IGNORE_CASE)
 
         fun extractCodenames(title: String): List<String> {
+            // The title is remote text and TITLE_CODE is quadratic in its "(" count (a long run of them
+            // took seconds); real titles are a device name and a codename, nowhere near this long.
+            if (title.length > MAX_TITLE_CHARS) return emptyList()
             val inner = TITLE_CODE.find(title)?.groupValues?.get(1) ?: return emptyList()
             return inner.split('/', ',', '&').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
         }

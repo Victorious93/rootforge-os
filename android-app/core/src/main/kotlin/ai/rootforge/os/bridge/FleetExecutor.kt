@@ -259,16 +259,6 @@ class FleetExecutor(
         })
     }
 
-    /** Every parameter is shown in full. A line past this cap is refused instead of clipped. */
-    private fun approvalParamLines(params: JsonObject): List<String> =
-        params.entries.map { (key, value) ->
-            val rendered = "$key = $value"
-            if (rendered.length > MAX_APPROVAL_LINE) {
-                throw FleetBadParameters("$key is too long to show in full on the approval screen")
-            }
-            rendered
-        }
-
     private suspend fun runAction(actionRef: String, params: JsonObject, caller: CallerIdentity): JsonObject {
         if (RemoteActionCatalog.isForbiddenDestructive(actionRef)) {
             throw FleetOpFailed(
@@ -290,9 +280,14 @@ class FleetExecutor(
         val deviceEpoch = if (deviceBound) backend.transportEpoch() else null
         val deviceSerial = if (deviceBound) backend.activeSerial() else null
         if (cap.kind == FleetKind.ACTION) {
+            val shown = try {
+                approvalParamLines(params)
+            } catch (e: IllegalArgumentException) {
+                throw FleetBadParameters(e.message ?: "invalid parameters")
+            }
             val ok = approvals.request(
                 title = "Allow $actionRef?",
-                lines = listOf("Requested by ${caller.packageName}", cap.description) + approvalParamLines(params),
+                lines = listOf("Requested by ${caller.packageName}", cap.description) + shown,
                 source = caller.packageName,
             )
             if (!ok) {
@@ -468,7 +463,6 @@ class FleetExecutor(
 
     companion object {
         private const val MAX_OUTPUT = 64 * 1024
-        private const val MAX_APPROVAL_LINE = 4_096
         private val NODE_STATUS_KEYS = setOf("nodeId", "snapshot")
         private val ADB_REBOOT_TARGETS = listOf("", "bootloader", "recovery", "sideload", "fastboot", "edl")
         private val FASTBOOT_REBOOT_TARGETS = listOf("system", "bootloader", "recovery", "fastbootd")

@@ -110,6 +110,8 @@ class SaharaClient(private val transport: BulkTransport) {
         if (resp.command != Cmd.CMD_EXEC_RESP) return null
         val length = resp.body.asLe().getInt(4)
         if (length <= 0) return null
+        // Identity fields are a handful of bytes; the length is the device's word and sizes a buffer.
+        if (length > MAX_PACKET) throw SaharaException("Implausible Sahara command response length $length")
         send(Cmd.CMD_EXEC_DATA, leBuffer(4).putInt(clientCommand).array())
         return readBytes(length, 10_000)
     }

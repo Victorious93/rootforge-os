@@ -11,6 +11,71 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-24 (bug sweep 2):** branch `ccr-4237cfad-065fob`, on `main` `5652d24`. Ran every
+> suite, then probed untrusted-input code (mutation fuzzing of every parser, `hypothesis` on the
+> Python parsers, hostile-length frames, a reproduction of each finding before its fix). Fixed, each
+> with a regression test that was shown failing on the old code first: (1) `FlashPlanner.parseVarLine`
+> split on the first `:` so `partition-size:boot_a: 0x4000000` became key `partition-size`, and
+> `putIfAbsent` kept only the first partition (Partition info listed one) — it now splits on the first
+> `": "`, the rule `core/device.py` and `docs/ARCHITECTURE.md` §3.1 already state. (2) The fleet and
+> legacy approval prompt showed `value.toString().take(300)` while `adb.shell` runs up to 2000
+> characters: a paired controller could hide a command's tail from the person approving. (3) The same
+> `toString()` recursed per JSON level: a ~4 KB nested `command` threw `StackOverflowError`
+> (an `Error`, missed by `catch (e: Exception)`) in the Android service coroutine. Both are now
+> `bridge/ApprovalPrompt.kt`: values shown whole, nested or over-long values refused before any
+> prompt. (4) `publishIdentity` keyed an identity by its own serial but the roster looks it up by the
+> target key (USB/`adb devices` serial or device name), so a Wi-Fi ADB phone (`ip:port`), a Qualcomm
+> 9008 port (Sahara chip serial) or a bootloader whose `serialno` differs from its USB string never
+> showed its identity, and the desktop loop re-ran `getprop` + `pm list packages` every 2 s —
+> `DeviceIdentity.targetKey`. (5) `BuiltModule.fileName` was not a library name (`1.0 beta`, `1.0+5`):
+> the Modules screen could not find the zip it had just built and `module.build` returned a name
+> that does not resolve. (6) `extractCodenames` regex was quadratic on remote titles (5 s on 30k
+> characters; now bounded). (7) ADB sync `DATA`/`FAIL` and Sahara command-response lengths were
+> allocated as sent by the target (an `OutOfMemoryError` is an `Error`); now bounded. (8) Docker
+> toolkit API: the generated token file was written then `chmod`ed (loose-umask window) at a
+> predictable `/tmp` path and **followed a planted symlink, overwriting and re-moding its target**
+> (reproduced); `Content-Length: -1` hung a handler thread; `abc` and a 60 KB nested body dropped the
+> connection with no response; the token was compared with `==`. Now `O_EXCL` 0600, 400s,
+> `hmac.compare_digest`; `HeadlessApi` compares in constant time. (9) `lint_module.sh` wrote
+> `sh -n` errors to the fixed `/tmp/lint_module_syntax_err` and wrote through a planted symlink
+> (reproduced); now `mktemp`.
+> **Found, NOT fixed — needs the owner (touches secret redaction, ASK FIRST):** `redact_text`
+> (Python) and `rf_redact` (sed) both leave `密码password=hunter2` and `éapi_key=abc` unredacted under a
+> UTF-8 locale (`\b` cannot match between a non-ASCII letter and the name; `LC_ALL=C` redacts), and the
+> Python pattern is quadratic: 40 KB of `a-a-a-…` took **63 s**, 100 KB **395 s** (sed: 0.03 s) while
+> `redact_file` takes logs up to 64 MiB at exit. A linear lookahead pattern that is byte-identical on
+> 250k random ASCII inputs and 16,000x faster was verified in scratch; it also closes the Unicode
+> leak in Python (the sed rule would need the same change and parity samples). Also unverified: the
+> TWRP / PitchBlack page formats — this session's network policy denies `twrp.me`, `dl.twrp.me` and
+> `pitchblackrecovery.com`, so `parseTwrpDirectory` (which drops root-relative hrefs) was not checked
+> against the live pages.
+> Local suite on this head: `:core:test` **445/0** (was 424), `:desktop:test` **8/0** (was 4),
+> `:app:testDebugUnitTest` **39/0** (was 36; `verifyPaparazziDebug` passes), `:app:assembleDebug`
+> (`aapt2 dump badging`: `ai.rootforge.os.debug` / `versionCode=1` / `versionName=0.1.0-debug`),
+> `:app:lintDebug` 0 errors / 30 warnings, `bash tests/run-tests.sh` **1057/0** (Python unittest 414,
+> was 405), `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). Android SDK installed at
+> `/opt/android-sdk` again (cmdline-tools 23.0, SHA-1 checked against Google's manifest;
+> `sdkmanager --sdk_root=/opt/android-sdk "platforms;android-35" "build-tools;34.0.0" "platform-tools"`;
+> it prints a deprecation notice). Maven Central answered 429 on two of three first attempts; retry
+> only on resolution errors, `--max-workers=1`. **Not run:** a phone, a desktop window, a Docker build
+> (the CLI is present, no daemon), the live TWRP / PitchBlack pages. Every open observation, with its
+> evidence and confidence, is in `docs/REVIEW.md` § Bug sweep 2026-10-24.
+
+> **Update 2026-10-20 (catalog aliases):** branch `feat/catalog-aliases`.
+> `:core` `CodenameAliases` (48 OnePlus stock names -> catalog codenames,
+> RootForge-written from Google's Play supported-devices list + the
+> catalog's model numbers; nothing copied from GPL Custom RR; display-only).
+> The `modules` Paparazzi golden was NOT stale on current `main`: record
+> produced no diff and `:app:verifyPaparazziDebug` passes (the earlier
+> "fails on plain main" note is obsolete since #81/#85). Phone checklist for
+> the owner is in `docs/CUSTOM_RR_CATALOG.md`. Local suite: `:core:test`
+> **424/0**, `:desktop:test` 4/0, `:app:testDebugUnitTest` 36/0,
+> `:app:assembleDebug` (`ai.rootforge.os.debug` / `0.1.0-debug`),
+> `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean (shellcheck via the repo
+> wheel). Android SDK installed at `/opt/android-sdk` on this agent only
+> (Maven Central rate-limits with 429; retry with `--max-workers=1`).
+> **Not run on a phone or a desktop window.**
+
 > **Update 2026-10-20 (confirm stays on the original phone):** branch
 > `cursor/critical-bug-inspection-8120`. While a confirm dialog was open,
 > dropping that phone let auto-connect publish another one, and the write
@@ -21,8 +86,9 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > (`DeviceSerialPin`). `connect` is refused while any non-identify action
 > is in flight. Fleet/bridge shell and reboots snapshot transport epoch +
 > serial and refuse if either changed. Host `edl` refuses unless that
-> 9008 device is the only one. Approval lines are shown in full (refuse
-> above 4,096 characters). Docker `adb.shell` uses `_select_serial`.
+> 9008 device is the only one. Approval lines are shown in full (main's
+> `bridge/ApprovalPrompt.kt`: a nested value or one over 12,100 JSON characters
+> is refused before any prompt). Docker `adb.shell` uses `_select_serial`.
 > Dry-run / typed confirm / backup / no auto-reboot unchanged.
 > `applicationId`, signing and versioning unchanged. Local suite:
 > `:core:test` **424/0**; `:desktop:test` **5/0**
@@ -31,6 +97,17 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
 > **Not run:** `:app` tests or assemble (no Android SDK here), a phone,
 > or a desktop window.
+> **Merged with `main` `4337dbd` on 2026-10-24** (after #85, #88, #91 and #87). Conflicts:
+> `CHANGELOG.md` and this file (both sides added a block at the top: both kept, newest
+> first), and `BridgeExecutor.kt` / `FleetExecutor.kt`, where this branch and #91 each
+> added an approval-line helper. Kept #91's shared `approvalParamLines`
+> (`bridge/ApprovalPrompt.kt`), which also refuses nested values, and dropped this branch's
+> private 4,096-character copies; the passages above that said 4,096 are corrected. Every
+> test this branch added still passes unchanged. On the merged tree: `:core:test`
+> **450/0**, `:desktop:test` **9/0**, `:app:testDebugUnitTest` **39/0** (the `:app` suite
+> and `:app:assembleDebug` did run this time), `bash tests/run-tests.sh` **1057/0**
+> (Python unittest 415), `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run on a phone or a desktop window.**
 
 > **Update 2026-10-20 (brands + MSM/EDL + infographics):** branch
 > `feat/multi-device-identify` (same PR #85). `:core` `BrandCatalog`
@@ -486,7 +563,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-20 · **Branch:** `cursor/critical-bug-inspection-8120`
+**Last updated:** 2026-10-24 · **Branch:** `cursor/critical-bug-inspection-8120`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
@@ -503,7 +580,8 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   reboots compare transport epoch and serial across Allow; Android erase
   and Firehose keep the client captured before the dialog; host `edl`
   refuses unless that 9008 device is alone; approval lines are shown in
-  full (refuse past 4,096 characters); Docker `adb.shell` uses
+  full (`bridge/ApprovalPrompt.kt`: a nested value or one over 12,100 JSON
+  characters is refused before any prompt); Docker `adb.shell` uses
   `_select_serial`. `:core:test` 424/0, `:desktop:test` 5/0,
   `tests/run-tests.sh` 1055/0 (Python unittest 406/0), `tests/lint.sh`
   clean. **Not run:** `:app` (no Android SDK here), a phone, or a desktop

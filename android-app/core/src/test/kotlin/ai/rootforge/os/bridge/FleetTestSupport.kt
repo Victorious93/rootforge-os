@@ -4,7 +4,10 @@ import ai.rootforge.os.config.ConfigBackup
 import ai.rootforge.os.core.ApprovalCenter
 import ai.rootforge.os.shizuku.PrivilegedResult
 import ai.rootforge.os.shizuku.PrivilegedShell
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -13,6 +16,13 @@ internal val CALLER = CallerIdentity("ai.droidcommand.app", "aa".repeat(32))
 internal const val NOW = 1_700_000_000_000L
 
 internal fun nonce(n: Int): String = n.toString(16).padStart(FLEET_NONCE_HEX_CHARS, '0')
+
+/** `[[[..."x"...]]]`, [depth] arrays deep, built without recursion. */
+internal fun nestedArray(depth: Int): JsonElement {
+    var el: JsonElement = JsonPrimitive("x")
+    repeat(depth) { el = JsonArray(listOf(el)) }
+    return el
+}
 
 internal fun memoryStore() = object : PairingPersistence {
     var json = "[]"
