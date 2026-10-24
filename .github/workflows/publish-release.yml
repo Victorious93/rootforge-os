@@ -1,0 +1,137 @@
+# RootForge OS — publish an APK release from the GitHub web UI
+# Victorious Framework
+#
+# A release without a computer: Actions -> "Publish release" -> Run workflow,
+# type the tag (for example v0.3.0). The workflow checks the tag, runs the
+# Android unit tests, builds the debug APK from main, then creates the tag and
+# a published GitHub Release with the APK and its SHA-256 attached.
+#
+# Only the debug APK. The ISO and Termux rootfs stay on release.yml, which a
+# tag created here does not start: GitHub does not run workflows for events
+# caused by GITHUB_TOKEN.
+#
+# Refuses when: not run from main; the tag is not vMAJOR.MINOR.PATCH; the tag
+# already exists; or the tag does not match versionName in
+# android-app/app/build.gradle.kts (bump the version in a PR first).
+
+name: Publish release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to create, e.g. v0.3.0 (must match versionName)'
+        required: true
+        type: string
+      notes:
+        description: 'Text shown above the generated release notes (optional)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check branch, tag format, version and that the tag is new
+        id: tag
+        env:
+          TAG: ${{ inputs.tag }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::Run this from main (was $REF)."
+            exit 1
+          fi
+          # Trim surrounding whitespace (phone keyboards add a trailing space).
+          tag="$(printf '%s' "$TAG" | tr -d '[:space:]')"
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag must look like v0.3.0 (got '$TAG')."
+            exit 1
+          fi
+          version="$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' android-app/app/build.gradle.kts)"
+          if [ "v$version" != "$tag" ]; then
+            echo "::error::Tag $tag does not match versionName '$version' in android-app/app/build.gradle.kts."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "::error::Tag $tag already exists."
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  build-apk:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: android-app/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Unit tests and debug APK
+        run: ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Stable asset name and checksum
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/apk-assets"
+          cp app/build/outputs/apk/debug/*.apk "$GITHUB_WORKSPACE/apk-assets/rootforge-os-android-debug.apk"
+          cd "$GITHUB_WORKSPACE/apk-assets"
+          sha256sum rootforge-os-android-debug.apk > rootforge-os-android-debug.apk.sha256
+          cat rootforge-os-android-debug.apk.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: publish-release-apk
+          path: apk-assets/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [check, build-apk]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: publish-release-apk
+          path: apk-assets
+
+      - name: Create the tag and a published release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ needs.check.outputs.tag }}
+          body: ${{ inputs.notes }}
+          draft: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            apk-assets/rootforge-os-android-debug.apk
+            apk-assets/rootforge-os-android-debug.apk.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -11,7 +11,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-24 (secret redaction fixed):** branch `ccr-4237cfad-065fob`, on `main` `500a0a3`. The owner said
+> **Update 2026-10-24 (secret redaction fixed):** branch `ccr-4237cfad-065fob`, on `main` `0240ec4`. The owner said
 > go ahead to the two findings the bug sweep held back (they touch secret redaction, ASK FIRST). (1) The `NAME=value`
 > rule missed a name glued to a non-ASCII letter (`密码password=hunter2`, `éapi_key=abc`) in both engines under a UTF-8
 > locale; Python's own locale coercion is enough to trigger it for the sed child, so the parity test reproduced it with
@@ -28,8 +28,8 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > full run is in the update below). **Not run on a phone or a desktop window.**
 
 > **Update 2026-10-24 (Custom Recovery lookup vs the live sites):** branch `ccr-4237cfad-065fob`, on `main`
-> `500a0a3` (merged in twice, after #87 and after #89 / #92 / #93 / #90; the only conflicts were docs, both
-> sides kept). The owner allowed `twrp.me`, `dl.twrp.me` and `pitchblackrecovery.com` (and `sourceforge.net` was
+> `0240ec4` (merged in three times: after #87, after #89 / #92 / #93 / #90, and after #94; the only conflicts
+> were docs, both sides kept). The owner allowed `twrp.me`, `dl.twrp.me` and `pitchblackrecovery.com` (and `sourceforge.net` was
 > reachable), so the lookup was run against the real pages. **[Certain] The old parsers returned no offer for
 > any device tried**: the unit fixtures matched layouts the sites do not use. (1) `dl.twrp.me/<codename>/` links
 > every file as a root-relative `/<codename>/<file>.html` page, which `parseTwrpDirectory` dropped; it now reads
@@ -48,6 +48,17 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > **1057/0**, `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a desktop
 > window.** The same session also cleared the merge conflicts on the bot PRs #89 and #90 (both merged since);
 > neither is part of this branch.
+
+> **Update 2026-10-24 (Publish release workflow):** branch `ccr-d6eee520-ln03s1`, on `main` `500a0a3`.
+> PR #93 (APK 0.3.0 / versionCode 2) and #90 are merged. The `v0.3.0` tag does **not** exist: this
+> session's git push of a tag gets HTTP 403 from its own network policy (branch pushes work), the
+> GitHub tools here cannot create tags, and the owner's web-form attempt said it could not create the
+> tag (cause not established; anonymous `rulesets` API shows none). New `publish-release.yml`
+> (manual): validates tag = `v`+`versionName`, tag new, ref `main`; runs `:core:test
+> :app:testDebugUnitTest :app:assembleDebug`; creates tag + published release with the debug APK +
+> `.sha256` via `softprops/action-gh-release@v2`. Does not start `release.yml` (GITHUB_TOKEN events).
+> Checked: duplicate-key YAML loader and `actionlint` (shellcheck on run steps) clean. **Not run on
+> GitHub yet.**
 
 > **Update 2026-10-24 (APK version bump):** branch `ccr-d6eee520-ln03s1`, on `main` `a8eb53b`.
 > APK `versionCode` 1 -> 2, `versionName` `0.1.0` -> `0.3.0`, to replace the v0.2.0 debug APK
@@ -112,7 +123,6 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > only on resolution errors, `--max-workers=1`. **Not run:** a phone, a desktop window, a Docker build
 > (the CLI is present, no daemon), the live TWRP / PitchBlack pages. Every open observation, with its
 > evidence and confidence, is in `docs/REVIEW.md` § Bug sweep 2026-10-24.
-
 
 > **Update 2026-10-22 (recovery backup gate):** branch `cursor/critical-bug-scan-921d`.
 > Custom Recovery treated a missing `su` exit status as success and wrote
@@ -972,6 +982,8 @@ assuming a regression.
   only when the `ROOTFORGE_KEYSTORE_*` repository secrets exist.
 - `toolkit.yml` ("Toolkit packages"): PRs, pushes to `main`, `v*` tags, manual. Jobs
   linux-desktop, windows-desktop, docker.
+- `publish-release.yml` ("Publish release"): manual only, from `main`, input `tag`. Creates the
+  tag + a published release with the debug APK; refuses unless tag == `v`+`versionName` and new.
 - `release.yml`: only on `v*` tags or manual dispatch (`contents: write`); builds a
   debug APK and attaches it to a published release; ISO and Termux rootfs still
   generate and verify assets into a draft. Never trigger the ISO half without being asked.
