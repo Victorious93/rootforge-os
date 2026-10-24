@@ -36,6 +36,26 @@ class FastbootClientTest {
         assertEquals("a", vars["current-slot"])
     }
 
+    /** On the wire the INFO text is just `name: value`; the `(bootloader) ` prefix is added by the host CLI. */
+    @Test
+    fun getvarAllKeepsArgumentBearingNamesIntact() {
+        val pipe = Pipe()
+        val client = FastbootClient(pipe.host)
+        thread(isDaemon = true) {
+            pipe.device.nextPacket()
+            pipe.device.send("INFOhas-slot:boot: yes".toByteArray())
+            pipe.device.send("INFOpartition-size:boot_a: 0x4000000".toByteArray())
+            pipe.device.send("INFOpartition-size:boot_b: 0x4000000".toByteArray())
+            pipe.device.send("INFOcurrent-slot: a".toByteArray())
+            pipe.device.send("OKAY".toByteArray())
+        }
+        val vars = client.getvarAll()
+        assertEquals("yes", vars["has-slot:boot"])
+        assertEquals("0x4000000", vars["partition-size:boot_a"])
+        assertEquals("0x4000000", vars["partition-size:boot_b"])
+        assertEquals("a", vars["current-slot"])
+    }
+
     @Test
     fun aFailReplyBecomesAnException() {
         val pipe = Pipe()

@@ -136,6 +136,25 @@ class RecoveryCatalogTest {
     }
 
     @Test
+    fun titleCodenamesComeFromTheTrailingParentheses() {
+        assertEquals(listOf("shiba"), RecoveryCatalogClient.extractCodenames("Google Pixel 8 (shiba)"))
+        assertEquals(listOf("enchilada", "fajita"), RecoveryCatalogClient.extractCodenames("OnePlus 6/6T (enchilada/fajita)  "))
+        assertEquals(listOf("baz"), RecoveryCatalogClient.extractCodenames("Foo (bar) (baz)"))
+        assertTrue(RecoveryCatalogClient.extractCodenames("Foo (bar (baz))").isEmpty())
+        assertTrue(RecoveryCatalogClient.extractCodenames("no parentheses").isEmpty())
+        assertEquals(listOf("shiba"), RecoveryCatalogClient.extractCodenames("x".repeat(250) + " (shiba)"))
+    }
+
+    /** The title is remote text and the pattern is quadratic in its "(" count: a hostile one must not stall the lookup. */
+    @Test
+    fun aHostileTitleCannotStallTheCodenameRegex() {
+        val started = System.nanoTime()
+        assertTrue(RecoveryCatalogClient.extractCodenames("(".repeat(30_000)).isEmpty())
+        val ms = (System.nanoTime() - started) / 1_000_000
+        assertTrue("extractCodenames took ${ms}ms on a 30k-character title", ms < 1_000)
+    }
+
+    @Test
     fun fetcherRefusesHttp() {
         val r = runCatching { RecoveryFetcher.fetchText("http://example.org/x") { _, _ -> error("must not open") } }
         assertTrue(r.exceptionOrNull() is IllegalArgumentException)

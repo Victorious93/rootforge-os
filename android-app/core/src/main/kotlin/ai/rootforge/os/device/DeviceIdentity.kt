@@ -28,8 +28,15 @@ enum class BootloaderLock {
 }
 
 /**
- * Read-only picture of one attached phone. [serial] is the full USB/adb
- * serial for targeting; UI and logs must use [maskedSerial].
+ * Read-only picture of one attached phone. [serial] is the full serial the
+ * phone reports; UI and logs must use [maskedSerial].
+ *
+ * [targetKey] is the roster key of the [AttachedTarget] this was read from.
+ * The roster looks identities up by that key, and what a phone reports can
+ * differ from it: a Wi-Fi phone is `ip:port` in `adb devices`, a Qualcomm 9008
+ * port reports its chip serial over Sahara, a bootloader's `serialno` need not
+ * match its USB string. Keying by [serial] alone would store the identity where
+ * no card finds it and `DeviceRoster.prune` would drop it on the next pass.
  */
 data class DeviceIdentity(
     val mode: TargetMode,
@@ -49,6 +56,7 @@ data class DeviceIdentity(
     val fingerprint: String? = null,
     val verifiedBoot: String? = null,
     val note: String? = null,
+    val targetKey: String? = null,
 ) {
     val maskedSerial: String get() = SerialMask.mask(serial)
 
@@ -56,7 +64,9 @@ data class DeviceIdentity(
         get() = RootManager.detect(rootManagers.map { it.packageName }).preferred
 
     fun rosterKey(fallback: String? = null): String =
-        serial?.trim()?.takeIf { it.isNotEmpty() } ?: fallback.orEmpty()
+        targetKey?.trim()?.takeIf { it.isNotEmpty() }
+            ?: serial?.trim()?.takeIf { it.isNotEmpty() }
+            ?: fallback.orEmpty()
 
     /** Whole-word tokens from brand/model/product/codename. "lg" must not match "google". */
     fun brandTokens(): Set<String> =

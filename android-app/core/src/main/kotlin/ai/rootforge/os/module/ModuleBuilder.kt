@@ -157,8 +157,19 @@ object ModuleBuilder {
         }
         val bytes = out.toByteArray()
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        return BuiltModule(bytes, "${spec.id}-${spec.version}.zip", sha, names)
+        return BuiltModule(bytes, fileName(spec), sha, names)
     }
+
+    /**
+     * `<id>-<version>.zip` as a library file name. The zip is stored through `Library.fileFor`, which
+     * rewrites anything outside `[A-Za-z0-9._-]` and caps the name at 96 characters, and it is found
+     * again by exact name. The version is free text, so apply the same rewrite here and cut the stem
+     * so `.zip` survives the cap; the name reported to the UI and to a controller then really exists.
+     */
+    private fun fileName(spec: ModuleSpec): String =
+        "${spec.id}-${spec.version}".replace(Regex("[^A-Za-z0-9._-]"), "_").take(MAX_FILE_STEM) + ".zip"
+
+    private const val MAX_FILE_STEM = 92
 
     fun writeTo(spec: ModuleSpec, out: OutputStream): BuiltModule {
         val built = build(spec)

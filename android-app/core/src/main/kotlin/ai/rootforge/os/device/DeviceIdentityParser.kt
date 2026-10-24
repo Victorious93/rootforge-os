@@ -57,6 +57,7 @@ object DeviceIdentityParser {
 
     fun fromAdb(props: Map<String, String>, packageListOutput: String, target: AttachedTarget): DeviceIdentity =
         fromAdb(props, packageListOutput, target.serial ?: target.deviceName, target.mode)
+            .copy(targetKey = target.rosterKey())
 
     fun fromFastboot(vars: Map<String, String>, serialFallback: String? = null): DeviceIdentity {
         val product = clean(vars["product"])
@@ -93,6 +94,7 @@ object DeviceIdentityParser {
                 usbModel != null -> usbModel
                 else -> id.model
             },
+            targetKey = target.rosterKey(),
         )
     }
 
@@ -142,6 +144,7 @@ object DeviceIdentityParser {
         previous: DeviceIdentity? = null,
     ): DeviceIdentity =
         fromEdl(target.vendorId, target.productId, chipSerial, msmHwId, target.serial ?: target.deviceName, previous)
+            .copy(targetKey = target.rosterKey())
 
     fun stub(target: AttachedTarget, note: String? = null): DeviceIdentity = DeviceIdentity(
         mode = target.mode,
@@ -149,6 +152,7 @@ object DeviceIdentityParser {
         model = TargetIdentity.clean(target.product),
         serial = TargetIdentity.clean(target.serial) ?: TargetIdentity.clean(target.deviceName),
         note = note,
+        targetKey = target.rosterKey(),
     )
 
     fun bootloaderFromAdb(props: Map<String, String>): BootloaderLock {
