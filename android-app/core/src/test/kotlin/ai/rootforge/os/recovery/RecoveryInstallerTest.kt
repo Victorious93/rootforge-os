@@ -56,7 +56,7 @@ class RecoveryInstallerTest {
         val env = env()
         val probe = env.installer.probe(RecoverySource.ADB_TARGET, props, listing, "uid=0(root)", 0)
         val image = env.library.importStream("twrp.img", "ANDROID!".toByteArray().plus(ByteArray(32)).inputStream())
-        val session = FakeRootSession(listing, partitionBytes = 64L * 1024 * 1024)
+        val session = FakeRootSession(listing, partitionBytes = 4096)
         val pending = async {
             env.installer.install(session, probe, image, dryRun = false)
         }
@@ -71,7 +71,7 @@ class RecoveryInstallerTest {
         assertTrue(session.commands.any { it.startsWith("dd if='/dev/block/by-name/recovery'") })
         assertTrue(session.commands.any { it.startsWith("dd if='/data/local/tmp/rf-recovery.img' of='/dev/block/by-name/recovery'") })
         assertFalse(session.rebooted)
-        assertTrue(result.backup!!.file.exists())
+        assertEquals(4096L, result.backup!!.file.length())
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -89,6 +89,47 @@ class RecoveryInstallerTest {
         assertTrue(result.exceptionOrNull()!!.message!!.contains("not confirmed"))
         assertFalse(session.pushed)
         assertTrue(session.commands.none { it.contains("dd if='/data/local/tmp/rf-recovery.img'") })
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun missingExitStatusDoesNotCountAsASuccessfulBackup() = runTest(UnconfinedTestDispatcher()) {
+        val env = env()
+        val probe = env.installer.probe(RecoverySource.ADB_TARGET, props, listing, "uid=0(root)", 0)
+        val image = env.library.importStream("twrp.img", "ANDROID!".toByteArray().plus(ByteArray(32)).inputStream())
+        val session = FakeRootSession(listing, partitionBytes = 4096, backupExit = null)
+        val pending = async {
+            runCatching { env.installer.install(session, probe, image, dryRun = false) }
+        }
+        assertTrue(env.approvals.answer(env.approvals.pending.value.single().id, true, "FLASH RECOVERY"))
+        val result = pending.await()
+        assertTrue(result.exceptionOrNull()!!.message!!.contains("Backup of the current recovery failed"))
+        assertTrue(session.commands.none { it.startsWith("dd if='/data/local/tmp/rf-recovery.img'") })
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun shortBackupIsDiscardedAndNothingIsWritten() = runTest(UnconfinedTestDispatcher()) {
+        val env = env()
+        val probe = env.installer.probe(RecoverySource.ADB_TARGET, props, listing, "uid=0(root)", 0)
+        val image = env.library.importStream("twrp.img", "ANDROID!".toByteArray().plus(ByteArray(32)).inputStream())
+        val session = FakeRootSession(listing, partitionBytes = 4096, pullBytes = 16)
+        val pending = async {
+            runCatching { env.installer.install(session, probe, image, dryRun = false) }
+        }
+        assertTrue(env.approvals.answer(env.approvals.pending.value.single().id, true, "FLASH RECOVERY"))
+        val result = pending.await()
+        val message = result.exceptionOrNull()!!.message!!
+        assertTrue(message, message.contains("16 bytes") && message.contains("nothing was written"))
+        assertTrue(session.commands.none { it.startsWith("dd if='/data/local/tmp/rf-recovery.img'") })
+        assertTrue(env.library.list().none { it.name.startsWith("recovery-backup-") })
+    }
+
+    @Test
+    fun aMissingShellExitIsNotSuccess() {
+        assertFalse(RootShellResult("partial dd", null).ok)
+        assertFalse(RootShellResult("denied", 1).ok)
+        assertTrue(RootShellResult("", 0).ok)
     }
 
     @Test
@@ -152,6 +193,8 @@ class RecoveryInstallerTest {
     private class FakeRootSession(
         private val listing: String,
         private val partitionBytes: Long? = 64L * 1024 * 1024,
+        private val backupExit: Int? = 0,
+        private val pullBytes: Long? = null,
     ) : RootSession {
         val commands = mutableListOf<String>()
         var pushed = false
@@ -163,7 +206,7 @@ class RecoveryInstallerTest {
                     RootShellResult(partitionBytes?.toString() ?: "blockdev: cannot open", if (partitionBytes == null) 1 else 0)
                 command.startsWith("ls -l") -> RootShellResult("brw------- 1 root root 259, 5 recovery", 0)
                 command == RecoveryLayoutDetector.LIST_SCRIPT -> RootShellResult(listing, 0)
-                command.startsWith("dd if='/dev/block/by-name/") -> RootShellResult("", 0)
+                command.startsWith("dd if='/dev/block/by-name/") -> RootShellResult("", backupExit)
                 command.startsWith("dd if='/data/local/tmp/rf-recovery.img'") -> RootShellResult("", 0)
                 command.startsWith("chmod") || command.startsWith("rm -f") -> RootShellResult("", 0)
                 else -> RootShellResult("", 0)
@@ -175,8 +218,17 @@ class RecoveryInstallerTest {
         }
 
         override fun pull(remote: String, local: File) {
-            local.parentFile.mkdirs()
-            local.writeBytes("ANDROID!".toByteArray() + ByteArray(16))
+            local.parentFile?.mkdirs()
+            val n = pullBytes ?: partitionBytes ?: 0L
+            local.outputStream().use { out ->
+                val chunk = ByteArray(8192)
+                var left = n
+                while (left > 0) {
+                    val w = minOf(left, chunk.size.toLong()).toInt()
+                    out.write(chunk, 0, w)
+                    left -= w
+                }
+            }
         }
 
         override fun rebootRecovery() {

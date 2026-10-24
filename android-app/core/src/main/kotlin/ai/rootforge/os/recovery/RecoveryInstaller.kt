@@ -11,7 +11,13 @@ import java.io.File
 import java.io.IOException
 
 data class RootShellResult(val output: String, val exitCode: Int?) {
-    val ok: Boolean get() = exitCode == null || exitCode == 0
+    /**
+     * Missing status is not success. The Android shell reports the exit
+     * code with a trailer; if the stream closes first (su killed, adb
+     * drop) that trailer never arrives and a half-written backup must
+     * not be treated as finished.
+     */
+    val ok: Boolean get() = exitCode == 0
 }
 
 /**
@@ -156,6 +162,16 @@ class RecoveryInstaller(
         session.pull(RecoveryCommands.BACKUP_REMOTE, dest)
         library.refresh()
         val backup = library.get(backupName) ?: throw IOException("Backup was not stored in app storage; refusing to write.")
+        val partitionBytes = size
+        if (partitionBytes == null || partitionBytes <= 0L || backup.file.length() != partitionBytes) {
+            val got = backup.file.length()
+            backup.file.delete()
+            library.refresh()
+            throw IOException(
+                "Backup of the current recovery is $got bytes; the partition is ${partitionBytes ?: "unknown"} bytes. " +
+                    "The incomplete copy was discarded and nothing was written.",
+            )
+        }
         log.info("Saved current recovery as ${backup.name} (${humanSize(backup.size)}, sha256 ${FileDigest.sha256Hex(backup.file)}).")
 
         log.command(RecoveryCommands.suShell(RecoveryCommands.write(again)))
