@@ -87,8 +87,13 @@ class HostController(
     val identities: StateFlow<Map<String, ai.rootforge.os.device.DeviceIdentity>> = identityState.asStateFlow()
     private val serialLock = SerialOpLock()
     val serialBusy: StateFlow<Map<String, String>> = serialLock.busyMap
+    private val transportGate = Any()
+    @Volatile private var transportEpochValue = 0L
 
-    private var active: AttachedTarget? = null
+    /** Bumps when the connected phone changes. Fleet confirm dialogs compare this before and after Allow. */
+    fun transportEpoch(): Long = transportEpochValue
+
+    @Volatile private var active: AttachedTarget? = null
     private var logcatJob: Job? = null
     @Volatile private var logcatStop = false
 
@@ -151,10 +156,16 @@ class HostController(
     }
 
     fun disconnect() {
+        synchronized(transportGate) { disconnectUnlocked() }
+    }
+
+    private fun disconnectUnlocked() {
+        val live = active != null
         logcatStop = true
         active = null
         infoState.value = null
         linkState.value = LinkState.Disconnected
+        if (live) transportEpochValue++
     }
 
     suspend fun connect(target: AttachedTarget): Result<Unit> {
@@ -163,17 +174,24 @@ class HostController(
             return Result.failure(IOException("Target ${target.publicLabel()} is unauthorized or offline."))
         }
         val key = target.rosterKey()
-        val activeKey = active?.rosterKey()
-        if (!activeKey.isNullOrEmpty() && activeKey != key && serialLock.isBusy(activeKey)) {
-            val msg = "Finish the current action on ${SerialMask.mask(activeKey)} first."
+        val blocked = serialLock.connectRefusal(key)
+        if (blocked != null) {
+            val msg = "Finish the current action ($blocked) before connecting another device."
             log.error(msg)
             return Result.failure(IOException(msg))
         }
         return operationOn(key, "Connecting to ${target.publicLabel()}") {
-            disconnect()
+            synchronized(transportGate) {
+                val other = serialLock.otherBusyAction(key)
+                if (other != null) {
+                    throw IOException("Finish the current action ($other) before connecting another device.")
+                }
+                disconnectUnlocked()
+                active = target
+                transportEpochValue++
+            }
             linkState.value = LinkState.Connecting("Talking to ${target.publicLabel()}")
             try {
-                active = target
                 when (target.mode) {
                     TargetMode.ADB -> {
                         requireAdb()
@@ -217,7 +235,7 @@ class HostController(
         }
     }
 
-    suspend fun adbShell(command: String): Result<Pair<String, Int?>> = operation("adb shell") {
+    suspend fun adbShell(command: String, boundEpoch: Long? = null): Result<Pair<String, Int?>> = operation("adb shell", boundEpoch) {
         log.command("adb shell $command")
         val r = adb(listOf("shell", command), 120_000)
         log.out(r.output.take(64 * 1024))
@@ -225,7 +243,7 @@ class HostController(
         r.output to r.exit
     }
 
-    suspend fun adbReboot(target: String): Result<Unit> = operation("Reboot ${target.ifBlank { "system" }}") {
+    suspend fun adbReboot(target: String, boundEpoch: Long? = null): Result<Unit> = operation("Reboot ${target.ifBlank { "system" }}", boundEpoch) {
         val args = if (target.isBlank()) listOf("reboot") else listOf("reboot", target)
         log.command("adb ${args.joinToString(" ")}")
         adb(args, 30_000)
@@ -348,7 +366,7 @@ class HostController(
         }
     }
 
-    suspend fun fastbootReboot(target: RebootTarget): Result<Unit> = operation("Reboot ${target.label}") {
+    suspend fun fastbootReboot(target: RebootTarget, boundEpoch: Long? = null): Result<Unit> = operation("Reboot ${target.label}", boundEpoch) {
         log.command("fastboot ${target.command}")
         val args = when (target) {
             RebootTarget.SYSTEM -> listOf("reboot")
@@ -492,6 +510,7 @@ class HostController(
 
     suspend fun edlUpload(file: LibraryFile): Result<Unit> = operation("EDL upload programmer") {
         val edl = tools.edl ?: throw IOException("No `edl` binary on PATH. Desktop EDL uses bkerler's edl (Linux) or a vendor tool; this app ships none.")
+        requireSoloEdl()
         val ok = approvals.request(
             title = "Send programmer to the EDL device",
             lines = listOf(
@@ -502,6 +521,7 @@ class HostController(
             phrase = "EDL",
         )
         if (!ok) throw IOException("Not confirmed; nothing was sent.")
+        requireSoloEdl()
         log.command("edl --loader ${file.name} printgpt")
         val r = runner.run(edl, listOf("--loader", file.file.absolutePath, "printgpt"), 180_000)
         log.out(r.output)
@@ -522,12 +542,14 @@ class HostController(
     suspend fun firehoseProgram(lun: Int, startSector: Long, sectorSize: Int, file: LibraryFile): Result<Unit> =
         operation("Firehose program") {
             val edl = tools.edl ?: throw IOException("No `edl` binary on PATH.")
+            requireSoloEdl()
             val ok = approvals.request(
                 title = "Write raw sectors via edl",
                 lines = listOf("LUN $lun, start sector $startSector, sector size $sectorSize", "File: ${file.name} (${humanSize(file.size)})", "This overwrites storage at that exact location."),
                 phrase = "WRITE LUN $lun SECTOR $startSector",
             )
             if (!ok) throw IOException("Not confirmed; nothing was written.")
+            requireSoloEdl()
             log.command("edl w ...")
             val r = runner.run(
                 edl,
@@ -540,6 +562,7 @@ class HostController(
 
     suspend fun firehoseReset(): Result<Unit> = operation("Firehose reset") {
         val edl = tools.edl ?: throw IOException("No `edl` binary on PATH.")
+        requireSoloEdl()
         val r = runner.run(edl, listOf("reset"), 30_000)
         log.out(r.output)
     }
@@ -704,7 +727,7 @@ class HostController(
         if (active?.rosterKey() == target.rosterKey()) infoState.value = identity.toTargetInfo()
     }
 
-    private fun getvarAll(serial: String? = activeSerial()): Map<String, String> {
+    private fun getvarAll(serial: String? = null): Map<String, String> {
         val r = fastboot(listOf("getvar", "all"), 30_000, serial)
         return DeviceIdentityParser.parseGetvarDump(r.output)
     }
@@ -728,7 +751,7 @@ class HostController(
             return
         }
         val key = target.rosterKey()
-        serialLock.withLock(key, "Identify") {
+        serialLock.withLock(key, SerialOpLock.IDENTIFY_LABEL) {
             when (target.mode) {
                 TargetMode.ADB -> loadAdbInfo(target)
                 TargetMode.FASTBOOT -> {
@@ -759,7 +782,22 @@ class HostController(
         log.out(SerialMask.replaceKnown(text, knownSerials()))
     }
 
-    private fun activeSerial(): String? = active?.serial ?: active?.deviceName
+    fun activeSerial(): String? = active?.serial ?: active?.deviceName
+
+    /**
+     * Host `edl` has no serial argument in this app. Refuse unless the connected
+     * phone is the only 9008 device, re-checked after the confirmation dialog.
+     */
+    private fun requireSoloEdl() {
+        val current = active
+        if (current?.mode != TargetMode.EDL) {
+            throw IOException("Connect the Qualcomm 9008 device before using the host edl tool. Nothing was sent.")
+        }
+        val attached = targetState.value.filter { it.mode == TargetMode.EDL }
+        if (attached.size != 1 || attached.single().rosterKey() != current.rosterKey()) {
+            throw IOException("The host edl tool cannot choose a serial. Refusing while ${attached.size} EDL devices are attached. Nothing was sent.")
+        }
+    }
 
     private fun pullToLibrary(remotePath: String, saveAs: String): LibraryFile {
         require(remotePath.startsWith("/")) { "Remote path must be absolute" }
@@ -776,22 +814,51 @@ class HostController(
     private fun requireAdb(): File = tools.adb ?: throw IOException("adb not found. Install Android platform-tools and put them on PATH, or set ANDROID_HOME.")
     private fun requireFastboot(): File = tools.fastboot ?: throw IOException("fastboot not found. Install Android platform-tools and put them on PATH, or set ANDROID_HOME.")
 
-    private fun adb(args: List<String>, timeoutMs: Long, serial: String? = activeSerial()): CmdResult {
+    private fun resolveBoundSerial(explicit: String?): String? {
+        val pin = DeviceSerialPin.current()
+        if (pin != null) {
+            val bound = pin.serial?.takeIf { it.isNotEmpty() }
+                ?: throw IOException("This action is not tied to a device serial; nothing was run.")
+            if (explicit != null && explicit != bound) {
+                throw IOException(
+                    "This action is pinned to ${SerialMask.mask(bound)}; refusing to target ${SerialMask.mask(explicit)}.",
+                )
+            }
+            return bound
+        }
+        return explicit ?: activeSerial()
+    }
+
+    private fun adb(args: List<String>, timeoutMs: Long, serial: String? = null): CmdResult {
         val exe = requireAdb()
-        val full = if (serial != null) listOf("-s", serial) + args else args
+        val chosen = resolveBoundSerial(serial)
+        val full = if (chosen != null) listOf("-s", chosen) + args else args
         val r = runner.run(exe, full, timeoutMs)
         if (!r.ok && r.output.contains("no devices", ignoreCase = true)) throw IOException("No adb device (current mode: ${currentMode?.label ?: "none"}).")
         return r
     }
 
-    private fun fastboot(args: List<String>, timeoutMs: Long, serial: String? = activeSerial()): CmdResult {
+    private fun fastboot(args: List<String>, timeoutMs: Long, serial: String? = null): CmdResult {
         val exe = requireFastboot()
-        val full = if (serial != null) listOf("-s", serial) + args else args
+        val chosen = resolveBoundSerial(serial)
+        val full = if (chosen != null) listOf("-s", chosen) + args else args
         return runner.run(exe, full, timeoutMs)
     }
 
-    private suspend fun <T> operation(label: String, block: suspend () -> T): Result<T> =
-        operationOn(active?.rosterKey(), label, block)
+    private suspend fun <T> operation(label: String, boundEpoch: Long? = null, block: suspend () -> T): Result<T> {
+        val serial = try {
+            synchronized(transportGate) {
+                if (boundEpoch != null && boundEpoch != transportEpochValue) {
+                    throw IOException("The connected device changed while you were confirming; nothing was run.")
+                }
+                active?.rosterKey()
+            }
+        } catch (e: IOException) {
+            log.error(e.message ?: "device changed")
+            return Result.failure(e)
+        }
+        return operationOn(serial, label, block)
+    }
 
     private fun refreshBusy() {
         if (logcatState.value) {
@@ -813,7 +880,7 @@ class HostController(
             serialLock.withLock(serial, label) {
                 busyState.value = label
                 try {
-                    Result.success(withContext(Dispatchers.IO) { block() })
+                    Result.success(withContext(Dispatchers.IO + DeviceSerialPin(serial)) { block() })
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {

@@ -12,7 +12,8 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 ## PROJECT STATE
 
 > **Update 2026-10-24 (Custom Recovery lookup vs the live sites):** branch `ccr-4237cfad-065fob`, on `main`
-> `4337dbd`. The owner allowed `twrp.me`, `dl.twrp.me` and `pitchblackrecovery.com` (and `sourceforge.net` was
+> `500a0a3` (merged in twice, after #87 and after #89 / #92 / #93 / #90; the only conflicts were docs, both
+> sides kept). The owner allowed `twrp.me`, `dl.twrp.me` and `pitchblackrecovery.com` (and `sourceforge.net` was
 > reachable), so the lookup was run against the real pages. **[Certain] The old parsers returned no offer for
 > any device tried**: the unit fixtures matched layouts the sites do not use. (1) `dl.twrp.me/<codename>/` links
 > every file as a root-relative `/<codename>/<file>.html` page, which `parseTwrpDirectory` dropped; it now reads
@@ -26,11 +27,24 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > 27 MB TWRP image (`ANDROID!`, its published `.md5` matched) and a 54 MB PitchBlack zip (`PK`, through the
 > SourceForge redirect) downloaded. **Not done:** TWRP's `.md5`/`.sha256` are linked only from each file's own page
 > and are still not fetched; the GitHub-release route was not run (`api.github.com` is denied by this session's
-> gateway). 11 new tests; the 8 that can run on the old code failed there. `:core:test` **456/0** (was 445),
-> `:desktop:test` 8/0, `:app:testDebugUnitTest` 39/0, `:app:assembleDebug` builds, `bash tests/run-tests.sh`
+> gateway). 11 new tests; the 8 that can run on the old code failed there. `:core:test` **464/0** (was 453 on `main`),
+> `:desktop:test` 9/0, `:app:testDebugUnitTest` 39/0, `:app:assembleDebug` builds, `bash tests/run-tests.sh`
 > **1057/0**, `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a desktop
-> window.** Also, the same session merged `main` into the two open bot PRs (#89, #90), whose only conflicts were
-> docs and the two bridge executors; they are not part of this branch.
+> window.** The same session also cleared the merge conflicts on the bot PRs #89 and #90 (both merged since);
+> neither is part of this branch.
+
+> **Update 2026-10-24 (APK version bump):** branch `ccr-d6eee520-ln03s1`, on `main` `a8eb53b`.
+> APK `versionCode` 1 -> 2, `versionName` `0.1.0` -> `0.3.0`, to replace the v0.2.0 debug APK
+> (built from `e1f84ea`, 34 merged PRs behind). Plan: after the PR merges, tag `v0.3.0` on `main`;
+> `release.yml` then publishes the debug APK and builds the ISO/rootfs into a **draft** (its first
+> run since the `make-release-metadata.sh` mode fix). Not tagged by this session. v0.2.0 users must
+> uninstall once (debug key changed in #62). Version tripwires in `tests/test_launcher_icons.py` /
+> `tests/test_manual.py` updated. Local: `:core:test` **453/0**, `:app:testDebugUnitTest` **39/0**,
+> `verifyPaparazziDebug` passes, `:app:assembleDebug` (`ai.rootforge.os.debug` / `versionCode='2'` /
+> `versionName='0.3.0-debug'`, committed debug cert), `tests/run-tests.sh` **1057/0**,
+> `tests/lint.sh` clean. Maven Central answered 429 repeatedly; the build resolved through a
+> session-local Gradle init script adding Google's Central mirror
+> (`maven-central.storage-download.googleapis.com/maven2/`), not committed. **Not run on a phone.**
 
 > **Update 2026-10-24 (bug sweep 2):** branch `ccr-4237cfad-065fob`, on `main` `5652d24`. Ran every
 > suite, then probed untrusted-input code (mutation fuzzing of every parser, `hypothesis` on the
@@ -82,6 +96,25 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > (the CLI is present, no daemon), the live TWRP / PitchBlack pages. Every open observation, with its
 > evidence and confidence, is in `docs/REVIEW.md` § Bug sweep 2026-10-24.
 
+
+> **Update 2026-10-22 (recovery backup gate):** branch `cursor/critical-bug-scan-921d`.
+> Custom Recovery treated a missing `su` exit status as success and wrote
+> the new image even when the pulled backup was shorter than the partition.
+> `RootShellResult.ok` is now exit code 0 only. After the pull, the backup
+> file must be exactly `blockdev --getsize64` bytes or it is deleted and
+> nothing is written. `:core:test` **427/0** (`RecoveryInstallerTest` 10).
+> `bash tests/run-tests.sh` 1055/0. `bash tests/lint.sh` clean (shellcheck
+> 0.11.0 via the repo wheel). **Not run on a phone or a desktop window.**
+> `:desktop:test` and `:app` were not re-run on this branch before the merge below
+> (no desktop or app code change).
+> **Merged with `main` `4337dbd` on 2026-10-24** (after #91 and #87). The only conflicts
+> were `CHANGELOG.md` and this file, where both sides added a block at the top: both are
+> kept, newest first. On the merged tree: `:core:test` **448/0**, `:desktop:test` 8/0,
+> `:app:testDebugUnitTest` 39/0, `:app:assembleDebug` built, `bash tests/run-tests.sh`
+> **1058/0** (1057/0 on an earlier run of the same tree: one check loops over
+> `ai_tools_*.log`, named to the second, so it runs once or twice), `bash tests/lint.sh`
+> clean (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a desktop window.**
+
 > **Update 2026-10-20 (catalog aliases):** branch `feat/catalog-aliases`.
 > `:core` `CodenameAliases` (48 OnePlus stock names -> catalog codenames,
 > RootForge-written from Google's Play supported-devices list + the
@@ -95,6 +128,39 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean (shellcheck via the repo
 > wheel). Android SDK installed at `/opt/android-sdk` on this agent only
 > (Maven Central rate-limits with 429; retry with `--max-workers=1`).
+> **Not run on a phone or a desktop window.**
+
+> **Update 2026-10-20 (confirm stays on the original phone):** branch
+> `cursor/critical-bug-inspection-8120`. While a confirm dialog was open,
+> dropping that phone let auto-connect publish another one, and the write
+> or shell followed the new phone (desktop `adb`/`fastboot` sampled
+> `active` per call; Android erase/Firehose re-read the client after
+> Allow; fleet/bridge ACTION approval ran before `SerialOpLock`).
+> Desktop ops now pin `-s` to the serial captured at start
+> (`DeviceSerialPin`). `connect` is refused while any non-identify action
+> is in flight. Fleet/bridge shell and reboots snapshot transport epoch +
+> serial and refuse if either changed. Host `edl` refuses unless that
+> 9008 device is the only one. Approval lines are shown in full (main's
+> `bridge/ApprovalPrompt.kt`: a nested value or one over 12,100 JSON characters
+> is refused before any prompt). Docker `adb.shell` uses `_select_serial`.
+> Dry-run / typed confirm / backup / no auto-reboot unchanged.
+> `applicationId`, signing and versioning unchanged. Local suite:
+> `:core:test` **424/0**; `:desktop:test` **5/0**
+> (`HostControllerSerialPinTest`); `:desktop:compileKotlin`;
+> `bash tests/run-tests.sh` 1055/0 (Python unittest 406/0);
+> `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run:** `:app` tests or assemble (no Android SDK here), a phone,
+> or a desktop window.
+> **Merged with `main` `4337dbd` on 2026-10-24** (after #85, #88, #91 and #87). Conflicts:
+> `CHANGELOG.md` and this file (both sides added a block at the top: both kept, newest
+> first), and `BridgeExecutor.kt` / `FleetExecutor.kt`, where this branch and #91 each
+> added an approval-line helper. Kept #91's shared `approvalParamLines`
+> (`bridge/ApprovalPrompt.kt`), which also refuses nested values, and dropped this branch's
+> private 4,096-character copies; the passages above that said 4,096 are corrected. Every
+> test this branch added still passes unchanged. On the merged tree: `:core:test`
+> **450/0**, `:desktop:test` **9/0**, `:app:testDebugUnitTest` **39/0** (the `:app` suite
+> and `:app:assembleDebug` did run this time), `bash tests/run-tests.sh` **1057/0**
+> (Python unittest 415), `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
 > **Not run on a phone or a desktop window.**
 
 > **Update 2026-10-20 (brands + MSM/EDL + infographics):** branch
@@ -556,7 +622,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
 APK-on-tag release (#58), module quoting (#59) and sideload seek (#61) are on `main`.
-On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), fleet `config.export` / `config.import` (#83 / `3f7661d`), and the bug sweep (#84 / `3d05929`). This branch (`feat/multi-device-identify`, PR #85) adds the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, ESP32 / Raspberry Pi owner helpers (no FRP / screen-lock bypass), the `BrandCatalog` identity table, the MSM / EDL guide (detect + explain + official links only), and Compose step diagrams. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
+On `main` from recent work: Root Guide (#65), terminal app hand-off and `com.termux` default (#67, #68), Kitsune manager plus module repositories/creator (#69), the Custom RR build catalog with a Dashboard card (#66), Shizuku/Sui (#75), Desktop mode via VictorSuite (#76 / `b8e7708`), Custom Recovery installer (#77 / `fabc649`), how-to manual + in-app Help (#78 / `44716de`), fleet protocol 1.1 (#79 / `988a941`), Custom RR → Custom Recovery (#80 / `ef088d3`), local module install + Links + Glossary (#81 / `b72d214`), `node.status.get` (#82), fleet `config.export` / `config.import` (#83 / `3f7661d`), and the bug sweep (#84 / `3d05929`). PR #85 (`feat/multi-device-identify`, now on `main`) adds the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, ESP32 / Raspberry Pi owner helpers (no FRP / screen-lock bypass), the `BrandCatalog` identity table, the MSM / EDL guide (detect + explain + official links only), and Compose step diagrams. The APK requests `INTERNET` for catalog Download and Custom Recovery lookup/download, both only when tapped. None run on a device. README refresh is #63 and the desktop API token file mode is #64. License lock (#53):
 original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
@@ -564,8 +630,26 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 - Custom Recovery lookup (this branch): read against the live TWRP and PitchBlack sites on 2026-10-24 and
   fixed (see the 2026-10-24 update above). A lookup and a download ran end to end through the real
   `RecoveryCatalogClient` / `RecoveryFetcher`; nothing was flashed. TWRP checksums are not fetched yet.
-  `:core:test` 456/0. **Not run on a phone or a desktop window.**
-- Brands + MSM/EDL + infographics (this branch, PR #85): `:core`
+  `:core:test` 464/0. **Not run on a phone or a desktop window.**
+- Custom Recovery backup gate (this branch): a missing `su` exit status is
+  not success, and a pulled backup that is not exactly the partition size
+  is discarded. The new image is not written. `:core:test` 427/0,
+  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a phone
+  or a desktop window.**
+- Confirmations stay on the phone they started on (this branch): desktop
+  `DeviceSerialPin` keeps `adb -s` / `fastboot -s` on the serial captured
+  when the action started; `SerialOpLock.connectRefusal` blocks a connect
+  while any non-identify action is in flight; fleet/bridge shell and
+  reboots compare transport epoch and serial across Allow; Android erase
+  and Firehose keep the client captured before the dialog; host `edl`
+  refuses unless that 9008 device is alone; approval lines are shown in
+  full (`bridge/ApprovalPrompt.kt`: a nested value or one over 12,100 JSON
+  characters is refused before any prompt); Docker `adb.shell` uses
+  `_select_serial`. `:core:test` 424/0, `:desktop:test` 5/0,
+  `tests/run-tests.sh` 1055/0 (Python unittest 406/0), `tests/lint.sh`
+  clean. **Not run:** `:app` (no Android SDK here), a phone, or a desktop
+  window.
+- Brands + MSM/EDL + infographics (PR #85, on `main`): `:core`
   `BrandCatalog` (24 makers), expanded `RootGuides` / `UnlockPortals`,
   `MsmGuides` explain+link for Qualcomm 9008 (never ships MSM/firmware;
   guide never writes), Compose `StepDiagram` on wizards / portals / MSM

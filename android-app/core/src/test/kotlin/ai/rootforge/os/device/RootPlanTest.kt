@@ -245,6 +245,40 @@ class SerialOpLockTest {
     }
 
     @Test
+    fun connectWaitsForAnotherDevicesActionButNotForIdentify() = runTest {
+        val lock = SerialOpLock()
+        val inside = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val job = launch {
+            lock.withLock("AAA", "Erase userdata") {
+                inside.complete(Unit)
+                release.await()
+            }
+        }
+        inside.await()
+        assertEquals("Erase userdata", lock.connectRefusal("BBB"))
+        assertEquals("Erase userdata", lock.connectRefusal("AAA"))
+        assertEquals("Erase userdata", lock.otherBusyAction("BBB"))
+        assertNull(lock.otherBusyAction("AAA"))
+        release.complete(Unit)
+        job.join()
+
+        val idInside = CompletableDeferred<Unit>()
+        val idRelease = CompletableDeferred<Unit>()
+        val idJob = launch {
+            lock.withLock("AAA", SerialOpLock.IDENTIFY_LABEL) {
+                idInside.complete(Unit)
+                idRelease.await()
+            }
+        }
+        idInside.await()
+        assertNull(lock.connectRefusal("BBB"))
+        assertNull(lock.connectRefusal("AAA"))
+        idRelease.complete(Unit)
+        idJob.join()
+    }
+
+    @Test
     fun blankSerialSharesTheUnknownKey() {
         assertEquals(SerialOpLock.UNKNOWN_KEY, SerialOpLock.key(null))
         assertEquals(SerialOpLock.UNKNOWN_KEY, SerialOpLock.key("  "))

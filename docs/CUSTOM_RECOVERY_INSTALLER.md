@@ -96,6 +96,8 @@ on-device `su` are `:app`; desktop host `adb` is `:desktop`.
 
 The Custom RR card never writes. A prefilled visit still defaults to dry-run,
 shows SHA-256, verifies a published MD5/SHA-256 when the official listing has
-one, needs typed `FLASH RECOVERY`, backs up first, writes only
+one, needs typed `FLASH RECOVERY`, backs up first (a missing exit status
+or a backup file that is not the partition's byte size aborts before the
+write), writes only
 `recovery` / `recovery_a` / `recovery_b`, never `dd`s a zip, and never
 reboots by itself.

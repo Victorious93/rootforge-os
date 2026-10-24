@@ -74,6 +74,62 @@ class FleetExecutorTest {
     }
 
     @Test
+    fun shellAllowDoesNotRunAfterTheConnectedPhoneChanges() = runTest(UnconfinedTestDispatcher()) {
+        val approvals = ApprovalCenter()
+        val backend = RecordingBackend()
+        val ex = fleetExec(approvals = approvals, backend = backend)
+        val pending = async {
+            parseFleet(
+                ex.handle(
+                    fleetJson(
+                        op = FleetOp.REMOTE_COMMAND,
+                        nonce = nonce(40),
+                        extra = buildJsonObject { put("actionRef", JsonPrimitive(BridgeOp.ADB_SHELL)) },
+                        params = buildJsonObject { put("command", JsonPrimitive("id")) },
+                    ),
+                    CALLER,
+                ),
+            )
+        }
+        val req = approvals.pending.value.single()
+        backend.serial = "OTHER"
+        backend.epoch = 2
+        approvals.answer(req.id, true)
+        val r = pending.await()
+        assertFalse(r.ok)
+        assertEquals(FleetError.NOT_FOUND, r.error?.code)
+        assertTrue(r.error!!.message.contains("changed"))
+        assertTrue(backend.shells.isEmpty())
+    }
+
+    @Test
+    fun shellApprovalShowsTheEntireCommand() = runTest(UnconfinedTestDispatcher()) {
+        val approvals = ApprovalCenter()
+        val backend = RecordingBackend()
+        val ex = fleetExec(approvals = approvals, backend = backend)
+        val cmd = "echo " + "A".repeat(400)
+        val pending = async {
+            parseFleet(
+                ex.handle(
+                    fleetJson(
+                        op = FleetOp.REMOTE_COMMAND,
+                        nonce = nonce(41),
+                        extra = buildJsonObject { put("actionRef", JsonPrimitive(BridgeOp.ADB_SHELL)) },
+                        params = buildJsonObject { put("command", JsonPrimitive(cmd)) },
+                    ),
+                    CALLER,
+                ),
+            )
+        }
+        val line = approvals.pending.value.single().lines.first { it.startsWith("command") }
+        assertTrue(line.contains("A".repeat(400)))
+        approvals.answer(approvals.pending.value.single().id, true)
+        val r = pending.await()
+        assertTrue(r.toString(), r.ok)
+        assertEquals(listOf(cmd), backend.shells)
+    }
+
+    @Test
     fun denyingAControlActionIsConfirmationRequired() = runTest(UnconfinedTestDispatcher()) {
         val approvals = ApprovalCenter()
         val backend = RecordingBackend()
