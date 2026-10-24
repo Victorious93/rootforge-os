@@ -276,6 +276,9 @@ class FleetExecutor(
             throw FleetBadParameters("unknown parameter(s): ${extra.sorted().joinToString()}")
         }
 
+        val deviceBound = BridgeOp.bindsUsbTarget(actionRef)
+        val deviceEpoch = if (deviceBound) backend.transportEpoch() else null
+        val deviceSerial = if (deviceBound) backend.activeSerial() else null
         if (cap.kind == FleetKind.ACTION) {
             val shown = try {
                 approvalParamLines(params)
@@ -290,6 +293,12 @@ class FleetExecutor(
             if (!ok) {
                 throw FleetOpFailed(FleetError.CONFIRMATION_REQUIRED, "the person at the host phone did not approve $actionRef")
             }
+            if (deviceEpoch != null && (backend.transportEpoch() != deviceEpoch || backend.activeSerial() != deviceSerial)) {
+                throw FleetOpFailed(
+                    FleetError.NOT_FOUND,
+                    "The connected device changed while you were confirming; nothing was run.",
+                )
+            }
         }
 
         return when (actionRef) {
@@ -301,7 +310,7 @@ class FleetExecutor(
             BridgeOp.ADB_SHELL -> {
                 val cmd = params.string("command", max = 2000)
                 if (cmd.contains('\u0000')) throw FleetBadParameters("command contains a NUL byte")
-                val (out, code) = backend.adbShell(cmd).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "shell failed") }
+                val (out, code) = backend.adbShell(cmd, deviceEpoch).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "shell failed") }
                 buildJsonObject {
                     put("exit_code", code?.let { JsonPrimitive(it) } ?: JsonNull)
                     put("output", out.take(MAX_OUTPUT))
@@ -311,13 +320,13 @@ class FleetExecutor(
             BridgeOp.ADB_REBOOT -> {
                 val t = params.stringOrNull("target") ?: ""
                 if (t !in ADB_REBOOT_TARGETS) throw FleetBadParameters("target must be one of ${ADB_REBOOT_TARGETS.filter { it.isNotEmpty() }}")
-                backend.adbReboot(t).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "reboot failed") }
+                backend.adbReboot(t, deviceEpoch).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "reboot failed") }
                 buildJsonObject { put("requested", t.ifEmpty { "system" }) }
             }
             BridgeOp.FASTBOOT_REBOOT -> {
                 val t = params.stringOrNull("target") ?: "system"
                 if (t !in FASTBOOT_REBOOT_TARGETS) throw FleetBadParameters("target must be one of $FASTBOOT_REBOOT_TARGETS")
-                backend.fastbootReboot(t).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "reboot failed") }
+                backend.fastbootReboot(t, deviceEpoch).getOrElse { throw FleetOpFailed(FleetError.INTERNAL, it.message ?: "reboot failed") }
                 buildJsonObject { put("requested", t) }
             }
             BridgeOp.MODULE_BUILD -> {

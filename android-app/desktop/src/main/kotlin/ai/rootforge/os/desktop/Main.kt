@@ -8,6 +8,7 @@ import ai.rootforge.os.catalog.BuildCatalogStore
 import ai.rootforge.os.core.ApprovalCenter
 import ai.rootforge.os.core.Library
 import ai.rootforge.os.core.OutputLog
+import ai.rootforge.os.device.SerialOpLock
 import ai.rootforge.os.ui.AppUiState
 import ai.rootforge.os.ui.RootForgeUi
 import ai.rootforge.os.ui.theme.RootForgeTheme
@@ -107,7 +108,8 @@ fun main(args: Array<String>) {
                         controller.identifyAttached()
                         val auto = settings.autoConnect
                         val link = controller.link.value
-                        if (auto && link is ai.rootforge.os.core.LinkState.Disconnected) {
+                        val actionInFlight = controller.serialBusy.value.values.any { it != SerialOpLock.IDENTIFY_LABEL }
+                        if (auto && !actionInFlight && link is ai.rootforge.os.core.LinkState.Disconnected) {
                             val first = controller.targets.value.firstOrNull { it.hasPermission && it.mode != ai.rootforge.os.usb.TargetMode.UNKNOWN }
                             if (first != null) controller.connect(first)
                         }

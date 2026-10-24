@@ -226,10 +226,11 @@ class Toolkit:
             cmd = params.get("command")
             if not isinstance(cmd, str) or not cmd or "\x00" in cmd:
                 raise RuntimeError("command must be a non-empty string")
-            argv = [self._bin("adb", self.adb), "shell", cmd]
-            serial = params.get("serial")
-            if serial:
-                argv = [argv[0], "-s", serial, "shell", cmd]
+            # Same pin as flash/reboot: omitting serial is allowed only when
+            # exactly one adb device is present. Otherwise ANDROID_SERIAL can
+            # send the shell to a phone the caller did not name.
+            serial = self._select_serial(params, "adb")
+            argv = [self._bin("adb", self.adb), "-s", serial, "shell", cmd]
             code, stdout, stderr = self.runner.run(argv, timeout=120)
             output = (stdout + stderr)[:64 * 1024]
             return {"exit_code": code, "output": output, "truncated": False}
