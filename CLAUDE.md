@@ -11,16 +11,6 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
-> **Update 2026-10-24 (merge of #89 and #90):** branch `ccr-5ef71a53-ef6iwi`, on `main` `4337dbd`.
-> Merged both open PR heads (`cursor/critical-bug-scan-921d` #90, then `cursor/critical-bug-inspection-8120`
-> #89), which conflicted with `main` in `CHANGELOG.md` / `CLAUDE.md` (kept both sides) and, for #89, in
-> `BridgeExecutor.kt` / `FleetExecutor.kt`: #89 added its own private `approvalParamLines` (4,096-char
-> cap) while `main` (#91) has `bridge/ApprovalPrompt.kt` (12,100 JSON chars, nested values refused).
-> Kept #91's helper (stricter) and #89's transport-epoch/serial re-check after Allow; removed the
-> duplicates. **Not run:** `:core:test`, `:desktop:test`, `:app` (this agent's Maven mirror refused
-> Gradle plugin artifacts, 429/404 on every retry), so the merged Kotlin is only read, not compiled.
-> `bash tests/run-tests.sh` **1057/0**; `tests/lint.sh` not run (shellcheck not installed here).
-
 > **Update 2026-10-24 (bug sweep 2):** branch `ccr-4237cfad-065fob`, on `main` `5652d24`. Ran every
 > suite, then probed untrusted-input code (mutation fuzzing of every parser, `hypothesis` on the
 > Python parsers, hostile-length frames, a reproduction of each finding before its fix). Fixed, each
@@ -71,16 +61,6 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > (the CLI is present, no daemon), the live TWRP / PitchBlack pages. Every open observation, with its
 > evidence and confidence, is in `docs/REVIEW.md` § Bug sweep 2026-10-24.
 
-> **Update 2026-10-22 (recovery backup gate):** branch `cursor/critical-bug-scan-921d`.
-> Custom Recovery treated a missing `su` exit status as success and wrote
-> the new image even when the pulled backup was shorter than the partition.
-> `RootShellResult.ok` is now exit code 0 only. After the pull, the backup
-> file must be exactly `blockdev --getsize64` bytes or it is deleted and
-> nothing is written. `:core:test` **427/0** (`RecoveryInstallerTest` 10).
-> `bash tests/run-tests.sh` 1055/0. `bash tests/lint.sh` clean (shellcheck
-> 0.11.0 via the repo wheel). **Not run on a phone or a desktop window.**
-> `:desktop:test` and `:app` were not re-run (no desktop or app code change).
-
 > **Update 2026-10-20 (catalog aliases):** branch `feat/catalog-aliases`.
 > `:core` `CodenameAliases` (48 OnePlus stock names -> catalog codenames,
 > RootForge-written from Google's Play supported-devices list + the
@@ -106,8 +86,9 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > (`DeviceSerialPin`). `connect` is refused while any non-identify action
 > is in flight. Fleet/bridge shell and reboots snapshot transport epoch +
 > serial and refuse if either changed. Host `edl` refuses unless that
-> 9008 device is the only one. Approval lines are shown in full (refuse
-> nested or over-long, per `ApprovalPrompt`). Docker `adb.shell` uses `_select_serial`.
+> 9008 device is the only one. Approval lines are shown in full (main's
+> `bridge/ApprovalPrompt.kt`: a nested value or one over 12,100 JSON characters
+> is refused before any prompt). Docker `adb.shell` uses `_select_serial`.
 > Dry-run / typed confirm / backup / no auto-reboot unchanged.
 > `applicationId`, signing and versioning unchanged. Local suite:
 > `:core:test` **424/0**; `:desktop:test` **5/0**
@@ -116,6 +97,17 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
 > **Not run:** `:app` tests or assemble (no Android SDK here), a phone,
 > or a desktop window.
+> **Merged with `main` `4337dbd` on 2026-10-24** (after #85, #88, #91 and #87). Conflicts:
+> `CHANGELOG.md` and this file (both sides added a block at the top: both kept, newest
+> first), and `BridgeExecutor.kt` / `FleetExecutor.kt`, where this branch and #91 each
+> added an approval-line helper. Kept #91's shared `approvalParamLines`
+> (`bridge/ApprovalPrompt.kt`), which also refuses nested values, and dropped this branch's
+> private 4,096-character copies; the passages above that said 4,096 are corrected. Every
+> test this branch added still passes unchanged. On the merged tree: `:core:test`
+> **450/0**, `:desktop:test` **9/0**, `:app:testDebugUnitTest` **39/0** (the `:app` suite
+> and `:app:assembleDebug` did run this time), `bash tests/run-tests.sh` **1057/0**
+> (Python unittest 415), `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel).
+> **Not run on a phone or a desktop window.**
 
 > **Update 2026-10-20 (brands + MSM/EDL + infographics):** branch
 > `feat/multi-device-identify` (same PR #85). `:core` `BrandCatalog`
@@ -571,9 +563,7 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 > First published Release is **v0.2.0** (debug APK only). EDL-Commander JNI
 > is still plan-only.
 
-**Last updated:** 2026-10-22 · **Branch:** `cursor/critical-bug-scan-921d`
-
-**Last updated:** 2026-10-20 · **Branch:** `cursor/critical-bug-inspection-8120`
+**Last updated:** 2026-10-24 · **Branch:** `cursor/critical-bug-inspection-8120`
 · **Phase:** active development; ISO/VM/hardware
 validation **blocked** on infrastructure. Android host-phone APK, Flash Tools,
 desktop/Docker toolkit, DroidCommand bridge, license lock, toolkit API serial pin (#60),
@@ -583,13 +573,6 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
 (`android-app/core/LICENSE`); third-party/Termux/Debian/SDK code not relicensed (`NOTICE`).
 
 **What is true now** (docs + hermetic suite this session; older bullets were not re-audited unless noted):
-- Custom Recovery backup gate (this branch): a missing `su` exit status is
-  not success, and a pulled backup that is not exactly the partition size
-  is discarded. The new image is not written. `:core:test` 427/0,
-  `tests/run-tests.sh` 1055/0, `tests/lint.sh` clean. **Not run on a phone
-  or a desktop window.**
-- Brands + MSM/EDL + infographics (this branch, PR #85): `:core`
-
 - Confirmations stay on the phone they started on (this branch): desktop
   `DeviceSerialPin` keeps `adb -s` / `fastboot -s` on the serial captured
   when the action started; `SerialOpLock.connectRefusal` blocks a connect
@@ -597,7 +580,8 @@ original work GPL-3.0-or-later (`LICENSE`); shared Kotlin `:core` Apache-2.0
   reboots compare transport epoch and serial across Allow; Android erase
   and Firehose keep the client captured before the dialog; host `edl`
   refuses unless that 9008 device is alone; approval lines are shown in
-  full (nested or over-long refused, per `ApprovalPrompt`); Docker `adb.shell` uses
+  full (`bridge/ApprovalPrompt.kt`: a nested value or one over 12,100 JSON
+  characters is refused before any prompt); Docker `adb.shell` uses
   `_select_serial`. `:core:test` 424/0, `:desktop:test` 5/0,
   `tests/run-tests.sh` 1055/0 (Python unittest 406/0), `tests/lint.sh`
   clean. **Not run:** `:app` (no Android SDK here), a phone, or a desktop
