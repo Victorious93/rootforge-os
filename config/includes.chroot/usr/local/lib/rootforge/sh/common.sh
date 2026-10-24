@@ -345,6 +345,10 @@ rf_log_init() {
 # secret-named assignments. It errs toward redacting: a pasted log is how
 # credentials usually leak, so an over-redacted "Public key: ..." costs less than a
 # leaked one. GNU sed is required (the I flag, \b); Debian and Termux have it.
+# sed runs in the C locale: under a UTF-8 locale \b counts a non-ASCII letter as part
+# of the word, so a name glued to such text (`密码password=...`, `éapi_key=...`) was never
+# matched. In C only [A-Za-z0-9_] is a word character, so a non-ASCII byte ends a name as
+# it does in the Python engine, and the result no longer depends on the caller's locale.
 # `read` is a builtin: sourcing this file must not need any external command (the
 # tests source it with an empty PATH). `|| true` because read returns 1 at EOF.
 IFS= read -r -d '' RF_REDACT_SED <<'EOS' || true
@@ -371,7 +375,7 @@ s/\b([A-Za-z0-9_.-]*(key|token|secret|password|passwd|credential|psk)([_.-][A-Za
 EOS
 
 rf_redact() {
-  sed -E -e "$RF_REDACT_SED"
+  LC_ALL=C sed -E -e "$RF_REDACT_SED"
 }
 
 # rf_redact_file <path> — redact a log in place; never fails.

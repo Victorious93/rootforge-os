@@ -5,6 +5,7 @@ sh/common.sh); everything the CLI writes is redacted by `rootforge.core.log`.
 They must agree, and each must give the INTENDED result, so a sample here fails
 if either drifts or if both are wrong the same way.
 """
+import os
 import subprocess
 import sys
 import unittest
@@ -49,6 +50,12 @@ SAMPLES = [
     ("dotted name", "ollama.api.token=abc", f"ollama.api.token={R}"),
     ("name with suffix after delimiter", "KEY_FILE=/tmp/x", f"KEY_FILE={R}"),
     ("case-insensitive name", "Password=Hunter2", f"Password={R}"),
+    # a name glued to non-ASCII text: a word boundary does not exist there for a Unicode-aware \b
+    ("name after CJK text", "密码password=hunter2", f"密码password={R}"),
+    ("name after an accented letter", "éapi_key=abc", f"éapi_key={R}"),
+    ("name after a Cyrillic word", "клюapi_key=abc", f"клюapi_key={R}"),
+    ("non-ASCII text after the value is kept", "token=abc 密码", f"token={R} 密码"),
+    ("quoted value next to non-ASCII words", 'é"api_key": "zzz" ü', f'é"api_key": {R} ü'),
     # private keys
     ("pem block", "a\n-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\nBBBB\n-----END OPENSSH PRIVATE KEY-----\nb", f"a\n{PEM}\nb"),
     ("pem unterminated", "a\n-----BEGIN RSA PRIVATE KEY-----\nAAAA\nBBBB", f"a\n{PEM}"),
@@ -56,6 +63,7 @@ SAMPLES = [
     # must NOT change
     ("ordinary text", "Backed up 3 partitions to /home/u/rootforge", "Backed up 3 partitions to /home/u/rootforge"),
     ("keyboard is not a secret name", "keyboard: US layout", "keyboard: US layout"),
+    ("accented text without a secret name", "café: ouvert, clé USB: non", "café: ouvert, clé USB: non"),
     ("monkey is not a delimiter hit", "monkeys: 3", "monkeys: 3"),
     ("a bare word key", "press any key to continue", "press any key to continue"),
     ("serials and hashes", "serial=ABC123 sha256=" + "a" * 64, "serial=ABC123 sha256=" + "a" * 64),
@@ -65,10 +73,13 @@ SAMPLES = [
 ]
 
 
-def shell_redact(text: str) -> str:
+def shell_redact(text: str, locale: str = "") -> str:
+    env = dict(os.environ)
+    if locale:
+        env["LC_ALL"] = locale
     proc = subprocess.run(
         ["bash", "-c", '. "$1"; rf_redact', "_", str(COMMON)],
-        input=text + "\n", capture_output=True, text=True, check=True,
+        input=text + "\n", capture_output=True, text=True, check=True, env=env,
     )
     return proc.stdout[:-1] if proc.stdout.endswith("\n") else proc.stdout
 
@@ -83,6 +94,13 @@ class TestRedactionParity(unittest.TestCase):
         for label, given, expected in SAMPLES:
             with self.subTest(label=label):
                 self.assertEqual(shell_redact(given), expected)
+
+    def test_shell_result_does_not_depend_on_the_callers_locale(self):
+        # Under a UTF-8 locale GNU sed's \b counts a non-ASCII letter as part of the word, so a name glued
+        # to such a letter was never matched. rf_redact runs sed in the C locale, whatever the caller has.
+        for label, given, expected in SAMPLES:
+            with self.subTest(label=label):
+                self.assertEqual(shell_redact(given, locale="C.UTF-8"), expected)
 
     # A second pass over `"k": ***REDACTED***,` takes the comma as part of the
     # unquoted value and drops it. That is cosmetic; making the value rule stop at

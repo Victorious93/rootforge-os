@@ -65,8 +65,21 @@ _SECRET_OPTION = re.compile(
 # `NAME=VALUE`, `NAME: VALUE`, `"name": "VALUE"`, `PrivateKey = VALUE` where the
 # name ends in, or has a `_`/`-`/`.`-delimited, key/token/secret/password/...
 # word ("keyboard" is not a secret name; "api_key" and "PrivateKey" are).
+#
+# A name is a run of [A-Za-z0-9_.-]. A match starts only where a run starts (the
+# lookbehind), one lookahead decides whether the run holds a secret word, and the run
+# is then taken whole, so each run is scanned a constant number of times. The earlier
+# form, `\b[A-Za-z0-9_.-]*WORD...`, started at every word boundary inside a long
+# `a-a-a-...` run and re-scanned the run each time (12 KB took 5 s, 40 KB took 63 s).
+# `\b` also counted a non-ASCII letter as part of the word, so a name glued to such
+# text (`密码password=...`, `éapi_key=...`) was never matched; here anything outside the
+# run's characters, a non-ASCII letter included, ends the previous run.
+# tests/test_log.py keeps the earlier form and checks that the two agree on ASCII.
+_SECRET_WORD = r"(?:key|token|secret|password|passwd|credential|psk)"
 _SECRET_ASSIGNMENT = re.compile(
-    r"""(?i)\b([A-Za-z0-9_.-]*(?:key|token|secret|password|passwd|credential|psk)(?:[_.-][A-Za-z0-9_.-]*)?["']?\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s"']+)"""
+    r"(?i)(?<![A-Za-z0-9_.-])"
+    r"(?=[A-Za-z0-9_.-]*?" + _SECRET_WORD + r"(?:[_.-]|(?![A-Za-z0-9_.-])))"
+    r"""([A-Za-z0-9_.-]+["']?\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s"']+)"""
 )
 
 
