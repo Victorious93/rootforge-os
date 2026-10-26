@@ -11,6 +11,8 @@ matrix: `docs/PLATFORM_SUPPORT.md`. Security: `docs/SECURITY_MODEL.md`. Plan:
 
 ## PROJECT STATE
 
+> **Update 2026-10-26 (recovery download keeps the library file):** branch `cursor/critical-bug-management-5cf0`, on `main` `06f5897`. A failed or rejected Custom Recovery download deleted the library file it was about to replace: `RecoveryFetcher.fetchToFile` called `dest.delete()` on any error, and both download buttons checked the body only after that replace. A retry, an HTML page, or a checksum mismatch removed the image already stored under that name. A failed fetch now deletes only its temp file; the download is staged and moved onto the library name only after it is an image or zip and any published checksum matches. `:core:test` **467/0** (was 464; 3 new `RecoveryCatalogTest` rows). `:desktop:compileKotlin` succeeds. `:app` was not compiled (no Android SDK here). `bash tests/run-tests.sh` **1057/0**, `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a desktop window.**
+
 > **Update 2026-10-24 (secret redaction fixed):** branch `ccr-4237cfad-065fob`, on `main` `0240ec4`. The owner said
 > go ahead to the two findings the bug sweep held back (they touch secret redaction, ASK FIRST). (1) The `NAME=value`
 > rule missed a name glued to a non-ASCII letter (`密码password=hunter2`, `éapi_key=abc`) in both engines under a UTF-8

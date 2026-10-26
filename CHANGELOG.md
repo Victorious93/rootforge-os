@@ -7,6 +7,11 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Custom Recovery download no longer deletes a library file when the new copy fails (2026-10-26)
+- **The bug.** `RecoveryFetcher.fetchToFile` wrote the response to a temp file, then on any error — including a dropped connection — deleted the destination. The Android and desktop download buttons pass the library file as that destination, and they also replaced it before checking the body: a retry, an HTML page (TWRP does this when the Referer is missing), or a checksum mismatch removed the image that was already stored under the same name. A recovery backup or an imported image with that filename was gone, and the log only said the download failed.
+- **The fix.** A failed `fetchToFile` deletes only its temp file. Official downloads land in a hidden staging file and move onto the library name only after the body is an image or zip and any published MD5/SHA-256 matches. If that move fails, the previous file is put back.
+- Tests: 3 new in `RecoveryCatalogTest` (failed transfer, HTML body, MD5 mismatch, and a matching download that does replace). `:core:test` **467/0** (was 464). `:desktop:compileKotlin` succeeds. `:app` was not compiled (no Android SDK here). `bash tests/run-tests.sh` **1057/0**, `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a desktop window.**
+
 ### Secret redaction: names glued to non-ASCII text, and the quadratic Python rule (2026-10-24)
 Both were reported by the bug sweep and held for the owner's decision (they touch secret redaction); the owner said go ahead.
 - **The leak.** Under a UTF-8 locale `redact_text` and `rf_redact` left `密码password=hunter2`, `éapi_key=abc` and `клюapi_key=abc` as they were: the `NAME=value` rule needed a `\b` before the name, and a Unicode-aware `\b` does not see a boundary between a non-ASCII letter and an ASCII one. Python's own locale coercion is enough to trigger it for the sed child process, so the parity test reproduced it with no setup. The Python rule now starts a match only where a `[A-Za-z0-9_.-]` run starts; `rf_redact` runs sed with `LC_ALL=C`, so the result no longer depends on the caller's locale (UTF-8 text and invalid bytes pass through unchanged).
