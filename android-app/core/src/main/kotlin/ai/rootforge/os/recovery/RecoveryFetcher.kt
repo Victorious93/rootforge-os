@@ -1,5 +1,7 @@
 package ai.rootforge.os.recovery
 
+import ai.rootforge.os.core.FileDigest
+import ai.rootforge.os.core.readPrefix
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -63,10 +65,69 @@ object RecoveryFetcher {
             }
             return dest.length()
         } catch (e: Exception) {
+            // [dest] may already be a library file. A failed download must not remove it;
+            // only the partial temp is discarded. Callers that replace a library file
+            // do that from a staging name after the body has been checked.
             tmp.delete()
-            dest.delete()
             throw e
         }
+    }
+
+    /**
+     * Downloads [url] and moves it onto [dest] only after the body is a recovery
+     * image or zip and any published checksum matches. An existing [dest] stays
+     * where it is when the transfer fails, the host returns HTML, or a checksum
+     * does not match — retrying a download must not throw away the copy already
+     * in the library.
+     */
+    fun downloadChecked(
+        url: String,
+        dest: File,
+        referer: String? = null,
+        md5: String? = null,
+        sha256: String? = null,
+        label: String = dest.name,
+        open: (URL, String?) -> InputStream = ::openHttps,
+    ): Long {
+        val parent = dest.parentFile ?: throw IOException("No directory for ${dest.name}")
+        parent.mkdirs()
+        // Ends in .part so a crash mid-download is hidden from the library listing.
+        val staging = File(parent, "${dest.name}.incoming.${System.nanoTime()}.part")
+        try {
+            fetchToFile(url, staging, referer, open = open)
+            val payload = RecoveryPlanner.payloadOf(dest.name, staging.readPrefix(8))
+            if (payload == RecoveryPayload.OTHER) {
+                throw IOException("$label is not a recovery.img or zip (the host may have returned an HTML page).")
+            }
+            md5?.let { expected ->
+                val check = FileDigest.verifyMd5(expected, FileDigest.md5Hex(staging))
+                if (!check.ok) throw IOException(check.message)
+            }
+            sha256?.let { expected ->
+                val check = FileDigest.verify(expected, FileDigest.sha256Hex(staging))
+                if (!check.ok) throw IOException(check.message)
+            }
+            moveIntoPlace(staging, dest)
+            return dest.length()
+        } catch (e: Exception) {
+            staging.delete()
+            throw e
+        }
+    }
+
+    /** Replaces [dest] with [staging]. If the replace fails, [dest] is put back. */
+    private fun moveIntoPlace(staging: File, dest: File) {
+        if (!dest.exists()) {
+            if (!staging.renameTo(dest)) throw IOException("Could not store ${dest.name}")
+            return
+        }
+        val backup = File(dest.parentFile, "${dest.name}.replacing.${System.nanoTime()}.part")
+        if (!dest.renameTo(backup)) throw IOException("Could not store ${dest.name}")
+        if (!staging.renameTo(dest)) {
+            backup.renameTo(dest)
+            throw IOException("Could not store ${dest.name}")
+        }
+        backup.delete()
     }
 
     internal fun readCapped(input: InputStream, maxBytes: Long): ByteArray {

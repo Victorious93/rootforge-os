@@ -22,14 +22,11 @@ import androidx.core.content.ContextCompat
 import ai.rootforge.os.fastboot.RebootTarget
 import ai.rootforge.os.core.FileDigest
 import ai.rootforge.os.core.Library
-import ai.rootforge.os.core.readPrefix
 import ai.rootforge.os.module.BuiltModule
 import ai.rootforge.os.module.ModuleSpec
 import ai.rootforge.os.recovery.RecoveryCatalogClient
 import ai.rootforge.os.recovery.RecoveryFetcher
 import ai.rootforge.os.recovery.RecoveryOffer
-import ai.rootforge.os.recovery.RecoveryPlanner
-import ai.rootforge.os.recovery.RecoveryPayload
 import ai.rootforge.os.recovery.RecoveryProbe
 import ai.rootforge.os.recovery.RecoveryProject
 import ai.rootforge.os.root.BootImageParser
@@ -192,27 +189,14 @@ class AppActionsImpl(
             runCatching {
                 withContext(Dispatchers.IO) {
                     val dest = app.library.fileFor(Library.sanitize(offer.filename))
-                    RecoveryFetcher.fetchToFile(url, dest, referer = offer.referer)
-                    val head = dest.readPrefix(8)
-                    val payload = RecoveryPlanner.payloadOf(dest.name, head)
-                    if (payload == RecoveryPayload.OTHER) {
-                        dest.delete()
-                        error("${offer.filename} is not a recovery.img or zip (the host may have returned an HTML page).")
-                    }
-                    offer.md5?.let { expected ->
-                        val check = FileDigest.verifyMd5(expected, FileDigest.md5Hex(dest))
-                        if (!check.ok) {
-                            dest.delete()
-                            error(check.message)
-                        }
-                    }
-                    offer.sha256?.let { expected ->
-                        val check = FileDigest.verify(expected, FileDigest.sha256Hex(dest))
-                        if (!check.ok) {
-                            dest.delete()
-                            error(check.message)
-                        }
-                    }
+                    RecoveryFetcher.downloadChecked(
+                        url,
+                        dest,
+                        referer = offer.referer,
+                        md5 = offer.md5,
+                        sha256 = offer.sha256,
+                        label = offer.filename,
+                    )
                     app.library.refresh()
                     val stored = app.library.get(dest.name) ?: error("Download was not stored.")
                     log.info("Saved ${stored.name} (SHA-256 ${FileDigest.sha256Hex(stored.file)})")

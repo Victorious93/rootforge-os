@@ -1,11 +1,14 @@
 package ai.rootforge.os.recovery
 
+import ai.rootforge.os.core.FileDigest
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.File
 import java.io.IOException
 
 class RecoveryCatalogTest {
@@ -169,6 +172,69 @@ class RecoveryCatalogTest {
         }
         assertTrue(r.exceptionOrNull() is IOException)
     }
+
+    /** A failed transfer used to delete the library file it was about to replace. */
+    @Test
+    fun aFailedDownloadLeavesTheExistingLibraryFile() {
+        val dir = tempDir()
+        val dest = File(dir, "twrp.img")
+        val kept = "ANDROID!kept-image".toByteArray()
+        dest.writeBytes(kept)
+        val failed = runCatching {
+            RecoveryFetcher.fetchToFile("https://dl.twrp.me/enchilada/twrp.img", dest) { _, _ ->
+                throw IOException("connection reset")
+            }
+        }
+        assertTrue(failed.exceptionOrNull() is IOException)
+        assertArrayEquals(kept, dest.readBytes())
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun aRejectedBodyDoesNotReplaceTheExistingLibraryFile() {
+        val dir = tempDir()
+        val dest = File(dir, "twrp.img")
+        val kept = "ANDROID!kept-image".toByteArray()
+        dest.writeBytes(kept)
+        val html = runCatching {
+            RecoveryFetcher.downloadChecked("https://dl.twrp.me/enchilada/twrp.img", dest, label = "twrp.img") { _, _ ->
+                ByteArrayInputStream("<html>not an image</html>".toByteArray())
+            }
+        }
+        assertTrue(html.exceptionOrNull()?.message?.contains("not a recovery.img") == true)
+        assertArrayEquals(kept, dest.readBytes())
+        val mismatch = runCatching {
+            RecoveryFetcher.downloadChecked(
+                "https://dl.twrp.me/enchilada/twrp.img",
+                dest,
+                md5 = "0".repeat(32),
+            ) { _, _ -> ByteArrayInputStream("ANDROID!new-image".toByteArray()) }
+        }
+        assertTrue(mismatch.exceptionOrNull() is IOException)
+        assertArrayEquals(kept, dest.readBytes())
+        assertTrue(dir.listFiles().orEmpty().none { it.name != "twrp.img" })
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun aCheckedDownloadReplacesTheLibraryFileOnlyAfterItMatches() {
+        val dir = tempDir()
+        val dest = File(dir, "twrp.img")
+        dest.writeBytes("ANDROID!old-image".toByteArray())
+        val fresh = "ANDROID!new-image".toByteArray()
+        val n = RecoveryFetcher.downloadChecked(
+            "https://dl.twrp.me/enchilada/twrp.img",
+            dest,
+            md5 = FileDigest.md5Hex(fresh),
+            sha256 = FileDigest.sha256Hex(fresh),
+        ) { _, _ -> ByteArrayInputStream(fresh) }
+        assertEquals(fresh.size.toLong(), n)
+        assertArrayEquals(fresh, dest.readBytes())
+        assertTrue(dir.listFiles().orEmpty().none { it.name.endsWith(".part") })
+        dir.deleteRecursively()
+    }
+
+    private fun tempDir(): File = File(System.getProperty("java.io.tmpdir"), "rf-fetch-${System.nanoTime()}").also { it.mkdirs() }
 
     // --- Page formats as the live sites serve them (read from twrp.me, dl.twrp.me, pitchblackrecovery.com and
     // sourceforge.net on 2026-10-24; the fixtures below are short excerpts, not the whole pages).
