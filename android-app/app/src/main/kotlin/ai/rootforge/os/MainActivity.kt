@@ -44,8 +44,9 @@ class MainActivity : ComponentActivity() {
             requestPermission = { desktopModePermission.launch(it) },
         )
         setContent {
-            RootForgeTheme {
-                RootForgeUi(rememberAppUiState(app), actions)
+            val ui = rememberAppUiState(app)
+            RootForgeTheme(fleet = ui.fleetTheme.snapshot) {
+                RootForgeUi(ui, actions)
             }
         }
     }
@@ -91,6 +92,7 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
     val localRoot = c.localRoot.collectAsStateWithLifecycle().value
     val identities = c.identities.collectAsStateWithLifecycle().value
     val serialBusy = c.serialBusy.collectAsStateWithLifecycle().value
+    val fleetTheme = app.fleetTheme.state.collectAsStateWithLifecycle().value
     val nodeId = remember { app.settings.nodeId }
     return AppUiState(
         targets = targets, link = link, info = info, busy = busy, progress = progress, library = library, buildCatalog = buildCatalog,
@@ -106,5 +108,6 @@ private fun rememberAppUiState(app: RootForgeApp): AppUiState {
         localListed = localRoot.listed,
         identities = identities,
         serialBusy = serialBusy,
+        fleetTheme = fleetTheme,
     )
 }

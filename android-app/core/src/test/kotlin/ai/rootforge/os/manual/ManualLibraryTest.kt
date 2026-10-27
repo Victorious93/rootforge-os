@@ -55,6 +55,9 @@ class ManualLibraryTest {
         assertTrue("official firmware links missing", "Official firmware" in library.raw)
         assertTrue("config backup ops missing", "config.export" in text && "config.import" in text)
         assertTrue("config backup remote refuse missing", "not remotely allowed" in text.lowercase())
+        assertTrue("fleet theme URI missing", "content://com.victorious.launch.theme/current" in text)
+        assertTrue("fleet theme broadcast missing", "FLEET_THEME_CHANGED" in text)
+        assertTrue("fleet theme read-only missing", "never writes the theme provider" in text.lowercase() || "never writes the provider" in text.lowercase())
     }
 
     @Test
