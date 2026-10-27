@@ -172,7 +172,7 @@ other recoveries stay links. Device work never uses the network.
 
 Screens: Dashboard (including **Desktop mode** through VictorSuite; see
 [docs/DESKTOP_MODE.md](docs/DESKTOP_MODE.md)), **Devices** (every attached phone: read-only identity, masked serial, catalog Root plan, brand Root wizard; on a PC the same screen uses host adb/fastboot and a two-column grid), **Ask**, **Root Guide**, **Help**, **Links** (official https directory, browser only), **Glossary** (everyday-words definitions; from Help and Links), **Flash Tools**, ADB, Fastboot, EDL (experimental), Root / Patching,
-Modules (creator, this-phone su install, and repository links), Recovery (USB fastboot), Custom Recovery (rooted TWRP/PitchBlack installer), Logs / Terminal, Settings.
+Modules (creator, this-phone su install, and repository links), Recovery (USB fastboot), Custom Recovery (rooted TWRP/PitchBlack installer), Logs / Terminal, Settings. The Android app also **reads** VictorLaunch's fleet theme (`FLEET_THEME` schemaVersion 1) and applies that palette when the provider is present and pinned; it never writes it.
 
 **Root Guide** is offline rooting documentation inside the app (bootloader unlock, Magisk / KernelSU / APatch,
 device guides, FAQ, troubleshooting) with search. Most pages are adapted from

@@ -542,7 +542,7 @@ Useful commands: `help`, `adb shell …`, a limited set of `fastboot` reads. The
 
 **External control.** The remote-control switch, node id, pending and paired controllers. See [Fleet integration](#fleet-integration).
 
-**About.** Version, the one network use (catalog Download), USB stack note, Shizuku status. **Open the manual** opens this Help screen. **Links directory** opens the official-URL list.
+**About.** Version, the one network use (catalog Download), USB stack note, Shizuku status, and a quiet **Fleet theme** line (`Fleet theme not available` / `Fleet theme not pinned` / `Fleet theme applied`). **Open the manual** opens this Help screen. **Links directory** opens the official-URL list.
 
 **Help** is also a drawer entry. It renders this bundled manual offline and offers **Open on GitHub**, **Links directory**, and **Glossary**.
 
@@ -602,10 +602,13 @@ The app also *looks up* (does not request permission for) these other packages, 
 - `ai.droidcommand.app` and `ai.droidcommand.app.debug` — so pairing can read the controller's signing certificate
 - `moe.shizuku.privileged.api` and `rikka.sui` — so Settings can tell whether Shizuku or Sui is installed
 - `com.termux`, `ai.victorsuite.app` and `ai.victorsuite.app.debug` — so Desktop mode can see VictorSuite and read its signing certificate
+- `com.victorious.launch` and the `com.victorious.launch.theme` provider — so the Android app can read VictorLaunch's fleet theme (package + certificate pin is the gate)
 - The `com.termux.RUN_COMMAND` and `ai.victorsuite.action.DESKTOP_MODE` actions — so the card can tell which transport exists
 - Any app with a launcher icon — so Settings can find the terminal app you named
 
 The **Messenger bridge service** is exported on purpose (`ai.rootforge.os.action.BRIDGE`). Binding grants **nothing**. Pairing plus the off-by-default switch are the gates.
+
+The **fleet-theme receiver** (`com.victorious.launch.action.FLEET_THEME_CHANGED`) is exported because VictorLaunch sends that broadcast explicitly to this package. The receiver checks VictorLaunch's package name **and** signing-certificate pin before it re-queries; an unverified sender is ignored. On Android 13 and older the sender cannot be proven, so the broadcast is ignored and the ContentObserver still applies a live change. RootForge never writes the theme provider.
 
 Backup of app data is **off** (`allowBackup="false"`) so the ADB key is not copied by Android backup.
 
@@ -614,6 +617,14 @@ Backup of app data is **off** (`allowBackup="false"`) so the ADB key is not copi
 ## Fleet integration
 
 RootForge is an **EXTERNAL_NODE**. This section is the frozen **protocol 1.1** remote-control contract (`BRIDGE_PROTOCOL_MAJOR = 1`, `BRIDGE_PROTOCOL_MINOR = 1`). The older snake_case envelope (`protocol_major: 1`, `operation: rootforge.devices.list`, …) still works on the same Messenger service. Pairing steps are in [Install](#install-and-first-run-setup). Technical notes: [docs/DROIDCOMMAND_INTEGRATION.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DROIDCOMMAND_INTEGRATION.md).
+
+### Fleet theme (read-only)
+
+VictorLaunch (`com.victorious.launch`) is the only writer of the shared fleet palette ([FLEET_THEME](https://github.com/Victorious93/victorlaunch/blob/main/docs/specs/FLEET_THEME.md), `schemaVersion` 1). The Android app **reads** `content://com.victorious.launch.theme/current` on start, watches that URI, and also listens for `com.victorious.launch.action.FLEET_THEME_CHANGED`. It applies `palette.*` to its own Compose theme. A payload whose `schemaVersion` is not `1` is ignored.
+
+Trust is VictorLaunch's package name plus its published debug signing-certificate SHA-256, not a signature-level permission (the fleet does not share a signing key). If VictorLaunch is missing, the cert does not match, or the provider throws `SecurityException` (this app is not on VictorLaunch's pin list yet), RootForge keeps its own default colours and Settings shows a quiet **Fleet theme not available** or **Fleet theme not pinned** line. No crash, no scary dialog. The desktop client never queries the provider.
+
+RootForge never writes the provider. This has **not** been run on a phone.
 
 ### Transport
 
@@ -839,6 +850,8 @@ This path has **not** been run on a phone in this repository.
 
 **Desktop mode does nothing.** The card is in the current app (Dashboard, Android only). It has **not** been run on a phone. Install VictorSuite (`com.termux`), pin it, grant `RUN_COMMAND`, set `allow-external-apps=true`, and install the rootfs wrapper. The dedicated Desktop-mode action is not in VictorSuite yet; `RUN_COMMAND` is the only live path. Missing VictorSuite is a hint, not a crash. See [docs/DESKTOP_MODE.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/DESKTOP_MODE.md).
 
+**The app did not pick up VictorLaunch's colours.** Settings → About should say **Fleet theme not available** (VictorLaunch is not installed, or the provider is gone) or **Fleet theme not pinned** (wrong signing certificate, or VictorLaunch has not trusted this package yet — use VictorLaunch Settings → Trust installed fleet share apps). A `schemaVersion` other than 1 is ignored. Missing VictorLaunch is quiet; RootForge keeps its own theme. Not run on a phone.
+
 **Custom Recovery will not write.** The phone must already have root (`su`). Dry-run is on by default. A real write needs typed `FLASH RECOVERY`. Recovery-in-boot devices are refused (use **Recovery → Boot once** or an installer zip). An unknown A/B slot is refused. An unknown recovery partition size (blockdev failed or unreadable) is refused. A zip is never written with `dd`. This has **not** been run on a phone. See [docs/CUSTOM_RECOVERY_INSTALLER.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/CUSTOM_RECOVERY_INSTALLER.md).
 
 **Is anything signed for release?** Only debug APKs. The v0.2.0 asset is debug. ISO and Termux rootfs were not attached to that release.
@@ -977,4 +990,4 @@ Drawer entry **Glossary**, also from Help and from Links. One short line per ter
 
 ---
 
-*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, the in-app Glossary, the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, ESP32 / Raspberry Pi owner helpers (no FRP or screen-lock bypass), the device-identity brand table, the MSM / EDL guide (detect + explain + official links only), and Compose step diagrams. If a line here disagrees with the running app, the app is right — please file an issue.*
+*This manual matches the code including Desktop mode from #76 (`b8e7708`), the Custom Recovery installer from #77 (`fabc649`), the Help screen from #78 (`44716de`), fleet protocol 1.1 from #79 (`988a941`), **Install with Custom Recovery** on matching Custom RR TWRP/PitchBlack rows, the in-app Glossary, the **Devices** multi-phone identify screen, brand Root wizards, the PC Devices grid, official bootloader unlock portals, ESP32 / Raspberry Pi owner helpers (no FRP or screen-lock bypass), the device-identity brand table, the MSM / EDL guide (detect + explain + official links only), Compose step diagrams, and the read-only VictorLaunch fleet-theme client (`FLEET_THEME` schemaVersion 1). If a line here disagrees with the running app, the app is right — please file an issue.*

@@ -7,6 +7,12 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Fleet theme client (read-only FLEET_THEME consumer) (2026-10-27)
+- Android app consumes VictorLaunch's fleet-wide theme (`FLEET_THEME` schemaVersion 1). VictorLaunch is the only writer. RootForge queries `content://com.victorious.launch.theme/current` on start, registers a `ContentObserver`, and an exported receiver for `com.victorious.launch.action.FLEET_THEME_CHANGED`. Either signal re-queries and applies `palette.*` to the Compose theme.
+- Trust is VictorLaunch's package (`com.victorious.launch`) plus its published debug signing-certificate SHA-256, not a signature-level permission. An unverified broadcast sender is ignored. `schemaVersion != 1` is ignored. `SecurityException` / missing provider fall back to RootForge's own theme with a quiet Settings line (`Fleet theme not available` / `Fleet theme not pinned`). No write path. `applicationId`, signing and versioning unchanged.
+- `:core` `FleetThemeClient` / `FleetThemeCodec` / `FleetThemePins`; `:app` observer, receiver, and theme mapping. Desktop never queries.
+- Tests: new `FleetThemeClientTest` (schema guard, palette parse, not-pinned / `SecurityException` fallback, unverified sender). **Not run on a phone.**
+
 ### Custom Recovery download no longer deletes a library file when the new copy fails (2026-10-26)
 - **The bug.** `RecoveryFetcher.fetchToFile` wrote the response to a temp file, then on any error — including a dropped connection — deleted the destination. The Android and desktop download buttons pass the library file as that destination, and they also replaced it before checking the body: a retry, an HTML page (TWRP does this when the Referer is missing), or a checksum mismatch removed the image that was already stored under the same name. A recovery backup or an imported image with that filename was gone, and the log only said the download failed.
 - **The fix.** A failed `fetchToFile` deletes only its temp file. Official downloads land in a hidden staging file and move onto the library name only after the body is an image or zip and any published MD5/SHA-256 matches. If that move fails, the previous file is put back.

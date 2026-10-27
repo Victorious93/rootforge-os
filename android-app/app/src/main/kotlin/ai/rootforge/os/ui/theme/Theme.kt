@@ -1,5 +1,10 @@
 package ai.rootforge.os.ui.theme
 
+import ai.rootforge.os.theme.FleetPalette
+import ai.rootforge.os.theme.FleetThemeCodec
+import ai.rootforge.os.theme.FleetThemeMode
+import ai.rootforge.os.theme.FleetThemeSnapshot
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -59,10 +64,75 @@ val MonoStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, l
 
 /** Dark is the default and the intended look; light exists only so the app follows an explicit system choice. */
 @Composable
-fun RootForgeTheme(dark: Boolean = true, content: @Composable () -> Unit) {
+fun RootForgeTheme(
+    dark: Boolean = true,
+    fleet: FleetThemeSnapshot? = null,
+    content: @Composable () -> Unit,
+) {
     MaterialTheme(
-        colorScheme = if (dark) DarkScheme else LightScheme,
+        colorScheme = colorSchemeFor(dark, fleet),
         typography = Typography(),
         content = content,
     )
 }
+
+internal fun colorSchemeFor(dark: Boolean, fleet: FleetThemeSnapshot?): ColorScheme {
+    val palette = fleet?.palette
+    if (palette == null) return if (dark) DarkScheme else LightScheme
+    return fleetColorScheme(palette, fleet.mode)
+}
+
+internal fun fleetColorScheme(palette: FleetPalette, mode: FleetThemeMode): ColorScheme {
+    val background = palette.color(palette.background) ?: ForgeColors.Surface0
+    val surface = palette.color(palette.surface) ?: ForgeColors.Surface1
+    val primary = palette.color(palette.primary) ?: ForgeColors.Ember
+    val secondary = palette.color(palette.secondary) ?: ForgeColors.Steel
+    val onBackground = palette.color(palette.onBackground) ?: Color(0xFFE3E7EC)
+    val muted = palette.color(palette.muted) ?: Color(0xFFB4BDC8)
+    val danger = palette.color(palette.danger) ?: ForgeColors.Danger
+    val stale = palette.color(palette.stale) ?: ForgeColors.Warn
+    val tile = palette.color(palette.tile) ?: ForgeColors.Surface2
+    val light = mode == FleetThemeMode.LIGHT
+    return if (light) {
+        lightColorScheme(
+            primary = primary,
+            onPrimary = background,
+            secondary = secondary,
+            onSecondary = background,
+            tertiary = stale,
+            error = danger,
+            background = background,
+            onBackground = onBackground,
+            surface = surface,
+            onSurface = onBackground,
+            surfaceVariant = tile,
+            onSurfaceVariant = muted,
+            surfaceContainer = tile,
+            surfaceContainerHigh = surface,
+            surfaceContainerHighest = tile,
+            outline = muted,
+        )
+    } else {
+        darkColorScheme(
+            primary = primary,
+            onPrimary = background,
+            secondary = secondary,
+            onSecondary = background,
+            tertiary = stale,
+            error = danger,
+            background = background,
+            onBackground = onBackground,
+            surface = surface,
+            onSurface = onBackground,
+            surfaceVariant = tile,
+            onSurfaceVariant = muted,
+            surfaceContainer = tile,
+            surfaceContainerHigh = surface,
+            surfaceContainerHighest = tile,
+            outline = muted,
+        )
+    }
+}
+
+private fun FleetPalette.color(hex: String): Color? =
+    FleetThemeCodec.parseArgb(hex)?.let { Color(it) }

@@ -79,6 +79,9 @@ class ManualDocTests(unittest.TestCase):
         self.assertIn("**Root.**", text)
         self.assertIn("node.status.get", text)
         self.assertIn("NodeStatusSnapshot", text)
+        self.assertIn("content://com.victorious.launch.theme/current", text)
+        self.assertIn("FLEET_THEME_CHANGED", text)
+        self.assertIn("Fleet theme not pinned", text)
         self.assertIn("**Bootloop.**", text)
         self.assertIn("**LSPosed.**", text)
         self.assertIn("**SHA-256 / checksum.**", text)
@@ -133,6 +136,9 @@ class ManualDocTests(unittest.TestCase):
         self.assertIn("android.permission.POST_NOTIFICATIONS", manifest)
         self.assertIn("com.termux.permission.RUN_COMMAND", manifest)
         self.assertIn("ai.victorsuite.permission.DESKTOP_MODE", manifest)
+        self.assertIn("com.victorious.launch", manifest)
+        self.assertIn("com.victorious.launch.theme", manifest)
+        self.assertIn("com.victorious.launch.action.FLEET_THEME_CHANGED", manifest)
 
     def test_glossary_entries_are_non_empty_and_unique(self) -> None:
         text = DOCS.read_text(encoding="utf-8")

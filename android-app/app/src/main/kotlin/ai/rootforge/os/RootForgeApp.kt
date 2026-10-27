@@ -25,6 +25,8 @@ import ai.rootforge.os.shizuku.BoundPrivilegedShell
 import ai.rootforge.os.shizuku.PrivilegedShell
 import ai.rootforge.os.shizuku.ShizukuManager
 import ai.rootforge.os.shizuku.ShizukuState
+import ai.rootforge.os.theme.AndroidFleetTheme
+import ai.rootforge.os.theme.FleetThemeHost
 import ai.rootforge.os.usb.TargetMode
 import ai.rootforge.os.usb.UsbHost
 import android.Manifest
@@ -46,7 +48,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /** Wires the long-lived pieces once so the UI, the USB receiver and the bridge service share one controller. */
-class RootForgeApp : Application() {
+class RootForgeApp : Application(), FleetThemeHost {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     val log by lazy { OutputLog(persistFile = File(filesDir, "command-log.jsonl")) }
     val settings by lazy { AppSettings(getSharedPreferences("settings", MODE_PRIVATE)) }
@@ -100,6 +102,9 @@ class RootForgeApp : Application() {
         DesktopMode.probe(emptyList(), pinned = null),
     )
     val companionLookup by lazy { AndroidCompanionLookup(packageManager) }
+    override val fleetTheme by lazy {
+        AndroidFleetTheme(this, appScope, onQuietLog = { log.info(it) })
+    }
 
     @Volatile var uiVisible = false
     private var lastAutoKey: String? = null
@@ -112,6 +117,7 @@ class RootForgeApp : Application() {
         shizukuManager.start()
         refreshFingerprint()
         refreshDesktopMode()
+        fleetTheme.start()
         watchPendingPairing()
         appScope.launch {
             usb.targets.collect { list ->

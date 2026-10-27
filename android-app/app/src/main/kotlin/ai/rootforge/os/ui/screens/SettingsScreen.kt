@@ -93,6 +93,7 @@ fun SettingsScreen(state: AppUiState, actions: AppActions, onOpenHelp: () -> Uni
             KeyValueRow("Version", state.appVersion)
             KeyValueRow("Network", "Catalog Download, plus Custom Recovery lookup/download (https, only when tapped)")
             KeyValueRow("USB", state.transportCaption)
+            KeyValueRow("Fleet theme", state.fleetTheme.message)
             ActionButton("Open the manual", kind = ActionKind.Primary) { onOpenHelp() }
             ActionButton("Links directory", kind = ActionKind.Outline) { onOpenLinks() }
             if (state.shizuku != null) {

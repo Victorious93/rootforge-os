@@ -24,6 +24,8 @@ import ai.rootforge.os.root.RootManager
 import ai.rootforge.os.desktopmode.DesktopModeOp
 import ai.rootforge.os.desktopmode.DesktopModeView
 import ai.rootforge.os.shizuku.ShizukuState
+import ai.rootforge.os.theme.FleetThemeClient
+import ai.rootforge.os.theme.FleetThemeState
 import ai.rootforge.os.usb.AttachedTarget
 
 /** Everything the screens render. Plain data so screens can be previewed and screenshot-tested. */
@@ -76,6 +78,11 @@ data class AppUiState(
     val identities: Map<String, DeviceIdentity> = emptyMap(),
     /** Per-serial busy labels so two phones can work at once. */
     val serialBusy: Map<String, String> = emptyMap(),
+    /**
+     * VictorLaunch fleet palette, when the provider is present and pinned.
+     * Default is the quiet "not available" state; desktop never queries.
+     */
+    val fleetTheme: FleetThemeState = FleetThemeClient.defaultState(),
 )
 
 /** Every user-triggerable action. The real implementation talks to the target; the preview one does nothing. */
