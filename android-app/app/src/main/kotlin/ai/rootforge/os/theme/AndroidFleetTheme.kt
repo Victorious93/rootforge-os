@@ -128,9 +128,11 @@ interface FleetThemeHost {
 
 internal fun resolveSender(context: Context, receiver: BroadcastReceiver): Pair<String, List<String>>? {
     if (Build.VERSION.SDK_INT < 34) return null
-    val pkg = receiver.sentFromPackage
-        ?: context.packageManager.getPackagesForUid(receiver.sendingUid)?.singleOrNull()
-        ?: return null
+    val fromPackage = receiver.sentFromPackage?.takeIf { it.isNotBlank() }
+    val fromUid = receiver.sentFromUid
+    val pkg = fromPackage
+        ?: (if (fromUid >= 0) context.packageManager.getPackagesForUid(fromUid)?.singleOrNull() else null)
+    if (pkg.isNullOrBlank()) return null
     return pkg to signingCerts(context.packageManager, pkg)
 }
 
