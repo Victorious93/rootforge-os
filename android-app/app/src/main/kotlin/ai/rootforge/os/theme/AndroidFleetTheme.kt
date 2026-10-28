@@ -131,6 +131,7 @@ interface FleetThemeHost {
 }
 
 internal fun resolveSender(context: Context, receiver: BroadcastReceiver): Pair<String, List<String>>? {
+    if (Build.VERSION.SDK_INT < 34) return null
     val fromUid = receiver.sentFromUid
     val uidPackages = if (fromUid >= 0) {
         runCatching { context.packageManager.getPackagesForUid(fromUid) }.getOrNull()
