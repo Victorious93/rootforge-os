@@ -30,6 +30,26 @@ class RecoveryLayoutTest {
         assertEquals(listOf("olive"), id.lookupNames())
         assertNull(id.slot)
         assertEquals(false, id.abUpdate)
+        assertNull(id.serial)
+    }
+
+    @Test
+    fun identityPinsSerialAndRefusesADifferentPhone() {
+        val probed = RecoveryIdentity.fromProps(
+            aOnlyProps + mapOf("ro.serialno" to "OLIVE1234"),
+        )
+        val same = RecoveryIdentity.fromProps(
+            aOnlyProps + mapOf("ro.serialno" to "OLIVE1234"),
+        )
+        val otherSerial = RecoveryIdentity.fromProps(
+            aOnlyProps + mapOf("ro.serialno" to "OTHER9999"),
+        )
+        val missingSerial = RecoveryIdentity.fromProps(aOnlyProps)
+        assertEquals("OLIVE1234", probed.serial)
+        assertTrue(probed.samePhone(same))
+        assertFalse(probed.samePhone(otherSerial))
+        assertFalse(probed.samePhone(missingSerial))
+        assertFalse(missingSerial.samePhone(probed))
     }
 
     @Test
@@ -38,11 +58,13 @@ class RecoveryLayoutTest {
             [ro.product.device]: [olive]
             [ro.build.product]: [olive]
             [ro.boot.slot_suffix]: [_b]
+            [ro.serialno]: [ABC123XYZ]
         """.trimIndent()
         val id = RecoveryIdentity.fromProps(RecoveryIdentity.parseGetprop(dump))
         assertEquals("olive", id.device)
         assertEquals("olive", id.product)
         assertEquals("b", id.slot)
+        assertEquals("ABC123XYZ", id.serial)
     }
 
     @Test

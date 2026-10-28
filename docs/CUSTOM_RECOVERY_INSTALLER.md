@@ -45,6 +45,10 @@ serve"). **Not run on a phone.** No recovery images are bundled in the APK.
   wildcard.
 - Guess an A/B slot. If `recovery_a`/`recovery_b` exist and the current slot is
   unknown, it refuses to write.
+- Write when the USB phone is not the one Detect ran on. Serial, device and
+  slot are read from the live session before the confirm dialog and again
+  after `FLASH RECOVERY`. Two phones that both expose `/dev/block/by-name/recovery`
+  (or `recovery_a` / `recovery_b`) are not treated as the same phone.
 - Write when `blockdev --getsize64` failed or returned nothing. Unknown
   partition size is not safe.
 - `dd` a zip. Zips are for sideload / an already-running recovery.

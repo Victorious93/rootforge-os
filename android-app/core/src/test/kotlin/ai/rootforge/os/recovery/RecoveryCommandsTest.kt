@@ -88,6 +88,13 @@ class RecoveryCommandsTest {
     }
 
     @Test
+    fun getpropDumpIsAReadOnlyCommand() {
+        assertEquals("getprop", RecoveryCommands.getpropDump())
+        assertFalse(RecoveryCommands.getpropDump().contains("dd"))
+        assertFalse(RecoveryCommands.getpropDump().contains("reboot"))
+    }
+
+    @Test
     fun blockdevSizeParsesTheFirstNumber() {
         assertEquals(67_108_864L, RecoveryCommands.parseBlockdevSize("67108864\n"))
         assertEquals(null, RecoveryCommands.parseBlockdevSize("not a number"))

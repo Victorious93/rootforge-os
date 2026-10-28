@@ -38,6 +38,9 @@ object RecoveryCommands {
 
     fun rootId(): String = "id"
 
+    /** Full `getprop` dump; [RecoveryIdentity.parseGetprop] reads the `[key]: [value]` lines. */
+    fun getpropDump(): String = "getprop"
+
     fun partitionSize(path: String): String = "blockdev --getsize64 ${shSingleQuote(requirePath(path))}"
 
     fun statPartition(path: String): String = "ls -l ${shSingleQuote(requirePath(path))}"

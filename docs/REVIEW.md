@@ -102,6 +102,25 @@ Nothing is cryptographically signed (ISO, APK, modules). README previously said 
 - Scaffolded `update-binary` sources Magisk's `util_functions.sh` and calls `install_module`.
 - Desktop launcher test no longer depends on the host lacking `xfce4-session`.
 
+## Bug sweep 2026-10-28 (on `main` `746bbb7`)
+
+Read recent history and the files; did not trust earlier summaries. VictorLaunch `FLEET_THEME.md` on `main` was fetched: writer pin `com.victorious.launch` / `B9:9A:AF:…:4A:69`, revoked `1B:06:A8:…:BA:CA` still refused. RootForge consumer pin on the VictorLaunch side (`ai.rootforge.os.debug` / `77:7A:C7:…:64:6F`) was not flipped.
+
+**Fixed on this branch**
+
+- **[Certain] Custom Recovery could `dd` the wrong USB phone.** After Detect, connecting a second phone (allowed: no op in flight) kept the first probe. The post-confirm check only compared `writePath` strings, so two A-only phones both showing `/dev/block/by-name/recovery` (or two A/B phones on the same slot) passed. The live session's serial, device and slot are now re-read before the confirm dialog and after `FLASH RECOVERY`.
+- **[Certain] Fleet theme required every palette key.** Spec says apply per key and keep the consumer default for a missing/invalid colour. One bad hex used to drop the whole snapshot. Malformed `json` also blocked valid denormalized columns.
+- **[Certain] Overlapping theme refreshes** could apply an older read last. Latest generation wins. Observer registration is retried if the first `registerContentObserver` throws.
+- **[Certain] `parseRoot` treated a missing `su` exit as success** when `uid=0` was in the captured output (same pattern in `LocalModules.parseRooted`). Exit code 0 is now required, matching the backup/write gate.
+- **[Likely] Android EDL programmer upload** did not re-check the Sahara client after confirm (Firehose write already did).
+
+**Checked, not changed**
+
+- ReplayGuard still records expired nonces so a later replay of the same nonce is `REPLAY` (by design; a paired caller can fill the 4,096 cap — low DoS, needs pairing + external control).
+- Fleet `config.export` / `config.import` stay `remoteAllowed=false` and are not wired to `AppSettings` (inert for production callers).
+- Private-key redaction rules remain quadratic (owner go-ahead; see below).
+- `publish-release.yml` is still `workflow_dispatch` only; no signing secrets in that workflow.
+
 ## Bug sweep 2026-10-24: findings (two fixed later the same day, the rest open)
 
 Found while probing untrusted-input code on `main` `5652d24`. The nine defects that were fixed are in `CHANGELOG.md` (each reproduced, then fixed with a test that failed first). What follows was **not** changed when the sweep ended; the first block below records the two redaction findings that were fixed afterwards. Tags: **[Certain]** reproduced or read in the code, **[Likely]** inferred, **[Guessing]** not verified.

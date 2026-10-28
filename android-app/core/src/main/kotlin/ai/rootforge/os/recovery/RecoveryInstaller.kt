@@ -7,6 +7,7 @@ import ai.rootforge.os.core.LibraryFile
 import ai.rootforge.os.core.OutputLog
 import ai.rootforge.os.core.humanSize
 import ai.rootforge.os.core.readPrefix
+import ai.rootforge.os.device.SerialMask
 import java.io.File
 import java.io.IOException
 
@@ -49,7 +50,7 @@ class RecoveryInstaller(
     private val approvals: ApprovalCenter,
 ) {
     fun parseRoot(idOutput: String, exitCode: Int?): Boolean =
-        (exitCode == null || exitCode == 0) && Regex("""uid=0\b""").containsMatchIn(idOutput)
+        exitCode == 0 && Regex("""uid=0\b""").containsMatchIn(idOutput)
 
     fun probe(source: RecoverySource, props: Map<String, String>, listing: String, idOutput: String, idExit: Int?): RecoveryProbe {
         val identity = RecoveryIdentity.fromProps(props)
@@ -106,28 +107,29 @@ class RecoveryInstaller(
         source: String = "RootForge OS",
     ): RecoveryInstallResult {
         if (!probe.rooted) throw IOException("su is not available; nothing was written.")
-        val size = runCatching { readPartitionSize(session, probe.layout) }.getOrNull()
-        val plan = evaluate(probe, image, dryRun, publishedMd5, publishedSha256, size)
+        val live = relockToProbedPhone(session, probe, afterConfirm = false)
+        val size = runCatching { readPartitionSize(session, live.layout) }.getOrNull()
+        val plan = evaluate(live, image, dryRun, publishedMd5, publishedSha256, size)
         plan.lines.forEach { log.info(it) }
         if (!plan.allowed) {
             plan.blockers.forEach { log.error("Refused: $it") }
             throw IOException("Refused: " + plan.blockers.first())
         }
         if (dryRun) {
-            val path = probe.layout.writePath
+            val path = live.layout.writePath
             log.info("Dry-run commands (not executed as a write):")
             log.command(RecoveryCommands.suShell(RecoveryCommands.listPartitions()))
             if (path != null && plan.payload == RecoveryPayload.IMAGE) {
                 log.command(RecoveryCommands.suShell(RecoveryCommands.statPartition(path)))
-                log.command(RecoveryCommands.suShell(RecoveryCommands.backup(probe.layout)))
-                log.command(RecoveryCommands.suShell(RecoveryCommands.write(probe.layout)))
+                log.command(RecoveryCommands.suShell(RecoveryCommands.backup(live.layout)))
+                log.command(RecoveryCommands.suShell(RecoveryCommands.write(live.layout)))
                 val stat = session.su(RecoveryCommands.statPartition(path), 15_000)
                 log.out(stat.output.trim())
             }
             log.info("Dry-run finished. Nothing was written.")
             return RecoveryInstallResult(dryRun = true, backup = null, plan = plan)
         }
-        if (plan.payload != RecoveryPayload.IMAGE || probe.layout.writePath == null) {
+        if (plan.payload != RecoveryPayload.IMAGE || live.layout.writePath == null) {
             throw IOException("Only a recovery.img can be written with dd, and only onto a dedicated recovery partition.")
         }
         val phrase = plan.confirmationPhrase ?: throw IOException("Internal error: write plan has no confirmation phrase.")
@@ -139,11 +141,8 @@ class RecoveryInstaller(
         )
         if (!approved) throw IOException("Write was not confirmed; nothing was written.")
 
-        val listing = session.su(RecoveryCommands.listPartitions(), 15_000).output
-        val again = RecoveryLayoutDetector.detect(probe.identity, listing)
-        if (again.writePath != probe.layout.writePath) {
-            throw IOException("The recovery partition changed after you confirmed (${probe.layout.writePath} → ${again.writePath}); nothing was written.")
-        }
+        val againProbe = relockToProbedPhone(session, probe, afterConfirm = true)
+        val again = againProbe.layout
         RecoveryCommands.requireWritePath(again)
 
         log.warn("The phone may show a Superuser prompt; allow it once.")
@@ -155,7 +154,7 @@ class RecoveryInstaller(
         if (!backupRun.ok) throw IOException("Backup of the current recovery failed: ${backupRun.output.take(240)}")
         session.su(RecoveryCommands.chmodReadable(RecoveryCommands.BACKUP_REMOTE), 15_000)
         val backupName = Library.sanitize(
-            "recovery-backup-${probe.identity.device ?: "device"}-${again.writePartition}-${System.currentTimeMillis()}.img",
+            "recovery-backup-${againProbe.identity.device ?: "device"}-${again.writePartition}-${System.currentTimeMillis()}.img",
         )
         val dest = library.fileFor(backupName)
         log.command("pull ${RecoveryCommands.BACKUP_REMOTE}")
@@ -189,5 +188,47 @@ class RecoveryInstaller(
         log.command(RecoveryCommands.suShell(RecoveryCommands.rebootRecovery()))
         session.rebootRecovery()
         log.info("Reboot to recovery requested.")
+    }
+
+    /**
+     * Re-read identity and layout from the live session. The probe is from
+     * Detect; USB may have moved to another phone that happens to expose
+     * the same `recovery` / `recovery_a` / `recovery_b` path string.
+     */
+    internal fun relockToProbedPhone(
+        session: RootSession,
+        probe: RecoveryProbe,
+        afterConfirm: Boolean,
+    ): RecoveryProbe {
+        val live = readLiveIdentity(session)
+        val confirmed = if (afterConfirm) " after you confirmed" else ""
+        if (!probe.identity.samePhone(live)) {
+            throw IOException(
+                "The connected phone is not the one that was probed$confirmed " +
+                    "(${phoneLabel(probe.identity)} → ${phoneLabel(live)}); nothing was written.",
+            )
+        }
+        val listing = session.su(RecoveryCommands.listPartitions(), 15_000).output
+        val again = RecoveryLayoutDetector.detect(live, listing)
+        if (again.writePath != probe.layout.writePath) {
+            throw IOException(
+                "The recovery partition changed$confirmed (${probe.layout.writePath} → ${again.writePath}); nothing was written.",
+            )
+        }
+        return probe.copy(identity = live, layout = again)
+    }
+
+    internal fun readLiveIdentity(session: RootSession): RecoveryIdentity {
+        val dump = session.su(RecoveryCommands.getpropDump(), 15_000).output
+        return RecoveryIdentity.fromProps(RecoveryIdentity.parseGetprop(dump))
+    }
+
+    internal fun phoneLabel(id: RecoveryIdentity): String {
+        val parts = listOfNotNull(
+            id.device,
+            id.slot?.let { "slot $it" },
+            id.serial?.let { SerialMask.mask(it) },
+        )
+        return parts.joinToString(" ").ifBlank { "unknown" }
     }
 }

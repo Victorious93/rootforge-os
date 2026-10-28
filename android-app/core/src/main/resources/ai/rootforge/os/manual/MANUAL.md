@@ -469,6 +469,7 @@ You can also open this screen from Dashboard **Builds for this device** → **In
 
 - Write `boot`, `vendor_boot`, or any other partition. Devices whose recovery lives in boot or vendor_boot get the official installer zip path and a pointer to **Recovery → Boot once**.
 - Guess an A/B slot. If `recovery_a` / `recovery_b` exist and the current slot is unknown, it refuses to write.
+- Write if the USB phone is not the one Detect ran on. Serial, device and slot are read again before the confirm dialog and after you type `FLASH RECOVERY`. Two phones that both have a `recovery` partition are not treated as the same phone.
 - `dd` a zip. Sideload the zip from ADB once the phone is in recovery, or install it from the recovery UI.
 - Follow `http://`, or download from hosts outside TWRP's `dl.twrp.me` / `twrp.me` and PitchBlack's site (`pitchblackrecovery.com`, `pitchblack.tech`) / GitHub / SourceForge. Custom RR's OrangeFox, SHRP and RedWolf pages stay browser links.
 - Skip the typed phrase. There is no setting that turns it off.
@@ -852,7 +853,7 @@ This path has **not** been run on a phone in this repository.
 
 **The app did not pick up VictorLaunch's colours.** Settings → About should say **Fleet theme not available** (VictorLaunch is not installed, or the provider is gone) or **Fleet theme not pinned** (wrong signing certificate, or VictorLaunch has not trusted this package yet — use VictorLaunch Settings → Trust installed fleet share apps). A `schemaVersion` other than 1 is ignored. Missing VictorLaunch is quiet; RootForge keeps its own theme. Not run on a phone.
 
-**Custom Recovery will not write.** The phone must already have root (`su`). Dry-run is on by default. A real write needs typed `FLASH RECOVERY`. Recovery-in-boot devices are refused (use **Recovery → Boot once** or an installer zip). An unknown A/B slot is refused. An unknown recovery partition size (blockdev failed or unreadable) is refused. A zip is never written with `dd`. This has **not** been run on a phone. See [docs/CUSTOM_RECOVERY_INSTALLER.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/CUSTOM_RECOVERY_INSTALLER.md).
+**Custom Recovery will not write.** The phone must already have root (`su`). Dry-run is on by default. A real write needs typed `FLASH RECOVERY`. Recovery-in-boot devices are refused (use **Recovery → Boot once** or an installer zip). An unknown A/B slot is refused. An unknown recovery partition size (blockdev failed or unreadable) is refused. A zip is never written with `dd`. If you plugged in another phone after Detect, tap Detect again: a write is refused when the live serial, device or slot is not the probed phone. This has **not** been run on a phone. See [docs/CUSTOM_RECOVERY_INSTALLER.md](https://github.com/Victorious93/rootforge-os/blob/main/docs/CUSTOM_RECOVERY_INSTALLER.md).
 
 **Is anything signed for release?** Only debug APKs. The v0.2.0 asset is debug. ISO and Termux rootfs were not attached to that release.
 

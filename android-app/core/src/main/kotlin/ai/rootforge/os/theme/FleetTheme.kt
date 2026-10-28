@@ -163,7 +163,6 @@ object FleetThemeCodec {
     fun parse(payload: FleetThemePayload): FleetThemeSnapshot? {
         val fromJson = payload.json?.takeIf { it.isNotBlank() }?.let { parseJson(it) }
         if (fromJson != null) return fromJson
-        if (payload.json?.isNotBlank() == true) return null
         return parseColumns(payload)
     }
 
@@ -204,16 +203,16 @@ object FleetThemeCodec {
     }
 
     private fun paletteFrom(get: (String) -> String?): FleetPalette? {
-        val background = hexOrNull(get(FleetThemeContract.COL_BACKGROUND)) ?: return null
-        val surface = hexOrNull(get(FleetThemeContract.COL_SURFACE)) ?: return null
-        val primary = hexOrNull(get(FleetThemeContract.COL_PRIMARY)) ?: return null
-        val secondary = hexOrNull(get(FleetThemeContract.COL_SECONDARY)) ?: return null
-        val onBackground = hexOrNull(get(FleetThemeContract.COL_ON_BACKGROUND)) ?: return null
-        val muted = hexOrNull(get(FleetThemeContract.COL_MUTED)) ?: return null
-        val danger = hexOrNull(get(FleetThemeContract.COL_DANGER)) ?: return null
-        val stale = hexOrNull(get(FleetThemeContract.COL_STALE)) ?: return null
-        val tile = hexOrNull(get(FleetThemeContract.COL_TILE)) ?: return null
-        return FleetPalette(
+        val background = hexOrNull(get(FleetThemeContract.COL_BACKGROUND)).orEmpty()
+        val surface = hexOrNull(get(FleetThemeContract.COL_SURFACE)).orEmpty()
+        val primary = hexOrNull(get(FleetThemeContract.COL_PRIMARY)).orEmpty()
+        val secondary = hexOrNull(get(FleetThemeContract.COL_SECONDARY)).orEmpty()
+        val onBackground = hexOrNull(get(FleetThemeContract.COL_ON_BACKGROUND)).orEmpty()
+        val muted = hexOrNull(get(FleetThemeContract.COL_MUTED)).orEmpty()
+        val danger = hexOrNull(get(FleetThemeContract.COL_DANGER)).orEmpty()
+        val stale = hexOrNull(get(FleetThemeContract.COL_STALE)).orEmpty()
+        val tile = hexOrNull(get(FleetThemeContract.COL_TILE)).orEmpty()
+        val palette = FleetPalette(
             background = background,
             surface = surface,
             primary = primary,
@@ -224,6 +223,10 @@ object FleetThemeCodec {
             danger = danger,
             tile = tile,
         )
+        val anyValid = listOf(
+            background, surface, primary, secondary, onBackground, muted, danger, stale, tile,
+        ).any { it.isNotEmpty() }
+        return palette.takeIf { anyValid }
     }
 
     private fun hexOrNull(raw: String?): String? {
@@ -253,6 +256,29 @@ object FleetThemeClient {
 
     fun shouldHonorBroadcast(senderPackage: String?, senderCerts: Collection<String>): Boolean =
         FleetThemePins.matches(senderPackage, senderCerts)
+
+    /**
+     * API 34+ sender of the explicit change broadcast. Older APIs cannot
+     * prove the sender, so this returns null and the ContentObserver is
+     * the live path. When both package and uid are present they must agree.
+     */
+    fun resolveBroadcastPackage(
+        sentFromPackage: String?,
+        sentFromUid: Int,
+        packagesForUid: Array<String>?,
+        sdkInt: Int,
+    ): String? {
+        if (sdkInt < 34) return null
+        val fromPackage = sentFromPackage?.takeIf { it.isNotBlank() }
+        if (fromPackage != null) {
+            if (sentFromUid >= 0 && (packagesForUid == null || fromPackage !in packagesForUid)) {
+                return null
+            }
+            return fromPackage
+        }
+        if (sentFromUid < 0) return null
+        return packagesForUid?.singleOrNull()
+    }
 
     fun consume(
         providerPackage: String?,
