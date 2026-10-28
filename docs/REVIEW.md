@@ -121,6 +121,10 @@ Read recent history and the files; did not trust earlier summaries. VictorLaunch
 - Private-key redaction rules remain quadratic (owner go-ahead; see below).
 - `publish-release.yml` is still `workflow_dispatch` only; no signing secrets in that workflow.
 
+**Follow-up after #98 merged (fixed 2026-10-28)**
+
+- **[Certain] Desktop Detect never stored a serial, so the new same-phone check refused every desktop dry-run and write.** `HostController.recoveryProps` asked for device, product, name, model, slot and `ro.build.ab_update` only. The probe serial stayed null. The live re-read is a full `getprop` dump, which includes `ro.serialno` on a real phone, and `samePhone` does not treat a missing serial as a match. The log said the connected phone was not the one that was probed; nothing was pushed. A blank or `unknown` `ro.serialno` also hid `ro.boot.serialno` (`?:` on the raw string; desktop stores an empty answer for every key it asks). Desktop now asks for both serial keys, and `fromProps` keeps the first value `clean` accepts. `HostControllerRecoveryTest` and `RecoveryLayoutTest.blankSerialnoDoesNotHideBootSerial` failed on the old code first.
+
 ## Bug sweep 2026-10-24: findings (two fixed later the same day, the rest open)
 
 Found while probing untrusted-input code on `main` `5652d24`. The nine defects that were fixed are in `CHANGELOG.md` (each reproduced, then fixed with a test that failed first). What follows was **not** changed when the sweep ended; the first block below records the two redaction findings that were fixed afterwards. Tags: **[Certain]** reproduced or read in the code, **[Likely]** inferred, **[Guessing]** not verified.

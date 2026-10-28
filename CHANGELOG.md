@@ -7,6 +7,11 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Desktop Custom Recovery Detect omitted the serial (2026-10-28)
+- **The bug.** After the same-phone check in #98, a recovery dry-run or write re-reads serial, device and slot and refuses unless they match the Detect probe. A missing serial does not match a present one. Desktop Detect asked `getprop` for device, product, name, model, slot and `ro.build.ab_update`, and not for `ro.serialno` or `ro.boot.serialno`, so the probe serial stayed null. The live `su getprop` dump on a real phone includes a serial, and every desktop dry-run and write stopped with "not the one that was probed". Nothing was written. A blank or `unknown` `ro.serialno` also hid `ro.boot.serialno`, because the fallback used `?:` on the raw string (desktop stores an empty answer for every key it asks).
+- **The fix.** Desktop Detect asks for both serial keys. `RecoveryIdentity.fromProps` keeps the first value that is present and not blank or `unknown`.
+- Tests: `HostControllerRecoveryTest` failed first (`expected OLIVE1234 but was null`); `RecoveryLayoutTest.blankSerialnoDoesNotHideBootSerial` failed first. `:core:test` **487/0** (was 486). `:desktop:test` **10/0** (was 9). `bash tests/run-tests.sh` **1057/0**. `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run:** `:app` (no app source change), a phone, a desktop window.
+
 ### Bug sweep 2026-10-28
 Each item was reproduced first, and its regression test was run against the old code and failed before the fix.
 - **Custom Recovery could write the wrong USB phone.** Detect stored a probe with no serial. After that, connecting another phone is allowed (no write is in flight). The installer only compared `writePath` strings after `FLASH RECOVERY`, so two phones that both expose `/dev/block/by-name/recovery` (or the same `recovery_a` / `recovery_b`) passed and `dd` ran on whoever was on the session. The live session's serial, device and slot are now re-read before the confirm dialog and again after the phrase; a mismatch refuses and nothing is pushed. Serials in the error line are masked. `parseRoot` / `LocalModules.parseRooted` now need exit code 0, not a missing status plus `uid=0` in the captured output.
