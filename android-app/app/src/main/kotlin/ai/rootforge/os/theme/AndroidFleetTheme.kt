@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,11 +41,12 @@ class AndroidFleetTheme(
     }
 
     @Volatile private var observing = false
+    private val refreshGeneration = AtomicLong(0)
 
     fun start() {
         if (!observing) {
-            runCatching { resolver.registerContentObserver(uri, true, observer) }
-            observing = true
+            val registered = runCatching { resolver.registerContentObserver(uri, true, observer) }.isSuccess
+            if (registered) observing = true
         }
         refresh()
     }
@@ -55,8 +57,10 @@ class AndroidFleetTheme(
     }
 
     fun refresh() {
+        val gen = refreshGeneration.incrementAndGet()
         scope.launch {
             val next = withContext(Dispatchers.IO) { read() }
+            if (gen != refreshGeneration.get()) return@launch
             if (next != stateFlow.value) {
                 stateFlow.value = next
                 onQuietLog(next.message)
@@ -128,11 +132,18 @@ interface FleetThemeHost {
 
 internal fun resolveSender(context: Context, receiver: BroadcastReceiver): Pair<String, List<String>>? {
     if (Build.VERSION.SDK_INT < 34) return null
-    val fromPackage = receiver.sentFromPackage?.takeIf { it.isNotBlank() }
     val fromUid = receiver.sentFromUid
-    val pkg = fromPackage
-        ?: (if (fromUid >= 0) context.packageManager.getPackagesForUid(fromUid)?.singleOrNull() else null)
-    if (pkg.isNullOrBlank()) return null
+    val uidPackages = if (fromUid >= 0) {
+        runCatching { context.packageManager.getPackagesForUid(fromUid) }.getOrNull()
+    } else {
+        null
+    }
+    val pkg = FleetThemeClient.resolveBroadcastPackage(
+        sentFromPackage = receiver.sentFromPackage,
+        sentFromUid = fromUid,
+        packagesForUid = uidPackages,
+        sdkInt = Build.VERSION.SDK_INT,
+    ) ?: return null
     return pkg to signingCerts(context.packageManager, pkg)
 }
 

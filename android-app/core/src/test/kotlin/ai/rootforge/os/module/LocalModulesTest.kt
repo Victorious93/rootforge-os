@@ -141,6 +141,7 @@ class LocalModulesTest {
         assertFalse(LocalModules.parseRooted("uid=2000(shell)", 0))
         assertFalse(LocalModules.parseRooted("uid=0(root)", 1))
         assertFalse(LocalModules.parseRooted("su: not found", null))
+        assertFalse(LocalModules.parseRooted("uid=0(root) gid=0(root)", null))
     }
 
     @Test

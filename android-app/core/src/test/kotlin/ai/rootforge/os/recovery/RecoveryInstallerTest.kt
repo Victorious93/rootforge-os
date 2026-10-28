@@ -25,6 +25,7 @@ class RecoveryInstallerTest {
     private val props = mapOf(
         "ro.product.device" to "olive",
         "ro.build.product" to "olive",
+        "ro.serialno" to "OLIVE1234",
     )
 
     @Test
@@ -33,6 +34,8 @@ class RecoveryInstallerTest {
         assertTrue(installer.parseRoot("uid=0(root) gid=0(root)", 0))
         assertFalse(installer.parseRoot("uid=2000(shell)", 0))
         assertFalse(installer.parseRoot("su: not found", 127))
+        assertFalse(installer.parseRoot("uid=0(root) gid=0(root)", null))
+        assertFalse(installer.parseRoot("uid=0(root) gid=0(root)", 1))
     }
 
     @Test
@@ -166,6 +169,55 @@ class RecoveryInstallerTest {
         assertTrue(thrown is IllegalArgumentException)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun aDifferentPhoneAfterDetectWritesNothing() = runTest(UnconfinedTestDispatcher()) {
+        val env = env()
+        val probe = env.installer.probe(RecoverySource.ADB_TARGET, props, listing, "uid=0(root)", 0)
+        val image = env.library.importStream("twrp.img", "ANDROID!".toByteArray().plus(ByteArray(32)).inputStream())
+        val session = FakeRootSession(
+            listing,
+            partitionBytes = 4096,
+            liveProps = mapOf(
+                "ro.product.device" to "olive",
+                "ro.build.product" to "olive",
+                "ro.serialno" to "OTHER9999",
+            ),
+        )
+        val result = runCatching { env.installer.install(session, probe, image, dryRun = false) }
+        val message = result.exceptionOrNull()!!.message!!
+        assertTrue(message, message.contains("not the one that was probed") && message.contains("nothing was written"))
+        assertFalse(message.contains("OTHER9999"))
+        assertFalse(message.contains("OLIVE1234"))
+        assertTrue(message.contains("••••1234") && message.contains("••••9999"))
+        assertFalse(session.pushed)
+        assertTrue(session.commands.none { it.startsWith("dd if='/data/local/tmp/rf-recovery.img'") })
+        assertTrue(env.approvals.pending.value.isEmpty())
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun phoneSwapDuringConfirmWritesNothing() = runTest(UnconfinedTestDispatcher()) {
+        val env = env()
+        val probe = env.installer.probe(RecoverySource.ADB_TARGET, props, listing, "uid=0(root)", 0)
+        val image = env.library.importStream("twrp.img", "ANDROID!".toByteArray().plus(ByteArray(32)).inputStream())
+        val session = FakeRootSession(listing, partitionBytes = 4096)
+        val pending = async {
+            runCatching { env.installer.install(session, probe, image, dryRun = false) }
+        }
+        session.liveProps = mapOf(
+            "ro.product.device" to "olive",
+            "ro.build.product" to "olive",
+            "ro.serialno" to "SWAP5678",
+        )
+        assertTrue(env.approvals.answer(env.approvals.pending.value.single().id, true, "FLASH RECOVERY"))
+        val result = pending.await()
+        val message = result.exceptionOrNull()!!.message!!
+        assertTrue(message, message.contains("not the one that was probed") && message.contains("after you confirmed"))
+        assertTrue(session.commands.none { it.startsWith("dd if='/data/local/tmp/rf-recovery.img'") })
+        assertFalse(session.pushed)
+    }
+
     @Test
     fun rebootIsASeparateCall() {
         val env = env()
@@ -195,6 +247,11 @@ class RecoveryInstallerTest {
         private val partitionBytes: Long? = 64L * 1024 * 1024,
         private val backupExit: Int? = 0,
         private val pullBytes: Long? = null,
+        var liveProps: Map<String, String> = mapOf(
+            "ro.product.device" to "olive",
+            "ro.build.product" to "olive",
+            "ro.serialno" to "OLIVE1234",
+        ),
     ) : RootSession {
         val commands = mutableListOf<String>()
         var pushed = false
@@ -202,6 +259,11 @@ class RecoveryInstallerTest {
         override fun su(command: String, timeoutMs: Long): RootShellResult {
             commands += command
             return when {
+                command == RecoveryCommands.getpropDump() ->
+                    RootShellResult(
+                        liveProps.entries.joinToString("\n") { "[${it.key}]: [${it.value}]" },
+                        0,
+                    )
                 command.startsWith("blockdev") ->
                     RootShellResult(partitionBytes?.toString() ?: "blockdev: cannot open", if (partitionBytes == null) 1 else 0)
                 command.startsWith("ls -l") -> RootShellResult("brw------- 1 root root 259, 5 recovery", 0)

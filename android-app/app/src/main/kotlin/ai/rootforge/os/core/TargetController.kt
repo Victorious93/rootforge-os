@@ -682,6 +682,9 @@ class TargetController(
             phrase = "EDL",
         )
         if (!ok) throw IOException("Not confirmed; nothing was sent.")
+        if (sahara?.first !== client) {
+            throw IOException("The connected device changed after you confirmed; nothing was sent.")
+        }
         log.command("sahara: upload ${programmer.name}")
         client.uploadProgrammer(programmer.file.readBytes()) { d, t -> setProgress("Uploading programmer", d, t) }
         clearProgress()

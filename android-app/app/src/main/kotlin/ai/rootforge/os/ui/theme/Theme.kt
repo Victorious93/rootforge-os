@@ -83,16 +83,17 @@ internal fun colorSchemeFor(dark: Boolean, fleet: FleetThemeSnapshot?): ColorSch
 }
 
 internal fun fleetColorScheme(palette: FleetPalette, mode: FleetThemeMode): ColorScheme {
-    val background = palette.color(palette.background) ?: ForgeColors.Surface0
-    val surface = palette.color(palette.surface) ?: ForgeColors.Surface1
-    val primary = palette.color(palette.primary) ?: ForgeColors.Ember
-    val secondary = palette.color(palette.secondary) ?: ForgeColors.Steel
-    val onBackground = palette.color(palette.onBackground) ?: Color(0xFFE3E7EC)
-    val muted = palette.color(palette.muted) ?: Color(0xFFB4BDC8)
-    val danger = palette.color(palette.danger) ?: ForgeColors.Danger
-    val stale = palette.color(palette.stale) ?: ForgeColors.Warn
-    val tile = palette.color(palette.tile) ?: ForgeColors.Surface2
     val light = mode == FleetThemeMode.LIGHT
+    val base = if (light) LightScheme else DarkScheme
+    val background = palette.color(palette.background) ?: base.background
+    val surface = palette.color(palette.surface) ?: base.surface
+    val primary = palette.color(palette.primary) ?: base.primary
+    val secondary = palette.color(palette.secondary) ?: base.secondary
+    val onBackground = palette.color(palette.onBackground) ?: base.onBackground
+    val muted = palette.color(palette.muted) ?: base.onSurfaceVariant
+    val danger = palette.color(palette.danger) ?: base.error
+    val stale = palette.color(palette.stale) ?: base.tertiary
+    val tile = palette.color(palette.tile) ?: base.surfaceVariant
     return if (light) {
         lightColorScheme(
             primary = primary,

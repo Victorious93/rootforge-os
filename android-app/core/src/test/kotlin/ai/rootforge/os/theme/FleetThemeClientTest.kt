@@ -139,9 +139,51 @@ class FleetThemeClientTest {
                 json = """{"schemaVersion":1,"palette":{"background":"nope","surface":"#FF161821","primary":"#FF00E5FF","secondary":"#FFE840FF","onBackground":"#FFF5F7FF","muted":"#FF9AA3B5","danger":"#FFFF6B8A","stale":"#FFFFC14D","tile":"#CC1A1D2B"}}""",
             )
         }
-        assertEquals(FleetThemeStatus.NOT_AVAILABLE, state.status)
-        assertNull(state.snapshot)
-        assertTrue(state.message.contains("not available", ignoreCase = true))
+        assertEquals(FleetThemeStatus.APPLIED, state.status)
+        val palette = state.palette!!
+        assertEquals("", palette.background)
+        assertEquals("#FF00E5FF", palette.primary)
+        assertEquals("#FF161821", palette.surface)
+        assertNull(FleetThemeCodec.parseArgb(palette.background))
+        assertEquals(0xFF00E5FF, FleetThemeCodec.parseArgb(palette.primary))
+    }
+
+    @Test
+    fun malformedJsonFallsBackToValidColumns() {
+        val columns = mapOf(
+            FleetThemeContract.COL_BACKGROUND to "#FF0B0C12",
+            FleetThemeContract.COL_SURFACE to "#FF161821",
+            FleetThemeContract.COL_PRIMARY to "#FF00E5FF",
+            FleetThemeContract.COL_SECONDARY to "#FFE840FF",
+            FleetThemeContract.COL_ON_BACKGROUND to "#FFF5F7FF",
+            FleetThemeContract.COL_MUTED to "#FF9AA3B5",
+            FleetThemeContract.COL_DANGER to "#FFFF6B8A",
+            FleetThemeContract.COL_STALE to "#FFFFC14D",
+            FleetThemeContract.COL_TILE to "#CC1A1D2B",
+        )
+        val state = FleetThemeClient.consume(FleetThemePins.PACKAGE, listOf(pin)) {
+            FleetThemePayload(
+                schemaVersion = 1,
+                json = """{"schemaVersion":1,"palette":{""",
+                columns = columns,
+            )
+        }
+        assertEquals(FleetThemeStatus.APPLIED, state.status)
+        assertEquals("#FF00E5FF", state.palette!!.primary)
+    }
+
+    @Test
+    fun incompleteJsonPaletteStillAppliesValidKeys() {
+        val state = FleetThemeClient.consume(FleetThemePins.PACKAGE, listOf(pin)) {
+            FleetThemePayload(
+                schemaVersion = 1,
+                json = """{"schemaVersion":1,"mode":"DARK","palette":{"primary":"#FF00E5FF"}}""",
+            )
+        }
+        assertEquals(FleetThemeStatus.APPLIED, state.status)
+        assertEquals("#FF00E5FF", state.palette!!.primary)
+        assertEquals("", state.palette!!.background)
+        assertEquals(FleetThemeMode.DARK, state.snapshot!!.mode)
     }
 
     @Test
@@ -222,5 +264,24 @@ class FleetThemeClientTest {
         assertTrue(FleetThemeClient.shouldHonorBroadcast(FleetThemePins.PACKAGE, listOf(pin)))
         assertNotNull(FleetThemeClient.defaultState().palette == null)
         assertEquals(FleetThemeStatus.NOT_AVAILABLE, FleetThemeClient.defaultState().status)
+        assertNull(FleetThemeClient.resolveBroadcastPackage(FleetThemePins.PACKAGE, 1000, arrayOf(FleetThemePins.PACKAGE), 33))
+        assertNull(FleetThemeClient.resolveBroadcastPackage(null, -1, null, 34))
+        assertEquals(
+            FleetThemePins.PACKAGE,
+            FleetThemeClient.resolveBroadcastPackage(FleetThemePins.PACKAGE, 1000, arrayOf(FleetThemePins.PACKAGE), 34),
+        )
+        assertNull(
+            FleetThemeClient.resolveBroadcastPackage(FleetThemePins.PACKAGE, 1000, arrayOf("com.evil.app"), 34),
+        )
+        assertNull(
+            FleetThemeClient.resolveBroadcastPackage(FleetThemePins.PACKAGE, 1000, null, 34),
+        )
+        assertEquals(
+            FleetThemePins.PACKAGE,
+            FleetThemeClient.resolveBroadcastPackage(null, 1000, arrayOf(FleetThemePins.PACKAGE), 34),
+        )
+        assertNull(
+            FleetThemeClient.resolveBroadcastPackage(null, 1000, arrayOf(FleetThemePins.PACKAGE, "com.other.app"), 34),
+        )
     }
 }

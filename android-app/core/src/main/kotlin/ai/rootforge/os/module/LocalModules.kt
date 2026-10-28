@@ -128,7 +128,7 @@ object LocalModules {
             .toList()
 
     fun parseRooted(idOutput: String, exitCode: Int?): Boolean =
-        (exitCode == null || exitCode == 0) && Regex("""uid=0\b""").containsMatchIn(idOutput)
+        exitCode == 0 && Regex("""uid=0\b""").containsMatchIn(idOutput)
 
     fun parseList(output: String): List<InstalledModule> {
         val modules = mutableListOf<InstalledModule>()

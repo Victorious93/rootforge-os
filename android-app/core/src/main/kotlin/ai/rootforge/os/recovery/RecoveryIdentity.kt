@@ -19,10 +19,20 @@ data class RecoveryIdentity(
     val slot: String? = null,
     /** `ro.build.ab_update` parsed as a tri-state. */
     val abUpdate: Boolean? = null,
+    /** `ro.serialno` / `ro.boot.serialno`. Unknown is not a wildcard. */
+    val serial: String? = null,
 ) {
     /** Codenames to try against TWRP / PitchBlack, device first. */
     fun lookupNames(): List<String> =
         listOfNotNull(device, product, name).map { it.lowercase() }.distinct()
+
+    /**
+     * True only when this probe still describes [live]. A missing serial
+     * on one side does not match a present serial; two phones of the
+     * same model and slot are distinct when serials differ.
+     */
+    fun samePhone(live: RecoveryIdentity): Boolean =
+        serial == live.serial && device == live.device && slot == live.slot
 
     companion object {
         private val PROP_LINE = Regex("""^\[([^]]+)]:\s*\[(.*)]$""")
@@ -34,6 +44,7 @@ data class RecoveryIdentity(
             model = TargetIdentity.clean(props["ro.product.model"]),
             slot = TargetIdentity.normalizeSlot(props["ro.boot.slot_suffix"]),
             abUpdate = parseTri(props["ro.build.ab_update"]),
+            serial = TargetIdentity.clean(props["ro.serialno"] ?: props["ro.boot.serialno"]),
         )
 
         /** Parses `getprop` dump lines (`[key]: [value]`). Loose `key: value` lines are ignored. */
