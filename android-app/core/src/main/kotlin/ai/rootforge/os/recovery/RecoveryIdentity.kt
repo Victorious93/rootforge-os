@@ -44,7 +44,10 @@ data class RecoveryIdentity(
             model = TargetIdentity.clean(props["ro.product.model"]),
             slot = TargetIdentity.normalizeSlot(props["ro.boot.slot_suffix"]),
             abUpdate = parseTri(props["ro.build.ab_update"]),
-            serial = TargetIdentity.clean(props["ro.serialno"] ?: props["ro.boot.serialno"]),
+            // A blank or "unknown" `ro.serialno` must not hide `ro.boot.serialno`.
+            // Desktop Detect stores every asked key, including an empty answer.
+            serial = TargetIdentity.clean(props["ro.serialno"])
+                ?: TargetIdentity.clean(props["ro.boot.serialno"]),
         )
 
         /** Parses `getprop` dump lines (`[key]: [value]`). Loose `key: value` lines are ignored. */

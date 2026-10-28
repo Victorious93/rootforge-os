@@ -53,6 +53,19 @@ class RecoveryLayoutTest {
     }
 
     @Test
+    fun blankSerialnoDoesNotHideBootSerial() {
+        val blank = RecoveryIdentity.fromProps(
+            aOnlyProps + mapOf("ro.serialno" to "", "ro.boot.serialno" to "BOOT9999"),
+        )
+        val unknown = RecoveryIdentity.fromProps(
+            aOnlyProps + mapOf("ro.serialno" to "unknown", "ro.boot.serialno" to "BOOT9999"),
+        )
+        assertEquals("BOOT9999", blank.serial)
+        assertEquals("BOOT9999", unknown.serial)
+        assertTrue(blank.samePhone(unknown))
+    }
+
+    @Test
     fun getpropDumpIsParsed() {
         val dump = """
             [ro.product.device]: [olive]
