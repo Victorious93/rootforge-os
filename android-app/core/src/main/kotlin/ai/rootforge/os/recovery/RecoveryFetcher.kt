@@ -75,7 +75,8 @@ object RecoveryFetcher {
 
     /**
      * Downloads [url] and moves it onto [dest] only after the body is a recovery
-     * image or zip and any published checksum matches. An existing [dest] stays
+     * image or zip (leading bytes, not the file name) and any published checksum
+     * matches. An existing [dest] stays
      * where it is when the transfer fails, the host returns HTML, or a checksum
      * does not match — retrying a download must not throw away the copy already
      * in the library.
@@ -95,8 +96,11 @@ object RecoveryFetcher {
         val staging = File(parent, "${dest.name}.incoming.${System.nanoTime()}.part")
         try {
             fetchToFile(url, staging, referer, open = open)
-            val payload = RecoveryPlanner.payloadOf(dest.name, staging.readPrefix(8))
-            if (payload == RecoveryPayload.OTHER) {
+            // The library name often ends in .zip. payloadOf treats that name as a zip
+            // even when the body is the HTML page dl.twrp.me returns without a Referer,
+            // which would replace a good library file with that page.
+            val head = staging.readPrefix(8)
+            if (!RecoveryPlanner.isAndroidImage(head) && !RecoveryPlanner.isZipLocalHeader(head)) {
                 throw IOException("$label is not a recovery.img or zip (the host may have returned an HTML page).")
             }
             md5?.let { expected ->
