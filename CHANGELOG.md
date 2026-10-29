@@ -7,6 +7,11 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Custom Recovery zip download no longer stores an HTML page (2026-10-29)
+- **The bug.** `RecoveryFetcher.downloadChecked` decided a body was a zip when the library name ended in `.zip`, via `RecoveryPlanner.payloadOf`. PitchBlack builds and TWRP installer zips use that name and usually have no published checksum. dl.twrp.me returns the file's HTML page when the Referer is missing (HTTP 200). That page passed the check, and the download replaced the zip already stored under that name. The image-name case was already refused.
+- **The fix.** The body is accepted only when its leading bytes are `ANDROID!` or a zip local-file header (`PK\x03\x04`). The file name is not evidence. A failed check still deletes only the staging file.
+- The new `RecoveryCatalogTest` row failed on the old code first: the HTML download returned success and replaced the library zip. `:core:test` **487/0** (was 486). `bash tests/run-tests.sh` **1057/0**. `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). `:desktop` and `:app` were not run (no Android SDK). **Not run on a phone or a desktop window.**
+
 ### Bug sweep 2026-10-28
 Each item was reproduced first, and its regression test was run against the old code and failed before the fix.
 - **Custom Recovery could write the wrong USB phone.** Detect stored a probe with no serial. After that, connecting another phone is allowed (no write is in flight). The installer only compared `writePath` strings after `FLASH RECOVERY`, so two phones that both expose `/dev/block/by-name/recovery` (or the same `recovery_a` / `recovery_b`) passed and `dd` ran on whoever was on the session. The live session's serial, device and slot are now re-read before the confirm dialog and again after the phrase; a mismatch refuses and nothing is pushed. Serials in the error line are masked. `parseRoot` / `LocalModules.parseRooted` now need exit code 0, not a missing status plus `uid=0` in the captured output.

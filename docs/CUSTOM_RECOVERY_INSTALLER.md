@@ -86,8 +86,10 @@ matched the downloaded file), but the directory page lists none of them; only
 each file's own page links them. The lookup does not fetch them, so a TWRP offer
 carries no published checksum yet. The older form, a directory that links a
 `.img.md5`, is still read, and a mismatch there refuses the download. A
-download is always checked for being an image or a zip, and its SHA-256 is
-always shown. The file already in the library under that name is replaced only
+download is always checked for being an image or a zip by its leading bytes
+(`ANDROID!`, or a zip local-file header `PK`), not by the file name. A `.zip`
+name whose body is an HTML page is refused. Its SHA-256 is always shown. The
+file already in the library under that name is replaced only
 after those checks pass; a failed transfer, an HTML page, or a checksum
 mismatch leaves the existing file where it is. PitchBlack builds carry no published checksum in the build list.
 PGP is **not** verified (the app does not ship a keyring).
