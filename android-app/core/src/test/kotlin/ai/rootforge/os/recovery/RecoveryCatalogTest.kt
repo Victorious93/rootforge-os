@@ -309,6 +309,23 @@ class RecoveryCatalogTest {
         assertTrue(asked.none { it.contains("/ai2201/") })
     }
 
+    @Test
+    fun twrpLookupStillReadsTheDirectoryWhenSearchJsonIsGarbage() {
+        val asked = mutableListOf<String>()
+        val client = RecoveryCatalogClient { url, _ ->
+            asked += url
+            when (url) {
+                RecoveryCatalogClient.TWRP_SEARCH -> "<html>not json"
+                "https://dl.twrp.me/enchilada/" ->
+                    """<a href="/enchilada/twrp-3.7.0_11-0-enchilada.img.html">twrp-3.7.0_11-0-enchilada.img</a>"""
+                else -> throw IOException("unexpected $url")
+            }
+        }
+        val offers = client.lookupTwrp(listOf("enchilada"))
+        assertEquals("https://dl.twrp.me/enchilada/twrp-3.7.0_11-0-enchilada.img", offers.single().downloadUrl)
+        assertTrue(asked.contains("https://dl.twrp.me/enchilada/"))
+    }
+
     /** The device page's HTML has no download links; it loads builds-<codename>.json, whose links end in /download. */
     private val liveBuildsJson = """
         {

@@ -5,6 +5,7 @@ import ai.rootforge.os.bridge.BridgeIngress
 import ai.rootforge.os.bridge.CallerIdentity
 import ai.rootforge.os.bridge.PairingPersistence
 import ai.rootforge.os.bridge.PairingStore
+import ai.rootforge.os.core.PrivateFile
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.File
@@ -133,9 +134,15 @@ class HeadlessApi(
 }
 
 class FilePairingPersistence(private val file: File) : PairingPersistence {
-    override fun read(): String = if (file.isFile) file.readText() else "[]"
+    override fun read(): String {
+        if (!file.isFile) return "[]"
+        PrivateFile.restrictToOwner(file)
+        return file.readText()
+    }
+
     override fun write(json: String) {
-        file.parentFile?.mkdirs()
+        PrivateFile.prepare(file)
         file.writeText(json)
+        PrivateFile.restrictToOwner(file)
     }
 }

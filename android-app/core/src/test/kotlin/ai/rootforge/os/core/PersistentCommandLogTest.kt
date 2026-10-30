@@ -1,9 +1,13 @@
 package ai.rootforge.os.core
 
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermissions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
+import kotlin.io.path.createTempDirectory
 import kotlin.io.path.createTempFile
 
 class PersistentCommandLogTest {
@@ -55,4 +59,33 @@ class PersistentCommandLogTest {
         val log = OutputLog(persistFile = file)
         assertEquals(listOf("ok"), log.lines.value.map { it.text })
     }
+
+    @Test
+    fun aNewLogFileIsOwnerOnly() {
+        assumePosix()
+        val file = createTempDirectory("rf-command-log").toFile().resolve("command-log.jsonl")
+        OutputLog(persistFile = file).info("hello")
+        assertTrue(file.isFile)
+        assertEquals("rw-------", posixMode(file))
+    }
+
+    @Test
+    fun anExistingWorldReadableLogIsTightened() {
+        assumePosix()
+        val file = createTempFile("command-log", ".jsonl").toFile()
+        file.writeText("")
+        Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString("rw-rw-rw-"))
+        assertEquals("rw-rw-rw-", posixMode(file))
+        OutputLog(persistFile = file).info("hello")
+        assertEquals("rw-------", posixMode(file))
+        assertTrue(file.readText().contains("hello"))
+    }
+
+    private fun assumePosix() {
+        val probe = createTempDirectory("rf-posix-probe")
+        assumeTrue(probe.fileSystem.supportedFileAttributeViews().contains("posix"))
+    }
+
+    private fun posixMode(file: java.io.File): String =
+        PosixFilePermissions.toString(Files.getPosixFilePermissions(file.toPath()))
 }

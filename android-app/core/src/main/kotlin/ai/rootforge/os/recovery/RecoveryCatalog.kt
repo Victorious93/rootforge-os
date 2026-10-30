@@ -149,7 +149,8 @@ class RecoveryCatalogClient(
 
     fun lookupTwrp(codenames: List<String>): List<RecoveryOffer> {
         val search = runCatching { fetchText(TWRP_SEARCH, null) }.getOrNull()
-        val matched = search?.let { matchTwrpSearch(it, codenames) }.orEmpty()
+        // A WAF page or truncated search.json must not skip dl.twrp.me/<codename>/.
+        val matched = search?.let { runCatching { matchTwrpSearch(it, codenames) }.getOrNull() }.orEmpty()
         val tryNames = (matched.map { it.codename } + codenames).distinctBy { it.lowercase() }
         val out = mutableListOf<RecoveryOffer>()
         for (name in tryNames) {
