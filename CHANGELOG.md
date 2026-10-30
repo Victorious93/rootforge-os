@@ -7,6 +7,17 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Bug sweep 2026-10-30
+Each item was reproduced first, and its regression test was run against the old code and failed before the fix. #98's recovery serial pin, fleet-theme per-key parse, EDL Sahara re-pin and `parseRoot` exit-code are already on `main` and were not re-opened.
+- **Desktop Devices hid a udev-blocked phone.** `HostDevices.parseAdb` only accepted one-token states, so `SERIAL no permissions …` and `authorizing` / `connecting` were dropped. The phone now appears with `hasPermission=false`, matching the CLI.
+- **Devices kept a permission stub after access was granted.** `needsIdentify` treated any same-mode identity as done. After Grant USB / `adb` Allow, the 2 s poll now replaces the "USB permission needed" / "unauthorized or offline" stub. A failed identify is still not retried every poll.
+- **Fleet `devices.list` said every phone in the active mode was connected.** Only the active serial in that mode is `connected`.
+- **Docker toolkit listed state `no` for `no permissions`.** The whole two-word state is kept; `usable` stays false.
+- **Desktop `paired.json` and `command-log.jsonl` were world-readable under umask 022.** Both are created `0600`; an existing group/world-readable copy is tightened on read and write (same family as #64).
+- **A malformed TWRP `search.json` skipped `dl.twrp.me/<codename>/`.** A failed fetch was already ignored; a WAF page or truncated JSON is ignored the same way, and the lookup still reads the directory for the names it already has.
+- Checked, not changed: unlock-portal / Links / RootPlan tables (no unofficial dump URLs); there is no Termux:API toggle; `HostToolset` still prefers `./platform-tools` (portable installs); `CatalogRecoveryPrefill` `|` in `pageUrl` (no live catalog URL has one); HeadlessApi auto-confirm (fail-safe); quadratic PEM redaction (needs a go-ahead). `applicationId`, signing and versioning unchanged.
+- Tests: `:core:test` **494/0** (was 486; 8 new: `HostDevicesTest` 1, `DeviceRosterTest` 3, `BridgeListingTest` 1, `RecoveryCatalogTest` 1, `PersistentCommandLogTest` 2). `:desktop:test` **11/0** (was 9; 2 new pairing-file rows). `:app:testDebugUnitTest` **40/0**. `:app:assembleDebug` (`ai.rootforge.os.debug` / `versionCode='2'` / `versionName='0.3.0-debug'`). `:app:lintDebug` 0 errors / 30 warnings. `bash tests/run-tests.sh` **1057/0** (Python unittest 420, was 419). `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a desktop window.**
+
 ### Bug sweep 2026-10-28
 Each item was reproduced first, and its regression test was run against the old code and failed before the fix.
 - **Custom Recovery could write the wrong USB phone.** Detect stored a probe with no serial. After that, connecting another phone is allowed (no write is in flight). The installer only compared `writePath` strings after `FLASH RECOVERY`, so two phones that both expose `/dev/block/by-name/recovery` (or the same `recovery_a` / `recovery_b`) passed and `dd` ran on whoever was on the session. The live session's serial, device and slot are now re-read before the confirm dialog and again after the phrase; a mismatch refuses and nothing is pushed. Serials in the error line are masked. `parseRoot` / `LocalModules.parseRooted` now need exit code 0, not a missing status plus `uid=0` in the captured output.

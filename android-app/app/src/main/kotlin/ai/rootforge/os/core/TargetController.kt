@@ -288,7 +288,7 @@ class TargetController(
 
     private suspend fun identifyOne(target: AttachedTarget) {
         if (!target.hasPermission) {
-            publishIdentity(DeviceIdentityParser.stub(target, "USB permission needed."))
+            publishIdentity(DeviceIdentityParser.stub(target, DeviceRoster.NOTE_USB_PERMISSION))
             return
         }
         val key = target.rosterKey()
