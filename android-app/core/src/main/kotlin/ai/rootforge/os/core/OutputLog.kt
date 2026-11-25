@@ -57,7 +57,11 @@ class OutputLog(
     @Synchronized
     fun clear() {
         state.update { emptyList() }
-        persistFile?.writeText("")
+        persistFile?.let { file ->
+            PrivateFile.prepare(file)
+            file.writeText("")
+            PrivateFile.restrictToOwner(file)
+        }
     }
 
     fun asText(): String = state.value.joinToString("\n") { it.text }
@@ -65,6 +69,7 @@ class OutputLog(
     private fun load() {
         val file = persistFile ?: return
         if (!file.isFile) return
+        PrivateFile.restrictToOwner(file)
         val restored = mutableListOf<LogLine>()
         file.forEachLine { raw ->
             if (raw.isBlank()) return@forEachLine
@@ -80,14 +85,16 @@ class OutputLog(
 
     private fun append(added: List<LogLine>) {
         val file = persistFile ?: return
-        file.parentFile?.mkdirs()
+        PrivateFile.prepare(file)
         file.appendText(added.joinToString("") { json.encodeToString(PersistLine.from(it)) + "\n" })
+        PrivateFile.restrictToOwner(file)
     }
 
     private fun rewrite() {
         val file = persistFile ?: return
-        file.parentFile?.mkdirs()
+        PrivateFile.prepare(file)
         file.writeText(state.value.joinToString("") { json.encodeToString(PersistLine.from(it)) + "\n" })
+        PrivateFile.restrictToOwner(file)
     }
 
     @Serializable

@@ -9,9 +9,13 @@ import ai.rootforge.os.usb.UsbClassifier
  * Used by the desktop app and covered without talking to a device.
  */
 object HostDevices {
+    // `adb devices -l` prints a one-token state, except Linux udev which is
+    // "no permissions" plus an optional parenthetical. Those phones are
+    // attached; dropping the line made Devices look empty.
     private val ADB_LINE = Regex(
-        """^(\S+)\s+(device|unauthorized|offline|recovery|sideload|bootloader)(?:\s+(.*))?$""",
+        """^(\S+)\s+(no permissions|device|unauthorized|offline|recovery|sideload|bootloader|authorizing|connecting)(?:\s+(.*))?$""",
     )
+    private val ADB_USABLE = setOf("device", "recovery", "sideload", "bootloader")
     private val FASTBOOT_LINE = Regex("""^(\S+)\s+(fastboot|fastbootd)\s*$""")
     private val PROP = Regex("""(\w+):(\S+)""")
 
@@ -35,7 +39,7 @@ object HostDevices {
                 productId = 0,
                 mode = mode,
                 interfaceId = null,
-                hasPermission = state != "unauthorized" && state != "offline",
+                hasPermission = state in ADB_USABLE,
                 serial = serial,
                 product = props["model"] ?: props["product"],
                 manufacturer = null,

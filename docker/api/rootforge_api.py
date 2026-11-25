@@ -52,6 +52,14 @@ READ_OPS = {
 }
 
 
+def _adb_listing(parts: List[str]) -> Tuple[str, str, List[str]]:
+    """serial, state, leftover tokens from one `adb devices -l` row."""
+    serial = parts[0]
+    if len(parts) >= 3 and parts[1] == "no" and parts[2] == "permissions":
+        return serial, "no permissions", parts[3:]
+    return serial, parts[1], parts[2:]
+
+
 class Runner:
     """Runs host binaries. Tests replace this."""
 
@@ -95,14 +103,14 @@ class Toolkit:
                 parts = line.split()
                 if len(parts) < 2:
                     continue
-                serial, state = parts[0], parts[1]
+                serial, state, rest = _adb_listing(parts)
                 out.append(
                     {
                         "serial": serial,
                         "mode": "fastboot" if state == "bootloader" else "adb",
                         "state": state,
                         "usable": state in ("device", "recovery", "sideload"),
-                        "note": " ".join(parts[2:]),
+                        "note": " ".join(rest),
                     }
                 )
         if self.fastboot:

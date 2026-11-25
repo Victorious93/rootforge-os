@@ -233,7 +233,7 @@ Each card is a read-only identity, a **Root plan**, and a brand **Root wizard** 
 Safety stays the same in the usual ways: dry-run stays the default where it already was, typed confirm still gates writes, a recovery write still backs up first, and nothing reboots by itself. Each serial still has its own lock, so identify can run on every phone at once. Connecting a different phone is refused while a write, shell, reboot, or other non-identify action is confirming or running, so that action stays on the phone it started on. If that phone is unplugged while the dialog is open, the action is cancelled.
 
 1. Open **Devices**.
-2. Plug the phones in. Grant USB access if a row asks. On a PC, unlock the phone and allow this computer if adb says unauthorized.
+2. Plug the phones in. Grant USB access if a row asks. On a PC, unlock the phone and allow this computer if adb says unauthorized. A Linux row that used to vanish (`no permissions`, missing udev rules) now stays on Devices until you can talk to it.
 3. Tap **Identify attached** if a card is still empty.
 4. Read the Root plan and the Root wizard. Open the tool you need for that phone. Do not skip the erase line or the typed phrase.
 
@@ -871,10 +871,10 @@ RootForge does **not** ship analytics, crash reporters or advertising SDKs.
 |---|---|---|
 | Settings (node id, switches, terminal package) | App preferences | Node id is random, generated once |
 | VictorSuite pin | App preferences (`victorsuite_pin`) | Package + certificate hash. Cleared with app data |
-| Paired controllers | App preferences | Package + certificate hash |
+| Paired controllers | App preferences (desktop: `~/.rootforge/paired.json`) | Package + certificate hash. Desktop file is mode `0600` |
 | Pending pairing list | Memory only | Lost if the app process dies |
 | ADB host key | Private no-backup folder | Not included in Android backup |
-| Command log | `command-log.jsonl` in app files (desktop: `~/.rootforge/command-log.jsonl`) | Redacted; desktop API token is **not** this file |
+| Command log | `command-log.jsonl` in app files (desktop: `~/.rootforge/command-log.jsonl`) | Redacted; mode `0600`; desktop API token is **not** this file |
 | Library images / zips / APKs | App files `library/` (desktop: `~/.rootforge/library`) | Copies you imported, plus Custom Recovery backups before a real `dd` |
 | Build catalog | App files `build-catalog/` | Last good copy only |
 | Desktop API token | `~/.rootforge/desktop.properties` | Created mode `0600`; a world-readable copy is tightened before it is read |

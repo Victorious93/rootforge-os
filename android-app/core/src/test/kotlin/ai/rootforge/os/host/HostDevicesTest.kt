@@ -26,6 +26,20 @@ class HostDevicesTest {
     }
 
     @Test
+    fun adbNoPermissionsAndAuthorizingAreListed() {
+        val text = """
+            List of devices attached
+            UDEV1          no permissions (missing udev rules? user is in the plugdev group; are your udev rules wrong?)
+            AUTH1          authorizing usb:1-3
+            CONN1          connecting
+        """.trimIndent()
+        val list = HostDevices.parseAdb(text)
+        assertEquals(listOf("UDEV1", "AUTH1", "CONN1"), list.map { it.serial })
+        assertTrue(list.all { it.mode == TargetMode.ADB })
+        assertTrue(list.all { !it.hasPermission })
+    }
+
+    @Test
     fun fastbootDevices() {
         val list = HostDevices.parseFastboot("ABC123\tfastboot\nXYZ\tfastbootd\n")
         assertEquals(2, list.size)

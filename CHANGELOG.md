@@ -7,6 +7,17 @@ Nothing here has been validated on real hardware, a booted ISO, a VM or a phone;
 
 ## Unreleased
 
+### Bug sweep 2026-10-30
+Each item was reproduced first, and its regression test was run against the old code and failed before the fix. #98's recovery serial pin, fleet-theme per-key parse, EDL Sahara re-pin and `parseRoot` exit-code are already on `main` and were not re-opened.
+- **Desktop Devices hid a udev-blocked phone.** `HostDevices.parseAdb` only accepted one-token states, so `SERIAL no permissions …` and `authorizing` / `connecting` were dropped. The phone now appears with `hasPermission=false`, matching the CLI.
+- **Devices kept a permission stub after access was granted.** `needsIdentify` treated any same-mode identity as done. After Grant USB / `adb` Allow, the 2 s poll now replaces the "USB permission needed" / "unauthorized or offline" stub. A failed identify is still not retried every poll.
+- **Fleet `devices.list` said every phone in the active mode was connected.** Only the active serial in that mode is `connected`.
+- **Docker toolkit listed state `no` for `no permissions`.** The whole two-word state is kept; `usable` stays false.
+- **Desktop `paired.json` and `command-log.jsonl` were world-readable under umask 022.** Both are created `0600`; an existing group/world-readable copy is tightened on read and write (same family as #64).
+- **A malformed TWRP `search.json` skipped `dl.twrp.me/<codename>/`.** A failed fetch was already ignored; a WAF page or truncated JSON is ignored the same way, and the lookup still reads the directory for the names it already has.
+- Checked, not changed: unlock-portal / Links / RootPlan tables (no unofficial dump URLs); there is no Termux:API toggle; `HostToolset` still prefers `./platform-tools` (portable installs); `CatalogRecoveryPrefill` `|` in `pageUrl` (no live catalog URL has one); HeadlessApi auto-confirm (fail-safe); quadratic PEM redaction (needs a go-ahead). `applicationId`, signing and versioning unchanged.
+- Tests: `:core:test` **494/0** (was 486; 8 new: `HostDevicesTest` 1, `DeviceRosterTest` 3, `BridgeListingTest` 1, `RecoveryCatalogTest` 1, `PersistentCommandLogTest` 2). `:desktop:test` **11/0** (was 9; 2 new pairing-file rows). `:app:testDebugUnitTest` **40/0**. `:app:assembleDebug` (`ai.rootforge.os.debug` / `versionCode='2'` / `versionName='0.3.0-debug'`). `:app:lintDebug` 0 errors / 30 warnings. `bash tests/run-tests.sh` **1057/0** (Python unittest 420, was 419). `bash tests/lint.sh` clean (shellcheck 0.11.0 via the repo wheel). **Not run on a phone or a desktop window.**
+
 ### Desktop Custom Recovery Detect omitted the serial (2026-10-28)
 - **The bug.** After the same-phone check in #98, a recovery dry-run or write re-reads serial, device and slot and refuses unless they match the Detect probe. A missing serial does not match a present one. Desktop Detect asked `getprop` for device, product, name, model, slot and `ro.build.ab_update`, and not for `ro.serialno` or `ro.boot.serialno`, so the probe serial stayed null. The live `su getprop` dump on a real phone includes a serial, and every desktop dry-run and write stopped with "not the one that was probed". Nothing was written. A blank or `unknown` `ro.serialno` also hid `ro.boot.serialno`, because the fallback used `?:` on the raw string (desktop stores an empty answer for every key it asks).
 - **The fix.** Desktop Detect asks for both serial keys. `RecoveryIdentity.fromProps` keeps the first value that is present and not blank or `unknown`.
