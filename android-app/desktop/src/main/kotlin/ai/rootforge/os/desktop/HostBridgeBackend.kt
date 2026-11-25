@@ -2,6 +2,7 @@ package ai.rootforge.os.desktop
 
 import ai.rootforge.os.bridge.BridgeBackend
 import ai.rootforge.os.bridge.BridgeDevice
+import ai.rootforge.os.bridge.BridgeListing
 import ai.rootforge.os.core.LinkState
 import ai.rootforge.os.device.publicLabel
 import ai.rootforge.os.fastboot.RebootTarget
@@ -19,7 +20,11 @@ class HostBridgeBackend(private val controller: HostController, override val app
                 mode = when (t.mode) {
                     TargetMode.ADB -> "adb"; TargetMode.FASTBOOT -> "fastboot"; TargetMode.EDL -> "edl"; TargetMode.UNKNOWN -> "unknown"
                 },
-                state = if (linked != null && linked.mode == t.mode) "connected" else if (t.hasPermission) "authorized" else "unauthorized",
+                state = when {
+                    BridgeListing.isConnected(t, linked?.mode, controller.activeSerial()) -> "connected"
+                    t.hasPermission -> "authorized"
+                    else -> "unauthorized"
+                },
                 usable = t.mode != TargetMode.UNKNOWN && t.hasPermission,
                 note = t.publicLabel(),
             )

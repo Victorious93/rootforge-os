@@ -60,6 +60,22 @@ class ToolkitApiTests(unittest.TestCase):
         serials = [d["serial"] for d in r["result"]["devices"]]
         self.assertEqual(serials, ["SERIAL1", "FB1"])
 
+    def test_devices_keeps_multiword_adb_state(self):
+        self.runner.script = [
+            (
+                0,
+                "List of devices attached\n"
+                "AAA\tno permissions (missing udev rules? user is in the plugdev group)\n",
+                "",
+            ),
+            (0, "", ""),
+        ]
+        r = self.handle("rootforge.devices.list")
+        device = r["result"]["devices"][0]
+        self.assertEqual(device["serial"], "AAA")
+        self.assertEqual(device["state"], "no permissions")
+        self.assertFalse(device["usable"])
+
     def test_flash_refused_without_confirmation(self):
         r = self.handle("rootforge.fastboot.flash", {"partition": "boot", "image": "/tmp/x.img"})
         self.assertFalse(r["ok"])

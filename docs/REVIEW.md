@@ -102,6 +102,28 @@ Nothing is cryptographically signed (ISO, APK, modules). README previously said 
 - Scaffolded `update-binary` sources Magisk's `util_functions.sh` and calls `install_module`.
 - Desktop launcher test no longer depends on the host lacking `xfce4-session`.
 
+## Bug sweep 2026-10-30 (on `main` `75fa4ca`)
+
+Read recent history, #98, and the files. Did not re-open #98's recovery serial pin, fleet-theme per-key parse, EDL Sahara re-pin, or `parseRoot` exit-code.
+
+**Fixed on this branch**
+
+- **[Certain] Desktop `parseAdb` dropped `no permissions` / `authorizing` / `connecting`.** The CLI already listed `no permissions`. Devices now shows those phones with `hasPermission=false`.
+- **[Certain] `needsIdentify` kept a permission stub after grant.** Same-mode identity was treated as done. The USB-permission / host-unauthorized stub is replaced once the phone is usable.
+- **[Certain] Fleet `devices.list` marked every same-mode phone as connected.** Only the active serial is `connected`.
+- **[Certain] Docker toolkit stored state `no` for `no permissions`.**
+- **[Certain] Desktop `paired.json` and `command-log.jsonl` inherited umask `0644`.** Both are `0600`; an existing world-readable copy is tightened.
+- **[Certain] Malformed TWRP `search.json` aborted `lookupTwrp`** before `dl.twrp.me/<codename>/`.
+
+**Checked, not changed**
+
+- Unlock-portal / Links / RootPlan tables: official https only; closed brands have `url = null`. No Termux:API toggle exists in the apps or install scripts.
+- `HostToolset` still prefers `./platform-tools` over `PATH` (portable-install behaviour; changing it would surprise existing users).
+- `CatalogRecoveryPrefill` still does not escape `|` in `pageUrl` (no live catalog URL contains one).
+- HeadlessApi auto-confirm remains fail-safe and still answers any pending prompt.
+- Private-key redaction rules remain quadratic (owner go-ahead).
+- Package lists and CI YAML: no syntax or version-gate defect found.
+
 ## Bug sweep 2026-10-28 (on `main` `746bbb7`)
 
 Read recent history and the files; did not trust earlier summaries. VictorLaunch `FLEET_THEME.md` on `main` was fetched: writer pin `com.victorious.launch` / `B9:9A:AF:…:4A:69`, revoked `1B:06:A8:…:BA:CA` still refused. RootForge consumer pin on the VictorLaunch side (`ai.rootforge.os.debug` / `77:7A:C7:…:64:6F`) was not flipped.
@@ -147,11 +169,11 @@ Found while probing untrusted-input code on `main` `5652d24`. The nine defects t
 
 - **[Certain]** `HeadlessApi` auto-confirms with a thread that gives up after 5 s. An operation that raises its prompt later (a slow `getvar all`, hashing a large image) times out into a denial after 120 s. It fails safe. The thread also answers *any* pending prompt, including one the person raised in the window: a prompt without a phrase is approved outright, a typed-phrase one when the request's `confirmation` equals it.
 - **[Likely]** `DeviceIdentityParser.fromEdl(previous = …)` cannot find the phone's earlier ADB/fastboot identity through the roster: that identity is pruned when its device disappears, and the 9008 port is a different target key. The "brand remembered from the last identify" note is only reachable from the unit test.
-- **[Likely]** A target that reports no USB serial keeps its "USB permission needed" stub after the grant: `DeviceRoster.needsIdentify` only checks that an identity of the same mode exists. The Identify button forces it.
+- **[Likely]** ~~A target that reports no USB serial keeps its "USB permission needed" stub after the grant.~~ Fixed 2026-10-30: `needsIdentify` re-runs once `hasPermission` is true when the stored identity is the USB-permission or host-unauthorized stub. A failed identify is still not retried every poll.
 - **[Likely]** `AdbConnection.shell` keeps all output in memory until its timeout; an approved command such as `yes` can exhaust the heap.
 - **[Certain]** `HostToolset` searches `./platform-tools` (the working directory) before `PATH`, so a launch from a directory with a hostile `platform-tools/adb` runs it.
 - **[Certain]** ~~Custom Recovery does not compare the pulled backup's size with the partition size before it overwrites the partition.~~ Fixed in #90: `RootShellResult.ok` is exit code 0 only, and the pulled backup must be exactly `blockdev --getsize64` bytes or it is deleted and nothing is written.
-- **[Certain]** `RecoveryCatalogClient.lookupTwrp` tolerates a failed `search.json` fetch but a malformed one fails the whole lookup.
+- **[Certain]** ~~`RecoveryCatalogClient.lookupTwrp` tolerates a failed `search.json` fetch but a malformed one fails the whole lookup.~~ Fixed 2026-10-30: a WAF page or truncated JSON is ignored and `dl.twrp.me/<codename>/` is still read.
 - **[Certain]** `CatalogRecoveryPrefill.encode` escapes `|` in the id and name but not in `pageUrl` or the codenames, so `decode` returns null for such a row and the button does nothing.
-- **[Certain]** `HostDevices.parseAdb` ignores the `no permissions` state, so a phone blocked by udev is absent instead of explained.
+- **[Certain]** ~~`HostDevices.parseAdb` ignores the `no permissions` state, so a phone blocked by udev is absent instead of explained.~~ Fixed 2026-10-30: `no permissions`, `authorizing` and `connecting` are listed with `hasPermission=false`. The Docker toolkit keeps the whole `no permissions` state too.
 - **[Certain]** `GuideMarkdown.parse` overflows the stack on 20,000 repeated `*` or `_`; it only parses bundled text. `FirehoseClient.programRaw` zero-fills if its stream ends before `dataSize` (the class is marked untested). (`_PEM_BLOCK` is now measured under "Open" above.)

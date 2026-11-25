@@ -747,7 +747,7 @@ class HostController(
 
     private suspend fun identifyOne(target: AttachedTarget) {
         if (!target.hasPermission) {
-            publishIdentity(DeviceIdentityParser.stub(target, "unauthorized or offline"))
+            publishIdentity(DeviceIdentityParser.stub(target, DeviceRoster.NOTE_HOST_UNAUTHORIZED))
             return
         }
         val key = target.rosterKey()
