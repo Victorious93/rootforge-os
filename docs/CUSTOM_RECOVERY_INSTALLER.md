@@ -12,9 +12,13 @@ serve"). **Not run on a phone.** No recovery images are bundled in the APK.
 ## What it does
 
 1. Detects **this phone** (Android app) and, if connected, the **USB ADB
-   target**. Reads `ro.product.device` and `ro.build.product`, whether `su -c id`
+   target**. Reads `ro.product.device`, `ro.build.product`, `ro.serialno` (or
+   `ro.boot.serialno` when the first is blank or `unknown`), whether `su -c id`
    reports `uid=0`, A/B vs A-only, and whether `/dev/block/by-name` (or
    `bootdevice/by-name`) has `recovery` / `recovery_a` / `recovery_b`.
+   Desktop Detect asks `getprop` for those keys by name, including both serial
+   keys; a serial left off that list is null on the probe and the later
+   same-phone check refuses the dry-run and the write.
 2. Lists **TWRP** from the official device list (`https://twrp.me/search.json`)
    and directory (`https://dl.twrp.me/<codename>/`), and **PitchBlack** from the
    build list its device page loads

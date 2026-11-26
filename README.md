@@ -1,35 +1,3 @@
-<!-- victorious-fleet-readme-refresh:start -->
-<p align="center">
-  <img src="assets/logo.png" alt="rootforge-os logo" width="200">
-</p>
-
-# rootforge-os
-
-Android rooting / root-management app (EXTERNAL_NODE).
-
-**Package id:** `ai.rootforge.os`
-
-> **Package note:** From `android-app/app/build.gradle.kts`.
-
-**Status:** CI green *(from [fleet-manifest ROADMAP](https://github.com/Victorious93/fleet-manifest/blob/main/ROADMAP.md))*
-
-## Install / build
-
-Android app under `android-app/`. Typical: `cd android-app && ./gradlew :app:assembleDebug` if wrapper present — verify in-repo.
-
-_Steps above are taken from this repo’s build files / existing docs; anything not exercised in this refresh is unlabeled as verified on a device._
-
-## Victorious fleet
-
-- Monorepo: [https://github.com/Victorious93/victorious-fleet](https://github.com/Victorious93/victorious-fleet)
-- Fleet site: [https://victorious-framework.pages.dev](https://victorious-framework.pages.dev)
-
-<!-- victorious-fleet-readme-refresh:end -->
-
-<p align="center">
-  <img src="assets/logo.png" alt="rootforge-os logo" width="200">
-</p>
-
 <p align="center">
   <img src="assets/logo/rootforge-os-logo.jpg" alt="RootForge OS logo" width="240">
 </p>
@@ -48,6 +16,7 @@ _Steps above are taken from this repo’s build files / existing docs; anything 
   <a href="android-app/core/LICENSE"><img alt="License: Apache-2.0 (core)" src="https://img.shields.io/badge/core-Apache--2.0-blue.svg"></a>
   <img alt="Base: Debian 12" src="https://img.shields.io/badge/base-Debian%2012%20(Bookworm)-A81D33">
   <img alt="Languages: Kotlin, Shell, Python" src="https://img.shields.io/badge/code-Kotlin%20%C2%B7%20Shell%20%C2%B7%20Python-informational">
+  <a href="https://victorious-framework.pages.dev"><img alt="Victorious Framework" src="https://img.shields.io/badge/Victorious-Framework-FF2BD6?labelColor=0B0F1A"></a>
   <img alt="Status: ISO unverified" src="https://img.shields.io/badge/status-active%20%C2%B7%20ISO%20unverified-orange">
 </p>
 
@@ -118,7 +87,7 @@ through several front ends:
 RootForge OS is one app in the Victorious set of Android tools, which is coordinated from the controller
 app **droidcommand-AI** (DCA, <https://github.com/Victorious93/droidcommand-AI>). DCA sorts the apps it
 knows about into classes. RootForge is in the **`EXTERNAL_NODE`** class: an independent product that
-DCA can talk to, not a "companion" that depends on DCA.
+DCA can talk to, not a "companion" that depends on DCA. It is part of the [Victorious Framework](https://victorious-framework.pages.dev); **it works standalone and every fleet integration is optional**. The roster is in [victorious-fleet](https://github.com/Victorious93/victorious-fleet) and live status is in [fleet-manifest](https://github.com/Victorious93/fleet-manifest).
 
 What that means in practice:
 

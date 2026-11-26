@@ -674,9 +674,13 @@ class HostController(
     }
 
     private fun recoveryProps(): Map<String, String> {
+        // `samePhone` compares serial, device and slot against a later full
+        // `getprop` dump. A key left off this list is null on the probe and
+        // does not match the live phone, so dry-run and write are refused.
         val keys = listOf(
             "ro.product.device", "ro.build.product", "ro.product.name", "ro.product.model",
             "ro.boot.slot_suffix", "ro.build.ab_update",
+            "ro.serialno", "ro.boot.serialno",
         )
         val p = mutableMapOf<String, String>()
         for (k in keys) p[k] = adb(listOf("shell", "getprop", k), 10_000).stdout.trim()
