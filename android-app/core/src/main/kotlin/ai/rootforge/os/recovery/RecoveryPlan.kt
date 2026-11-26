@@ -118,15 +118,23 @@ object RecoveryPlanner {
         )
     }
 
-    fun payloadOf(name: String, head: ByteArray): RecoveryPayload {
-        val magic = String(head, 0, minOf(8, head.size), Charsets.ISO_8859_1)
-        val zip = head.size >= 4 &&
+    fun payloadOf(name: String, head: ByteArray): RecoveryPayload = when {
+        isAndroidImage(head) -> RecoveryPayload.IMAGE
+        isZipLocalHeader(head) || name.endsWith(".zip", ignoreCase = true) -> RecoveryPayload.ZIP
+        else -> RecoveryPayload.OTHER
+    }
+
+    /** Leading bytes of an Android boot or recovery image (`ANDROID!`). The file name is ignored. */
+    fun isAndroidImage(head: ByteArray): Boolean =
+        head.size >= ANDROID_MAGIC.length &&
+            String(head, 0, ANDROID_MAGIC.length, Charsets.ISO_8859_1) == ANDROID_MAGIC
+
+    /**
+     * Zip local-file header (`PK\x03\x04`). A name ending in `.zip` is not a zip:
+     * dl.twrp.me returns an HTML page for that name when the Referer is missing.
+     */
+    fun isZipLocalHeader(head: ByteArray): Boolean =
+        head.size >= 4 &&
             head[0] == 0x50.toByte() && head[1] == 0x4B.toByte() &&
             head[2] == 0x03.toByte() && head[3] == 0x04.toByte()
-        return when {
-            magic == ANDROID_MAGIC -> RecoveryPayload.IMAGE
-            zip || name.endsWith(".zip", ignoreCase = true) -> RecoveryPayload.ZIP
-            else -> RecoveryPayload.OTHER
-        }
-    }
 }

@@ -216,6 +216,36 @@ class RecoveryCatalogTest {
         dir.deleteRecursively()
     }
 
+    /**
+     * PitchBlack and TWRP installer downloads are named `.zip` and often have no
+     * published checksum. dl.twrp.me returns the file's HTML page when the Referer
+     * is missing. The name must not count as proof that the body is a zip.
+     */
+    @Test
+    fun anHtmlPageNamedAsZipDoesNotReplaceTheExistingLibraryFile() {
+        val dir = tempDir()
+        val dest = File(dir, "PBRP-enchilada-4.0-OFFICIAL.zip")
+        val kept = byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00)
+        dest.writeBytes(kept)
+        val html = runCatching {
+            RecoveryFetcher.downloadChecked(
+                "https://sourceforge.net/projects/pbrp/files/enchilada/PBRP-enchilada-4.0-OFFICIAL.zip/download",
+                dest,
+                label = dest.name,
+            ) { _, _ -> ByteArrayInputStream("<!DOCTYPE html><html>download will begin</html>".toByteArray()) }
+        }
+        assertTrue(html.exceptionOrNull()?.message?.contains("not a recovery.img") == true)
+        assertArrayEquals(kept, dest.readBytes())
+        val fresh = byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0x0A, 0x00, 0x00, 0x00)
+        val n = RecoveryFetcher.downloadChecked(
+            "https://sourceforge.net/projects/pbrp/files/enchilada/PBRP-enchilada-4.0-OFFICIAL.zip/download",
+            dest,
+        ) { _, _ -> ByteArrayInputStream(fresh) }
+        assertEquals(fresh.size.toLong(), n)
+        assertArrayEquals(fresh, dest.readBytes())
+        dir.deleteRecursively()
+    }
+
     @Test
     fun aCheckedDownloadReplacesTheLibraryFileOnlyAfterItMatches() {
         val dir = tempDir()
